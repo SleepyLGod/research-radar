@@ -24,6 +24,9 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
         captured["verifier"] = kwargs.get("verifier")
         captured["verifier_model"] = kwargs.get("verifier_model")
         captured["limit"] = kwargs.get("limit")
+        captured["deep_reader"] = kwargs.get("deep_reader")
+        captured["deep_model"] = kwargs.get("deep_model")
+        captured["deep_limit"] = kwargs.get("deep_limit")
         return tmp_path / "runs" / "fake-run"
 
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
@@ -40,12 +43,16 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
             secret_source="env",
             env_file=env_file,
             limit=3,
+            deep_limit=1,
         )
     )
 
     assert isinstance(captured["verifier"], DeepSeekProvider)
     assert captured["verifier_model"] == "deepseek-chat"
     assert captured["limit"] == 3
+    assert isinstance(captured["deep_reader"], DeepSeekProvider)
+    assert captured["deep_model"] == "deepseek-chat"
+    assert captured["deep_limit"] == 1
 
 
 def test_run_daily_local_provider_does_not_configure_verifier(
@@ -64,6 +71,8 @@ def test_run_daily_local_provider_does_not_configure_verifier(
         captured["verifier"] = kwargs.get("verifier")
         captured["verifier_model"] = kwargs.get("verifier_model")
         captured["limit"] = kwargs.get("limit")
+        captured["deep_reader"] = kwargs.get("deep_reader")
+        captured["deep_limit"] = kwargs.get("deep_limit")
         return tmp_path / "runs" / "fake-run"
 
     monkeypatch.setattr(cli, "load_config", lambda path: config)
@@ -79,9 +88,12 @@ def test_run_daily_local_provider_does_not_configure_verifier(
             secret_source="keychain",
             env_file=None,
             limit=10,
+            deep_limit=1,
         )
     )
 
     assert captured["verifier"] is None
     assert captured["verifier_model"] is None
     assert captured["limit"] == 10
+    assert captured["deep_reader"] is None
+    assert captured["deep_limit"] == 1

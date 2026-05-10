@@ -7,6 +7,7 @@ from research_radar.analysis.paper_reading import (
     RelatedWorkAssessment,
     heuristic_paper_reading,
     paper_reading_prompt,
+    parse_paper_reading,
     validate_paper_reading,
 )
 from research_radar.analysis.prompts import (
@@ -15,6 +16,7 @@ from research_radar.analysis.prompts import (
     triage_prompt,
     verifier_prompt,
 )
+from research_radar.exceptions import AnalysisError
 from research_radar.models import (
     Artifact,
     Claim,
@@ -163,3 +165,110 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "MONITORED TOPIC: agent-memory" in verifier
     assert "- agent memory benchmark" in verifier
     assert "not supported by evidence" in verifier
+
+
+def test_parse_model_json_into_paper_reading() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Agent memory systems combine storage and retrieval.",
+          "active_questions": ["How should retrieval evidence be evaluated?"],
+          "common_baselines": ["Answer-only scoring"],
+          "evidence": [{"quote": "Agent memory systems combine storage and retrieval."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmarks can reward unsupported answers.",
+          "why_it_matters": "Ungrounded scores hide failures.",
+          "hidden_assumptions": ["Retrieved evidence is available."],
+          "solution": "Require answers to cite retrieved memory items.",
+          "mechanism": "The method checks answer support against retrieved evidence.",
+          "evidence": [{"quote": "Require answers to cite retrieved memory items."}]
+        },
+        "related_work": {
+          "prior_work": ["Answer-only memory benchmarks"],
+          "novelty": "It shifts evaluation from answer match to grounded answerability.",
+          "repackaging_risk": "It is an evaluation lens, not a new memory architecture.",
+          "evidence": [{"quote": "shifts evaluation from answer match"}]
+        },
+        "limitations": {
+          "explicit_limitations": ["It does not test long-horizon deployment."],
+          "inferred_weaknesses": ["It may depend on benchmark-specific formats."],
+          "evidence": [{"quote": "does not test long-horizon deployment"}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Medium",
+          "weak_evaluations": ["No deployment eval"],
+          "missing_ablations": ["No retrieval-format ablation"],
+          "bottom_line": "The contribution is the evaluation lens.",
+          "evidence": [{"quote": "evaluation lens"}]
+        },
+        "plain_language_example": "A correct answer without evidence should not get full credit.",
+        "essence": "The paper reframes memory quality as grounded answerability.",
+        "unsupported_or_rejected_claims": ["It proves all agents are unreliable."]
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, findings = validate_paper_reading(reading)
+
+    assert reading.problem_solution.problem.startswith("Memory benchmarks")
+    assert reading.essence.startswith("The paper reframes")
+    assert any(claim.text.startswith("Problem:") for claim in claims)
+    assert any("proves all agents" in (finding.claim_text or "") for finding in findings)
+
+
+def test_parse_model_json_rejects_malformed_response() -> None:
+    try:
+        parse_paper_reading("not json", _artifact())
+    except AnalysisError as exc:
+        assert "valid JSON" in str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+
+def test_parse_model_json_rejects_missing_anchors() -> None:
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {"background": "Background"},
+        "problem_solution": {
+          "problem": "Problem",
+          "why_it_matters": "Motivation",
+          "solution": "Solution",
+          "mechanism": "Mechanism",
+          "evidence": []
+        },
+        "related_work": {"novelty": "Novelty", "repackaging_risk": "Risk", "evidence": []},
+        "limitations": {"explicit_limitations": ["Limitation"], "evidence": []},
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "bottom_line": "Bottom line",
+          "evidence": []
+        },
+        "plain_language_example": "Example",
+        "essence": "Essence"
+      }
+    }
+    """
+
+    try:
+        parse_paper_reading(raw, _artifact())
+    except AnalysisError as exc:
+        assert "no evidence anchors" in str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+
+def _artifact() -> Artifact:
+    return Artifact(
+        source=SourceCandidate(
+            title="Evidence-Checked Memory Agents",
+            url="https://example.com/evidence-memory",
+            source_type=SourceType.PAPER,
+            source_name="fixture",
+        ),
+        text="Memory benchmark fixture.",
+    )

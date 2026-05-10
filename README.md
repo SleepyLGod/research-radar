@@ -65,12 +65,13 @@ uv run research-radar run daily --topic agent-memory
 Run the same daily pipeline with DeepSeek-backed review from an explicit local `.env` file:
 
 ```bash
-uv run research-radar run daily --topic agent-memory --provider deepseek --secret-source env --env-file .env
+uv run research-radar run daily --topic agent-memory --provider deepseek --secret-source env --env-file .env --deep-limit 1
 ```
 
-DeepSeek review feedback is written to `review_report.md`; publishable article claims still come
-from the evidence policy.
+DeepSeek deep-reading output is converted into evidence-bound claims; publishable article claims
+still come from the evidence policy.
 Use `--limit 3` for narrow real smoke runs while the discovery and relevance gates are evolving.
+Deep-reading output is written to `readings.jsonl` and `deep_reading.md`.
 
 Generate WeChat-compatible HTML from a run:
 

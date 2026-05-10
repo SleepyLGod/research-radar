@@ -77,6 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum candidates requested per connector query.",
     )
     daily.add_argument(
+        "--deep-limit",
+        type=int,
+        default=1,
+        help="Maximum relevant sources to ingest and deep-read with the selected provider.",
+    )
+    daily.add_argument(
         "--provider",
         choices=["local", "deepseek"],
         default="local",
@@ -173,6 +179,8 @@ def handle_run_daily(args: argparse.Namespace) -> None:
 
     if args.limit < 1:
         raise ResearchRadarError("--limit must be at least 1.")
+    if args.deep_limit < 0:
+        raise ResearchRadarError("--deep-limit cannot be negative.")
     if args.env_file is not None:
         _load_env_file(args.env_file)
     config = load_config(args.config)
@@ -183,6 +191,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         GitHubRepoConnector(manager),
     ]
     verifier = _daily_verifier(args.provider, manager)
+    deep_reader = _daily_deep_reader(args.provider, manager, args.deep_limit)
     verifier_model = _daily_verifier_model(args.provider, args.model)
     run_dir = run_daily(
         args.root,
@@ -192,6 +201,9 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         verifier=verifier,
         verifier_model=verifier_model,
         limit=args.limit,
+        deep_reader=deep_reader,
+        deep_model=verifier_model,
+        deep_limit=args.deep_limit,
     )
     print(f"Created run: {run_dir}")
 
@@ -266,6 +278,18 @@ def _daily_verifier_model(provider_name: str, model: str | None) -> str | None:
     if provider_name == "deepseek":
         return model or "deepseek-chat"
     return model
+
+
+def _daily_deep_reader(
+    provider_name: str,
+    manager: SecretManager,
+    deep_limit: int,
+) -> LLMProvider | None:
+    if deep_limit <= 0:
+        return None
+    if provider_name == "deepseek":
+        return DeepSeekProvider(manager)
+    return None
 
 
 def _load_env_file(path: Path) -> None:
