@@ -4,13 +4,15 @@ ResearchRadar is a privacy-first research intelligence system that monitors pape
 open-source projects, and web sources, then turns verified analysis into platform-ready
 research briefs.
 
-The project is intentionally local-first for v1. API keys, WeChat credentials, raw run data,
-and user preferences stay out of git and are stored through a secret backend.
+The current repo is the v0.0.0 foundation: a local-first skeleton for security, typed data,
+research workflow, dry-run pipelines, and publishing boundaries. It is not yet the full v1
+product. API keys, WeChat credentials, raw run data, and user preferences stay out of git and
+are stored through a secret backend.
 
-## What v1 Does
+## Current v0.0.0 Foundation
 
-- Runs daily monitoring and weekly deep-dive pipelines from a CLI.
-- Keeps a durable run directory with source manifests, evidence ledgers, drafts, and review reports.
+- Provides daily monitoring and weekly deep-dive CLI scaffolds for dry-run validation.
+- Keeps durable run directories with source manifests, evidence ledgers, drafts, and review reports.
 - Uses typed interfaces for discovery, ingestion, LLM analysis, evidence verification, neutral
   article drafts, renderers, and publishers.
 - Includes a dedicated researcher-grade paper reading skill under `docs/skills/research-radar/`.
@@ -18,6 +20,25 @@ and user preferences stay out of git and are stored through a secret backend.
 - Encrypts sensitive runtime state with envelope encryption and AES-GCM.
 - Provides a privacy scanner for committed files.
 - Supports fake clients in tests so the system can be verified without real API keys.
+
+## Target E2E Flow
+
+1. Topic setup: define topic id, queries, priority sources, and cadence.
+2. Planner: expand the topic into neutral scope, research questions, source priorities, and risks.
+3. Discovery: search papers, repositories, RSS/blogs, and later open web sources.
+4. Wide scan: cluster and rank candidates, then select sources for deep reading.
+5. Ingestion: fetch and extract PDFs, HTML pages, and repository metadata with provenance.
+6. Deep research reading: apply the ResearchRadar skill to problem, solution, related work,
+   limitations, critique, examples, and essence.
+7. Evidence ledger: convert claims into source-anchored records and reject unsupported claims.
+8. Review: run rule-based and model-backed checks for hallucination, overclaiming, weak evidence,
+   and unsupported critique.
+9. Synthesis outline / prewriting: ask perspective-guided questions and outline before drafting.
+10. ArticleDraft: assemble verified claims into a platform-neutral draft.
+11. Rendering: render the same draft to Markdown, WeChat HTML, and future channel formats.
+12. Manual publishing: create a WeChat draft only after review; no auto-publish.
+13. Audit artifacts: keep manifests, sources, artifacts, claims, evidence, drafts, rendered output,
+   and review reports under `runs/`.
 
 ## Quick Start
 
@@ -41,6 +62,16 @@ Generate a dry-run daily report:
 uv run research-radar run daily --topic agent-memory
 ```
 
+Run the same daily pipeline with DeepSeek-backed review from an explicit local `.env` file:
+
+```bash
+uv run research-radar run daily --topic agent-memory --provider deepseek --secret-source env --env-file .env
+```
+
+DeepSeek review feedback is written to `review_report.md`; publishable article claims still come
+from the evidence policy.
+Use `--limit 3` for narrow real smoke runs while the discovery and relevance gates are evolving.
+
 Generate WeChat-compatible HTML from a run:
 
 ```bash
@@ -58,8 +89,9 @@ The publisher creates a draft only. It does not auto-publish or mass-send.
 ## Research Reading Standard
 
 ResearchRadar is designed to read papers as a researcher, not as a generic summarizer. The
-paper-reading workflow requires area context, problem/solution analysis, related-work comparison,
-limitations, neutral critique, and evidence anchors for factual or critical claims.
+workflow requires planning, wide scanning, deep reading, outline-first synthesis, area context,
+problem/solution analysis, related-work comparison, limitations, neutral critique, and evidence
+anchors for factual or critical claims.
 
 Graphify-style corpus graphs may be used for clustering and cross-document links, but graph output
 is not treated as proof. Publishable claims must be grounded in source evidence.

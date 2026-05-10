@@ -1,0 +1,53 @@
+# ResearchRadar Architecture
+
+ResearchRadar is split into narrow subsystems so each risky boundary is explicit. The current
+repo is the v0.0.0 foundation: a local-first skeleton with testable dry-run flows, privacy
+guardrails, typed models, and a research workflow contract. The full high-quality,
+model-backed research loop is a later milestone.
+
+## Subsystems
+
+- `scheduler`: local and Codex automation entrypoints.
+- `discovery`: source connectors for papers, repositories, RSS/blogs, and web search adapters.
+- `ingestion`: PDF, HTML, and repository extraction with provenance.
+- `analysis`: provider interfaces for DeepSeek triage and high-reasoning review.
+- `evidence`: claim ledger and unsupported-claim policy.
+- `compose`: platform-neutral article drafts plus Markdown, WeChat, and future channel renderers.
+- `publishers.wechat`: WeChat Official Account draft API client.
+- `publishers.zhihu`: placeholder boundary for future Zhihu integration.
+- `storage`: run directories, manifests, and encrypted state.
+- `security`: secrets, encryption, redaction, and privacy scanning.
+
+WeChat and Zhihu are downstream publishing channels. They should not define the core research
+model; platform-neutral evidence and article drafts come first.
+
+## Canonical E2E Flow
+
+1. Topic setup defines topic id, queries, priority sources, and cadence.
+2. Planner expands the topic into neutral scope, research questions, source priorities, and risks.
+3. Discovery produces normalized `SourceCandidate` records from papers, repositories, RSS/blogs,
+   and later open web sources.
+4. Wide scan clusters and ranks candidates, then selects sources for deep reading.
+5. Ingestion stores PDFs, HTML pages, and repository metadata as artifacts with provenance.
+6. Deep research reading applies the ResearchRadar skill to area context, problem/solution,
+   related work, limitations, critique, examples, and essence.
+7. Evidence ledger converts claims into source-anchored records and rejects unsupported claims.
+8. Review checks hallucination risk, overclaiming, weak evidence, and unsupported critique.
+9. Synthesis outline / prewriting asks perspective-guided questions and outlines before drafting.
+10. `ArticleDraft` assembles verified claims into a platform-neutral draft.
+11. Rendering transforms the same draft into Markdown, WeChat HTML, or future channel formats.
+12. Manual publishing creates a WeChat draft only after review; auto-publish is out of scope.
+13. Audit artifacts preserve manifests, sources, artifacts, claims, evidence, rendered output, and
+   review reports under `runs/`.
+
+## Extension Points
+
+Add a new source by implementing `DiscoveryConnector`.
+Add a new model by implementing `LLMProvider`.
+Add a new publisher by implementing a package under `publishers`.
+
+## Research Skill
+
+The project skill at `docs/skills/research-radar/SKILL.md` defines the required research behavior
+contract: planner, wide scan, deep reading, prewriting, and publishing discipline. It should be
+used before changing analysis prompts or adding new research workflows.

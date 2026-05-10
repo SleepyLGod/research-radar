@@ -1,0 +1,30 @@
+project:
+  name: ResearchRadar
+
+topics:
+  - id: agent-memory
+    queries:
+      - "agent memory systems"
+      - "LLM memory benchmark"
+    priority_sources:
+      - arxiv.org
+      - semanticscholar.org
+      - github.com
+      - openreview.net
+
+cadence:
+  daily_monitor: "09:00"
+  weekly_deep_dive: "Sunday 10:00"
+
+models:
+  scout: deepseek-v4-flash
+  analyst: deepseek-v4-pro
+  verifier: codex_or_openai_high_reasoning
+
+publishing:
+  channel: wechat_draft
+  auto_publish: false
+
+security:
+  secret_backend: keychain
+  encrypt_storage: true
