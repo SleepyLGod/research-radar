@@ -36,7 +36,7 @@ def topic_for_connector(topic: TopicConfig, connector_name: str) -> TopicConfig:
         return topic
     if connector_name not in PAPER_CONNECTOR_NAMES:
         return topic
-    expanded_queries = paper_query_variants(topic.queries)
+    expanded_queries = _paper_connector_queries(topic)
     if expanded_queries == topic.queries:
         return topic
     return replace(topic, queries=expanded_queries)
@@ -55,8 +55,21 @@ def query_expansion_metadata(
         "source_intent": original_topic.source_intent,
         "connector": connector_name,
         "original_queries": original_topic.queries,
+        "paper_queries": original_topic.paper_queries,
         "expanded_queries": connector_topic.queries,
     }
+
+
+def _paper_connector_queries(topic: TopicConfig) -> list[str]:
+    queries: list[str] = []
+    seen: set[str] = set()
+    for query in [*topic.paper_queries, *paper_query_variants(topic.queries)]:
+        key = query.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        queries.append(query)
+    return queries
 
 
 def _variants_for_query(query: str) -> list[str]:

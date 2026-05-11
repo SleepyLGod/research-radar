@@ -15,6 +15,7 @@ class TopicConfig:
 
     id: str
     queries: list[str]
+    paper_queries: list[str] = field(default_factory=list)
     priority_sources: list[str] = field(default_factory=list)
     source_intent: str = "research_brief"
 
@@ -112,6 +113,11 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
             TopicConfig(
                 id=topic_id,
                 queries=queries,
+                paper_queries=_string_list(
+                    item_map.get("paper_queries", []),
+                    f"topic {topic_id} paper_queries",
+                    allow_empty=True,
+                ),
                 priority_sources=_string_list(
                     item_map.get("priority_sources", []),
                     f"topic {topic_id} priority_sources",

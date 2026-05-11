@@ -29,8 +29,16 @@ STOPWORDS = {
 }
 
 GENERIC_TERMS = {
+    "arxiv",
     "benchmark",
     "benchmarks",
+    "eval",
+    "evaluation",
+    "generation",
+    "paper",
+    "papers",
+    "survey",
+    "surveys",
     "system",
     "systems",
 }
@@ -44,6 +52,14 @@ PHRASE_BOOSTS = {
     "memory benchmark": 0.35,
     "persistent recall": 0.35,
     "context management": 0.25,
+    "llm reasoning": 0.35,
+    "reasoning benchmark": 0.40,
+    "reasoning evaluation": 0.40,
+    "test time scaling": 0.40,
+    "rag benchmark": 0.40,
+    "rag evaluation": 0.40,
+    "retrieval augmented generation": 0.45,
+    "retrieval augmented generation evaluation": 0.50,
 }
 
 
@@ -87,14 +103,28 @@ def score_source(candidate: SourceCandidate, topic: TopicConfig) -> SourceCandid
 
     matched_primary = sorted(primary_terms & text_terms)
     matched_generic = sorted(generic_terms & text_terms)
-    matched_phrases = sorted(phrase for phrase in PHRASE_BOOSTS if phrase in text)
+    configured_phrases = _topic_phrases(topic)
+    topic_primary_terms = {_singular(token) for token in (_topic_terms(topic) - GENERIC_TERMS)}
+    matched_phrases = sorted(
+        {
+            phrase
+            for phrase in [*PHRASE_BOOSTS, *configured_phrases]
+            if phrase in text and _phrase_matches_topic(phrase, topic_primary_terms)
+        }
+    )
 
     score = 0.0
     score += min(0.54, len(matched_primary) * 0.18)
     score += min(0.16, len(matched_generic) * 0.08)
-    score += sum(PHRASE_BOOSTS[phrase] for phrase in matched_phrases)
+    score += sum(PHRASE_BOOSTS.get(phrase, 0.30) for phrase in matched_phrases)
     score += min(0.08, priority_score(candidate.url, topic.priority_sources) * 0.08)
     score += 0.03
+    if (
+        candidate.source_type.value == "paper"
+        and not matched_phrases
+        and len(matched_primary) < 2
+    ):
+        score = min(score, NEEDS_REVIEW_THRESHOLD)
     score = min(score, 1.0)
 
     if score >= RELEVANT_THRESHOLD:
@@ -119,8 +149,37 @@ def score_source(candidate: SourceCandidate, topic: TopicConfig) -> SourceCandid
 
 
 def _topic_terms(topic: TopicConfig) -> set[str]:
-    text = _normalize(" ".join([topic.id, *topic.queries]))
+    text = _normalize(" ".join([topic.id, *topic.queries, *topic.paper_queries]))
     return {token for token in _tokens(text) if token not in STOPWORDS}
+
+
+def _topic_phrases(topic: TopicConfig) -> set[str]:
+    phrases = set()
+    for raw in [topic.id, *topic.queries, *topic.paper_queries]:
+        phrase = _query_phrase(raw)
+        if len(_tokens(phrase)) >= 2:
+            phrases.add(phrase)
+    return phrases
+
+
+def _query_phrase(query: str) -> str:
+    tokens = [
+        token
+        for token in _tokens(_normalize(query))
+        if token not in STOPWORDS and token not in GENERIC_TERMS
+    ]
+    return " ".join(tokens)
+
+
+def _phrase_matches_topic(phrase: str, topic_primary_terms: set[str]) -> bool:
+    phrase_terms = {_singular(token) for token in _tokens(phrase)} - GENERIC_TERMS
+    return len(phrase_terms & topic_primary_terms) >= 2
+
+
+def _singular(token: str) -> str:
+    if len(token) > 3 and token.endswith("s"):
+        return token[:-1]
+    return token
 
 
 def _tokens(text: str) -> list[str]:

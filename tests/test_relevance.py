@@ -48,3 +48,47 @@ def test_relevance_gate_marks_borderline_source_needs_review() -> None:
     assert all_sources[0].metadata["relevance"]["status"] == "needs_review"
     assert selected == []
     assert findings[0].metadata["source_status"] == "needs_review"
+
+
+def test_relevance_exact_phrase_outranks_weak_single_token_match() -> None:
+    topic = TopicConfig(
+        id="rag-systems",
+        queries=["RAG systems evaluation"],
+        paper_queries=["retrieval augmented generation evaluation benchmark"],
+    )
+    phrase_source = SourceCandidate(
+        title="Evaluating Retrieval-Augmented Generation Systems",
+        url="https://arxiv.org/abs/2605.01000",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary="A benchmark for retrieval augmented generation evaluation.",
+    )
+    weak_source = SourceCandidate(
+        title="Normalizing Trajectory Models",
+        url="https://arxiv.org/abs/2605.01001",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary="A method for generation in trajectory modeling.",
+    )
+
+    phrase = score_source(phrase_source, topic)
+    weak = score_source(weak_source, topic)
+
+    assert phrase.metadata["relevance"]["status"] == "relevant"
+    assert weak.metadata["relevance"]["status"] != "relevant"
+    assert phrase.metadata["relevance"]["score"] > weak.metadata["relevance"]["score"]
+
+
+def test_relevance_generic_benchmark_wording_is_not_enough_for_viable_paper() -> None:
+    topic = TopicConfig(id="agent-memory", queries=["agent memory systems"])
+    source = SourceCandidate(
+        title="A General Benchmark for Efficient Inference",
+        url="https://arxiv.org/abs/2605.01002",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary="This benchmark evaluates inference systems without memory agents.",
+    )
+
+    scored = score_source(source, topic)
+
+    assert scored.metadata["relevance"]["status"] != "relevant"

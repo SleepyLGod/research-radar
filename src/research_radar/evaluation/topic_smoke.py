@@ -29,6 +29,7 @@ class TopicSmokeSpec:
     queries: tuple[str, ...]
     topic_signals: tuple[str, ...]
     source_intent: str = RESEARCH_BRIEF
+    paper_queries: tuple[str, ...] = ()
     priority_sources: tuple[str, ...] = (
         "arxiv.org",
         "semanticscholar.org",
@@ -50,6 +51,7 @@ class TopicSmokeResult:
     relevant_paper_count: int
     viable_paper_count: int
     paper_selection_reason: str
+    rejected_paper_candidates: list[dict[str, Any]]
     publishable_claim_count: int
     warning_count: int
     semantic_scholar_warning_count: int
@@ -80,6 +82,12 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
             "memory benchmark",
             "persistent recall",
         ),
+        paper_queries=(
+            "Memory in the LLM Era",
+            "LLM agent memory benchmark",
+            "LOCOMO LongMemEval agent memory",
+            "long term memory LLM agents",
+        ),
     ),
     TopicSmokeSpec(
         id="llm-reasoning-eval",
@@ -91,6 +99,11 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
             "test-time scaling",
             "test time scaling",
         ),
+        paper_queries=(
+            "LLM reasoning evaluation benchmark",
+            "test-time scaling reasoning benchmark",
+            "reasoning trace self consistency evaluation",
+        ),
     ),
     TopicSmokeSpec(
         id="rag-systems",
@@ -101,6 +114,11 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
             "retrieval-augmented generation",
             "retrieval benchmark",
             "rag system",
+        ),
+        paper_queries=(
+            "retrieval augmented generation evaluation benchmark",
+            "RAG systems evaluation",
+            "retrieval augmented generation survey",
         ),
     ),
 )
@@ -133,6 +151,7 @@ def with_smoke_topics(config: AppConfig, specs: Sequence[TopicSmokeSpec]) -> App
             TopicConfig(
                 id=spec.id,
                 queries=list(spec.queries),
+                paper_queries=list(spec.paper_queries),
                 priority_sources=list(spec.priority_sources),
                 source_intent=spec.source_intent,
             )
@@ -207,6 +226,7 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
     selected_source = _selected_source(sources, findings)
     best_skipped_paper = _best_skipped_paper(sources, selected_source)
     paper_diagnostics = _paper_diagnostics(sources, findings, selected_source)
+    rejected_papers = _rejected_papers(sources)
     non_list_relevant_count = _non_list_relevant_count(sources)
     warning_count = sum(1 for finding in findings if finding.get("severity") == "warning")
     semantic_scholar_warning_count = sum(
@@ -238,6 +258,7 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
         relevant_paper_count=paper_diagnostics["relevant_paper_count"],
         viable_paper_count=paper_diagnostics["viable_paper_count"],
         paper_selection_reason=str(paper_diagnostics["paper_selection_reason"]),
+        rejected_paper_candidates=rejected_papers,
         publishable_claim_count=publishable_claim_count,
         warning_count=warning_count,
         semantic_scholar_warning_count=semantic_scholar_warning_count,
@@ -281,6 +302,7 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
             f"{result.warning_count} | "
             f"{failures} |"
         )
+    lines.extend(_rejected_paper_lines(report.results))
     lines.append("")
     return "\n".join(lines)
 
@@ -297,6 +319,7 @@ def _failed_topic_result(topic_id: str, reason: str) -> TopicSmokeResult:
         relevant_paper_count=0,
         viable_paper_count=0,
         paper_selection_reason="topic run failed",
+        rejected_paper_candidates=[],
         publishable_claim_count=0,
         warning_count=0,
         semantic_scholar_warning_count=0,
@@ -432,6 +455,44 @@ def _paper_diagnostics(
             selected_source,
         ),
     }
+
+
+def _rejected_papers(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rejected = []
+    for source in sources:
+        if not _is_paper_source(source):
+            continue
+        relevance = source.get("metadata", {}).get("relevance", {})
+        score = _relevance_score(source)
+        status = str(relevance.get("status", "unknown"))
+        if status == "relevant" and score >= RESEARCH_BRIEF_PAPER_RELEVANCE_FLOOR:
+            continue
+        rejected.append(
+            {
+                "title": source.get("title"),
+                "url": source.get("url"),
+                "status": status,
+                "score": score,
+                "reason": relevance.get("reason", "no relevance reason"),
+            }
+        )
+    return sorted(rejected, key=lambda item: float(item["score"]), reverse=True)[:3]
+
+
+def _rejected_paper_lines(results: list[TopicSmokeResult]) -> list[str]:
+    lines = ["", "## Top Rejected Paper Candidates", ""]
+    for result in results:
+        if not result.rejected_paper_candidates:
+            lines.append(f"- `{result.topic_id}`: none")
+            continue
+        rows = []
+        for paper in result.rejected_paper_candidates:
+            rows.append(
+                f"{paper.get('title')} "
+                f"({paper.get('status')}, {paper.get('score')}): {paper.get('reason')}"
+            )
+        lines.append(f"- `{result.topic_id}`: " + "; ".join(rows))
+    return lines
 
 
 def _paper_selection_reason(

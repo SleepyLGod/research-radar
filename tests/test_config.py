@@ -24,6 +24,7 @@ def test_parse_config_accepts_default_plan_shape() -> None:
                 {
                     "id": "agent-memory",
                     "queries": ["agent memory systems"],
+                    "paper_queries": ["Memory in the LLM Era"],
                     "priority_sources": ["arxiv.org", "github.com"],
                 }
             ],
@@ -33,6 +34,7 @@ def test_parse_config_accepts_default_plan_shape() -> None:
 
     assert config.project.name == "ResearchRadar"
     assert config.topic("agent-memory").queries == ["agent memory systems"]
+    assert config.topic("agent-memory").paper_queries == ["Memory in the LLM Era"]
     assert config.topic("agent-memory").source_intent == "research_brief"
     assert config.publishing.auto_publish is False
 

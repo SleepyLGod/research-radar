@@ -46,6 +46,7 @@ def test_query_expansion_metadata_records_audit_data() -> None:
         "source_intent": "research_brief",
         "connector": "semantic_scholar",
         "original_queries": ["agent memory systems"],
+        "paper_queries": [],
         "expanded_queries": [
             "agent memory systems",
             "agent memory systems paper",
@@ -54,3 +55,26 @@ def test_query_expansion_metadata_records_audit_data() -> None:
             "agent memory systems arxiv",
         ],
     }
+
+
+def test_paper_queries_precede_generic_query_expansion() -> None:
+    topic = TopicConfig(
+        id="agent-memory",
+        queries=["agent memory systems"],
+        paper_queries=["Memory in the LLM Era", "LLM agent memory benchmark"],
+        source_intent="research_brief",
+    )
+
+    expanded = topic_for_connector(topic, "arxiv")
+
+    assert expanded.queries[:2] == [
+        "Memory in the LLM Era",
+        "LLM agent memory benchmark",
+    ]
+    assert expanded.queries[2:] == [
+        "agent memory systems",
+        "agent memory systems paper",
+        "agent memory systems benchmark",
+        "agent memory systems survey",
+        "agent memory systems arxiv",
+    ]

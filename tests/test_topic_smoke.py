@@ -134,6 +134,9 @@ def test_topic_smoke_distinguishes_missing_paper_from_below_threshold(tmp_path: 
 
     assert no_paper.paper_selection_reason == "no paper found"
     assert low_paper.paper_selection_reason == "paper below threshold"
+    assert low_paper.rejected_paper_candidates[0]["title"] == (
+        "Agentic Discovery for Test-Time Scaling"
+    )
 
 
 def test_topic_smoke_reports_zero_publishable_claims(tmp_path: Path) -> None:
@@ -224,6 +227,7 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
     ]
     assert "best_skipped_paper" in summary["results"][0]
     assert "paper_candidate_count" in summary["results"][0]
+    assert "rejected_paper_candidates" in summary["results"][0]
 
 
 def _write_run(

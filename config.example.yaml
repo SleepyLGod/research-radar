@@ -7,6 +7,11 @@ topics:
     queries:
       - "agent memory systems"
       - "LLM memory benchmark"
+    paper_queries:
+      - "Memory in the LLM Era"
+      - "LLM agent memory benchmark"
+      - "LOCOMO LongMemEval agent memory"
+      - "long term memory LLM agents"
     priority_sources:
       - arxiv.org
       - semanticscholar.org
