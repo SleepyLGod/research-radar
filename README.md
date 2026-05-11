@@ -81,6 +81,8 @@ uv run research-radar eval topics --provider deepseek --secret-source env --env-
 
 The harness checks source selection, publishable claim count, warning-only connector failures, and
 whether downgraded claims leaked into rendered briefs.
+For `research_brief` topics, paper connectors use deterministic paper-focused query variants and
+the smoke summary reports paper candidate diagnostics.
 
 Run a single-paper golden smoke without discovery:
 

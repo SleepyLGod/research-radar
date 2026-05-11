@@ -10,7 +10,10 @@ from typing import Any
 from research_radar.analysis.providers import LLMProvider
 from research_radar.config import AppConfig, TopicConfig
 from research_radar.discovery.base import DiscoveryConnector
-from research_radar.discovery.source_selection import RESEARCH_BRIEF
+from research_radar.discovery.source_selection import (
+    RESEARCH_BRIEF,
+    RESEARCH_BRIEF_PAPER_RELEVANCE_FLOOR,
+)
 from research_radar.exceptions import ResearchRadarError
 from research_radar.pipeline.daily import run_daily
 from research_radar.storage.files import ensure_dir, read_json, read_jsonl, write_json, write_text
@@ -43,6 +46,10 @@ class TopicSmokeResult:
     failures: list[str]
     selected_source: dict[str, Any] | None
     best_skipped_paper: dict[str, Any] | None
+    paper_candidate_count: int
+    relevant_paper_count: int
+    viable_paper_count: int
+    paper_selection_reason: str
     publishable_claim_count: int
     warning_count: int
     semantic_scholar_warning_count: int
@@ -199,6 +206,7 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
 
     selected_source = _selected_source(sources, findings)
     best_skipped_paper = _best_skipped_paper(sources, selected_source)
+    paper_diagnostics = _paper_diagnostics(sources, findings, selected_source)
     non_list_relevant_count = _non_list_relevant_count(sources)
     warning_count = sum(1 for finding in findings if finding.get("severity") == "warning")
     semantic_scholar_warning_count = sum(
@@ -226,6 +234,10 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
         failures=failures,
         selected_source=selected_source,
         best_skipped_paper=best_skipped_paper,
+        paper_candidate_count=paper_diagnostics["paper_candidate_count"],
+        relevant_paper_count=paper_diagnostics["relevant_paper_count"],
+        viable_paper_count=paper_diagnostics["viable_paper_count"],
+        paper_selection_reason=str(paper_diagnostics["paper_selection_reason"]),
         publishable_claim_count=publishable_claim_count,
         warning_count=warning_count,
         semantic_scholar_warning_count=semantic_scholar_warning_count,
@@ -244,8 +256,8 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
         f"- Summary JSON: `{report.summary_path}`",
         "",
         "| Topic | Status | Selected Source | Role | "
-        "Best Skipped Paper | Claims | Warnings | Failures |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | --- |",
+        "Best Skipped Paper | Papers | Paper Status | Claims | Warnings | Failures |",
+        "| --- | --- | --- | --- | --- | ---: | --- | ---: | ---: | --- |",
     ]
     for result in report.results:
         selected = result.selected_source or {}
@@ -253,6 +265,7 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
         selected_role = str(selected.get("role", "-")).replace("|", "\\|")
         skipped = result.best_skipped_paper or {}
         skipped_title = str(skipped.get("title", "-")).replace("|", "\\|")
+        paper_status = result.paper_selection_reason.replace("|", "\\|")
         failures = ("; ".join(result.failures) if result.failures else "-").replace("|", "\\|")
         lines.append(
             "| "
@@ -261,6 +274,9 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
             f"{selected_title} | "
             f"{selected_role} | "
             f"{skipped_title} | "
+            f"{result.paper_candidate_count}/{result.relevant_paper_count}/"
+            f"{result.viable_paper_count} | "
+            f"{paper_status} | "
             f"{result.publishable_claim_count} | "
             f"{result.warning_count} | "
             f"{failures} |"
@@ -277,6 +293,10 @@ def _failed_topic_result(topic_id: str, reason: str) -> TopicSmokeResult:
         failures=[f"topic run failed: {reason}"],
         selected_source=None,
         best_skipped_paper=None,
+        paper_candidate_count=0,
+        relevant_paper_count=0,
+        viable_paper_count=0,
+        paper_selection_reason="topic run failed",
         publishable_claim_count=0,
         warning_count=0,
         semantic_scholar_warning_count=0,
@@ -384,6 +404,75 @@ def _best_skipped_paper(
     }
 
 
+def _paper_diagnostics(
+    sources: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    selected_source: dict[str, Any] | None,
+) -> dict[str, object]:
+    paper_sources = [_paper for _paper in sources if _is_paper_source(_paper)]
+    relevant_papers = [
+        source
+        for source in paper_sources
+        if source.get("metadata", {}).get("relevance", {}).get("status") == "relevant"
+    ]
+    viable_papers = [
+        source
+        for source in relevant_papers
+        if _relevance_score(source) >= RESEARCH_BRIEF_PAPER_RELEVANCE_FLOOR
+    ]
+    return {
+        "paper_candidate_count": len(paper_sources),
+        "relevant_paper_count": len(relevant_papers),
+        "viable_paper_count": len(viable_papers),
+        "paper_selection_reason": _paper_selection_reason(
+            paper_sources,
+            relevant_papers,
+            viable_papers,
+            findings,
+            selected_source,
+        ),
+    }
+
+
+def _paper_selection_reason(
+    paper_sources: list[dict[str, Any]],
+    relevant_papers: list[dict[str, Any]],
+    viable_papers: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+    selected_source: dict[str, Any] | None,
+) -> str:
+    if selected_source is not None and selected_source.get("role") in {
+        "primary_paper",
+        "benchmark_paper",
+    }:
+        failure_reason = _selected_paper_failure_reason(selected_source, findings)
+        return failure_reason or "paper selected"
+    if not paper_sources:
+        return "no paper found"
+    if not relevant_papers:
+        return "no relevant paper"
+    if not viable_papers:
+        return "paper below threshold"
+    return "viable paper skipped"
+
+
+def _selected_paper_failure_reason(
+    selected_source: dict[str, Any],
+    findings: list[dict[str, Any]],
+) -> str | None:
+    source_url = selected_source.get("url")
+    for finding in findings:
+        metadata = finding.get("metadata", {})
+        if metadata.get("source_url") != source_url:
+            continue
+        kind = metadata.get("kind")
+        if kind == "deep_ingestion_failed":
+            return "selected paper ingestion failed"
+        if kind == "deep_reading_failed":
+            return "selected paper reading failed"
+    return None
+
+
 def _non_list_relevant_count(sources: list[dict[str, Any]]) -> int:
     count = 0
     for source in sources:
@@ -399,6 +488,13 @@ def _non_list_relevant_count(sources: list[dict[str, Any]]) -> int:
 def _source_role(source: dict[str, Any]) -> str | None:
     role = source.get("metadata", {}).get("source_role", {}).get("role")
     return str(role) if role is not None else None
+
+
+def _is_paper_source(source: dict[str, Any]) -> bool:
+    return source.get("source_type") == "paper" or _source_role(source) in {
+        "primary_paper",
+        "benchmark_paper",
+    }
 
 
 def _paper_role_rank(source: dict[str, Any]) -> int:

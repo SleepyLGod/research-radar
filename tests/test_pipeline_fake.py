@@ -25,6 +25,26 @@ class FakeConnector:
         ]
 
 
+class CapturingPaperConnector:
+    name = "arxiv"
+
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        self.queries = context.topic.queries
+        return [
+            SourceCandidate(
+                title="A careful paper",
+                url="https://example.com/paper",
+                source_type=SourceType.PAPER,
+                source_name=self.name,
+                summary="This paper reports an agent memory benchmark with clear evidence.",
+                score=1.0,
+            )
+        ]
+
+
 def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     config = parse_config(
         {
@@ -45,6 +65,34 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "review_report.md").exists()
     assert (run_dir / "review_findings.jsonl").exists()
     assert "A careful paper" in (run_dir / "daily.md").read_text(encoding="utf-8")
+
+
+def test_daily_pipeline_expands_queries_for_paper_connectors(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    connector = CapturingPaperConnector()
+
+    run_dir = run_daily(tmp_path, config, "agent-memory", [connector])
+    manifest = read_json(run_dir / "manifest.json")
+
+    assert connector.queries == [
+        "agent memory",
+        "agent memory paper",
+        "agent memory benchmark",
+        "agent memory survey",
+        "agent memory arxiv",
+    ]
+    assert manifest["metadata"]["query_expansion"]["arxiv"]["expanded_queries"] == [
+        "agent memory",
+        "agent memory paper",
+        "agent memory benchmark",
+        "agent memory survey",
+        "agent memory arxiv",
+    ]
 
 
 class MixedConnector:

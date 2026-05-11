@@ -21,6 +21,10 @@ def test_topic_smoke_summary_reads_selected_source(tmp_path: Path) -> None:
     assert result.selected_source["title"] == "Grounded Agent Memory Benchmark"
     assert result.selected_source["role"] == "benchmark_paper"
     assert result.best_skipped_paper is None
+    assert result.paper_candidate_count == 1
+    assert result.relevant_paper_count == 1
+    assert result.viable_paper_count == 1
+    assert result.paper_selection_reason == "paper selected"
     assert result.publishable_claim_count == 1
 
 
@@ -81,7 +85,55 @@ def test_topic_smoke_reports_repo_hiding_comparable_paper(tmp_path: Path) -> Non
     assert not result.passed
     assert result.best_skipped_paper is not None
     assert result.best_skipped_paper["title"] == "Grounded Agent Memory Benchmark"
+    assert result.paper_selection_reason == "viable paper skipped"
     assert "selected repository hides a comparable relevant paper" in result.failures
+
+
+def test_topic_smoke_distinguishes_missing_paper_from_below_threshold(tmp_path: Path) -> None:
+    no_paper_run = _write_run(
+        tmp_path / "missing",
+        DEFAULT_TOPIC_SMOKE_SPECS[0],
+        selected_url="https://example.com/repo",
+        sources=[
+            _source(
+                "agent-memory-benchmark",
+                "https://example.com/repo",
+                "implementation_repo",
+                "Benchmark implementation for agent memory.",
+                source_type="repository",
+                source_name="github",
+            )
+        ],
+    )
+    low_paper_run = _write_run(
+        tmp_path / "low",
+        DEFAULT_TOPIC_SMOKE_SPECS[0],
+        selected_url="https://example.com/repo",
+        sources=[
+            _source(
+                "agent-memory-benchmark",
+                "https://example.com/repo",
+                "implementation_repo",
+                "Benchmark implementation for agent memory.",
+                source_type="repository",
+                source_name="github",
+                relevance=0.8,
+            ),
+            _source(
+                "Agentic Discovery for Test-Time Scaling",
+                "https://example.com/paper",
+                "benchmark_paper",
+                "A paper about test-time scaling.",
+                relevance=0.47,
+            ),
+        ],
+    )
+
+    no_paper = summarize_topic_run(no_paper_run, DEFAULT_TOPIC_SMOKE_SPECS[0])
+    low_paper = summarize_topic_run(low_paper_run, DEFAULT_TOPIC_SMOKE_SPECS[0])
+
+    assert no_paper.paper_selection_reason == "no paper found"
+    assert low_paper.paper_selection_reason == "paper below threshold"
 
 
 def test_topic_smoke_reports_zero_publishable_claims(tmp_path: Path) -> None:
@@ -171,6 +223,7 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
         "llm-reasoning-eval",
     ]
     assert "best_skipped_paper" in summary["results"][0]
+    assert "paper_candidate_count" in summary["results"][0]
 
 
 def _write_run(

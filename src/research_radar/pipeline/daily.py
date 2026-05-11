@@ -20,6 +20,10 @@ from research_radar.compose.wechat import render_wechat_html
 from research_radar.config import AppConfig
 from research_radar.discovery.base import DiscoveryConnector, DiscoveryContext
 from research_radar.discovery.dedupe import dedupe_candidates
+from research_radar.discovery.query_expansion import (
+    query_expansion_metadata,
+    topic_for_connector,
+)
 from research_radar.discovery.relevance import gate_relevant_sources
 from research_radar.discovery.source_role import classify_source_role
 from research_radar.discovery.source_selection import (
@@ -52,11 +56,16 @@ def run_daily(
 
     topic = config.topic(topic_id)
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
-    context = DiscoveryContext(topic=topic, limit=limit)
     findings: list[ReviewFinding] = []
     candidates: list[SourceCandidate] = []
+    query_expansions: dict[str, object] = {}
 
     for connector in connectors:
+        connector_topic = topic_for_connector(topic, connector.name)
+        expansion = query_expansion_metadata(topic, connector_topic, connector.name)
+        if expansion is not None:
+            query_expansions[connector.name] = expansion
+        context = DiscoveryContext(topic=connector_topic, limit=limit)
         try:
             candidates.extend(connector.discover(context))
         except DiscoveryError as exc:
@@ -159,6 +168,7 @@ def run_daily(
         publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
         metadata={
             **manifest.metadata,
+            "query_expansion": query_expansions,
             "relevance": {
                 "relevant_count": len(relevant_candidates),
                 "needs_review_count": _relevance_count(candidates, "needs_review"),
