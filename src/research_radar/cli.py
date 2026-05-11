@@ -18,6 +18,7 @@ from research_radar.discovery.semantic_scholar import SemanticScholarConnector
 from research_radar.evidence.ledger import load_claims
 from research_radar.exceptions import ResearchRadarError
 from research_radar.pipeline.daily import run_daily
+from research_radar.pipeline.paper import run_paper
 from research_radar.pipeline.weekly import compose_weekly_from_run
 from research_radar.publishers.wechat.client import (
     WeChatArticle,
@@ -106,6 +107,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly load local environment variables before reading env-backed secrets.",
     )
     daily.set_defaults(handler=handle_run_daily)
+    paper = run_subparsers.add_parser("paper", help="Run a single-paper deep reading.")
+    paper.add_argument("--topic", required=True)
+    paper.add_argument("--url", required=True)
+    paper.add_argument("--config", type=Path, default=Path("config.yaml"))
+    paper.add_argument("--root", type=Path, default=Path.cwd())
+    paper.add_argument(
+        "--provider",
+        choices=["deepseek"],
+        default="deepseek",
+        help="Model provider for the paper-reading pass.",
+    )
+    paper.add_argument(
+        "--model",
+        default=None,
+        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+    )
+    paper.add_argument(
+        "--secret-source",
+        choices=["keychain", "env"],
+        default="keychain",
+        help="Read provider secrets from Keychain or the current process environment.",
+    )
+    paper.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Explicitly load local environment variables before reading env-backed secrets.",
+    )
+    paper.set_defaults(handler=handle_run_paper)
     weekly = run_subparsers.add_parser("weekly", help="Compose weekly draft from latest run.")
     weekly.add_argument("--topic", required=True)
     weekly.add_argument("--run", dest="run_dir", type=Path, required=True)
@@ -215,6 +245,26 @@ def handle_run_weekly(args: argparse.Namespace) -> None:
     print(f"Updated weekly draft artifacts in {args.run_dir}")
 
 
+def handle_run_paper(args: argparse.Namespace) -> None:
+    """Run single-paper deep reading."""
+
+    if args.env_file is not None:
+        _load_env_file(args.env_file)
+    config = load_config(args.config)
+    manager = _secret_manager(args.secret_source)
+    reader = _paper_reader(args.provider, manager)
+    model = _paper_model(args.provider, args.model)
+    run_dir = run_paper(
+        args.root,
+        config,
+        args.topic,
+        args.url,
+        reader,
+        model=model,
+    )
+    print(f"Created paper run: {run_dir}")
+
+
 def handle_compose_wechat(args: argparse.Namespace) -> None:
     """Compose WeChat HTML from claims."""
 
@@ -290,6 +340,18 @@ def _daily_deep_reader(
     if provider_name == "deepseek":
         return DeepSeekProvider(manager)
     return None
+
+
+def _paper_reader(provider_name: str, manager: SecretManager) -> LLMProvider:
+    if provider_name == "deepseek":
+        return DeepSeekProvider(manager)
+    raise ResearchRadarError(f"Unsupported provider: {provider_name}")
+
+
+def _paper_model(provider_name: str, model: str | None) -> str:
+    if provider_name == "deepseek":
+        return model or "deepseek-chat"
+    raise ResearchRadarError(f"Unsupported provider: {provider_name}")
 
 
 def _load_env_file(path: Path) -> None:

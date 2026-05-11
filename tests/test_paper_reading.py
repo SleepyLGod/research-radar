@@ -154,6 +154,7 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "deep_reading_candidates" in wide
     assert "deep-reading stage" in deep
     assert "perspective_questions" in deep
+    assert "exact substring copied from TEXT" in deep
     assert "Do not draft the final article here" in deep
     assert "synthesis_outline" in outline
     assert "researcher, builder, evaluator, and skeptic" in outline
@@ -260,6 +261,156 @@ def test_parse_model_json_rejects_missing_anchors() -> None:
         assert "no evidence anchors" in str(exc)
     else:
         raise AssertionError("Expected AnalysisError")
+
+
+def test_validate_paper_reading_downgrades_unfound_evidence_quote() -> None:
+    anchor = EvidenceAnchor(
+        source_url="https://example.com/thin",
+        quote="This quote is absent from the artifact.",
+    )
+    reading = PaperReading(
+        title="Thin Paper",
+        area_context=AreaContext(background="Background", evidence=[anchor]),
+        problem_solution=ProblemSolution(
+            problem="Problem",
+            why_it_matters="Motivation",
+            hidden_assumptions=[],
+            solution="Solution",
+            mechanism="Mechanism",
+            evidence=[anchor],
+        ),
+        related_work=RelatedWorkAssessment(
+            prior_work=["Prior"],
+            novelty="Novelty",
+            repackaging_risk="Risk",
+            evidence=[anchor],
+        ),
+        limitations=LimitationAssessment(
+            explicit_limitations=["Limitation"],
+            inferred_weaknesses=[],
+            evidence=[anchor],
+        ),
+        critical_assessment=CriticalAssessment(
+            overclaiming_risk="Low",
+            weak_evaluations=[],
+            missing_ablations=[],
+            bottom_line="Critique",
+            evidence=[anchor],
+        ),
+        essence="Essence",
+        plain_language_example="Example",
+    )
+    artifact = Artifact(
+        source=SourceCandidate(
+            title="Thin Paper",
+            url="https://example.com/thin",
+            source_type=SourceType.PAPER,
+            source_name="fixture",
+        ),
+        text="The artifact contains different evidence.",
+    )
+
+    claims, findings = validate_paper_reading(reading, artifact)
+
+    assert all(claim.status == ClaimStatus.UNSUPPORTED for claim in claims)
+    assert any(
+        finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings
+    )
+
+
+def test_validate_paper_reading_handles_pdf_extraction_noise() -> None:
+    anchor = EvidenceAnchor(
+        source_url="https://example.com/paper",
+        quote="The framework decomposes memory mechanisms into four stages.",
+    )
+    reading = PaperReading(
+        title="PDF Paper",
+        area_context=AreaContext(background="Background", evidence=[anchor]),
+        problem_solution=ProblemSolution(
+            problem="Problem",
+            why_it_matters="Motivation",
+            hidden_assumptions=[],
+            solution="The framework decomposes memory mechanisms into four stages.",
+            mechanism="Mechanism",
+            evidence=[anchor],
+        ),
+        related_work=RelatedWorkAssessment(
+            prior_work=["Prior"],
+            novelty="Novelty",
+            repackaging_risk="Risk",
+            evidence=[anchor],
+        ),
+        limitations=LimitationAssessment(
+            explicit_limitations=["Limitation"],
+            inferred_weaknesses=[],
+            evidence=[anchor],
+        ),
+        critical_assessment=CriticalAssessment(
+            overclaiming_risk="Low",
+            weak_evaluations=[],
+            missing_ablations=[],
+            bottom_line="Critique",
+            evidence=[anchor],
+        ),
+        essence="Essence",
+        plain_language_example="Example",
+    )
+    artifact = Artifact(
+        source=SourceCandidate(
+            title="PDF Paper",
+            url="https://example.com/paper",
+            source_type=SourceType.PAPER,
+            source_name="fixture",
+        ),
+        text="The framework decom-\nposes memory mechanisms into four stages.",
+    )
+
+    claims, findings = validate_paper_reading(reading, artifact)
+
+    assert all(claim.status == ClaimStatus.SUPPORTED for claim in claims)
+    assert not any(
+        finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings
+    )
+
+
+def test_empty_limitation_claim_is_not_publishable() -> None:
+    anchor = EvidenceAnchor(source_url="https://example.com/paper", quote="Grounded")
+    reading = PaperReading(
+        title="Paper Without Explicit Limitations",
+        area_context=AreaContext(background="Background", evidence=[anchor]),
+        problem_solution=ProblemSolution(
+            problem="Problem",
+            why_it_matters="Motivation",
+            hidden_assumptions=[],
+            solution="Solution",
+            mechanism="Mechanism",
+            evidence=[anchor],
+        ),
+        related_work=RelatedWorkAssessment(
+            prior_work=["Prior"],
+            novelty="Novelty",
+            repackaging_risk="Risk",
+            evidence=[anchor],
+        ),
+        limitations=LimitationAssessment(
+            explicit_limitations=[],
+            inferred_weaknesses=["Weakness"],
+            evidence=[anchor],
+        ),
+        critical_assessment=CriticalAssessment(
+            overclaiming_risk="Low",
+            weak_evaluations=[],
+            missing_ablations=[],
+            bottom_line="Critique",
+            evidence=[anchor],
+        ),
+        essence="Essence",
+        plain_language_example="Example",
+    )
+
+    claims, _ = validate_paper_reading(reading)
+
+    assert not any(claim.text == "Limitations: " for claim in claims)
 
 
 def _artifact() -> Artifact:

@@ -73,6 +73,15 @@ still come from the evidence policy.
 Use `--limit 3` for narrow real smoke runs while the discovery and relevance gates are evolving.
 Deep-reading output is written to `readings.jsonl` and `deep_reading.md`.
 
+Run a single-paper golden smoke without discovery:
+
+```bash
+uv run research-radar run paper --topic agent-memory --url https://arxiv.org/pdf/2604.01707v1 --provider deepseek --secret-source env --env-file .env
+```
+
+Single-paper output is written to `paper.md`, `deep_reading.md`, `claims.jsonl`, and
+`review_report.md`.
+
 Generate WeChat-compatible HTML from a run:
 
 ```bash

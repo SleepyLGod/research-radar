@@ -97,3 +97,45 @@ def test_run_daily_local_provider_does_not_configure_verifier(
     assert captured["limit"] == 10
     assert captured["deep_reader"] is None
     assert captured["deep_limit"] == 1
+
+
+def test_run_paper_can_use_deepseek_from_env(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    captured: dict[str, object] = {}
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY='fake-deepseek-key'\n", encoding="utf-8")
+
+    def fake_run_paper(*args, **kwargs):
+        captured["reader"] = args[4]
+        captured["url"] = args[3]
+        captured["model"] = kwargs.get("model")
+        return tmp_path / "runs" / "fake-paper-run"
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_paper", fake_run_paper)
+
+    cli.handle_run_paper(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            url="https://arxiv.org/pdf/2604.01707v1",
+            provider="deepseek",
+            model=None,
+            secret_source="env",
+            env_file=env_file,
+        )
+    )
+
+    assert isinstance(captured["reader"], DeepSeekProvider)
+    assert captured["url"] == "https://arxiv.org/pdf/2604.01707v1"
+    assert captured["model"] == "deepseek-chat"

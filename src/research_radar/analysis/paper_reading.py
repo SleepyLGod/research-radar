@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 
 from research_radar.analysis.providers import LLMProvider, Message
 from research_radar.evidence.policy import enforce_evidence_policy
@@ -82,6 +83,8 @@ class PaperReading:
     critical_assessment: CriticalAssessment
     essence: str
     plain_language_example: str
+    experiment_summary: str = ""
+    experiment_evidence: list[EvidenceAnchor] = field(default_factory=list)
     unsupported_or_rejected_claims: list[str] = field(default_factory=list)
 
 
@@ -106,6 +109,7 @@ Return structured JSON with these fields:
   - area_context: background, active_questions, common_baselines, evidence
   - problem_solution: problem, why_it_matters, hidden_assumptions, solution, mechanism, evidence
   - related_work: prior_work, novelty, repackaging_risk, evidence
+  - experiments: summary, evidence
   - limitations: explicit_limitations, inferred_weaknesses, evidence
   - critical_assessment: overclaiming_risk, weak_evaluations, missing_ablations,
     bottom_line, evidence
@@ -120,7 +124,9 @@ Rules:
 - Every factual or critical claim needs evidence in the same section.
 - Every section evidence field must be a non-empty list of objects.
 - Every evidence object must include quote and location.
-- Use short verbatim quotes or close paraphrased anchors from the provided text.
+- The quote field must be an exact substring copied from TEXT.
+- Use short exact quotes; do not clean up hyphenation, symbols, line-break artifacts, or wording.
+- Do not use paraphrased evidence anchors.
 - Do not turn author framing into your own conclusion unless evidence supports it.
 - Be neutral, sharp, and concrete. Do not flatter the paper.
 - Do not draft the final article here; this stage feeds an outline-first synthesis step.
@@ -198,6 +204,12 @@ def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
         ),
         essence=_required_string(reading_data, "essence"),
         plain_language_example=str(reading_data.get("plain_language_example") or ""),
+        experiment_summary=_parse_experiment_summary(reading_data),
+        experiment_evidence=_parse_experiment_evidence(
+            reading_data,
+            artifact,
+            fallback_evidence,
+        ),
         unsupported_or_rejected_claims=[
             str(item)
             for item in reading_data.get("unsupported_or_rejected_claims", [])
@@ -233,6 +245,9 @@ def render_deep_reading_report(readings: list[PaperReading]) -> str:
                 "",
                 "### Related Work",
                 reading.related_work.novelty,
+                "",
+                "### Experiments",
+                reading.experiment_summary or "No experiment summary captured.",
                 "",
                 "### Limitations",
                 "\n".join(f"- {item}" for item in reading.limitations.explicit_limitations)
@@ -271,10 +286,27 @@ def reading_to_claims(reading: PaperReading) -> list[Claim]:
             reading.related_work.evidence,
             "Novelty assessment against related work.",
         ),
-        _claim(
-            f"Limitations: {'; '.join(reading.limitations.explicit_limitations)}",
-            reading.limitations.evidence,
-            "Explicit limitations reported or supported by the paper.",
+        *(
+            [
+                _claim(
+                    f"Experiment: {reading.experiment_summary}",
+                    reading.experiment_evidence,
+                    "Experiment or evaluation summary.",
+                )
+            ]
+            if reading.experiment_summary
+            else []
+        ),
+        *(
+            [
+                _claim(
+                    f"Limitations: {'; '.join(reading.limitations.explicit_limitations)}",
+                    reading.limitations.evidence,
+                    "Explicit limitations reported or supported by the paper.",
+                )
+            ]
+            if reading.limitations.explicit_limitations
+            else []
         ),
         _claim(
             f"Critical assessment: {reading.critical_assessment.bottom_line}",
@@ -297,10 +329,79 @@ def reading_to_claims(reading: PaperReading) -> list[Claim]:
     ]
 
 
-def validate_paper_reading(reading: PaperReading) -> tuple[list[Claim], list[ReviewFinding]]:
+def validate_paper_reading(
+    reading: PaperReading,
+    artifact: Artifact | None = None,
+) -> tuple[list[Claim], list[ReviewFinding]]:
     """Validate that paper-reading claims are evidence-backed before publication."""
 
-    return enforce_evidence_policy(reading_to_claims(reading))
+    claims, findings = enforce_evidence_policy(reading_to_claims(reading))
+    if artifact is None:
+        return claims, findings
+    checked_claims: list[Claim] = []
+    for claim in claims:
+        if not claim.is_publishable():
+            checked_claims.append(claim)
+            continue
+        valid_evidence = [
+            anchor for anchor in claim.evidence if _quote_found(anchor.quote, artifact.text)
+        ]
+        if len(valid_evidence) == len(claim.evidence):
+            checked_claims.append(claim)
+            continue
+        missing_count = len(claim.evidence) - len(valid_evidence)
+        if valid_evidence:
+            checked_claims.append(
+                replace(
+                    claim,
+                    evidence=valid_evidence,
+                    metadata={
+                        **claim.metadata,
+                        "evidence_validation": {
+                            "status": "partial",
+                            "missing_anchor_count": missing_count,
+                        },
+                    },
+                )
+            )
+            findings.append(
+                ReviewFinding(
+                    severity="warning",
+                    message="Some evidence anchors were not found in the ingested text.",
+                    claim_text=claim.text,
+                    metadata={
+                        "kind": "evidence_anchor_unmatched",
+                        "missing_anchor_count": missing_count,
+                    },
+                )
+            )
+            continue
+        checked_claims.append(
+            replace(
+                claim,
+                status=ClaimStatus.UNSUPPORTED,
+                evidence=[],
+                metadata={
+                    **claim.metadata,
+                    "evidence_validation": {
+                        "status": "failed",
+                        "missing_anchor_count": missing_count,
+                    },
+                },
+            )
+        )
+        findings.append(
+            ReviewFinding(
+                severity="error",
+                message="No evidence anchors for this claim were found in the ingested text.",
+                claim_text=claim.text,
+                metadata={
+                    "kind": "evidence_anchor_unmatched",
+                    "missing_anchor_count": missing_count,
+                },
+            )
+        )
+    return checked_claims, findings
 
 
 def heuristic_paper_reading(artifact: Artifact) -> PaperReading:
@@ -359,6 +460,8 @@ def heuristic_paper_reading(artifact: Artifact) -> PaperReading:
             ),
             evidence=[anchor],
         ),
+        experiment_summary=_section(text, "Experiment"),
+        experiment_evidence=[anchor] if _section(text, "Experiment") else [],
         essence=_section(text, "Essence") or "The paper's essence is not established.",
         plain_language_example=_section(text, "Example") or "No grounded example is available.",
         unsupported_or_rejected_claims=[
@@ -474,6 +577,29 @@ def _parse_critical_assessment(
     )
 
 
+def _parse_experiment_summary(data: dict[str, object]) -> str:
+    experiments = data.get("experiments") or data.get("experiment")
+    if isinstance(experiments, dict):
+        return str(
+            experiments.get("summary")
+            or experiments.get("evaluation")
+            or experiments.get("headline_results")
+            or ""
+        ).strip()
+    return str(data.get("experiment_summary") or "").strip()
+
+
+def _parse_experiment_evidence(
+    data: dict[str, object],
+    artifact: Artifact,
+    fallback_evidence: list[EvidenceAnchor],
+) -> list[EvidenceAnchor]:
+    experiments = data.get("experiments") or data.get("experiment")
+    if isinstance(experiments, dict):
+        return _section_evidence(experiments, artifact, fallback_evidence)
+    return _parse_evidence(data.get("experiment_evidence", []), artifact, required=False)
+
+
 def _section_evidence(
     data: dict[str, object],
     artifact: Artifact,
@@ -556,3 +682,27 @@ def _string_list(value: object) -> list[str]:
 def _require_anchor(evidence: list[EvidenceAnchor], section: str) -> None:
     if not evidence:
         raise AnalysisError(f"Paper reading section has no evidence anchors: {section}")
+
+
+def _quote_found(quote: str, text: str) -> bool:
+    normalized_quote = _normalize_evidence_text(quote)
+    if not normalized_quote:
+        return False
+    normalized_text = _normalize_evidence_text(text)
+    if normalized_quote in normalized_text:
+        return True
+    compact_quote = _compact_evidence_text(normalized_quote)
+    if len(compact_quote) < 12:
+        return False
+    return compact_quote in _compact_evidence_text(normalized_text)
+
+
+def _normalize_evidence_text(text: str) -> str:
+    without_controls = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", text)
+    without_soft_hyphen = without_controls.replace("\xad", "")
+    dehyphenated = re.sub(r"(?<=[a-zA-Z])-\s+(?=[a-zA-Z])", "", without_soft_hyphen)
+    return re.sub(r"\s+", " ", dehyphenated).strip().lower()
+
+
+def _compact_evidence_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
