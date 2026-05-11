@@ -12,28 +12,40 @@ from research_radar.analysis.paper_reading import (
     validate_paper_reading,
 )
 from research_radar.analysis.providers import LLMProvider
+from research_radar.analysis.research_plan import build_research_plan, research_plan_to_dict
 from research_radar.analysis.review import model_review, rule_based_review
 from research_radar.analysis.triage import heuristic_claims
 from research_radar.compose.draft import build_daily_draft
 from research_radar.compose.markdown import render_markdown
+from research_radar.compose.synthesis import render_synthesis_outline
 from research_radar.compose.wechat import render_wechat_html
 from research_radar.config import AppConfig
-from research_radar.discovery.base import DiscoveryConnector, DiscoveryContext
-from research_radar.discovery.dedupe import dedupe_candidates
-from research_radar.discovery.query_expansion import (
-    query_expansion_metadata,
-    topic_for_connector,
-)
+from research_radar.discovery.base import DiscoveryConnector
+from research_radar.discovery.orchestrator import DiscoveryOrchestrator
 from research_radar.discovery.relevance import gate_relevant_sources
+from research_radar.discovery.source_quality import (
+    paper_coverage_diagnostics,
+    score_source_quality,
+)
 from research_radar.discovery.source_role import classify_source_role
 from research_radar.discovery.source_selection import (
     select_deep_candidates,
     source_selection_score,
 )
+from research_radar.discovery.wide_scan import (
+    build_source_selection_report,
+    build_wide_scan,
+)
 from research_radar.evidence.ledger import write_claims, write_evidence
-from research_radar.exceptions import AnalysisError, DiscoveryError, IngestionError
+from research_radar.exceptions import AnalysisError, IngestionError
 from research_radar.ingestion.router import ingest_source
-from research_radar.models import Artifact, ReviewFinding, SourceCandidate, dataclass_to_dict
+from research_radar.models import (
+    Artifact,
+    Claim,
+    ReviewFinding,
+    SourceCandidate,
+    dataclass_to_dict,
+)
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.storage.files import write_json, write_jsonl, write_text
 from research_radar.storage.runs import create_run_dir, update_manifest
@@ -57,28 +69,17 @@ def run_daily(
     topic = config.topic(topic_id)
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
     findings: list[ReviewFinding] = []
-    candidates: list[SourceCandidate] = []
-    query_expansions: dict[str, object] = {}
-
-    for connector in connectors:
-        connector_topic = topic_for_connector(topic, connector.name)
-        expansion = query_expansion_metadata(topic, connector_topic, connector.name)
-        if expansion is not None:
-            query_expansions[connector.name] = expansion
-        context = DiscoveryContext(topic=connector_topic, limit=limit)
-        try:
-            candidates.extend(connector.discover(context))
-        except DiscoveryError as exc:
-            findings.append(
-                ReviewFinding(
-                    severity="warning",
-                    message=f"{connector.name} discovery failed: {exc}",
-                )
-            )
-
-    candidates = dedupe_candidates(candidates)
+    research_plan = build_research_plan(topic, trusted_domains=config.discovery.trusted_domains)
+    discovery = DiscoveryOrchestrator(connectors).discover(
+        topic,
+        limit=limit,
+        trusted_domains=config.discovery.trusted_domains,
+        research_plan=research_plan,
+    )
+    candidates = discovery.candidates
+    findings.extend(discovery.findings)
     candidates, relevant_candidates, relevance_findings = gate_relevant_sources(candidates, topic)
-    candidates = [classify_source_role(candidate) for candidate in candidates]
+    candidates = [score_source_quality(classify_source_role(candidate)) for candidate in candidates]
     relevant_candidates = [
         candidate
         for candidate in candidates
@@ -96,7 +97,9 @@ def run_daily(
     deep_artifacts: list[Artifact] = []
     readings = []
     deep_claims = []
-    if deep_reader is not None and deep_limit > 0:
+    selected_deep_candidates: list[SourceCandidate] = []
+    deep_required = deep_reader is not None and deep_limit > 0
+    if deep_required:
         selected_deep_candidates = select_deep_candidates(
             relevant_candidates,
             deep_limit,
@@ -140,16 +143,25 @@ def run_daily(
                 )
                 continue
             readings.append(reading)
-            reading_claims, reading_findings = validate_paper_reading(reading)
+            reading_claims, reading_findings = validate_paper_reading(reading, artifact)
             deep_claims.extend(reading_claims)
             findings.extend(reading_findings)
 
-    claims = deep_claims if deep_claims else heuristic_claims(summary_artifacts)
+    paper_coverage = paper_coverage_diagnostics(candidates, source_intent=topic.source_intent)
+    findings.extend(_quality_gate_findings(paper_coverage))
+    claims, fallback_findings = _daily_claims(
+        deep_required=deep_required,
+        selected_deep_candidates=selected_deep_candidates,
+        readings=readings,
+        deep_claims=deep_claims,
+        summary_artifacts=summary_artifacts,
+    )
+    findings.extend(fallback_findings)
     claims, policy_findings = rule_based_review(claims)
     findings.extend(policy_findings)
 
     model_feedback = None
-    if verifier is not None and claims and not deep_claims:
+    if verifier is not None and claims:
         claims, model_findings, model_feedback = model_review(
             claims,
             verifier,
@@ -168,24 +180,42 @@ def run_daily(
         publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
         metadata={
             **manifest.metadata,
-            "query_expansion": query_expansions,
+            "query_expansion": discovery.query_expansions,
+            "research_plan": {
+                "paper_query_count": len(research_plan.paper_queries),
+                "web_query_count": len(research_plan.web_queries),
+            },
+            "discovery": {
+                "stage_counts": discovery.stage_counts,
+                "provider_counts": discovery.provider_counts,
+                "trusted_domains": config.discovery.trusted_domains,
+            },
             "relevance": {
                 "relevant_count": len(relevant_candidates),
                 "needs_review_count": _relevance_count(candidates, "needs_review"),
                 "irrelevant_count": _relevance_count(candidates, "irrelevant"),
             },
+            "quality_gate": paper_coverage,
             "deep_reading": {
                 "source_intent": topic.source_intent,
-                "selected_count": len(selected_deep_candidates)
-                if deep_reader is not None and deep_limit > 0
-                else 0,
+                "selected_count": len(selected_deep_candidates),
                 "reading_count": len(readings),
                 "deep_claim_count": len(deep_claims),
             },
         },
     )
     update_manifest(run_dir, manifest)
+    write_json(run_dir / "research_plan.json", research_plan_to_dict(research_plan))
     write_jsonl(run_dir / "sources.jsonl", candidates)
+    write_json(run_dir / "wide_scan.json", build_wide_scan(candidates))
+    write_json(
+        run_dir / "source_selection.json",
+        build_source_selection_report(
+            relevant_candidates,
+            selected_deep_candidates,
+            source_intent=topic.source_intent,
+        ),
+    )
     artifacts = _merge_artifacts(summary_artifacts, deep_artifacts)
     write_jsonl(
         run_dir / "artifacts.jsonl",
@@ -198,6 +228,10 @@ def run_daily(
     write_jsonl(run_dir / "review_findings.jsonl", findings)
     draft = build_daily_draft(topic_id, relevant_candidates, claims)
     write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
+    write_text(
+        run_dir / "synthesis_outline.md",
+        render_synthesis_outline(topic_id, relevant_candidates, claims, readings),
+    )
     write_text(run_dir / "daily.md", render_markdown(draft))
     write_text(run_dir / "wechat.html", render_wechat_html(draft))
     write_text(run_dir / "deep_reading.md", render_deep_reading_report(readings))
@@ -266,6 +300,51 @@ def _deep_selection_findings(
             )
         )
     return findings
+
+
+def _quality_gate_findings(paper_coverage: dict[str, object]) -> list[ReviewFinding]:
+    if paper_coverage.get("status") == "pass":
+        return []
+    return [
+        ReviewFinding(
+            severity="warning",
+            message=f"Research quality gate degraded run: {paper_coverage.get('reason')}",
+            metadata={
+                "kind": "research_quality_gate",
+                "status": paper_coverage.get("status"),
+                "reason": paper_coverage.get("reason"),
+            },
+        )
+    ]
+
+
+def _daily_claims(
+    *,
+    deep_required: bool,
+    selected_deep_candidates: list[SourceCandidate],
+    readings: list[object],
+    deep_claims: list[Claim],
+    summary_artifacts: list[Artifact],
+) -> tuple[list[Claim], list[ReviewFinding]]:
+    if not deep_required:
+        return heuristic_claims(summary_artifacts), []
+    if deep_claims:
+        return deep_claims, []
+    return [], [
+        ReviewFinding(
+            severity="error",
+            message=(
+                "Deep reading was required, but no validated deep-reading claims were "
+                "produced; heuristic fallback is disabled for this run."
+            ),
+            metadata={
+                "kind": "deep_reading_required_but_missing",
+                "selected_count": len(selected_deep_candidates),
+                "reading_count": len(readings),
+                "deep_claim_count": len(deep_claims),
+            },
+        )
+    ]
 
 
 def _merge_artifacts(

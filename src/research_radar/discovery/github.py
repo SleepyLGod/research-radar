@@ -26,6 +26,8 @@ class GitHubRepoConnector:
         """Return GitHub repository candidates."""
 
         candidates: list[SourceCandidate] = []
+        failed_queries: list[str] = []
+        last_error: OSError | None = None
         for query in context.topic.queries:
             url = (
                 f"{self.endpoint}?q={quote_plus(query)}&sort=updated&order=desc"
@@ -36,8 +38,14 @@ class GitHubRepoConnector:
                 with urlopen(request, timeout=20) as response:
                     payload = json.loads(response.read().decode("utf-8"))
             except OSError as exc:
-                raise DiscoveryError(f"GitHub discovery failed for query: {query}") from exc
+                failed_queries.append(query)
+                last_error = exc
+                continue
             candidates.extend(self._parse(payload, context))
+        if not candidates and last_error is not None:
+            raise DiscoveryError(
+                f"GitHub discovery failed for all queries: {_failed_query_summary(failed_queries)}"
+            ) from last_error
         return candidates
 
     def _headers(self) -> dict[str, str]:
@@ -91,3 +99,10 @@ class GitHubRepoConnector:
                 )
             )
         return candidates
+
+
+def _failed_query_summary(queries: list[str]) -> str:
+    shown = ", ".join(queries[:3])
+    if len(queries) > 3:
+        return f"{shown}, ..."
+    return shown

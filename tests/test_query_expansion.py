@@ -47,6 +47,8 @@ def test_query_expansion_metadata_records_audit_data() -> None:
         "connector": "semantic_scholar",
         "original_queries": ["agent memory systems"],
         "paper_queries": [],
+        "web_queries": [],
+        "exclusion_terms": [],
         "expanded_queries": [
             "agent memory systems",
             "agent memory systems paper",

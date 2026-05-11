@@ -3,10 +3,20 @@ from pathlib import Path
 from research_radar.analysis.providers import StaticProvider
 from research_radar.config import parse_config
 from research_radar.discovery.base import DiscoveryContext
+from research_radar.exceptions import IngestionError
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 from research_radar.pipeline import daily
 from research_radar.pipeline.daily import run_daily
 from research_radar.storage.files import read_json, read_jsonl
+
+DEEP_READING_FIXTURE_TEXT = """
+Agent memory systems require grounded retrieval.
+Require cited memory evidence before crediting answers.
+The paper studies grounded answerability rather than answer match alone.
+The system only evaluates benchmark-style tasks.
+The useful contribution is the evaluation lens.
+Memory benchmarks reward unsupported answers.
+""".strip()
 
 
 class FakeConnector:
@@ -62,6 +72,10 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "article_draft.json").exists()
     assert (run_dir / "daily.md").exists()
     assert (run_dir / "wechat.html").exists()
+    assert (run_dir / "research_plan.json").exists()
+    assert (run_dir / "wide_scan.json").exists()
+    assert (run_dir / "source_selection.json").exists()
+    assert (run_dir / "synthesis_outline.md").exists()
     assert (run_dir / "review_report.md").exists()
     assert (run_dir / "review_findings.jsonl").exists()
     assert "A careful paper" in (run_dir / "daily.md").read_text(encoding="utf-8")
@@ -86,6 +100,8 @@ def test_daily_pipeline_expands_queries_for_paper_connectors(tmp_path: Path) -> 
         "agent memory survey",
         "agent memory arxiv",
     ]
+    assert manifest["metadata"]["research_plan"]["paper_query_count"] == 5
+    assert manifest["metadata"]["query_expansion"]["arxiv"]["discovery_stage"] == "primary_sources"
     assert manifest["metadata"]["query_expansion"]["arxiv"]["expanded_queries"] == [
         "agent memory",
         "agent memory paper",
@@ -190,7 +206,7 @@ def test_daily_pipeline_writes_deep_reading_outputs(monkeypatch, tmp_path: Path)
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         return Artifact(
             source=source,
-            text="Full text about an agent memory benchmark.",
+            text=DEEP_READING_FIXTURE_TEXT,
             artifact_path=str(artifact_dir / "fixture.txt"),
             content_type="text/plain",
         )
@@ -220,6 +236,116 @@ def test_daily_pipeline_writes_deep_reading_outputs(monkeypatch, tmp_path: Path)
     assert "Solution: Require cited memory evidence before crediting answers." in draft
     assert "Limitations: It only evaluates benchmark-style tasks." in draft
     assert "The source reframes memory quality as grounded recall." in deep_report
+
+
+def test_daily_deep_required_disables_summary_fallback_when_ingestion_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        raise IngestionError("fixture ingestion failure")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+    draft = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert manifest["claim_count"] == 0
+    assert manifest["publishable_claim_count"] == 0
+    assert claims == []
+    assert "No claim passed evidence verification" in draft
+    assert "A careful paper is relevant" not in draft
+    assert any(
+        finding["metadata"].get("kind") == "deep_ingestion_failed" for finding in findings
+    )
+    assert any(
+        finding["metadata"].get("kind") == "deep_reading_required_but_missing"
+        for finding in findings
+    )
+
+
+class WebAndPrimaryConnector:
+    name = "web_search"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Agent Memory Web Context",
+                url="https://example.com/agent-memory",
+                source_type=SourceType.WEB,
+                source_name=self.name,
+                summary="A web page about agent memory systems.",
+                score=0.4,
+            )
+        ]
+
+
+def test_daily_pipeline_records_discovery_stage_metadata(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "discovery": {"trusted_domains": ["example.com"]},
+        }
+    )
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [WebAndPrimaryConnector()],
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    sources = read_jsonl(run_dir / "sources.jsonl")
+
+    assert manifest["metadata"]["discovery"]["stage_counts"]["web_search"] == 1
+    assert sources[0]["metadata"]["discovery_stage"] == "web_search"
+    assert sources[0]["metadata"]["trusted_domain_match"] == "example.com"
+
+
+def test_daily_pipeline_marks_research_brief_without_paper_as_degraded(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [RepoOnlyConnector()],
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+
+    assert manifest["metadata"]["quality_gate"]["status"] == "degraded"
+    assert any(
+        finding["metadata"].get("kind") == "research_quality_gate" for finding in findings
+    )
 
 
 class PaperAndListConnector:
@@ -285,7 +411,7 @@ def test_daily_deep_reading_prefers_research_paper_over_repo(
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         ingested.append(source)
-        return Artifact(source=source, text="Full text about agent memory.")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
 
     monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
 
@@ -320,7 +446,7 @@ def test_daily_deep_reading_prefers_paper_over_resource_list(
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         ingested.append(source)
-        return Artifact(source=source, text="Full text about agent memory.")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
 
     monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
 
@@ -399,7 +525,7 @@ def test_daily_deep_reading_falls_back_to_repo_when_no_paper(
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         ingested.append(source)
-        return Artifact(source=source, text="Full text about agent memory.")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
 
     monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
 
@@ -434,7 +560,7 @@ def test_daily_deep_reading_can_fallback_to_resource_list(
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         ingested.append(source)
-        return Artifact(source=source, text="Full text about agent memory.")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
 
     monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
 
@@ -498,7 +624,7 @@ def test_daily_deep_reading_keeps_topic_relevance_ahead_of_role_priority(
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         ingested.append(source)
-        return Artifact(source=source, text="Full text about agent memory.")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
 
     monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
 

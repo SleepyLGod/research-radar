@@ -26,12 +26,17 @@ class SemanticScholarConnector:
         """Return Semantic Scholar paper candidates."""
 
         candidates: list[SourceCandidate] = []
+        failed_queries: list[str] = []
+        last_error: OSError | None = None
         for query in context.topic.queries:
             params = urlencode(
                 {
                     "query": query,
                     "limit": str(context.limit),
-                    "fields": "title,url,abstract,authors,year,publicationDate,externalIds",
+                    "fields": (
+                        "title,url,abstract,authors,year,publicationDate,"
+                        "externalIds,openAccessPdf"
+                    ),
                 }
             )
             request = Request(f"{self.endpoint}?{params}", headers=self._headers())
@@ -39,10 +44,15 @@ class SemanticScholarConnector:
                 with urlopen(request, timeout=20) as response:
                     payload = json.loads(response.read().decode("utf-8"))
             except OSError as exc:
-                raise DiscoveryError(
-                    f"Semantic Scholar discovery failed for query: {query}"
-                ) from exc
+                failed_queries.append(query)
+                last_error = exc
+                continue
             candidates.extend(self._parse(payload, context))
+        if not candidates and last_error is not None:
+            raise DiscoveryError(
+                "Semantic Scholar discovery failed for all queries: "
+                f"{_failed_query_summary(failed_queries)}"
+            ) from last_error
         return candidates
 
     def _headers(self) -> dict[str, str]:
@@ -86,7 +96,10 @@ class SemanticScholarConnector:
                     published_at=str(row.get("publicationDate") or row.get("year") or ""),
                     summary=row.get("abstract") if isinstance(row.get("abstract"), str) else None,
                     score=0.75 + priority_score(url, context.topic.priority_sources),
-                    metadata={"external_ids": row.get("externalIds", {})},
+                    metadata={
+                        "external_ids": row.get("externalIds", {}),
+                        "pdf_url": _open_access_pdf_url(row),
+                    },
                 )
             )
         return candidates
@@ -102,3 +115,20 @@ def _semantic_id(row: dict[str, object]) -> str | None:
             if isinstance(value, int):
                 return f"{key}:{value}"
     return None
+
+
+def _open_access_pdf_url(row: dict[str, object]) -> str | None:
+    open_access_pdf = row.get("openAccessPdf")
+    if not isinstance(open_access_pdf, dict):
+        return None
+    url = open_access_pdf.get("url")
+    if isinstance(url, str) and url:
+        return url
+    return None
+
+
+def _failed_query_summary(queries: list[str]) -> str:
+    shown = ", ".join(queries[:3])
+    if len(queries) > 3:
+        return f"{shown}, ..."
+    return shown

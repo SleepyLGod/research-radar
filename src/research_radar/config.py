@@ -16,8 +16,26 @@ class TopicConfig:
     id: str
     queries: list[str]
     paper_queries: list[str] = field(default_factory=list)
+    web_queries: list[str] = field(default_factory=list)
+    exclusion_terms: list[str] = field(default_factory=list)
     priority_sources: list[str] = field(default_factory=list)
     source_intent: str = "research_brief"
+
+
+@dataclass(frozen=True)
+class WebSearchConfig:
+    """Optional generic web-search connector configuration."""
+
+    endpoint: str | None = None
+    header_secret_name: str | None = None
+
+
+@dataclass(frozen=True)
+class DiscoveryConfig:
+    """Discovery orchestration configuration."""
+
+    trusted_domains: list[str] = field(default_factory=list)
+    web_search: WebSearchConfig = field(default_factory=WebSearchConfig)
 
 
 @dataclass(frozen=True)
@@ -66,6 +84,7 @@ class AppConfig:
 
     project: ProjectConfig
     topics: list[TopicConfig]
+    discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     cadence: CadenceConfig = field(default_factory=CadenceConfig)
     models: ModelConfig = field(default_factory=ModelConfig)
     publishing: PublishingConfig = field(default_factory=PublishingConfig)
@@ -118,6 +137,16 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
                     f"topic {topic_id} paper_queries",
                     allow_empty=True,
                 ),
+                web_queries=_string_list(
+                    item_map.get("web_queries", []),
+                    f"topic {topic_id} web_queries",
+                    allow_empty=True,
+                ),
+                exclusion_terms=_string_list(
+                    item_map.get("exclusion_terms", []),
+                    f"topic {topic_id} exclusion_terms",
+                    allow_empty=True,
+                ),
                 priority_sources=_string_list(
                     item_map.get("priority_sources", []),
                     f"topic {topic_id} priority_sources",
@@ -134,10 +163,32 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
     return AppConfig(
         project=ProjectConfig(name=str(project_data.get("name", "ResearchRadar"))),
         topics=topics,
+        discovery=_discovery_config(_mapping(data.get("discovery", {}), "discovery")),
         cadence=CadenceConfig(**_mapping(data.get("cadence", {}), "cadence")),
         models=ModelConfig(**_mapping(data.get("models", {}), "models")),
         publishing=PublishingConfig(**publishing),
         security=SecurityConfig(**_mapping(data.get("security", {}), "security")),
+    )
+
+
+def _discovery_config(data: dict[str, Any]) -> DiscoveryConfig:
+    web_search = _mapping(data.get("web_search", {}), "discovery.web_search")
+    return DiscoveryConfig(
+        trusted_domains=_string_list(
+            data.get("trusted_domains", []),
+            "discovery trusted_domains",
+            allow_empty=True,
+        ),
+        web_search=WebSearchConfig(
+            endpoint=_optional_string(
+                web_search.get("endpoint"),
+                "discovery.web_search.endpoint",
+            ),
+            header_secret_name=_optional_string(
+                web_search.get("header_secret_name"),
+                "discovery.web_search.header_secret_name",
+            ),
+        ),
     )
 
 
@@ -165,6 +216,14 @@ def _string_list(value: Any, name: str, *, allow_empty: bool = False) -> list[st
     if len(result) != len(value):
         raise ConfigError(f"{name} must contain only strings.")
     return result
+
+
+def _optional_string(value: Any, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{name} must be a non-empty string or null.")
+    return value.strip()
 
 
 def _source_intent(value: Any) -> str:

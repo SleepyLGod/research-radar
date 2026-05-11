@@ -7,7 +7,7 @@ from dataclasses import replace
 from research_radar.config import TopicConfig
 from research_radar.discovery.source_selection import RESEARCH_BRIEF
 
-PAPER_CONNECTOR_NAMES = {"arxiv", "semantic_scholar"}
+PAPER_CONNECTOR_NAMES = {"arxiv", "semantic_scholar", "openalex"}
 PAPER_QUERY_SUFFIXES = ("paper", "benchmark", "survey", "arxiv")
 
 
@@ -56,6 +56,8 @@ def query_expansion_metadata(
         "connector": connector_name,
         "original_queries": original_topic.queries,
         "paper_queries": original_topic.paper_queries,
+        "web_queries": original_topic.web_queries,
+        "exclusion_terms": original_topic.exclusion_terms,
         "expanded_queries": connector_topic.queries,
     }
 

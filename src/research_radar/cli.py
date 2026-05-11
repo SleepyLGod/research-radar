@@ -11,13 +11,16 @@ from pathlib import Path
 
 from research_radar.analysis.deepseek import DeepSeekProvider
 from research_radar.analysis.providers import LLMProvider
-from research_radar.config import load_config
+from research_radar.config import AppConfig, load_config
 from research_radar.discovery.arxiv import ArxivConnector
+from research_radar.discovery.base import DiscoveryConnector
 from research_radar.discovery.github import GitHubRepoConnector
+from research_radar.discovery.openalex import OpenAlexConnector
 from research_radar.discovery.semantic_scholar import SemanticScholarConnector
+from research_radar.discovery.web_search import GenericWebSearchConnector
 from research_radar.evaluation.topic_smoke import run_topic_smoke, select_topic_specs
 from research_radar.evidence.ledger import load_claims
-from research_radar.exceptions import ResearchRadarError
+from research_radar.exceptions import ResearchRadarError, SecretError
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
 from research_radar.pipeline.weekly import compose_weekly_from_run
@@ -62,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     secrets_set = secrets_subparsers.add_parser("set", help="Set a secret group.")
     secrets_set.add_argument(
         "name",
-        choices=["deepseek", "openai", "wechat", "github", "semantic-scholar"],
+        choices=["deepseek", "openai", "wechat", "github", "semantic-scholar", "web-search"],
     )
     secrets_set.set_defaults(handler=handle_secrets_set)
 
@@ -254,6 +257,8 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
         manager.set_github_token(_prompt_secret("GitHub token"))
     elif args.name == "semantic-scholar":
         manager.set_semantic_scholar_api_key(_prompt_secret("Semantic Scholar API key"))
+    elif args.name == "web-search":
+        manager.backend.set_secret("web_search.api_key", _prompt_secret("Web search API key"))
     print(f"Stored {args.name} secrets in the configured secret backend.")
 
 
@@ -268,11 +273,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         _load_env_file(args.env_file)
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
-    connectors = [
-        ArxivConnector(),
-        SemanticScholarConnector(manager),
-        GitHubRepoConnector(manager),
-    ]
+    connectors = _daily_connectors(config, manager)
     verifier = _daily_verifier(args.provider, manager)
     deep_reader = _daily_deep_reader(args.provider, manager, args.deep_limit)
     verifier_model = _daily_verifier_model(args.provider, args.model)
@@ -327,11 +328,7 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
     manager = _secret_manager(args.secret_source)
     provider = _paper_reader(args.provider, manager)
     model = _paper_model(args.provider, args.model)
-    connectors = [
-        ArxivConnector(),
-        SemanticScholarConnector(manager),
-        GitHubRepoConnector(manager),
-    ]
+    connectors = _daily_connectors(config, manager)
     report = run_topic_smoke(
         args.root,
         config,
@@ -434,6 +431,43 @@ def _paper_model(provider_name: str, model: str | None) -> str:
     if provider_name == "deepseek":
         return model or "deepseek-chat"
     raise ResearchRadarError(f"Unsupported provider: {provider_name}")
+
+
+def _daily_connectors(
+    config: AppConfig,
+    manager: SecretManager,
+) -> list[DiscoveryConnector]:
+    connectors: list[DiscoveryConnector] = [
+        ArxivConnector(),
+        SemanticScholarConnector(manager),
+        OpenAlexConnector(),
+    ]
+    web_search = _web_search_connector(config, manager)
+    if web_search is not None:
+        connectors.append(web_search)
+    connectors.append(GitHubRepoConnector(manager))
+    return connectors
+
+
+def _web_search_connector(
+    config: AppConfig,
+    manager: SecretManager,
+) -> GenericWebSearchConnector | None:
+    web_search = config.discovery.web_search
+    if web_search.endpoint is None:
+        return None
+    headers: dict[str, str] = {}
+    if web_search.header_secret_name:
+        try:
+            token = manager.get_named_secret(web_search.header_secret_name)
+        except SecretError:
+            print(
+                "Web search disabled: missing configured header secret.",
+                file=sys.stderr,
+            )
+            return None
+        headers["Authorization"] = f"Bearer {token}"
+    return GenericWebSearchConnector(web_search.endpoint, headers=headers)
 
 
 def _load_env_file(path: Path) -> None:

@@ -14,7 +14,7 @@ def ingest_pdf(source: SourceCandidate, artifact_dir: Path) -> Artifact:
     """Download and extract text from a PDF source."""
 
     ensure_dir(artifact_dir)
-    pdf_url = _pdf_url(source.url)
+    pdf_url = _pdf_url(source)
     filename = (source.canonical_id or source.title).replace("/", "-").replace(" ", "_")[:120]
     path = artifact_dir / f"{filename}.pdf"
     request = Request(pdf_url, headers={"User-Agent": "ResearchRadar/0.0.0"})
@@ -53,7 +53,29 @@ def extract_pdf(source: SourceCandidate, path: Path) -> Artifact:
     )
 
 
-def _pdf_url(url: str) -> str:
+def _pdf_url(source: SourceCandidate) -> str:
+    pdf_url = source.metadata.get("pdf_url")
+    if isinstance(pdf_url, str) and pdf_url:
+        return pdf_url
+    arxiv_id = _external_arxiv_id(source)
+    if arxiv_id is not None:
+        return f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+    url = source.url
     if "arxiv.org/abs/" in url:
         return url.replace("/abs/", "/pdf/") + ".pdf"
     return url
+
+
+def _external_arxiv_id(source: SourceCandidate) -> str | None:
+    external_ids = source.metadata.get("external_ids", {})
+    if isinstance(external_ids, dict):
+        value = external_ids.get("ArXiv") or external_ids.get("arxiv")
+        if isinstance(value, str) and value:
+            return value
+    canonical_id = source.canonical_id or ""
+    if canonical_id.startswith("ArXiv:"):
+        return canonical_id.removeprefix("ArXiv:")
+    doi_prefix = "DOI:10.48550/arXiv."
+    if canonical_id.startswith(doi_prefix):
+        return canonical_id.removeprefix(doi_prefix)
+    return None

@@ -81,6 +81,7 @@ class EnvSecretBackend:
         "wechat.app_secret": "WECHAT_APP_SECRET",
         "github.token": "GITHUB_TOKEN",
         "semantic_scholar.api_key": "SEMANTIC_SCHOLAR_API_KEY",
+        "web_search.api_key": "WEB_SEARCH_API_KEY",
     }
 
     def set_secret(self, name: str, value: str) -> None:
@@ -168,3 +169,8 @@ class SecretManager:
         """Return the Semantic Scholar API key."""
 
         return self.backend.get_secret("semantic_scholar.api_key")
+
+    def get_named_secret(self, name: str) -> str:
+        """Return a configured secret by its storage name."""
+
+        return self.backend.get_secret(name)

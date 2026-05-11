@@ -99,6 +99,103 @@ def test_run_daily_local_provider_does_not_configure_verifier(
     assert captured["deep_limit"] == 1
 
 
+def test_run_daily_adds_configured_web_search_connector(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "discovery": {
+                "web_search": {
+                    "endpoint": "https://search.example.test/api",
+                }
+            },
+        }
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_daily(*args, **kwargs):
+        captured["connectors"] = args[3]
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider="local",
+            model=None,
+            secret_source="keychain",
+            env_file=None,
+            limit=10,
+            deep_limit=0,
+        )
+    )
+
+    connectors = captured["connectors"]
+    assert [connector.name for connector in connectors] == [
+        "arxiv",
+        "semantic_scholar",
+        "openalex",
+        "web_search",
+        "github",
+    ]
+
+
+def test_run_daily_skips_web_search_when_configured_secret_is_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "discovery": {
+                "web_search": {
+                    "endpoint": "https://search.example.test/api",
+                    "header_secret_name": "web_search.api_key",
+                }
+            },
+        }
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_daily(*args, **kwargs):
+        captured["connectors"] = args[3]
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.delenv("WEB_SEARCH_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider="local",
+            model=None,
+            secret_source="env",
+            env_file=None,
+            limit=10,
+            deep_limit=0,
+        )
+    )
+
+    connectors = captured["connectors"]
+    assert [connector.name for connector in connectors] == [
+        "arxiv",
+        "semantic_scholar",
+        "openalex",
+        "github",
+    ]
+
+
 def test_run_paper_can_use_deepseek_from_env(
     monkeypatch,
     tmp_path: Path,

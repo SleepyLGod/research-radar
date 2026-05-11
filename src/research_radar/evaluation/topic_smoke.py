@@ -241,6 +241,7 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
         spec=spec,
         selected_source=selected_source,
         best_skipped_paper=best_skipped_paper,
+        paper_selection_reason=str(paper_diagnostics["paper_selection_reason"]),
         non_list_relevant_count=non_list_relevant_count,
         publishable_claim_count=publishable_claim_count,
         claims=claims,
@@ -571,6 +572,7 @@ def _acceptance_failures(
     spec: TopicSmokeSpec,
     selected_source: dict[str, Any] | None,
     best_skipped_paper: dict[str, Any] | None,
+    paper_selection_reason: str,
     non_list_relevant_count: int,
     publishable_claim_count: int,
     claims: list[dict[str, Any]],
@@ -587,6 +589,16 @@ def _acceptance_failures(
             failures.append("selected repository hides a comparable relevant paper")
         if not _has_required_signal(selected_source, spec):
             failures.append("selected source lacks topic phrase or quality source signal")
+        if (
+            spec.source_intent == RESEARCH_BRIEF
+            and selected_role == "implementation_repo"
+            and best_skipped_paper is None
+        ):
+            failures.append("research brief degraded because no relevant paper was selected")
+        if paper_selection_reason == "selected paper ingestion failed":
+            failures.append("selected paper failed ingestion")
+        if paper_selection_reason == "selected paper reading failed":
+            failures.append("selected paper failed deep reading")
 
     if publishable_claim_count <= 0:
         failures.append("publishable_claim_count is zero")

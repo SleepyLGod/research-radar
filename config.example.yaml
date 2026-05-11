@@ -12,11 +12,30 @@ topics:
       - "LLM agent memory benchmark"
       - "LOCOMO LongMemEval agent memory"
       - "long term memory LLM agents"
+    web_queries:
+      - "agent memory systems paper"
+      - "LLM agent memory benchmark blog"
+      - "LOCOMO LongMemEval official"
+    exclusion_terms:
+      - "translation memory"
+      - "cache-only inference"
     priority_sources:
       - arxiv.org
       - semanticscholar.org
+      - openalex.org
       - github.com
       - openreview.net
+
+discovery:
+  trusted_domains:
+    - arxiv.org
+    - semanticscholar.org
+    - openalex.org
+    - openreview.net
+    - aclanthology.org
+  web_search:
+    endpoint:
+    header_secret_name:
 
 cadence:
   daily_monitor: "09:00"

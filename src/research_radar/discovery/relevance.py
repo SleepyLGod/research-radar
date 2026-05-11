@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
+from datetime import UTC, date, datetime
 
 from research_radar.config import TopicConfig
 from research_radar.discovery.dedupe import priority_score
@@ -126,6 +127,9 @@ def score_source(candidate: SourceCandidate, topic: TopicConfig) -> SourceCandid
     ):
         score = min(score, NEEDS_REVIEW_THRESHOLD)
     score = min(score, 1.0)
+    future_publication = _future_publication(candidate.published_at)
+    if future_publication is not None:
+        score = min(score, NEEDS_REVIEW_THRESHOLD)
 
     if score >= RELEVANT_THRESHOLD:
         status = "relevant"
@@ -135,6 +139,8 @@ def score_source(candidate: SourceCandidate, topic: TopicConfig) -> SourceCandid
         status = "irrelevant"
 
     reason = _reason(matched_primary, matched_generic, matched_phrases)
+    if future_publication is not None:
+        reason = f"{reason}; publication date is in the future ({future_publication})"
     metadata = {
         **candidate.metadata,
         "relevance": {
@@ -143,6 +149,7 @@ def score_source(candidate: SourceCandidate, topic: TopicConfig) -> SourceCandid
             "reason": reason,
             "matched_terms": [*matched_primary, *matched_generic],
             "matched_phrases": matched_phrases,
+            "future_publication": future_publication,
         },
     }
     return replace(candidate, metadata=metadata)
@@ -188,6 +195,25 @@ def _tokens(text: str) -> list[str]:
 
 def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower().replace("-", " ")).strip()
+
+
+def _future_publication(published_at: str | None) -> str | None:
+    if not published_at:
+        return None
+    raw = published_at.strip()
+    if not raw:
+        return None
+    try:
+        if re.fullmatch(r"\d{4}", raw):
+            published = date(int(raw), 1, 1)
+        else:
+            published = date.fromisoformat(raw[:10])
+    except ValueError:
+        return None
+    today = datetime.now(UTC).date()
+    if published > today:
+        return published.isoformat()
+    return None
 
 
 def _reason(

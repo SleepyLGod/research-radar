@@ -133,6 +133,8 @@ def test_topic_smoke_distinguishes_missing_paper_from_below_threshold(tmp_path: 
     low_paper = summarize_topic_run(low_paper_run, DEFAULT_TOPIC_SMOKE_SPECS[0])
 
     assert no_paper.paper_selection_reason == "no paper found"
+    assert not no_paper.passed
+    assert "research brief degraded because no relevant paper was selected" in no_paper.failures
     assert low_paper.paper_selection_reason == "paper below threshold"
     assert low_paper.rejected_paper_candidates[0]["title"] == (
         "Agentic Discovery for Test-Time Scaling"
@@ -172,6 +174,30 @@ def test_semantic_scholar_warning_does_not_fail_valid_smoke(tmp_path: Path) -> N
     assert result.passed
     assert result.warning_count == 1
     assert result.semantic_scholar_warning_count == 1
+
+
+def test_topic_smoke_fails_selected_paper_ingestion_failure(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[0],
+        extra_findings=[
+            {
+                "severity": "warning",
+                "message": "Deep ingestion failed: fixture parse failure",
+                "claim_text": "Grounded Agent Memory Benchmark",
+                "metadata": {
+                    "kind": "deep_ingestion_failed",
+                    "source_url": "https://example.com/paper",
+                },
+            }
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[0])
+
+    assert not result.passed
+    assert result.paper_selection_reason == "selected paper ingestion failed"
+    assert "selected paper failed ingestion" in result.failures
 
 
 def test_topic_smoke_reports_downgraded_claim_render_leak(tmp_path: Path) -> None:
@@ -281,7 +307,9 @@ def _write_run(
     write_jsonl(run_dir / "review_findings.jsonl", finding_rows)
     write_jsonl(
         run_dir / "claims.jsonl",
-        claims or [_claim("Problem: The paper studies grounded recall.", "supported")],
+        claims
+        if claims is not None
+        else [_claim("Problem: The paper studies grounded recall.", "supported")],
     )
     write_text(run_dir / "daily.md", daily_text)
     return run_dir

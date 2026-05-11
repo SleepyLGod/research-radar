@@ -92,3 +92,24 @@ def test_relevance_generic_benchmark_wording_is_not_enough_for_viable_paper() ->
     scored = score_source(source, topic)
 
     assert scored.metadata["relevance"]["status"] != "relevant"
+
+
+def test_relevance_future_dated_paper_requires_review() -> None:
+    topic = TopicConfig(
+        id="rag-systems",
+        queries=["RAG systems evaluation"],
+        paper_queries=["retrieval augmented generation evaluation benchmark"],
+    )
+    source = SourceCandidate(
+        title="Retrieval Augmented Generation Benchmark",
+        url="https://example.com/future-paper",
+        source_type=SourceType.PAPER,
+        source_name="openalex",
+        published_at="2999-01-01",
+        summary="A benchmark for retrieval augmented generation evaluation.",
+    )
+
+    scored = score_source(source, topic)
+
+    assert scored.metadata["relevance"]["status"] == "needs_review"
+    assert scored.metadata["relevance"]["future_publication"] == "2999-01-01"
