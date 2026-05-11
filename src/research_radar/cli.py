@@ -15,6 +15,7 @@ from research_radar.config import load_config
 from research_radar.discovery.arxiv import ArxivConnector
 from research_radar.discovery.github import GitHubRepoConnector
 from research_radar.discovery.semantic_scholar import SemanticScholarConnector
+from research_radar.evaluation.topic_smoke import run_topic_smoke, select_topic_specs
 from research_radar.evidence.ledger import load_claims
 from research_radar.exceptions import ResearchRadarError
 from research_radar.pipeline.daily import run_daily
@@ -141,6 +142,58 @@ def build_parser() -> argparse.ArgumentParser:
     weekly.add_argument("--run", dest="run_dir", type=Path, required=True)
     weekly.set_defaults(handler=handle_run_weekly)
 
+    eval_parser = subparsers.add_parser("eval", help="Run evaluation harnesses.")
+    eval_subparsers = eval_parser.add_subparsers(dest="eval_target", required=True)
+    eval_topics = eval_subparsers.add_parser("topics", help="Run the real-topic smoke suite.")
+    eval_topics.add_argument(
+        "--topics",
+        nargs="*",
+        default=None,
+        help="Topic ids to run. Defaults to the built-in three-topic smoke suite.",
+    )
+    eval_topics.add_argument("--config", type=Path, default=Path("config.yaml"))
+    eval_topics.add_argument(
+        "--root",
+        type=Path,
+        default=Path("/private/tmp/research-radar-topic-smoke"),
+    )
+    eval_topics.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum candidates requested per connector query.",
+    )
+    eval_topics.add_argument(
+        "--deep-limit",
+        type=int,
+        default=1,
+        help="Maximum relevant sources to deep-read per topic.",
+    )
+    eval_topics.add_argument(
+        "--provider",
+        choices=["deepseek"],
+        default="deepseek",
+        help="Model provider for reading and review.",
+    )
+    eval_topics.add_argument(
+        "--model",
+        default=None,
+        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+    )
+    eval_topics.add_argument(
+        "--secret-source",
+        choices=["keychain", "env"],
+        default="keychain",
+        help="Read provider secrets from Keychain or the current process environment.",
+    )
+    eval_topics.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Explicitly load local environment variables before reading env-backed secrets.",
+    )
+    eval_topics.set_defaults(handler=handle_eval_topics)
+
     compose_parser = subparsers.add_parser("compose", help="Compose article artifacts.")
     compose_subparsers = compose_parser.add_subparsers(dest="compose_target", required=True)
     compose_wechat = compose_subparsers.add_parser("wechat", help="Compose WeChat HTML.")
@@ -263,6 +316,35 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         model=model,
     )
     print(f"Created paper run: {run_dir}")
+
+
+def handle_eval_topics(args: argparse.Namespace) -> None:
+    """Run the real-topic smoke evaluation."""
+
+    if args.env_file is not None:
+        _load_env_file(args.env_file)
+    config = load_config(args.config)
+    manager = _secret_manager(args.secret_source)
+    provider = _paper_reader(args.provider, manager)
+    model = _paper_model(args.provider, args.model)
+    connectors = [
+        ArxivConnector(),
+        SemanticScholarConnector(manager),
+        GitHubRepoConnector(manager),
+    ]
+    report = run_topic_smoke(
+        args.root,
+        config,
+        connectors,
+        provider,
+        model=model,
+        specs=select_topic_specs(args.topics),
+        limit=args.limit,
+        deep_limit=args.deep_limit,
+    )
+    print(f"Wrote topic smoke summary: {report.markdown_path}")
+    if not report.passed:
+        raise ResearchRadarError(f"Topic smoke failed: {report.markdown_path}")
 
 
 def handle_compose_wechat(args: argparse.Namespace) -> None:

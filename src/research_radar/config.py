@@ -16,6 +16,7 @@ class TopicConfig:
     id: str
     queries: list[str]
     priority_sources: list[str] = field(default_factory=list)
+    source_intent: str = "research_brief"
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,7 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
                     f"topic {topic_id} priority_sources",
                     allow_empty=True,
                 ),
+                source_intent=_source_intent(item_map.get("source_intent", "research_brief")),
             )
         )
 
@@ -157,3 +159,11 @@ def _string_list(value: Any, name: str, *, allow_empty: bool = False) -> list[st
     if len(result) != len(value):
         raise ConfigError(f"{name} must contain only strings.")
     return result
+
+
+def _source_intent(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ConfigError("source_intent must be a string.")
+    if value not in {"research_brief", "implementation_scan"}:
+        raise ConfigError("source_intent must be research_brief or implementation_scan.")
+    return value

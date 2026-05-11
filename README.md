@@ -73,6 +73,15 @@ still come from the evidence policy.
 Use `--limit 3` for narrow real smoke runs while the discovery and relevance gates are evolving.
 Deep-reading output is written to `readings.jsonl` and `deep_reading.md`.
 
+Run the repeatable three-topic smoke harness under `/private/tmp`:
+
+```bash
+uv run research-radar eval topics --provider deepseek --secret-source env --env-file .env
+```
+
+The harness checks source selection, publishable claim count, warning-only connector failures, and
+whether downgraded claims leaked into rendered briefs.
+
 Run a single-paper golden smoke without discovery:
 
 ```bash

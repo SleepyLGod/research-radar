@@ -22,6 +22,10 @@ from research_radar.discovery.base import DiscoveryConnector, DiscoveryContext
 from research_radar.discovery.dedupe import dedupe_candidates
 from research_radar.discovery.relevance import gate_relevant_sources
 from research_radar.discovery.source_role import classify_source_role
+from research_radar.discovery.source_selection import (
+    select_deep_candidates,
+    source_selection_score,
+)
 from research_radar.evidence.ledger import write_claims, write_evidence
 from research_radar.exceptions import AnalysisError, DiscoveryError, IngestionError
 from research_radar.ingestion.router import ingest_source
@@ -84,8 +88,18 @@ def run_daily(
     readings = []
     deep_claims = []
     if deep_reader is not None and deep_limit > 0:
-        selected_deep_candidates = _deep_candidates(relevant_candidates, deep_limit)
-        findings.extend(_deep_selection_findings(relevant_candidates, selected_deep_candidates))
+        selected_deep_candidates = select_deep_candidates(
+            relevant_candidates,
+            deep_limit,
+            source_intent=topic.source_intent,
+        )
+        findings.extend(
+            _deep_selection_findings(
+                relevant_candidates,
+                selected_deep_candidates,
+                source_intent=topic.source_intent,
+            )
+        )
         for candidate in selected_deep_candidates:
             try:
                 artifact = ingest_source(candidate, run_dir / "artifacts")
@@ -151,6 +165,7 @@ def run_daily(
                 "irrelevant_count": _relevance_count(candidates, "irrelevant"),
             },
             "deep_reading": {
+                "source_intent": topic.source_intent,
                 "selected_count": len(selected_deep_candidates)
                 if deep_reader is not None and deep_limit > 0
                 else 0,
@@ -200,32 +215,11 @@ def _relevance_count(candidates: list[SourceCandidate], status: str) -> int:
     )
 
 
-def _deep_candidates(candidates: list[SourceCandidate], limit: int) -> list[SourceCandidate]:
-    non_list_candidates = [
-        candidate
-        for candidate in candidates
-        if candidate.metadata.get("source_role", {}).get("role") != "survey_or_list"
-    ]
-    candidate_pool = non_list_candidates or candidates
-    return sorted(
-        candidate_pool,
-        key=lambda candidate: (
-            _selection_score(candidate),
-            candidate.score,
-        ),
-        reverse=True,
-    )[:limit]
-
-
-def _selection_score(candidate: SourceCandidate) -> float:
-    relevance_score = float(candidate.metadata.get("relevance", {}).get("score", 0.0))
-    role_priority = int(candidate.metadata.get("source_role", {}).get("deep_read_priority", 0))
-    return relevance_score + (role_priority / 1000)
-
-
 def _deep_selection_findings(
     candidates: list[SourceCandidate],
     selected: list[SourceCandidate],
+    *,
+    source_intent: str,
 ) -> list[ReviewFinding]:
     selected_urls = {candidate.url for candidate in selected}
     findings: list[ReviewFinding] = []
@@ -242,6 +236,8 @@ def _deep_selection_findings(
                     "Deep-read source selection "
                     f"{selected_text}: role={source_role.get('role')}, "
                     f"priority={source_role.get('deep_read_priority')}, "
+                    f"score={source_selection_score(candidate, source_intent=source_intent):.3f}, "
+                    f"intent={source_intent}, "
                     f"reason={source_role.get('reason')}"
                 ),
                 claim_text=candidate.title,
@@ -251,6 +247,11 @@ def _deep_selection_findings(
                     "selected": candidate.url in selected_urls,
                     "role": source_role.get("role"),
                     "deep_read_priority": source_role.get("deep_read_priority"),
+                    "selection_score": source_selection_score(
+                        candidate,
+                        source_intent=source_intent,
+                    ),
+                    "source_intent": source_intent,
                 },
             )
         )

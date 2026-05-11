@@ -198,6 +198,65 @@ class PaperAndListConnector:
         ]
 
 
+class PaperAndRepoConnector:
+    name = "paper-and-repo"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="agent-memory-benchmark",
+                url="https://github.com/example/agent-memory-benchmark",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="Benchmark implementation for agent memory systems.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url="https://arxiv.org/abs/2604.01707",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="A paper about agent memory benchmark evaluation.",
+                score=0.1,
+            ),
+        ]
+
+
+def test_daily_deep_reading_prefers_research_paper_over_repo(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text="Full text about agent memory.")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [PaperAndRepoConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+
+    assert ingested[0].title == "Memory in the LLM Era"
+    assert manifest["metadata"]["deep_reading"]["source_intent"] == "research_brief"
+
+
 def test_daily_deep_reading_prefers_paper_over_resource_list(
     monkeypatch,
     tmp_path: Path,
@@ -259,6 +318,57 @@ class ListOnlyConnector:
                 score=1.0,
             )
         ]
+
+
+class RepoOnlyConnector:
+    name = "repo-only"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="agent-memory-benchmark",
+                url="https://github.com/example/agent-memory-benchmark",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="Benchmark implementation for agent memory systems.",
+                score=1.0,
+            )
+        ]
+
+
+def test_daily_deep_reading_falls_back_to_repo_when_no_paper(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text="Full text about agent memory.")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [RepoOnlyConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    readings = read_jsonl(run_dir / "readings.jsonl")
+
+    assert ingested[0].title == "agent-memory-benchmark"
+    assert readings
 
 
 def test_daily_deep_reading_can_fallback_to_resource_list(

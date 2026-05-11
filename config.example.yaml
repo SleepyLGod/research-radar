@@ -3,6 +3,7 @@ project:
 
 topics:
   - id: agent-memory
+    source_intent: research_brief
     queries:
       - "agent memory systems"
       - "LLM memory benchmark"
