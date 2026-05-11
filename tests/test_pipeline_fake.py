@@ -174,6 +174,189 @@ def test_daily_pipeline_writes_deep_reading_outputs(monkeypatch, tmp_path: Path)
     assert "The source reframes memory quality as grounded recall." in deep_report
 
 
+class PaperAndListConnector:
+    name = "paper-and-list"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Awesome Agent Memory",
+                url="https://github.com/example/awesome-agent-memory",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="A curated collection of agent memory systems and benchmarks.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url="https://arxiv.org/abs/2604.01707",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="A paper about agent memory benchmark evaluation.",
+                score=0.1,
+            ),
+        ]
+
+
+def test_daily_deep_reading_prefers_paper_over_resource_list(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text="Full text about agent memory.")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [PaperAndListConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    sources = read_jsonl(run_dir / "sources.jsonl")
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+
+    assert ingested[0].title == "Memory in the LLM Era"
+    assert {
+        source["title"]: source["metadata"]["source_role"]["role"] for source in sources
+    } == {
+        "Awesome Agent Memory": "survey_or_list",
+        "Memory in the LLM Era": "benchmark_paper",
+    }
+    assert any(
+        finding["metadata"].get("kind") == "deep_source_selection"
+        and finding["metadata"].get("selected")
+        and finding["claim_text"] == "Memory in the LLM Era"
+        for finding in findings
+    )
+
+
+class ListOnlyConnector:
+    name = "list-only"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Awesome Agent Memory",
+                url="https://github.com/example/awesome-agent-memory",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="A curated collection of agent memory systems and benchmarks.",
+                score=1.0,
+            )
+        ]
+
+
+def test_daily_deep_reading_can_fallback_to_resource_list(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text="Full text about agent memory.")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [ListOnlyConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+
+    assert ingested[0].title == "Awesome Agent Memory"
+    assert any(
+        finding["metadata"].get("kind") == "deep_source_selection"
+        and finding["metadata"].get("selected")
+        and finding["metadata"].get("role") == "survey_or_list"
+        for finding in findings
+    )
+
+
+class LowRelevancePaperAndStrongRepoConnector:
+    name = "low-paper-strong-repo"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="LLMs Improving LLMs: Agentic Discovery for Test-Time Scaling",
+                url="https://arxiv.org/abs/2605.06655",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="An LLM agent benchmark evaluation for test-time scaling.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="go-agent-memory",
+                url="https://github.com/example/go-agent-memory",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="An agent memory system with persistent recall.",
+                score=0.1,
+            ),
+        ]
+
+
+def test_daily_deep_reading_keeps_topic_relevance_ahead_of_role_priority(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text="Full text about agent memory.")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [LowRelevancePaperAndStrongRepoConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    assert ingested[0].title == "go-agent-memory"
+
+
 def _deep_reading_json() -> str:
     return """
     {

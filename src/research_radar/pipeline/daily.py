@@ -21,6 +21,7 @@ from research_radar.config import AppConfig
 from research_radar.discovery.base import DiscoveryConnector, DiscoveryContext
 from research_radar.discovery.dedupe import dedupe_candidates
 from research_radar.discovery.relevance import gate_relevant_sources
+from research_radar.discovery.source_role import classify_source_role
 from research_radar.evidence.ledger import write_claims, write_evidence
 from research_radar.exceptions import AnalysisError, DiscoveryError, IngestionError
 from research_radar.ingestion.router import ingest_source
@@ -64,6 +65,12 @@ def run_daily(
 
     candidates = dedupe_candidates(candidates)
     candidates, relevant_candidates, relevance_findings = gate_relevant_sources(candidates, topic)
+    candidates = [classify_source_role(candidate) for candidate in candidates]
+    relevant_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.metadata.get("relevance", {}).get("status") == "relevant"
+    ]
     findings.extend(relevance_findings)
     summary_artifacts = [
         Artifact(
@@ -77,7 +84,9 @@ def run_daily(
     readings = []
     deep_claims = []
     if deep_reader is not None and deep_limit > 0:
-        for candidate in _deep_candidates(relevant_candidates, deep_limit):
+        selected_deep_candidates = _deep_candidates(relevant_candidates, deep_limit)
+        findings.extend(_deep_selection_findings(relevant_candidates, selected_deep_candidates))
+        for candidate in selected_deep_candidates:
             try:
                 artifact = ingest_source(candidate, run_dir / "artifacts")
                 deep_artifacts.append(artifact)
@@ -142,8 +151,8 @@ def run_daily(
                 "irrelevant_count": _relevance_count(candidates, "irrelevant"),
             },
             "deep_reading": {
-                "selected_count": min(deep_limit, len(relevant_candidates))
-                if deep_reader is not None
+                "selected_count": len(selected_deep_candidates)
+                if deep_reader is not None and deep_limit > 0
                 else 0,
                 "reading_count": len(readings),
                 "deep_claim_count": len(deep_claims),
@@ -192,14 +201,60 @@ def _relevance_count(candidates: list[SourceCandidate], status: str) -> int:
 
 
 def _deep_candidates(candidates: list[SourceCandidate], limit: int) -> list[SourceCandidate]:
+    non_list_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.metadata.get("source_role", {}).get("role") != "survey_or_list"
+    ]
+    candidate_pool = non_list_candidates or candidates
     return sorted(
-        candidates,
+        candidate_pool,
         key=lambda candidate: (
-            float(candidate.metadata.get("relevance", {}).get("score", 0.0)),
+            _selection_score(candidate),
             candidate.score,
         ),
         reverse=True,
     )[:limit]
+
+
+def _selection_score(candidate: SourceCandidate) -> float:
+    relevance_score = float(candidate.metadata.get("relevance", {}).get("score", 0.0))
+    role_priority = int(candidate.metadata.get("source_role", {}).get("deep_read_priority", 0))
+    return relevance_score + (role_priority / 1000)
+
+
+def _deep_selection_findings(
+    candidates: list[SourceCandidate],
+    selected: list[SourceCandidate],
+) -> list[ReviewFinding]:
+    selected_urls = {candidate.url for candidate in selected}
+    findings: list[ReviewFinding] = []
+    for candidate in candidates:
+        source_role = candidate.metadata.get("source_role", {})
+        selected_text = "selected" if candidate.url in selected_urls else "not selected"
+        severity = "info"
+        if selected_text == "selected" and source_role.get("role") == "survey_or_list":
+            severity = "warning"
+        findings.append(
+            ReviewFinding(
+                severity=severity,
+                message=(
+                    "Deep-read source selection "
+                    f"{selected_text}: role={source_role.get('role')}, "
+                    f"priority={source_role.get('deep_read_priority')}, "
+                    f"reason={source_role.get('reason')}"
+                ),
+                claim_text=candidate.title,
+                metadata={
+                    "kind": "deep_source_selection",
+                    "source_url": candidate.url,
+                    "selected": candidate.url in selected_urls,
+                    "role": source_role.get("role"),
+                    "deep_read_priority": source_role.get("deep_read_priority"),
+                },
+            )
+        )
+    return findings
 
 
 def _merge_artifacts(
