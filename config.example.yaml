@@ -4,6 +4,7 @@ project:
 topics:
   - id: agent-memory
     source_intent: research_brief
+    report_language: en
     queries:
       - "agent memory systems"
       - "LLM memory benchmark"
@@ -19,6 +20,56 @@ topics:
     exclusion_terms:
       - "translation memory"
       - "cache-only inference"
+    required_phrases:
+      - "agent memory"
+      - "LLM agent memory"
+      - "LLM memory"
+      - "agentic memory"
+      - "conversational memory"
+      - "episodic memory"
+      - "long-term memory for agents"
+      - "persistent recall"
+      - "LOCOMO"
+      - "LongMemEval"
+    negative_phrases:
+      - "prefill serving"
+      - "kv cache"
+      - "retrieval adapter"
+      - "planning problems"
+      - "activation quantization"
+      - "moe serving"
+    concept_groups:
+      agent_context:
+        - "agent memory"
+        - "LLM agent memory"
+        - "agentic memory"
+        - "autonomous LLM agents"
+        - "conversational agents"
+        - "AI agents"
+      memory_mechanism:
+        - "memory retrieval"
+        - "agent recall"
+        - "persistent recall"
+        - "long-term memory"
+        - "episodic memory"
+        - "conversational memory"
+        - "memory management"
+        - "memory systems"
+      evaluation_signal:
+        - "LOCOMO"
+        - "LongMemEval"
+        - "agent memory benchmark"
+        - "memory evaluation"
+        - "conversational memory benchmark"
+      negative_compute_or_training:
+        - "prefill serving"
+        - "kv cache"
+        - "retrieval adapter"
+        - "planning problems"
+        - "activation quantization"
+        - "moe serving"
+        - "fine-tuning"
+        - "QLoRA"
     priority_sources:
       - arxiv.org
       - semanticscholar.org

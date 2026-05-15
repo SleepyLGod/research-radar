@@ -169,6 +169,7 @@ def run_topic_smoke(
     specs: Sequence[TopicSmokeSpec] = DEFAULT_TOPIC_SMOKE_SPECS,
     limit: int = 5,
     deep_limit: int = 1,
+    language: str | None = None,
     runner: DailyRunner = run_daily,
 ) -> TopicSmokeReport:
     """Run daily smoke checks for a small set of research topics."""
@@ -194,6 +195,7 @@ def run_topic_smoke(
                 deep_reader=provider,
                 deep_model=model,
                 deep_limit=deep_limit,
+                language=language,
             )
         except ResearchRadarError as exc:
             results.append(_failed_topic_result(spec.id, str(exc)))

@@ -14,12 +14,13 @@ from research_radar.analysis.paper_reading import (
 from research_radar.analysis.providers import LLMProvider
 from research_radar.analysis.research_plan import build_research_plan, research_plan_to_dict
 from research_radar.analysis.review import model_review, rule_based_review
+from research_radar.analysis.source_gist import attach_source_gists
 from research_radar.analysis.triage import heuristic_claims
 from research_radar.compose.draft import build_daily_draft
 from research_radar.compose.markdown import render_markdown
 from research_radar.compose.synthesis import render_synthesis_outline
 from research_radar.compose.wechat import render_wechat_html
-from research_radar.config import AppConfig
+from research_radar.config import AppConfig, TopicConfig
 from research_radar.discovery.base import DiscoveryConnector
 from research_radar.discovery.orchestrator import DiscoveryOrchestrator
 from research_radar.discovery.relevance import gate_relevant_sources
@@ -49,6 +50,10 @@ from research_radar.models import (
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.storage.files import write_json, write_jsonl, write_text
 from research_radar.storage.runs import create_run_dir, update_manifest
+from research_radar.storage.source_history import (
+    annotate_source_history,
+    is_reportable_source,
+)
 
 
 def run_daily(
@@ -63,10 +68,12 @@ def run_daily(
     deep_reader: LLMProvider | None = None,
     deep_model: str | None = None,
     deep_limit: int = 0,
+    language: str | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
 
     topic = config.topic(topic_id)
+    report_language = language or topic.report_language
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
     findings: list[ReviewFinding] = []
     research_plan = build_research_plan(topic, trusted_domains=config.discovery.trusted_domains)
@@ -80,10 +87,40 @@ def run_daily(
     findings.extend(discovery.findings)
     candidates, relevant_candidates, relevance_findings = gate_relevant_sources(candidates, topic)
     candidates = [score_source_quality(classify_source_role(candidate)) for candidate in candidates]
+    candidates, history_report = annotate_source_history(
+        root,
+        topic.id,
+        candidates,
+        run_id=manifest.run_id,
+    )
+    candidates, daily_report_findings = _apply_daily_report_gate(candidates, topic)
+    findings.extend(daily_report_findings)
     relevant_candidates = [
         candidate
         for candidate in candidates
         if candidate.metadata.get("relevance", {}).get("status") == "relevant"
+    ]
+    reportable_candidates = [
+        candidate
+        for candidate in relevant_candidates
+        if is_reportable_source(candidate) and _passes_daily_report_gate(candidate)
+    ]
+    reportable_candidates = attach_source_gists(
+        reportable_candidates,
+        provider=verifier,
+        model=verifier_model or config.models.scout,
+        language=report_language,
+    )
+    candidates = _replace_candidates(candidates, reportable_candidates)
+    relevant_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.metadata.get("relevance", {}).get("status") == "relevant"
+    ]
+    reportable_candidates = [
+        candidate
+        for candidate in relevant_candidates
+        if is_reportable_source(candidate) and _passes_daily_report_gate(candidate)
     ]
     findings.extend(relevance_findings)
     summary_artifacts = [
@@ -92,7 +129,7 @@ def run_daily(
             text=candidate.summary or candidate.title,
             content_type="discovery-summary",
         )
-        for candidate in relevant_candidates
+        for candidate in reportable_candidates
     ]
     deep_artifacts: list[Artifact] = []
     readings = []
@@ -101,13 +138,13 @@ def run_daily(
     deep_required = deep_reader is not None and deep_limit > 0
     if deep_required:
         selected_deep_candidates = select_deep_candidates(
-            relevant_candidates,
+            reportable_candidates,
             deep_limit,
             source_intent=topic.source_intent,
         )
         findings.extend(
             _deep_selection_findings(
-                relevant_candidates,
+                reportable_candidates,
                 selected_deep_candidates,
                 source_intent=topic.source_intent,
             )
@@ -131,6 +168,7 @@ def run_daily(
                     artifact,
                     deep_reader,
                     model=deep_model or config.models.analyst,
+                    language=report_language,
                 )
             except AnalysisError as exc:
                 findings.append(
@@ -195,6 +233,11 @@ def run_daily(
                 "needs_review_count": _relevance_count(candidates, "needs_review"),
                 "irrelevant_count": _relevance_count(candidates, "irrelevant"),
             },
+            "source_history": {
+                "counts": history_report["counts"],
+                "reportable_count": len(reportable_candidates),
+                "omitted_seen_count": len(history_report["omitted_seen_sources"]),
+            },
             "quality_gate": paper_coverage,
             "deep_reading": {
                 "source_intent": topic.source_intent,
@@ -202,16 +245,18 @@ def run_daily(
                 "reading_count": len(readings),
                 "deep_claim_count": len(deep_claims),
             },
+            "report_language": report_language,
         },
     )
     update_manifest(run_dir, manifest)
     write_json(run_dir / "research_plan.json", research_plan_to_dict(research_plan))
     write_jsonl(run_dir / "sources.jsonl", candidates)
+    write_json(run_dir / "source_history_report.json", history_report)
     write_json(run_dir / "wide_scan.json", build_wide_scan(candidates))
     write_json(
         run_dir / "source_selection.json",
         build_source_selection_report(
-            relevant_candidates,
+            reportable_candidates,
             selected_deep_candidates,
             source_intent=topic.source_intent,
         ),
@@ -226,15 +271,18 @@ def run_daily(
     write_claims(run_dir / "claims.jsonl", claims)
     write_evidence(run_dir / "evidence.jsonl", claims)
     write_jsonl(run_dir / "review_findings.jsonl", findings)
-    draft = build_daily_draft(topic_id, relevant_candidates, claims)
+    draft = build_daily_draft(topic_id, reportable_candidates, claims, language=report_language)
     write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
     write_text(
         run_dir / "synthesis_outline.md",
-        render_synthesis_outline(topic_id, relevant_candidates, claims, readings),
+        render_synthesis_outline(topic_id, reportable_candidates, claims, readings),
     )
     write_text(run_dir / "daily.md", render_markdown(draft))
     write_text(run_dir / "wechat.html", render_wechat_html(draft))
-    write_text(run_dir / "deep_reading.md", render_deep_reading_report(readings))
+    write_text(
+        run_dir / "deep_reading.md",
+        render_deep_reading_report(readings, claims, language=report_language),
+    )
     write_text(
         run_dir / "review_report.md",
         render_review_report(findings, model_feedback=model_feedback),
@@ -245,6 +293,7 @@ def run_daily(
             "run_dir": str(run_dir),
             "source_count": len(candidates),
             "relevant_source_count": len(relevant_candidates),
+            "reportable_source_count": len(reportable_candidates),
             "publishable_claim_count": sum(1 for claim in claims if claim.is_publishable()),
         },
     )
@@ -257,6 +306,63 @@ def _relevance_count(candidates: list[SourceCandidate], status: str) -> int:
         for candidate in candidates
         if candidate.metadata.get("relevance", {}).get("status") == status
     )
+
+
+def _apply_daily_report_gate(
+    candidates: list[SourceCandidate],
+    topic: TopicConfig,
+) -> tuple[list[SourceCandidate], list[ReviewFinding]]:
+    gated: list[SourceCandidate] = []
+    findings: list[ReviewFinding] = []
+    for candidate in candidates:
+        reason = _daily_report_suppression_reason(candidate, topic)
+        if reason is None:
+            gated.append(candidate)
+            continue
+        gated_candidate = replace(
+            candidate,
+            metadata={
+                **candidate.metadata,
+                "daily_report_gate": {
+                    "status": "suppressed",
+                    "reason": reason,
+                },
+            },
+        )
+        gated.append(gated_candidate)
+        if (
+            candidate.metadata.get("relevance", {}).get("status") == "relevant"
+            and is_reportable_source(candidate)
+        ):
+            findings.append(
+                ReviewFinding(
+                    severity="info",
+                    message=f"Daily report gate suppressed source: {reason}",
+                    claim_text=candidate.title,
+                    metadata={
+                        "kind": "daily_report_gate",
+                        "source_url": candidate.url,
+                        "reason": reason,
+                    },
+                )
+            )
+    return gated, findings
+
+
+def _daily_report_suppression_reason(
+    candidate: SourceCandidate,
+    topic: TopicConfig,
+) -> str | None:
+    if topic.source_intent != "research_brief":
+        return None
+    role = candidate.metadata.get("source_role", {}).get("role")
+    if candidate.source_type.value == "repository" and role == "survey_or_list":
+        return "research brief excludes repository resource lists"
+    return None
+
+
+def _passes_daily_report_gate(candidate: SourceCandidate) -> bool:
+    return candidate.metadata.get("daily_report_gate", {}).get("status") != "suppressed"
 
 
 def _deep_selection_findings(
@@ -316,6 +422,14 @@ def _quality_gate_findings(paper_coverage: dict[str, object]) -> list[ReviewFind
             },
         )
     ]
+
+
+def _replace_candidates(
+    candidates: list[SourceCandidate],
+    replacements: list[SourceCandidate],
+) -> list[SourceCandidate]:
+    by_url = {candidate.url: candidate for candidate in replacements}
+    return [by_url.get(candidate.url, candidate) for candidate in candidates]
 
 
 def _daily_claims(

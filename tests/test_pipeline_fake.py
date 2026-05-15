@@ -75,6 +75,7 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "research_plan.json").exists()
     assert (run_dir / "wide_scan.json").exists()
     assert (run_dir / "source_selection.json").exists()
+    assert (run_dir / "source_history_report.json").exists()
     assert (run_dir / "synthesis_outline.md").exists()
     assert (run_dir / "review_report.md").exists()
     assert (run_dir / "review_findings.jsonl").exists()
@@ -143,6 +144,81 @@ class MixedConnector:
         ]
 
 
+class PrecisionGateConnector:
+    name = "precision-gate"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url="https://arxiv.org/abs/2604.01707",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="This LLM memory paper evaluates agent memory with LOCOMO.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="ZeRO-Prefill: Zero Redundancy Overheads in MoE Prefill Serving",
+                url="https://arxiv.org/abs/2605.00010",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="A method to reduce redundancy in prefill serving for MoE models.",
+                score=0.9,
+            ),
+            SourceCandidate(
+                title="Analysis of Optimality of Large Language Models on Planning Problems",
+                url="https://arxiv.org/abs/2605.00012",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="An analysis of whether LLMs reason optimally in planning problems.",
+                score=0.8,
+            ),
+        ]
+
+
+class RepoPrecisionConnector:
+    name = "repo-precision"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url="https://arxiv.org/abs/2604.01707",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="This LLM memory paper evaluates agent memory with LOCOMO.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="agent-memory-benchmark",
+                url="https://github.com/example/agent-memory-benchmark",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="Benchmark implementation for agent memory systems with LongMemEval.",
+                score=0.9,
+            ),
+            SourceCandidate(
+                title="TeleAI-UAGI/Awesome-Agent-Memory",
+                url="https://github.com/TeleAI-UAGI/Awesome-Agent-Memory",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary="A curated collection of systems, benchmarks, and papers on agent memory.",
+                score=0.8,
+            ),
+            SourceCandidate(
+                title="Samarth2001/LLM-Fine-tuning",
+                url="https://github.com/Samarth2001/LLM-Fine-tuning",
+                source_type=SourceType.REPOSITORY,
+                source_name="github",
+                summary=(
+                    "Parameter-efficient fine-tuning experiments for 7B LLMs "
+                    "with QLoRA and memory optimization strategies."
+                ),
+                score=0.7,
+            ),
+        ]
+
+
 def test_daily_pipeline_applies_relevance_and_model_review_gates(tmp_path: Path) -> None:
     config = parse_config(
         {
@@ -194,6 +270,113 @@ def test_daily_pipeline_applies_relevance_and_model_review_gates(tmp_path: Path)
     assert any(finding["metadata"].get("kind") == "model_review_decision" for finding in findings)
 
 
+def test_daily_repo_precision_gate_keeps_only_serious_repositories(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [
+                {
+                    "id": "agent-memory",
+                    "queries": ["agent memory systems", "LLM memory benchmark"],
+                    "required_phrases": ["agent memory", "LLM memory", "LOCOMO", "LongMemEval"],
+                }
+            ],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [RepoPrecisionConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    sources = read_jsonl(run_dir / "sources.jsonl")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+    review_report = (run_dir / "review_report.md").read_text(encoding="utf-8")
+    by_title = {source["title"]: source for source in sources}
+
+    assert len(sources) == 4
+    assert ingested[0].title == "Memory in the LLM Era"
+    assert "Memory in the LLM Era" in daily_text
+    assert "agent-memory-benchmark" in daily_text
+    assert "TeleAI-UAGI/Awesome-Agent-Memory" not in daily_text
+    assert "Samarth2001/LLM-Fine-tuning" not in daily_text
+    assert by_title["Samarth2001/LLM-Fine-tuning"]["metadata"]["relevance"]["status"] != "relevant"
+    assert (
+        by_title["TeleAI-UAGI/Awesome-Agent-Memory"]["metadata"]["daily_report_gate"]["status"]
+        == "suppressed"
+    )
+    assert "research brief excludes repository resource lists" in review_report
+    assert "research brief repo missing configured required phrase" in review_report
+
+
+def test_daily_precision_gate_keeps_only_required_phrase_papers(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [
+                {
+                    "id": "agent-memory",
+                    "queries": ["agent memory systems", "LLM memory benchmark"],
+                    "required_phrases": ["agent memory", "LLM memory", "LOCOMO"],
+                    "negative_phrases": ["prefill serving", "planning problems"],
+                }
+            ],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [PrecisionGateConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    sources = read_jsonl(run_dir / "sources.jsonl")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert ingested[0].title == "Memory in the LLM Era"
+    assert "Memory in the LLM Era" in daily_text
+    assert "ZeRO-Prefill" not in daily_text
+    assert "Planning Problems" not in daily_text
+    assert {
+        source["title"]: source["metadata"]["relevance"]["status"] for source in sources
+    } == {
+        "Memory in the LLM Era": "relevant",
+        "ZeRO-Prefill: Zero Redundancy Overheads in MoE Prefill Serving": "irrelevant",
+        "Analysis of Optimality of Large Language Models on Planning Problems": "irrelevant",
+    }
+
+
 def test_daily_pipeline_writes_deep_reading_outputs(monkeypatch, tmp_path: Path) -> None:
     config = parse_config(
         {
@@ -236,6 +419,9 @@ def test_daily_pipeline_writes_deep_reading_outputs(monkeypatch, tmp_path: Path)
     assert "Solution: Require cited memory evidence before crediting answers." in draft
     assert "Limitations: It only evaluates benchmark-style tasks." in draft
     assert "The source reframes memory quality as grounded recall." in deep_report
+    assert "**Core:** Memory benchmarks reward unsupported answers." in deep_report
+    assert "Why it matters: Scores can hide ungrounded guessing." in deep_report
+    assert "Repackaging risk: It is an evaluation lens, not a new memory store." in deep_report
 
 
 def test_daily_deep_required_disables_summary_fallback_when_ingestion_fails(
@@ -282,6 +468,71 @@ def test_daily_deep_required_disables_summary_fallback_when_ingestion_fails(
         finding["metadata"].get("kind") == "deep_reading_required_but_missing"
         for finding in findings
     )
+
+
+def test_daily_pipeline_omits_seen_sources_from_second_daily_run(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    run_daily(tmp_path, config, "agent-memory", [FakeConnector()])
+    run_dir = run_daily(tmp_path, config, "agent-memory", [FakeConnector()])
+
+    manifest = read_json(run_dir / "manifest.json")
+    history_report = read_json(run_dir / "source_history_report.json")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert manifest["publishable_claim_count"] == 0
+    assert manifest["metadata"]["source_history"]["omitted_seen_count"] == 1
+    assert history_report["omitted_seen_sources"][0]["title"] == "A careful paper"
+    assert "No new or updated sources passed the report gate." in daily_text
+    assert "A careful paper" not in daily_text
+
+
+class VersionedArxivConnector:
+    name = "arxiv"
+
+    def __init__(self) -> None:
+        self.version = 1
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        version = self.version
+        self.version += 1
+        return [
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url=f"http://arxiv.org/abs/2604.01707v{version}",
+                canonical_id=f"2604.01707v{version}",
+                source_type=SourceType.PAPER,
+                source_name=self.name,
+                summary="A paper about agent memory benchmark evaluation.",
+                score=1.0,
+            )
+        ]
+
+
+def test_daily_pipeline_reports_new_arxiv_version(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    connector = VersionedArxivConnector()
+
+    run_daily(tmp_path, config, "agent-memory", [connector])
+    run_dir = run_daily(tmp_path, config, "agent-memory", [connector])
+
+    history_report = read_json(run_dir / "source_history_report.json")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert history_report["counts"]["version_update"] == 1
+    assert "status=version_update" in daily_text
+    assert "version=v2" in daily_text
+    assert "Memory in the LLM Era" in daily_text
 
 
 class WebAndPrimaryConnector:
@@ -545,7 +796,7 @@ def test_daily_deep_reading_falls_back_to_repo_when_no_paper(
     assert readings
 
 
-def test_daily_deep_reading_can_fallback_to_resource_list(
+def test_daily_deep_reading_suppresses_resource_list_for_research_brief(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -575,12 +826,19 @@ def test_daily_deep_reading_can_fallback_to_resource_list(
     )
 
     findings = read_jsonl(run_dir / "review_findings.jsonl")
+    sources = read_jsonl(run_dir / "sources.jsonl")
+    draft = (run_dir / "daily.md").read_text(encoding="utf-8")
 
-    assert ingested[0].title == "Awesome Agent Memory"
+    assert ingested == []
+    assert "Awesome Agent Memory" not in draft
+    assert sources[0]["metadata"]["daily_report_gate"]["status"] == "suppressed"
     assert any(
-        finding["metadata"].get("kind") == "deep_source_selection"
-        and finding["metadata"].get("selected")
-        and finding["metadata"].get("role") == "survey_or_list"
+        finding["metadata"].get("kind") == "daily_report_gate"
+        and finding["claim_text"] == "Awesome Agent Memory"
+        for finding in findings
+    )
+    assert any(
+        finding["metadata"].get("kind") == "deep_reading_required_but_missing"
         for finding in findings
     )
 
