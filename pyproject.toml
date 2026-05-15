@@ -1,7 +1,7 @@
 [project]
 name = "research-radar"
 version = "0.0.0"
-description = "Privacy-first research intelligence and WeChat draft publishing system."
+description = "Privacy-first research intelligence system for evidence-backed briefs and draft publishing."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

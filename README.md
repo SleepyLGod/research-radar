@@ -4,10 +4,10 @@ ResearchRadar is a privacy-first research intelligence system that monitors pape
 open-source projects, and web sources, then turns verified analysis into platform-ready
 research briefs.
 
-The current repo is the v0.0.0 foundation: a local-first skeleton for security, typed data,
-research workflow, dry-run pipelines, and publishing boundaries. It is not yet the full v1
-product. API keys, WeChat credentials, raw run data, and user preferences stay out of git and
-are stored through a secret backend.
+The current repo is the v0.0.0 foundation: a local-first system for security, typed data,
+research workflow, verified pipeline smoke runs, and draft-only publishing boundaries.
+It is not yet the full v1 product. API keys, WeChat credentials, raw run data, and user
+preferences stay out of git and are stored through a secret backend.
 
 ## Current v0.0.0 Foundation
 

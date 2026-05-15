@@ -10,6 +10,7 @@ Source: https://github.com/assafelovic/gpt-researcher
 - Use a finite planner-executor-publisher shape instead of open-ended agent loops.
 - Turn a broad user topic into concrete research questions before searching.
 - Gather source-level summaries with provenance before final writing.
+- Respect the requested report language through the whole synthesis path.
 - Write the final report only from gathered information, not from model memory.
 - Parallel execution can improve speed, but ResearchRadar treats it as optional.
 
@@ -35,6 +36,15 @@ Source: https://github.com/Future-House/paper-qa
 - Summarize passages in relation to the query before final synthesis.
 - Require citations or anchors in scientific answers.
 - Treat PaperQA2 as an optional future backend, not the default ResearchRadar engine.
+
+## LangChain Open Deep Research
+
+Source: https://github.com/langchain-ai/open_deep_research
+
+- Preserve source metadata through research, summarization, and report writing.
+- Keep the report language aligned with the user-requested language.
+- Separate research-topic clarification from evidence collection and final synthesis.
+- Treat workflow shape and prompt principles as inspiration only; do not vendor prompts.
 
 ## Graphify
 

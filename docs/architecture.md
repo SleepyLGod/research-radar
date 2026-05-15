@@ -51,3 +51,15 @@ Add a new publisher by implementing a package under `publishers`.
 The project skill at `docs/skills/research-radar/SKILL.md` defines the required research behavior
 contract: planner, wide scan, deep reading, prewriting, and publishing discipline. It should be
 used before changing analysis prompts or adding new research workflows.
+
+## Figure Policy
+
+Public article figures should default to self-drawn explanatory diagrams derived from verified
+claims. Original paper figures may be used only when license/source metadata supports reuse or a
+human reviewer explicitly approves it for the target channel. Every reused figure must keep
+attribution to the paper, authors when available, source URL or arXiv id, and known license.
+
+arXiv source files can include TeX/LaTeX and figures, and arXiv OAI metadata can expose license
+information. This does not mean every arXiv figure is automatically safe for public reuse: the
+default arXiv license gives arXiv distribution rights, while third-party reuse depends on the
+paper's selected license and attribution requirements.
