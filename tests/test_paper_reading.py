@@ -8,6 +8,7 @@ from research_radar.analysis.paper_reading import (
     heuristic_paper_reading,
     paper_reading_prompt,
     parse_paper_reading,
+    render_deep_reading_report,
     validate_paper_reading,
 )
 from research_radar.analysis.prompts import (
@@ -46,6 +47,7 @@ Related Work: Prior memory benchmarks mostly measure answer match.
 Novelty: The paper shifts evaluation from answer-only scoring to evidence-grounded scoring.
 Limitation: It does not test long-horizon deployment.
 Weakness: The setup may still depend on benchmark-specific retrieval formats.
+Future Work: Future work should test deployed multi-session agents.
 Critical Bottom Line: The useful contribution is the evaluation lens, not a new memory architecture.
 Essence: It reframes memory quality as grounded answerability.
 Example: A correct answer without retrieved evidence should not receive full credit.
@@ -63,6 +65,9 @@ Unsupported Claim: The paper proves all memory agents are unreliable.""",
     assert reading.problem_solution.solution.startswith("The paper adds")
     assert "evidence-grounded" in reading.related_work.novelty
     assert reading.limitations.explicit_limitations == ["It does not test long-horizon deployment."]
+    assert reading.limitations.future_work == [
+        "Future work should test deployed multi-session agents."
+    ]
     assert "evaluation lens" in reading.critical_assessment.bottom_line
     assert any(claim.status == ClaimStatus.UNSUPPORTED for claim in claims)
     assert any("proves all memory agents" in (finding.claim_text or "") for finding in findings)
@@ -154,6 +159,7 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "deep_reading_candidates" in wide
     assert "deep-reading stage" in deep
     assert "perspective_questions" in deep
+    assert "2-4 concrete sentences per field" in deep
     assert "exact substring copied from TEXT" in deep
     assert "Do not draft the final article here" in deep
     assert "synthesis_outline" in outline
@@ -166,6 +172,13 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "MONITORED TOPIC: agent-memory" in verifier
     assert "- agent memory benchmark" in verifier
     assert "not supported by evidence" in verifier
+
+
+def test_paper_reading_prompt_can_request_chinese_without_translating_quotes() -> None:
+    prompt = paper_reading_prompt(_artifact(), language="zh")
+
+    assert "Simplified Chinese" in prompt
+    assert "Only evidence quote fields may remain in the original source language" in prompt
 
 
 def test_parse_model_json_into_paper_reading() -> None:
@@ -196,6 +209,7 @@ def test_parse_model_json_into_paper_reading() -> None:
         "limitations": {
           "explicit_limitations": ["It does not test long-horizon deployment."],
           "inferred_weaknesses": ["It may depend on benchmark-specific formats."],
+          "future_work": ["Future work should test deployed agents."],
           "evidence": [{"quote": "does not test long-horizon deployment"}]
         },
         "critical_assessment": {
@@ -216,9 +230,58 @@ def test_parse_model_json_into_paper_reading() -> None:
     claims, findings = validate_paper_reading(reading)
 
     assert reading.problem_solution.problem.startswith("Memory benchmarks")
+    assert reading.limitations.future_work == ["Future work should test deployed agents."]
     assert reading.essence.startswith("The paper reframes")
     assert any(claim.text.startswith("Problem:") for claim in claims)
     assert any("proves all agents" in (finding.claim_text or "") for finding in findings)
+
+
+def test_render_deep_reading_report_supports_chinese_labels() -> None:
+    anchor = EvidenceAnchor(source_url="https://example.com/paper", quote="Grounded")
+    reading = PaperReading(
+        title="Memory Paper",
+        area_context=AreaContext(background="背景", evidence=[anchor]),
+        problem_solution=ProblemSolution(
+            problem="问题",
+            why_it_matters="动机",
+            hidden_assumptions=["假设"],
+            solution="方法",
+            mechanism="机制",
+            evidence=[anchor],
+        ),
+        related_work=RelatedWorkAssessment(
+            prior_work=["已有工作"],
+            novelty="新意",
+            repackaging_risk="风险",
+            evidence=[anchor],
+        ),
+        limitations=LimitationAssessment(
+            explicit_limitations=["局限"],
+            inferred_weaknesses=["弱点"],
+            evidence=[anchor],
+            future_work=["未来工作"],
+        ),
+        critical_assessment=CriticalAssessment(
+            overclaiming_risk="中等",
+            weak_evaluations=["薄弱评估"],
+            missing_ablations=["缺失消融"],
+            bottom_line="底线判断",
+            evidence=[anchor],
+        ),
+        essence="本质",
+        plain_language_example="通俗例子",
+        experiment_summary="实验",
+        experiment_evidence=[anchor],
+    )
+    claims, _ = validate_paper_reading(reading)
+
+    report = render_deep_reading_report([reading], claims, language="zh")
+
+    assert "# 深度阅读报告" in report
+    assert "## Memory Paper" in report
+    assert "### 问题与动机" in report
+    assert "### 局限与未来工作" in report
+    assert "未来工作" in report
 
 
 def test_parse_model_json_rejects_malformed_response() -> None:
@@ -411,6 +474,53 @@ def test_empty_limitation_claim_is_not_publishable() -> None:
     claims, _ = validate_paper_reading(reading)
 
     assert not any(claim.text == "Limitations: " for claim in claims)
+
+
+def test_parse_paper_reading_ignores_model_supplied_source_urls() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture.", "source_url": "https://evil.example"}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture.", "source_url": "https://evil.example"}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture.", "source_url": "https://evil.example"}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture.", "source_url": "https://evil.example"}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture.", "source_url": "https://evil.example"}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture."
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+
+    assert reading.problem_solution.evidence[0].source_url == artifact.source.url
+    assert reading.problem_solution.evidence[0].source_title == artifact.source.title
 
 
 def _artifact() -> Artifact:

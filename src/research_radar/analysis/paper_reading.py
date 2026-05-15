@@ -58,6 +58,7 @@ class LimitationAssessment:
     explicit_limitations: list[str]
     inferred_weaknesses: list[str]
     evidence: list[EvidenceAnchor]
+    future_work: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -88,12 +89,28 @@ class PaperReading:
     unsupported_or_rejected_claims: list[str] = field(default_factory=list)
 
 
-def paper_reading_prompt(artifact: Artifact, area_context: str | None = None) -> str:
+def paper_reading_prompt(
+    artifact: Artifact,
+    area_context: str | None = None,
+    *,
+    language: str = "en",
+) -> str:
     """Build the structured paper-reading prompt."""
 
     context = area_context or "Infer only from supplied sources; mark missing context as unknown."
+    language_rule = (
+        "REPORT LANGUAGE: Simplified Chinese. Every analytical JSON string value must be "
+        "Simplified Chinese, including background, problem, motivation, solution, mechanism, "
+        "experiments, related work, limitations, critique, plain_language_example, and essence. "
+        "Only evidence quote fields may remain in the original source language, because they "
+        "must be exact substrings from TEXT."
+        if language == "zh"
+        else "REPORT LANGUAGE: English. Write all analytical prose in English. Keep evidence "
+        "quote fields as exact substrings from TEXT."
+    )
     return f"""Run the deep-reading stage for this ResearchRadar source.
 Act as a skeptical but fair researcher.
+{language_rule}
 
 Area context:
 {context}
@@ -110,7 +127,7 @@ Return structured JSON with these fields:
   - problem_solution: problem, why_it_matters, hidden_assumptions, solution, mechanism, evidence
   - related_work: prior_work, novelty, repackaging_risk, evidence
   - experiments: summary, evidence
-  - limitations: explicit_limitations, inferred_weaknesses, evidence
+  - limitations: explicit_limitations, inferred_weaknesses, future_work, evidence
   - critical_assessment: overclaiming_risk, weak_evaluations, missing_ablations,
     bottom_line, evidence
   - plain_language_example: simple example grounded in the source
@@ -121,6 +138,8 @@ Return structured JSON with these fields:
 
 Rules:
 - Separate facts from interpretation and speculation.
+- Make problem, motivation, solution, mechanism, experiments, related work, limitations, and
+  critique detailed enough for researcher notes: usually 2-4 concrete sentences per field.
 - Every factual or critical claim needs evidence in the same section.
 - Every section evidence field must be a non-empty list of objects.
 - Every evidence object must include quote and location.
@@ -143,6 +162,7 @@ def model_paper_reading(
     *,
     model: str,
     area_context: str | None = None,
+    language: str = "en",
 ) -> PaperReading:
     """Run model-based deep reading and parse the structured result."""
 
@@ -151,10 +171,14 @@ def model_paper_reading(
             role="system",
             content=(
                 "You are a skeptical but fair research analyst. "
+                f"{_system_language_rule(language)} "
                 "Return strict JSON only."
             ),
         ),
-        Message(role="user", content=paper_reading_prompt(artifact, area_context)),
+        Message(
+            role="user",
+            content=paper_reading_prompt(artifact, area_context, language=language),
+        ),
     ]
     response = provider.complete(messages, model=model)
     return parse_paper_reading(response.content, artifact)
@@ -223,41 +247,119 @@ def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
     return reading
 
 
-def render_deep_reading_report(readings: list[PaperReading]) -> str:
+def render_deep_reading_report(
+    readings: list[PaperReading],
+    claims: list[Claim] | None = None,
+    *,
+    language: str = "en",
+) -> str:
     """Render structured paper readings as a human-readable Markdown audit report."""
 
-    lines = ["# Deep Reading Report", ""]
+    labels = _deep_reading_labels(language)
+    lines = [f"# {labels['title']}", ""]
     if not readings:
-        lines.append("No deep readings were produced.")
+        lines.append(labels["no_readings"])
         return "\n".join(lines).strip() + "\n"
+    allowed = _publishable_prefixes(claims)
     for reading in readings:
-        lines.extend(
-            [
-                f"## {reading.title}",
-                "",
-                f"**Essence:** {reading.essence}",
-                "",
-                "### Problem",
-                reading.problem_solution.problem,
-                "",
-                "### Solution",
-                reading.problem_solution.solution,
-                "",
-                "### Related Work",
-                reading.related_work.novelty,
-                "",
-                "### Experiments",
-                reading.experiment_summary or "No experiment summary captured.",
-                "",
-                "### Limitations",
-                "\n".join(f"- {item}" for item in reading.limitations.explicit_limitations)
-                or "No explicit limitations captured.",
-                "",
-                "### Critical Assessment",
-                reading.critical_assessment.bottom_line,
-                "",
-            ]
-        )
+        lines.extend([f"## {reading.title}", ""])
+        if _can_render("Essence:", allowed):
+            lines.extend([f"**{labels['essence']}:** {reading.essence}", ""])
+        if _can_render("Problem:", allowed):
+            lines.extend(
+                [
+                    f"### {labels['problem']}",
+                    f"**{labels['core']}:** {reading.problem_solution.problem}",
+                    f"- {labels['why_it_matters']}: {reading.problem_solution.why_it_matters}",
+                    _list_line(
+                        labels["hidden_assumptions"],
+                        reading.problem_solution.hidden_assumptions,
+                        language=language,
+                    ),
+                    "",
+                ]
+            )
+        if _can_render("Solution:", allowed):
+            lines.extend(
+                [
+                    f"### {labels['solution']}",
+                    f"**{labels['core']}:** {reading.problem_solution.solution}",
+                    f"- {labels['mechanism']}: {reading.problem_solution.mechanism}",
+                    "",
+                ]
+            )
+        if _can_render("Experiment:", allowed):
+            lines.extend(
+                [
+                    f"### {labels['experiments']}",
+                    (
+                        f"**{labels['core']}:** "
+                        f"{reading.experiment_summary or labels['no_experiment']}"
+                    ),
+                    "",
+                ]
+            )
+        if reading.plain_language_example:
+            lines.extend(
+                [
+                    f"### {labels['plain_example']}",
+                    reading.plain_language_example,
+                    "",
+                ]
+            )
+        if _can_render("Related work:", allowed):
+            lines.extend(
+                [
+                    f"### {labels['related_work']}",
+                    f"**{labels['core']}:** {reading.related_work.novelty}",
+                    _list_line(
+                        labels["prior_work"],
+                        reading.related_work.prior_work,
+                        language=language,
+                    ),
+                    f"- {labels['repackaging_risk']}: {reading.related_work.repackaging_risk}",
+                    "",
+                ]
+            )
+        if _can_render("Limitations:", allowed):
+            explicit = reading.limitations.explicit_limitations
+            inferred = reading.limitations.inferred_weaknesses
+            lines.extend(
+                [
+                    f"### {labels['limitations']}",
+                    f"**{labels['core']}:** {_first_or_none(explicit, labels['no_limitations'])}",
+                    _list_line(labels["explicit_limitations"], explicit, language=language),
+                    _list_line(labels["inferred_weaknesses"], inferred, language=language),
+                    _list_line(
+                        labels["future_work"],
+                        reading.limitations.future_work,
+                        language=language,
+                    ),
+                    "",
+                ]
+            )
+        if _can_render("Critical assessment:", allowed):
+            lines.extend(
+                [
+                    f"### {labels['critical']}",
+                    f"**{labels['core']}:** {reading.critical_assessment.bottom_line}",
+                    (
+                        f"- {labels['overclaiming_risk']}: "
+                        f"{reading.critical_assessment.overclaiming_risk}"
+                    ),
+                    _list_line(
+                        labels["weak_evaluations"],
+                        reading.critical_assessment.weak_evaluations,
+                        language=language,
+                    ),
+                    _list_line(
+                        labels["missing_ablations"],
+                        reading.critical_assessment.missing_ablations,
+                        language=language,
+                    ),
+                    "",
+                ]
+            )
     return "\n".join(lines).strip() + "\n"
 
 
@@ -265,6 +367,99 @@ def reading_to_dict(reading: PaperReading) -> dict[str, object]:
     """Convert a paper reading to a JSON-friendly dictionary."""
 
     return dataclass_to_dict(reading)
+
+
+def _publishable_prefixes(claims: list[Claim] | None) -> set[str] | None:
+    if claims is None:
+        return None
+    prefixes = set()
+    for claim in claims:
+        if not claim.is_publishable():
+            continue
+        prefix, separator, _ = claim.text.partition(":")
+        if separator:
+            prefixes.add(f"{prefix.casefold()}:")
+    return prefixes
+
+
+def _can_render(prefix: str, allowed: set[str] | None) -> bool:
+    return allowed is None or prefix.casefold() in allowed
+
+
+def _list_line(label: str, values: list[str], *, language: str = "en") -> str:
+    if not values:
+        empty = "未捕捉到" if language == "zh" else "none captured"
+        return f"- {label}: {empty}"
+    return f"- {label}: " + "; ".join(values)
+
+
+def _deep_reading_labels(language: str) -> dict[str, str]:
+    if language == "zh":
+        return {
+            "title": "深度阅读报告",
+            "no_readings": "没有生成深度阅读结果。",
+            "essence": "本质判断",
+            "problem": "问题与动机",
+            "solution": "方法与机制",
+            "experiments": "实验与评估",
+            "plain_example": "通俗例子",
+            "related_work": "相关工作",
+            "limitations": "局限与未来工作",
+            "critical": "中立批判",
+            "core": "核心判断",
+            "why_it_matters": "为什么重要",
+            "hidden_assumptions": "隐藏假设",
+            "mechanism": "机制",
+            "no_experiment": "没有捕捉到实验摘要。",
+            "prior_work": "已有工作",
+            "repackaging_risk": "重新包装风险",
+            "no_limitations": "没有捕捉到明确局限。",
+            "explicit_limitations": "作者明确局限",
+            "inferred_weaknesses": "推断弱点",
+            "future_work": "未来工作",
+            "overclaiming_risk": "过度声称风险",
+            "weak_evaluations": "薄弱评估",
+            "missing_ablations": "缺失消融",
+        }
+    return {
+        "title": "Deep Reading Report",
+        "no_readings": "No deep readings were produced.",
+        "essence": "Essence",
+        "problem": "Problems and Motivation",
+        "solution": "Solution",
+        "experiments": "Experiments",
+        "plain_example": "Plain-language Example",
+        "related_work": "Related Work",
+        "limitations": "Limitations and Future Work",
+        "critical": "Critical Assessment",
+        "core": "Core",
+        "why_it_matters": "Why it matters",
+        "hidden_assumptions": "Hidden assumptions",
+        "mechanism": "Mechanism",
+        "no_experiment": "No experiment summary captured.",
+        "prior_work": "Prior work",
+        "repackaging_risk": "Repackaging risk",
+        "no_limitations": "No explicit limitations captured.",
+        "explicit_limitations": "Explicit limitations",
+        "inferred_weaknesses": "Inferred weaknesses",
+        "future_work": "Future work",
+        "overclaiming_risk": "Overclaiming risk",
+        "weak_evaluations": "Weak evaluations",
+        "missing_ablations": "Missing ablations",
+    }
+
+
+def _system_language_rule(language: str) -> str:
+    if language == "zh":
+        return (
+            "All analytical JSON string values must be Simplified Chinese; only evidence "
+            "quote strings may preserve original source wording."
+        )
+    return "All analytical JSON string values must be English."
+
+
+def _first_or_none(values: list[str], fallback: str) -> str:
+    return values[0] if values else fallback
 
 
 def reading_to_claims(reading: PaperReading) -> list[Claim]:
@@ -445,6 +640,7 @@ def heuristic_paper_reading(artifact: Artifact) -> PaperReading:
             else [],
             inferred_weaknesses=[_section(text, "Weakness")] if _section(text, "Weakness") else [],
             evidence=[anchor],
+            future_work=[_section(text, "Future Work")] if _section(text, "Future Work") else [],
         ),
         critical_assessment=CriticalAssessment(
             overclaiming_risk=_section(text, "Overclaiming") or "Overclaiming risk is unknown.",
@@ -559,6 +755,7 @@ def _parse_limitations(
         explicit_limitations=_string_list(data.get("explicit_limitations", [])),
         inferred_weaknesses=_string_list(data.get("inferred_weaknesses", [])),
         evidence=_section_evidence(data, artifact, fallback_evidence),
+        future_work=_string_list(data.get("future_work", [])),
     )
 
 
@@ -648,8 +845,8 @@ def _parse_evidence(
             continue
         anchors.append(
             EvidenceAnchor(
-                source_url=str(item.get("source_url") or artifact.source.url),
-                source_title=str(item.get("source_title") or artifact.source.title),
+                source_url=artifact.source.url,
+                source_title=artifact.source.title,
                 quote=quote,
                 location=str(item.get("location") or item.get("section") or "model anchor"),
                 confidence=float(item.get("confidence", 0.7)),

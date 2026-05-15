@@ -110,6 +110,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Explicitly load local environment variables before reading env-backed secrets.",
     )
+    daily.add_argument(
+        "--language",
+        choices=["en", "zh"],
+        default=None,
+        help="Override the configured report language.",
+    )
     daily.set_defaults(handler=handle_run_daily)
     paper = run_subparsers.add_parser("paper", help="Run a single-paper deep reading.")
     paper.add_argument("--topic", required=True)
@@ -138,6 +144,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Explicitly load local environment variables before reading env-backed secrets.",
+    )
+    paper.add_argument(
+        "--language",
+        choices=["en", "zh"],
+        default=None,
+        help="Override the configured report language.",
     )
     paper.set_defaults(handler=handle_run_paper)
     weekly = run_subparsers.add_parser("weekly", help="Compose weekly draft from latest run.")
@@ -194,6 +206,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Explicitly load local environment variables before reading env-backed secrets.",
+    )
+    eval_topics.add_argument(
+        "--language",
+        choices=["en", "zh"],
+        default=None,
+        help="Override the configured report language.",
     )
     eval_topics.set_defaults(handler=handle_eval_topics)
 
@@ -288,6 +306,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         deep_reader=deep_reader,
         deep_model=verifier_model,
         deep_limit=args.deep_limit,
+        language=getattr(args, "language", None),
     )
     print(f"Created run: {run_dir}")
 
@@ -315,6 +334,7 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         args.url,
         reader,
         model=model,
+        language=getattr(args, "language", None),
     )
     print(f"Created paper run: {run_dir}")
 
@@ -338,6 +358,7 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         specs=select_topic_specs(args.topics),
         limit=args.limit,
         deep_limit=args.deep_limit,
+        language=getattr(args, "language", None),
     )
     print(f"Wrote topic smoke summary: {report.markdown_path}")
     if not report.passed:

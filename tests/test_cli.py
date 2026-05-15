@@ -27,6 +27,7 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
         captured["deep_reader"] = kwargs.get("deep_reader")
         captured["deep_model"] = kwargs.get("deep_model")
         captured["deep_limit"] = kwargs.get("deep_limit")
+        captured["language"] = kwargs.get("language")
         return tmp_path / "runs" / "fake-run"
 
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
@@ -44,6 +45,7 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
             env_file=env_file,
             limit=3,
             deep_limit=1,
+            language="zh",
         )
     )
 
@@ -53,6 +55,7 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
     assert isinstance(captured["deep_reader"], DeepSeekProvider)
     assert captured["deep_model"] == "deepseek-chat"
     assert captured["deep_limit"] == 1
+    assert captured["language"] == "zh"
 
 
 def test_run_daily_local_provider_does_not_configure_verifier(

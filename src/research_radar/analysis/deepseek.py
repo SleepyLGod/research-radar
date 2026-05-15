@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from http.client import HTTPException
 from urllib.request import Request, urlopen
 
 from research_radar.analysis.providers import LLMProvider, Message, ModelResponse
@@ -42,7 +43,7 @@ class DeepSeekProvider(LLMProvider):
         try:
             with urlopen(request, timeout=120) as response:
                 data = json.loads(response.read().decode("utf-8"))
-        except OSError as exc:
+        except (HTTPException, OSError, json.JSONDecodeError) as exc:
             raise AnalysisError("DeepSeek request failed.") from exc
         try:
             content = data["choices"][0]["message"]["content"]

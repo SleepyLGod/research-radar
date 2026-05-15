@@ -39,6 +39,9 @@ def test_parse_config_accepts_default_plan_shape() -> None:
     assert config.topic("agent-memory").paper_queries == ["Memory in the LLM Era"]
     assert config.topic("agent-memory").web_queries == ["agent memory systems paper"]
     assert config.topic("agent-memory").exclusion_terms == ["translation memory"]
+    assert config.topic("agent-memory").required_phrases == []
+    assert config.topic("agent-memory").negative_phrases == []
+    assert config.topic("agent-memory").report_language == "en"
     assert config.discovery.trusted_domains == []
     assert config.discovery.web_search.endpoint is None
     assert config.topic("agent-memory").source_intent == "research_brief"
@@ -60,6 +63,77 @@ def test_parse_config_accepts_implementation_scan_source_intent() -> None:
     )
 
     assert config.topic("agent-memory").source_intent == "implementation_scan"
+
+
+def test_parse_config_accepts_topic_precision_and_language() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [
+                {
+                    "id": "agent-memory",
+                    "queries": ["agent memory systems"],
+                    "required_phrases": ["agent memory"],
+                    "negative_phrases": ["prefill serving"],
+                    "concept_groups": {
+                        "agent_context": ["agent memory"],
+                        "memory_mechanism": ["persistent recall"],
+                    },
+                    "report_language": "zh",
+                }
+            ],
+        }
+    )
+
+    topic = config.topic("agent-memory")
+
+    assert topic.required_phrases == ["agent memory"]
+    assert topic.negative_phrases == ["prefill serving"]
+    assert topic.concept_groups == {
+        "agent_context": ["agent memory"],
+        "memory_mechanism": ["persistent recall"],
+    }
+    assert topic.report_language == "zh"
+
+
+def test_parse_config_rejects_invalid_concept_groups() -> None:
+    data = {
+        "project": {"name": "ResearchRadar"},
+        "topics": [
+            {
+                "id": "agent-memory",
+                "queries": ["agent memory"],
+                "concept_groups": {"agent_context": "agent memory"},
+            }
+        ],
+    }
+
+    try:
+        parse_config(data)
+    except ConfigError as exc:
+        assert "concept_groups.agent_context" in str(exc)
+    else:
+        raise AssertionError("Expected ConfigError")
+
+
+def test_parse_config_rejects_invalid_report_language() -> None:
+    data = {
+        "project": {"name": "ResearchRadar"},
+        "topics": [
+            {
+                "id": "agent-memory",
+                "queries": ["agent memory"],
+                "report_language": "fr",
+            }
+        ],
+    }
+
+    try:
+        parse_config(data)
+    except ConfigError as exc:
+        assert "report_language" in str(exc)
+    else:
+        raise AssertionError("Expected ConfigError")
 
 
 def test_parse_config_rejects_invalid_source_intent() -> None:

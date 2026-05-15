@@ -125,6 +125,7 @@ class ArticleSection:
     title: str
     body: str
     claims: list[Claim] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

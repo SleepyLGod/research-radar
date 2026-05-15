@@ -11,6 +11,7 @@ from research_radar.models import ArticleDraft, Claim
 def render_wechat_html(draft: ArticleDraft) -> str:
     """Render a platform-neutral draft as WeChat-compatible HTML."""
 
+    language = str(draft.metadata.get("language", "en"))
     body = [
         _section(
             "section",
@@ -21,10 +22,14 @@ def render_wechat_html(draft: ArticleDraft) -> str:
         )
     ]
     for section in draft.sections:
-        if section.title.lower().startswith("evidence"):
-            content = "".join(_evidence_block(claim) for claim in section.claims)
+        if _section_kind(section) == "evidence_trail":
+            content = "".join(_evidence_block(claim, language=language) for claim in section.claims)
+        elif _section_kind(section) == "new_updated_sources":
+            content = _source_list(section.metadata.get("sources", []), language=language)
+            if not content:
+                content = f"<p>{escape(section.body)}</p>"
         else:
-            content = "".join(_claim_card(claim) for claim in section.claims)
+            content = "".join(_claim_card(claim, language=language) for claim in section.claims)
             if not content:
                 content = f"<p>{escape(section.body)}</p>"
         body.append(_section("section", f"<h2>{escape(section.title)}</h2>{content}"))
@@ -64,15 +69,69 @@ def _section(tag: str, content: str) -> str:
     return f"<{tag}>{content}</{tag}>"
 
 
-def _claim_card(claim: Claim) -> str:
+def _claim_card(claim: Claim, *, language: str) -> str:
+    tag = "已核验" if language == "zh" else "Verified"
+    fallback = (
+        "这条判断由下方证据链支撑。"
+        if language == "zh"
+        else "This claim is backed by the evidence trail below."
+    )
     return f"""<section class="rr-card">
-<span class="rr-tag">Verified</span>
-<h3>{escape(claim.text)}</h3>
-<p>{escape(claim.rationale or "This claim is backed by the evidence trail below.")}</p>
+<span class="rr-tag">{tag}</span>
+<h3>{escape(_localized_claim_text(claim.text, language=language))}</h3>
+<p>{escape(claim.rationale or fallback)}</p>
 </section>"""
 
 
-def _evidence_block(claim: Claim) -> str:
+def _source_list(raw_sources: object, *, language: str) -> str:
+    if not isinstance(raw_sources, list):
+        return ""
+    blocks = []
+    for item in raw_sources:
+        if not isinstance(item, dict):
+            continue
+        title = escape(str(item.get("title", "Untitled source")))
+        url = escape(str(item.get("url", "")))
+        gist = escape(str(item.get("gist", "")))
+        descriptor = escape(_source_descriptor(item))
+        gist_label = "摘要" if language == "zh" else "Gist"
+        blocks.append(
+            f"""<section class="rr-card">
+<h3><a href="{url}">{title}</a></h3>
+<p>{descriptor}</p>
+<p><strong>{gist_label}:</strong> {gist}</p>
+</section>"""
+        )
+    return "".join(blocks)
+
+
+def _section_kind(section: object) -> str:
+    metadata = getattr(section, "metadata", {})
+    if isinstance(metadata, dict) and isinstance(metadata.get("kind"), str):
+        return str(metadata["kind"])
+    title = str(getattr(section, "title", "")).lower()
+    if title.startswith("new / updated"):
+        return "new_updated_sources"
+    if title.startswith("evidence"):
+        return "evidence_trail"
+    return ""
+
+
+def _source_descriptor(item: dict[object, object]) -> str:
+    parts = []
+    for key, label in [
+        ("role", "role"),
+        ("history_status", "status"),
+        ("published_at", "published"),
+        ("version", "version"),
+    ]:
+        value = item.get(key)
+        if value:
+            parts.append(f"{label}={value}")
+    return ", ".join(str(part) for part in parts)
+
+
+def _evidence_block(claim: Claim, *, language: str) -> str:
     anchors = []
     for anchor in claim.evidence:
         title = escape(anchor.source_title or anchor.source_url)
@@ -85,4 +144,23 @@ def _evidence_block(claim: Claim) -> str:
 <p><a href="{escape(anchor.source_url)}">Original source</a></p>
 </section>"""
         )
-    return f"<section><h3>{escape(claim.text)}</h3>{''.join(anchors)}</section>"
+    claim_text = escape(_localized_claim_text(claim.text, language=language))
+    return f"<section><h3>{claim_text}</h3>{''.join(anchors)}</section>"
+
+
+def _localized_claim_text(text: str, *, language: str) -> str:
+    if language != "zh":
+        return text
+    prefix_map = {
+        "Problem:": "问题：",
+        "Solution:": "方法：",
+        "Related work:": "相关工作：",
+        "Experiment:": "实验：",
+        "Limitations:": "局限：",
+        "Critical assessment:": "批判判断：",
+        "Essence:": "本质：",
+    }
+    for prefix, localized in prefix_map.items():
+        if text.startswith(prefix):
+            return localized + text[len(prefix) :].lstrip()
+    return text

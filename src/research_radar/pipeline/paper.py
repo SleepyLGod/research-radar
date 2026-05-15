@@ -33,10 +33,12 @@ def run_paper(
     reader: LLMProvider,
     *,
     model: str,
+    language: str | None = None,
 ) -> Path:
     """Run the single-paper pipeline and return the run directory."""
 
     topic = config.topic(topic_id)
+    report_language = language or topic.report_language
     source = build_direct_paper_source(url)
     run_dir, manifest = _create_paper_run_dir(root, topic, source)
     artifact = ingest_source(source, run_dir / "artifacts")
@@ -45,6 +47,7 @@ def run_paper(
         reader,
         model=model,
         area_context=_area_context(topic),
+        language=report_language,
     )
     claims, findings = validate_paper_reading(reading, artifact)
     model_feedback = None
@@ -69,6 +72,7 @@ def run_paper(
             "paper_url": source.url,
             "canonical_id": source.canonical_id,
             "reading_count": 1,
+            "report_language": report_language,
         },
     )
 
@@ -79,8 +83,11 @@ def run_paper(
     write_claims(run_dir / "claims.jsonl", claims)
     write_evidence(run_dir / "evidence.jsonl", claims)
     write_jsonl(run_dir / "review_findings.jsonl", findings)
-    write_text(run_dir / "deep_reading.md", render_deep_reading_report([reading]))
-    write_text(run_dir / "paper.md", render_paper_brief(reading, claims))
+    write_text(
+        run_dir / "deep_reading.md",
+        render_deep_reading_report([reading], claims, language=report_language),
+    )
+    write_text(run_dir / "paper.md", render_paper_brief(reading, claims, language=report_language))
     write_text(
         run_dir / "review_report.md",
         render_review_report(findings, model_feedback=model_feedback),

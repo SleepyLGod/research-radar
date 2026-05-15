@@ -18,8 +18,12 @@ class TopicConfig:
     paper_queries: list[str] = field(default_factory=list)
     web_queries: list[str] = field(default_factory=list)
     exclusion_terms: list[str] = field(default_factory=list)
+    required_phrases: list[str] = field(default_factory=list)
+    negative_phrases: list[str] = field(default_factory=list)
+    concept_groups: dict[str, list[str]] = field(default_factory=dict)
     priority_sources: list[str] = field(default_factory=list)
     source_intent: str = "research_brief"
+    report_language: str = "en"
 
 
 @dataclass(frozen=True)
@@ -147,12 +151,27 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
                     f"topic {topic_id} exclusion_terms",
                     allow_empty=True,
                 ),
+                required_phrases=_string_list(
+                    item_map.get("required_phrases", []),
+                    f"topic {topic_id} required_phrases",
+                    allow_empty=True,
+                ),
+                negative_phrases=_string_list(
+                    item_map.get("negative_phrases", []),
+                    f"topic {topic_id} negative_phrases",
+                    allow_empty=True,
+                ),
+                concept_groups=_concept_groups(
+                    item_map.get("concept_groups", {}),
+                    f"topic {topic_id} concept_groups",
+                ),
                 priority_sources=_string_list(
                     item_map.get("priority_sources", []),
                     f"topic {topic_id} priority_sources",
                     allow_empty=True,
                 ),
                 source_intent=_source_intent(item_map.get("source_intent", "research_brief")),
+                report_language=_report_language(item_map.get("report_language", "en")),
             )
         )
 
@@ -218,6 +237,23 @@ def _string_list(value: Any, name: str, *, allow_empty: bool = False) -> list[st
     return result
 
 
+def _concept_groups(value: Any, name: str) -> dict[str, list[str]]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ConfigError(f"{name} must be a mapping.")
+    groups: dict[str, list[str]] = {}
+    for group_name, aliases in value.items():
+        if not isinstance(group_name, str) or not group_name.strip():
+            raise ConfigError(f"{name} keys must be non-empty strings.")
+        groups[group_name.strip()] = _string_list(
+            aliases,
+            f"{name}.{group_name}",
+            allow_empty=False,
+        )
+    return groups
+
+
 def _optional_string(value: Any, name: str) -> str | None:
     if value is None:
         return None
@@ -231,4 +267,12 @@ def _source_intent(value: Any) -> str:
         raise ConfigError("source_intent must be a string.")
     if value not in {"research_brief", "implementation_scan"}:
         raise ConfigError("source_intent must be research_brief or implementation_scan.")
+    return value
+
+
+def _report_language(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ConfigError("report_language must be a string.")
+    if value not in {"en", "zh"}:
+        raise ConfigError("report_language must be en or zh.")
     return value
