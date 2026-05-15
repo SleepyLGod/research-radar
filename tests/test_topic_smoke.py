@@ -231,6 +231,8 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
         topic_ids = {topic.id for topic in config.topics}
         assert topic_id in topic_ids
         assert config.topic(topic_id).source_intent == "research_brief"
+        if topic_id == "llm-reasoning-eval":
+            assert config.topic(topic_id).concept_groups["agent_context"]
         spec = next(item for item in specs if item.id == topic_id)
         return _write_run(root / topic_id, spec)
 

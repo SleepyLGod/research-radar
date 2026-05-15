@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,7 @@ class TopicSmokeSpec:
     topic_signals: tuple[str, ...]
     source_intent: str = RESEARCH_BRIEF
     paper_queries: tuple[str, ...] = ()
+    concept_groups: dict[str, tuple[str, ...]] = field(default_factory=dict)
     priority_sources: tuple[str, ...] = (
         "arxiv.org",
         "semanticscholar.org",
@@ -88,6 +89,33 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
             "LOCOMO LongMemEval agent memory",
             "long term memory LLM agents",
         ),
+        concept_groups={
+            "agent_context": (
+                "agent memory",
+                "LLM agent memory",
+                "agentic memory",
+                "autonomous LLM agents",
+            ),
+            "memory_mechanism": (
+                "memory retrieval",
+                "agent recall",
+                "persistent recall",
+                "long-term memory",
+                "memory systems",
+            ),
+            "evaluation_signal": (
+                "LOCOMO",
+                "LongMemEval",
+                "agent memory benchmark",
+                "memory evaluation",
+            ),
+            "negative_compute_or_training": (
+                "prefill serving",
+                "kv cache",
+                "fine-tuning",
+                "QLoRA",
+            ),
+        },
     ),
     TopicSmokeSpec(
         id="llm-reasoning-eval",
@@ -104,6 +132,33 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
             "test-time scaling reasoning benchmark",
             "reasoning trace self consistency evaluation",
         ),
+        concept_groups={
+            "agent_context": (
+                "LLM reasoning",
+                "large language model reasoning",
+                "reasoning model",
+            ),
+            "memory_mechanism": (
+                "reasoning evaluation",
+                "reasoning benchmark",
+                "test-time scaling",
+                "test time scaling",
+                "reasoning trace",
+                "self consistency",
+            ),
+            "evaluation_signal": (
+                "benchmark",
+                "evaluation",
+                "pass@",
+                "accuracy",
+            ),
+            "negative_compute_or_training": (
+                "kv cache",
+                "prefill serving",
+                "fine-tuning",
+                "quantization",
+            ),
+        },
     ),
     TopicSmokeSpec(
         id="rag-systems",
@@ -120,6 +175,31 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
             "RAG systems evaluation",
             "retrieval augmented generation survey",
         ),
+        concept_groups={
+            "agent_context": (
+                "RAG",
+                "retrieval augmented generation",
+                "retrieval-augmented generation",
+            ),
+            "memory_mechanism": (
+                "retrieval",
+                "retriever",
+                "grounded generation",
+                "knowledge grounding",
+            ),
+            "evaluation_signal": (
+                "RAG benchmark",
+                "retrieval benchmark",
+                "RAG evaluation",
+                "retrieval augmented generation evaluation",
+            ),
+            "negative_compute_or_training": (
+                "kv cache",
+                "prefill serving",
+                "fine-tuning",
+                "quantization",
+            ),
+        },
     ),
 )
 
@@ -152,6 +232,10 @@ def with_smoke_topics(config: AppConfig, specs: Sequence[TopicSmokeSpec]) -> App
                 id=spec.id,
                 queries=list(spec.queries),
                 paper_queries=list(spec.paper_queries),
+                concept_groups={
+                    group: list(aliases)
+                    for group, aliases in spec.concept_groups.items()
+                },
                 priority_sources=list(spec.priority_sources),
                 source_intent=spec.source_intent,
             )
