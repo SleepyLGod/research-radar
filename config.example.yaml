@@ -107,12 +107,15 @@ model_providers:
   codex:
     kind: codex_cli
     command: /Applications/Codex.app/Contents/Resources/codex
+    timeout_seconds: 300
   claude:
     kind: claude_code_cli
     command: claude
+    timeout_seconds: 300
   von_claude:
     kind: claude_code_cli
     command: von-claude
+    timeout_seconds: 300
   local:
     kind: local
 

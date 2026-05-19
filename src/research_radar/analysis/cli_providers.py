@@ -38,8 +38,6 @@ class CodexCliProvider:
                 "--ephemeral",
                 "--sandbox",
                 "read-only",
-                "--ask-for-approval",
-                "never",
                 "--skip-git-repo-check",
                 "--output-last-message",
                 str(output_path),
@@ -148,6 +146,6 @@ def _run_command(
     except subprocess.TimeoutExpired as exc:
         raise AnalysisError(f"{provider_name} command timed out.") from exc
     except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip()
-        detail = f": {stderr}" if stderr else ""
+        detail_text = exc.stderr.strip() or exc.stdout.strip()
+        detail = f": {detail_text}" if detail_text else ""
         raise AnalysisError(f"{provider_name} command failed{detail}") from exc

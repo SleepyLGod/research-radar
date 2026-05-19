@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 
 from research_radar.analysis.prompts import verifier_prompt
@@ -140,6 +141,7 @@ def apply_model_review_decisions(
 
 
 def _parse_decisions(raw_feedback: str) -> list[dict[str, object]] | None:
+    raw_feedback = _strip_json_fence(raw_feedback)
     try:
         payload = json.loads(raw_feedback)
     except json.JSONDecodeError:
@@ -151,6 +153,14 @@ def _parse_decisions(raw_feedback: str) -> list[dict[str, object]] | None:
     if not isinstance(decisions, list):
         return None
     return [decision for decision in decisions if isinstance(decision, dict)]
+
+
+def _strip_json_fence(raw_feedback: str) -> str:
+    stripped = raw_feedback.strip()
+    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL)
+    if match is None:
+        return stripped
+    return match.group(1).strip()
 
 
 def _decision_index(decision: dict[str, object]) -> int | None:

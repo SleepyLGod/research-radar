@@ -155,6 +155,20 @@ def test_claude_code_cli_provider_reads_stdout(tmp_path: Path) -> None:
     assert response.metadata["provider"] == "von_claude"
 
 
+def test_cli_provider_failure_reports_stdout_when_stderr_is_empty(tmp_path: Path) -> None:
+    command = tmp_path / "fake-failing-claude"
+    command.write_text("#!/bin/sh\nprintf 'API error from stdout\\n'\nexit 1\n", encoding="utf-8")
+    command.chmod(0o755)
+    provider = ClaudeCodeCliProvider(name="von_claude", command=str(command))
+
+    try:
+        provider.complete([Message(role="user", content="hello")], model="sonnet")
+    except AnalysisError as exc:
+        assert "API error from stdout" in str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+
 def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
     command = _fake_codex_command(tmp_path)
     config = parse_config(

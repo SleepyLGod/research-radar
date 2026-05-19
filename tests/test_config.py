@@ -176,6 +176,19 @@ def test_parse_config_accepts_discovery_settings() -> None:
     assert config.discovery.web_search.header_secret_name == "web_search.api_key"
 
 
+def test_default_command_providers_have_longer_timeout() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    assert config.model_providers["codex"].timeout_seconds == 300
+    assert config.model_providers["claude"].timeout_seconds == 300
+    assert config.model_providers["von_claude"].timeout_seconds == 300
+
+
 def test_parse_config_rejects_empty_web_search_endpoint() -> None:
     data = {
         "project": {"name": "ResearchRadar"},

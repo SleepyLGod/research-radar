@@ -57,3 +57,30 @@ def test_model_review_missing_decision_marks_claim_needs_review() -> None:
     assert reviewed[0].status == ClaimStatus.SUPPORTED
     assert reviewed[1].status == ClaimStatus.NEEDS_REVIEW
     assert findings[0].metadata["kind"] == "model_review_missing_decision"
+
+
+def test_model_review_accepts_fenced_json() -> None:
+    claim = Claim(
+        text="A paper is relevant to agent memory.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[EvidenceAnchor(source_url="https://example.com", quote="Evidence")],
+    )
+    raw = """
+    ```json
+    {
+      "decisions": [
+        {
+          "claim_index": 1,
+          "status": "needs_review",
+          "risk": "medium",
+          "reason": "partially grounded"
+        }
+      ]
+    }
+    ```
+    """
+
+    reviewed, findings = apply_model_review_decisions([claim], raw)
+
+    assert reviewed[0].status == ClaimStatus.NEEDS_REVIEW
+    assert findings[0].metadata["status"] == "needs_review"
