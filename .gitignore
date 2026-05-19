@@ -18,6 +18,7 @@ build/
 .env.*
 !.env.example
 config.yaml
+topic_drafts/
 runs/
 data/
 cache/

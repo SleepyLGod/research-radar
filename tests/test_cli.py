@@ -6,6 +6,59 @@ from research_radar.analysis.deepseek import DeepSeekProvider
 from research_radar.config import parse_config
 
 
+def test_topic_bootstrap_cli_writes_default_draft_and_prints_yaml(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    cli.main(
+        [
+            "topic",
+            "bootstrap",
+            "--topic",
+            "diffusion world models for embodied agents",
+            "--root",
+            str(tmp_path),
+        ]
+    )
+
+    output = capsys.readouterr().out
+    draft_path = tmp_path / "topic_drafts" / "diffusion-world-models-embodied-agents.yaml"
+
+    assert draft_path.exists()
+    assert f"Wrote topic draft: {draft_path.resolve()}" in output
+    assert "```yaml" in output
+    assert "diffusion-world-models-embodied-agents" in output
+
+
+def test_topic_bootstrap_cli_supports_custom_output_and_language(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "drafts" / "custom.yaml"
+
+    cli.main(
+        [
+            "topic",
+            "bootstrap",
+            "--topic",
+            "diffusion world models",
+            "--root",
+            str(tmp_path),
+            "--output",
+            str(output_path),
+            "--language",
+            "zh",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    text = output_path.read_text(encoding="utf-8")
+
+    assert f"Wrote topic draft: {output_path.resolve()}" in output
+    assert "report_language: zh" in text
+    assert "report_language: zh" in output
+
+
 def test_run_daily_can_use_deepseek_verifier_from_env(
     monkeypatch,
     tmp_path: Path,

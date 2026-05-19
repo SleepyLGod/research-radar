@@ -17,6 +17,7 @@ def test_gitignore_covers_private_runtime_files() -> None:
     for pattern in [
         ".env",
         "config.yaml",
+        "topic_drafts/",
         "runs/",
         "data/",
         "cache/",

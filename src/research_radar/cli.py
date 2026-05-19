@@ -35,6 +35,11 @@ from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import EnvSecretBackend, KeychainSecretBackend, SecretManager
 from research_radar.storage.encrypted_store import EncryptedJsonStore
 from research_radar.storage.files import write_text
+from research_radar.topic_bootstrap import (
+    bootstrap_topic_draft,
+    render_topic_draft_yaml,
+    write_topic_draft,
+)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -68,6 +73,41 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["deepseek", "openai", "wechat", "github", "semantic-scholar", "web-search"],
     )
     secrets_set.set_defaults(handler=handle_secrets_set)
+
+    topic_parser = subparsers.add_parser("topic", help="Topic profile utilities.")
+    topic_subparsers = topic_parser.add_subparsers(dest="topic_command", required=True)
+    topic_bootstrap = topic_subparsers.add_parser(
+        "bootstrap",
+        help="Create an editable topic profile draft.",
+    )
+    topic_bootstrap.add_argument("--topic", required=True)
+    topic_bootstrap.add_argument("--root", type=Path, default=Path.cwd())
+    topic_bootstrap.add_argument("--output", type=Path, default=None)
+    topic_bootstrap.add_argument("--language", choices=["en", "zh"], default="en")
+    topic_bootstrap.add_argument(
+        "--provider",
+        choices=["local", "deepseek"],
+        default="local",
+        help="Use local heuristic bootstrap or DeepSeek-backed topic drafting.",
+    )
+    topic_bootstrap.add_argument(
+        "--model",
+        default=None,
+        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+    )
+    topic_bootstrap.add_argument(
+        "--secret-source",
+        choices=["keychain", "env"],
+        default="keychain",
+        help="Read provider secrets from Keychain or the current process environment.",
+    )
+    topic_bootstrap.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Explicitly load local environment variables before reading env-backed secrets.",
+    )
+    topic_bootstrap.set_defaults(handler=handle_topic_bootstrap)
 
     run_parser = subparsers.add_parser("run", help="Run a pipeline.")
     run_subparsers = run_parser.add_subparsers(dest="mode", required=True)
@@ -278,6 +318,33 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
     elif args.name == "web-search":
         manager.backend.set_secret("web_search.api_key", _prompt_secret("Web search API key"))
     print(f"Stored {args.name} secrets in the configured secret backend.")
+
+
+def handle_topic_bootstrap(args: argparse.Namespace) -> None:
+    """Create an editable topic profile draft."""
+
+    if args.env_file is not None:
+        _load_env_file(args.env_file)
+    provider = None
+    model = None
+    if args.provider == "deepseek":
+        manager = _secret_manager(args.secret_source)
+        provider = DeepSeekProvider(manager)
+        model = args.model or "deepseek-chat"
+    elif args.provider != "local":
+        raise ResearchRadarError(f"Unsupported provider: {args.provider}")
+    topic = bootstrap_topic_draft(
+        args.topic,
+        language=args.language,
+        provider=provider,
+        model=model,
+    )
+    output_path = write_topic_draft(args.root, topic, output=args.output)
+    print(f"Wrote topic draft: {output_path}")
+    print()
+    print("```yaml")
+    print(render_topic_draft_yaml(topic).rstrip())
+    print("```")
 
 
 def handle_run_daily(args: argparse.Namespace) -> None:
