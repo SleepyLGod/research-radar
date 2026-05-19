@@ -77,6 +77,7 @@ class EnvSecretBackend:
     _names = {
         "deepseek.api_key": "DEEPSEEK_API_KEY",
         "openai.api_key": "OPENAI_API_KEY",
+        "anthropic.api_key": "ANTHROPIC_API_KEY",
         "wechat.app_id": "WECHAT_APP_ID",
         "wechat.app_secret": "WECHAT_APP_SECRET",
         "github.token": "GITHUB_TOKEN",
@@ -133,6 +134,16 @@ class SecretManager:
         """Return the OpenAI API key."""
 
         return self.backend.get_secret("openai.api_key")
+
+    def set_anthropic_api_key(self, value: str) -> None:
+        """Store the Anthropic API key."""
+
+        self.backend.set_secret("anthropic.api_key", value)
+
+    def get_anthropic_api_key(self) -> str:
+        """Return the Anthropic API key."""
+
+        return self.backend.get_secret("anthropic.api_key")
 
     def set_wechat_credentials(self, app_id: str, app_secret: str) -> None:
         """Store WeChat Official Account credentials."""

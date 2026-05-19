@@ -53,6 +53,8 @@ Set local secrets when you are ready to call real providers:
 
 ```bash
 uv run research-radar secrets set deepseek
+uv run research-radar secrets set openai
+uv run research-radar secrets set anthropic
 uv run research-radar secrets set wechat
 ```
 
@@ -62,14 +64,21 @@ Generate a dry-run daily report:
 uv run research-radar run daily --topic agent-memory
 ```
 
-Run the same daily pipeline with DeepSeek-backed review from an explicit local `.env` file:
+Run the same daily pipeline with a compatibility provider from an explicit local `.env` file:
 
 ```bash
 uv run research-radar run daily --topic agent-memory --provider deepseek --secret-source env --env-file .env --deep-limit 1
 ```
 
-DeepSeek deep-reading output is converted into evidence-bound claims; publishable article claims
-still come from the evidence policy.
+Task-specific routes can override that compatibility default. This example uses DeepSeek for
+reading and Codex CLI for verification:
+
+```bash
+uv run research-radar run daily --topic agent-memory --reader-provider deepseek --verifier-provider codex --secret-source env --env-file .env --deep-limit 1
+```
+
+Deep-reading output is converted into evidence-bound claims; publishable article claims still come
+from the evidence policy.
 Use `--limit 3` for narrow real smoke runs while the discovery and relevance gates are evolving.
 Deep-reading output is written to `readings.jsonl` and `deep_reading.md`.
 

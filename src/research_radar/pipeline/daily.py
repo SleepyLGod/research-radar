@@ -64,6 +64,8 @@ def run_daily(
     *,
     verifier: LLMProvider | None = None,
     verifier_model: str | None = None,
+    gist_provider: LLMProvider | None = None,
+    gist_model: str | None = None,
     limit: int = 10,
     deep_reader: LLMProvider | None = None,
     deep_model: str | None = None,
@@ -107,8 +109,8 @@ def run_daily(
     ]
     reportable_candidates = attach_source_gists(
         reportable_candidates,
-        provider=verifier,
-        model=verifier_model or config.models.scout,
+        provider=gist_provider,
+        model=gist_model or config.models.scout,
         language=report_language,
     )
     candidates = _replace_candidates(candidates, reportable_candidates)

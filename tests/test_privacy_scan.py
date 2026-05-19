@@ -24,6 +24,13 @@ def test_privacy_scan_fails_on_fake_secret(tmp_path: Path) -> None:
         raise AssertionError("Expected PrivacyScanError")
 
 
+def test_privacy_scan_allows_secret_reference_names(tmp_path: Path) -> None:
+    path = tmp_path / "provider.py"
+    path.write_text('api_key_secret="deepseek.api_key"\n', encoding="utf-8")
+
+    assert_clean(tmp_path)
+
+
 def test_privacy_scan_skips_local_only_secret_files(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
     config_path = tmp_path / "config.yaml"

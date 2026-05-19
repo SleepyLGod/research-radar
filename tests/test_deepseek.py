@@ -14,11 +14,11 @@ def test_deepseek_provider_wraps_incomplete_http_reads(monkeypatch) -> None:
     def fake_urlopen(*args, **kwargs):
         raise IncompleteRead(b"")
 
-    monkeypatch.setattr("research_radar.analysis.deepseek.urlopen", fake_urlopen)
+    monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
 
     try:
         provider.complete([Message(role="user", content="hello")], model="fake")
     except AnalysisError as exc:
-        assert "DeepSeek request failed" in str(exc)
+        assert "deepseek request failed" in str(exc)
     else:
         raise AssertionError("Expected AnalysisError")

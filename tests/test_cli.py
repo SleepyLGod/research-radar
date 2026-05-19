@@ -2,7 +2,8 @@ from argparse import Namespace
 from pathlib import Path
 
 from research_radar import cli
-from research_radar.analysis.deepseek import DeepSeekProvider
+from research_radar.analysis.cli_providers import CodexCliProvider
+from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.config import parse_config
 
 
@@ -102,10 +103,12 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
         )
     )
 
-    assert isinstance(captured["verifier"], DeepSeekProvider)
+    assert isinstance(captured["verifier"], OpenAICompatibleProvider)
+    assert captured["verifier"].name == "deepseek"
     assert captured["verifier_model"] == "deepseek-chat"
     assert captured["limit"] == 3
-    assert isinstance(captured["deep_reader"], DeepSeekProvider)
+    assert isinstance(captured["deep_reader"], OpenAICompatibleProvider)
+    assert captured["deep_reader"].name == "deepseek"
     assert captured["deep_model"] == "deepseek-chat"
     assert captured["deep_limit"] == 1
     assert captured["language"] == "zh"
@@ -153,6 +156,65 @@ def test_run_daily_local_provider_does_not_configure_verifier(
     assert captured["limit"] == 10
     assert captured["deep_reader"] is None
     assert captured["deep_limit"] == 1
+
+
+def test_run_daily_supports_task_specific_provider_routes(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    codex_command = tmp_path / "fake-codex"
+    codex_command.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    codex_command.chmod(0o755)
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "codex": {"kind": "codex_cli", "command": str(codex_command)},
+            },
+        }
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_daily(*args, **kwargs):
+        captured["gist_provider"] = kwargs.get("gist_provider")
+        captured["gist_model"] = kwargs.get("gist_model")
+        captured["deep_reader"] = kwargs.get("deep_reader")
+        captured["deep_model"] = kwargs.get("deep_model")
+        captured["verifier"] = kwargs.get("verifier")
+        captured["verifier_model"] = kwargs.get("verifier_model")
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider="deepseek",
+            model="deepseek-chat",
+            gist_provider="openai",
+            gist_model="gpt-5.4",
+            reader_provider=None,
+            reader_model=None,
+            verifier_provider="codex",
+            verifier_model="gpt-5.4",
+            secret_source="env",
+            env_file=None,
+            limit=3,
+            deep_limit=1,
+            language=None,
+        )
+    )
+
+    assert captured["gist_provider"].name == "openai"
+    assert captured["gist_model"] == "gpt-5.4"
+    assert captured["deep_reader"].name == "deepseek"
+    assert captured["deep_model"] == "deepseek-chat"
+    assert isinstance(captured["verifier"], CodexCliProvider)
+    assert captured["verifier_model"] == "gpt-5.4"
 
 
 def test_run_daily_adds_configured_web_search_connector(
@@ -289,6 +351,7 @@ def test_run_paper_can_use_deepseek_from_env(
         )
     )
 
-    assert isinstance(captured["reader"], DeepSeekProvider)
+    assert isinstance(captured["reader"], OpenAICompatibleProvider)
+    assert captured["reader"].name == "deepseek"
     assert captured["url"] == "https://arxiv.org/pdf/2604.01707v1"
     assert captured["model"] == "deepseek-chat"

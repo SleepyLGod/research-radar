@@ -33,6 +33,8 @@ def run_paper(
     reader: LLMProvider,
     *,
     model: str,
+    verifier: LLMProvider | None = None,
+    verifier_model: str | None = None,
     language: str | None = None,
 ) -> Path:
     """Run the single-paper pipeline and return the run directory."""
@@ -51,11 +53,13 @@ def run_paper(
     )
     claims, findings = validate_paper_reading(reading, artifact)
     model_feedback = None
-    if claims:
+    review_provider = verifier or reader
+    review_model = verifier_model or model
+    if claims and review_provider is not None:
         claims, model_findings, model_feedback = model_review(
             claims,
-            reader,
-            model=model,
+            review_provider,
+            model=review_model,
             topic_id=topic.id,
             queries=topic.queries,
         )

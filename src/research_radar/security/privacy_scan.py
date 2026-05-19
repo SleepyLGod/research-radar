@@ -105,6 +105,8 @@ def _is_allowed_example_line(line: str) -> bool:
     lowered = stripped.lower()
     if "fake" in lowered or "example" in lowered:
         return True
+    if "api_key_secret" in lowered and ".api_key" in stripped:
+        return True
     if "local_path_pattern" in lowered or 're.compile(r"/users/' in lowered:
         return True
     if "/Users/someone" in stripped:
@@ -114,10 +116,12 @@ def _is_allowed_example_line(line: str) -> bool:
         for name in [
             "DEEPSEEK_API_KEY",
             "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
             "WECHAT_APP_SECRET",
             "WECHAT_APP_ID",
             "GITHUB_TOKEN",
             "SEMANTIC_SCHOLAR_API_KEY",
+            "WEB_SEARCH_API_KEY",
         ]
     ):
         return True

@@ -10,7 +10,8 @@ model-backed research loop is a later milestone.
 - `scheduler`: local and Codex automation entrypoints.
 - `discovery`: source connectors for papers, repositories, RSS/blogs, and web search adapters.
 - `ingestion`: PDF, HTML, and repository extraction with provenance.
-- `analysis`: provider interfaces for DeepSeek triage and high-reasoning review.
+- `analysis`: task-level model routes plus concrete OpenAI-compatible, Anthropic, Codex CLI,
+  Claude Code CLI, and local/static provider instances.
 - `evidence`: claim ledger and unsupported-claim policy.
 - `compose`: platform-neutral article drafts plus Markdown, WeChat, and future channel renderers.
 - `publishers.wechat`: WeChat Official Account draft API client.

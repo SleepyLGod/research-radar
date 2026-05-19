@@ -9,9 +9,8 @@ import shutil
 import sys
 from pathlib import Path
 
-from research_radar.analysis.deepseek import DeepSeekProvider
-from research_radar.analysis.providers import LLMProvider
-from research_radar.config import AppConfig, load_config
+from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
+from research_radar.config import AppConfig, load_config, parse_config
 from research_radar.discovery.arxiv import ArxivConnector
 from research_radar.discovery.base import DiscoveryConnector
 from research_radar.discovery.github import GitHubRepoConnector
@@ -20,7 +19,7 @@ from research_radar.discovery.semantic_scholar import SemanticScholarConnector
 from research_radar.discovery.web_search import GenericWebSearchConnector
 from research_radar.evaluation.topic_smoke import run_topic_smoke, select_topic_specs
 from research_radar.evidence.ledger import load_claims
-from research_radar.exceptions import ResearchRadarError, SecretError
+from research_radar.exceptions import ConfigError, ResearchRadarError, SecretError
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
 from research_radar.pipeline.weekly import compose_weekly_from_run
@@ -70,7 +69,15 @@ def build_parser() -> argparse.ArgumentParser:
     secrets_set = secrets_subparsers.add_parser("set", help="Set a secret group.")
     secrets_set.add_argument(
         "name",
-        choices=["deepseek", "openai", "wechat", "github", "semantic-scholar", "web-search"],
+        choices=[
+            "deepseek",
+            "openai",
+            "anthropic",
+            "wechat",
+            "github",
+            "semantic-scholar",
+            "web-search",
+        ],
     )
     secrets_set.set_defaults(handler=handle_secrets_set)
 
@@ -81,19 +88,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create an editable topic profile draft.",
     )
     topic_bootstrap.add_argument("--topic", required=True)
+    topic_bootstrap.add_argument("--config", type=Path, default=Path("config.yaml"))
     topic_bootstrap.add_argument("--root", type=Path, default=Path.cwd())
     topic_bootstrap.add_argument("--output", type=Path, default=None)
     topic_bootstrap.add_argument("--language", choices=["en", "zh"], default="en")
     topic_bootstrap.add_argument(
         "--provider",
-        choices=["local", "deepseek"],
-        default="local",
-        help="Use local heuristic bootstrap or DeepSeek-backed topic drafting.",
+        default=None,
+        help="Compatibility default provider for the bootstrap task.",
     )
     topic_bootstrap.add_argument(
         "--model",
         default=None,
-        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+        help="Compatibility default model for the bootstrap task.",
+    )
+    topic_bootstrap.add_argument(
+        "--bootstrap-provider",
+        default=None,
+        help="Provider instance for topic bootstrap.",
+    )
+    topic_bootstrap.add_argument(
+        "--bootstrap-model",
+        default=None,
+        help="Model for topic bootstrap.",
     )
     topic_bootstrap.add_argument(
         "--secret-source",
@@ -129,14 +146,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     daily.add_argument(
         "--provider",
-        choices=["local", "deepseek"],
-        default="local",
-        help="Use local dry-run review or DeepSeek-backed model review.",
+        default=None,
+        help="Compatibility default provider for all model-backed daily tasks.",
     )
     daily.add_argument(
         "--model",
         default=None,
-        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+        help="Compatibility default model for all model-backed daily tasks.",
+    )
+    daily.add_argument("--gist-provider", default=None, help="Provider instance for source gists.")
+    daily.add_argument("--gist-model", default=None, help="Model for source gists.")
+    daily.add_argument(
+        "--reader-provider",
+        default=None,
+        help="Provider instance for deep reading.",
+    )
+    daily.add_argument("--reader-model", default=None, help="Model for deep reading.")
+    daily.add_argument(
+        "--verifier-provider",
+        default=None,
+        help="Provider instance for verification.",
+    )
+    daily.add_argument(
+        "--verifier-model",
+        default=None,
+        help="Model for claim verification.",
     )
     daily.add_argument(
         "--secret-source",
@@ -164,14 +198,29 @@ def build_parser() -> argparse.ArgumentParser:
     paper.add_argument("--root", type=Path, default=Path.cwd())
     paper.add_argument(
         "--provider",
-        choices=["deepseek"],
-        default="deepseek",
-        help="Model provider for the paper-reading pass.",
+        default=None,
+        help="Compatibility default provider for paper reading and verification.",
     )
     paper.add_argument(
         "--model",
         default=None,
-        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+        help="Compatibility default model for paper reading and verification.",
+    )
+    paper.add_argument(
+        "--reader-provider",
+        default=None,
+        help="Provider instance for paper reading.",
+    )
+    paper.add_argument("--reader-model", default=None, help="Model for paper reading.")
+    paper.add_argument(
+        "--verifier-provider",
+        default=None,
+        help="Provider instance for verification.",
+    )
+    paper.add_argument(
+        "--verifier-model",
+        default=None,
+        help="Model for claim verification.",
     )
     paper.add_argument(
         "--secret-source",
@@ -226,14 +275,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eval_topics.add_argument(
         "--provider",
-        choices=["deepseek"],
-        default="deepseek",
-        help="Model provider for reading and review.",
+        default=None,
+        help="Compatibility default provider for all model-backed eval tasks.",
     )
     eval_topics.add_argument(
         "--model",
         default=None,
-        help="Model name for the selected provider. DeepSeek defaults to deepseek-chat.",
+        help="Compatibility default model for all model-backed eval tasks.",
+    )
+    eval_topics.add_argument(
+        "--gist-provider",
+        default=None,
+        help="Provider instance for source gists.",
+    )
+    eval_topics.add_argument("--gist-model", default=None, help="Model for source gists.")
+    eval_topics.add_argument(
+        "--reader-provider",
+        default=None,
+        help="Provider instance for deep reading.",
+    )
+    eval_topics.add_argument("--reader-model", default=None, help="Model for deep reading.")
+    eval_topics.add_argument(
+        "--verifier-provider",
+        default=None,
+        help="Provider instance for verification.",
+    )
+    eval_topics.add_argument(
+        "--verifier-model",
+        default=None,
+        help="Model for claim verification.",
     )
     eval_topics.add_argument(
         "--secret-source",
@@ -307,6 +377,8 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
         manager.set_deepseek_api_key(_prompt_secret("DeepSeek API key"))
     elif args.name == "openai":
         manager.set_openai_api_key(_prompt_secret("OpenAI API key"))
+    elif args.name == "anthropic":
+        manager.set_anthropic_api_key(_prompt_secret("Anthropic API key"))
     elif args.name == "wechat":
         app_id = input("WeChat App ID: ").strip()
         app_secret = _prompt_secret("WeChat App Secret")
@@ -325,19 +397,31 @@ def handle_topic_bootstrap(args: argparse.Namespace) -> None:
 
     if args.env_file is not None:
         _load_env_file(args.env_file)
-    provider = None
-    model = None
-    if args.provider == "deepseek":
-        manager = _secret_manager(args.secret_source)
-        provider = DeepSeekProvider(manager)
-        model = args.model or "deepseek-chat"
-    elif args.provider != "local":
-        raise ResearchRadarError(f"Unsupported provider: {args.provider}")
+    config = _load_routing_config(getattr(args, "config", Path("config.yaml")))
+    manager = _secret_manager(args.secret_source)
+    global_provider = getattr(args, "provider", None)
+    if (
+        global_provider is None
+        and getattr(args, "bootstrap_provider", None) is None
+        and getattr(args, "bootstrap_model", None) is None
+        and getattr(args, "model", None) is None
+    ):
+        global_provider = "local"
+    route = resolve_task_route(
+        config,
+        manager,
+        "topic_bootstrap",
+        provider_override=getattr(args, "bootstrap_provider", None),
+        model_override=getattr(args, "bootstrap_model", None),
+        global_provider=global_provider,
+        global_model=getattr(args, "model", None),
+        default_local=True,
+    )
     topic = bootstrap_topic_draft(
         args.topic,
         language=args.language,
-        provider=provider,
-        model=model,
+        provider=route.provider,
+        model=route.model,
     )
     output_path = write_topic_draft(args.root, topic, output=args.output)
     print(f"Wrote topic draft: {output_path}")
@@ -359,19 +443,39 @@ def handle_run_daily(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
     connectors = _daily_connectors(config, manager)
-    verifier = _daily_verifier(args.provider, manager)
-    deep_reader = _daily_deep_reader(args.provider, manager, args.deep_limit)
-    verifier_model = _daily_verifier_model(args.provider, args.model)
+    gist_route = resolve_task_route(
+        config,
+        manager,
+        "source_gist",
+        provider_override=getattr(args, "gist_provider", None),
+        model_override=getattr(args, "gist_model", None),
+        global_provider=getattr(args, "provider", None),
+        global_model=getattr(args, "model", None),
+        default_local=True,
+    )
+    reader_route = _resolve_daily_reader_route(args, config, manager)
+    verifier_route = resolve_task_route(
+        config,
+        manager,
+        "verifier",
+        provider_override=getattr(args, "verifier_provider", None),
+        model_override=getattr(args, "verifier_model", None),
+        global_provider=getattr(args, "provider", None),
+        global_model=getattr(args, "model", None),
+        default_local=True,
+    )
     run_dir = run_daily(
         args.root,
         config,
         args.topic,
         connectors,
-        verifier=verifier,
-        verifier_model=verifier_model,
+        verifier=verifier_route.provider,
+        verifier_model=verifier_route.model,
+        gist_provider=gist_route.provider,
+        gist_model=gist_route.model,
         limit=args.limit,
-        deep_reader=deep_reader,
-        deep_model=verifier_model,
+        deep_reader=reader_route.provider,
+        deep_model=reader_route.model,
         deep_limit=args.deep_limit,
         language=getattr(args, "language", None),
     )
@@ -392,15 +496,28 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         _load_env_file(args.env_file)
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
-    reader = _paper_reader(args.provider, manager)
-    model = _paper_model(args.provider, args.model)
+    reader_route = resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_override=getattr(args, "reader_provider", None),
+        model_override=getattr(args, "reader_model", None),
+        global_provider=getattr(args, "provider", None),
+        global_model=getattr(args, "model", None),
+        default_local=False,
+    )
+    verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
+    if reader_route.provider is None or reader_route.model is None:
+        raise ResearchRadarError("Single-paper reading requires a non-local reader provider.")
     run_dir = run_paper(
         args.root,
         config,
         args.topic,
         args.url,
-        reader,
-        model=model,
+        reader_route.provider,
+        model=reader_route.model,
+        verifier=verifier_route.provider,
+        verifier_model=verifier_route.model,
         language=getattr(args, "language", None),
     )
     print(f"Created paper run: {run_dir}")
@@ -413,15 +530,38 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         _load_env_file(args.env_file)
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
-    provider = _paper_reader(args.provider, manager)
-    model = _paper_model(args.provider, args.model)
+    gist_route = resolve_task_route(
+        config,
+        manager,
+        "source_gist",
+        provider_override=getattr(args, "gist_provider", None),
+        model_override=getattr(args, "gist_model", None),
+        global_provider=getattr(args, "provider", None),
+        global_model=getattr(args, "model", None),
+        default_local=True,
+    )
+    reader_route = resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_override=getattr(args, "reader_provider", None),
+        model_override=getattr(args, "reader_model", None),
+        global_provider=getattr(args, "provider", None),
+        global_model=getattr(args, "model", None),
+        default_local=False,
+    )
+    verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
     connectors = _daily_connectors(config, manager)
     report = run_topic_smoke(
         args.root,
         config,
         connectors,
-        provider,
-        model=model,
+        gist_provider=gist_route.provider,
+        gist_model=gist_route.model,
+        reader=reader_route.provider,
+        reader_model=reader_route.model,
+        verifier=verifier_route.provider,
+        verifier_model=verifier_route.model,
         specs=select_topic_specs(args.topics),
         limit=args.limit,
         deep_limit=args.deep_limit,
@@ -483,42 +623,58 @@ def _secret_manager(secret_source: str) -> SecretManager:
     raise ResearchRadarError(f"Unsupported secret source: {secret_source}")
 
 
-def _daily_verifier(provider_name: str, manager: SecretManager) -> LLMProvider | None:
-    if provider_name == "local":
-        return None
-    if provider_name == "deepseek":
-        return DeepSeekProvider(manager)
-    raise ResearchRadarError(f"Unsupported provider: {provider_name}")
+def _load_routing_config(path: Path) -> AppConfig:
+    if path.exists():
+        return load_config(path)
+    return parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "bootstrap", "queries": ["topic bootstrap"]}],
+        }
+    )
 
 
-def _daily_verifier_model(provider_name: str, model: str | None) -> str | None:
-    if provider_name == "deepseek":
-        return model or "deepseek-chat"
-    return model
-
-
-def _daily_deep_reader(
-    provider_name: str,
+def _resolve_daily_reader_route(
+    args: argparse.Namespace,
+    config: AppConfig,
     manager: SecretManager,
-    deep_limit: int,
-) -> LLMProvider | None:
-    if deep_limit <= 0:
-        return None
-    if provider_name == "deepseek":
-        return DeepSeekProvider(manager)
-    return None
+) -> TaskModelRoute:
+    if args.deep_limit <= 0:
+        return TaskModelRoute(provider=None, model=None, provider_name="local")
+    return resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_override=getattr(args, "reader_provider", None),
+        model_override=getattr(args, "reader_model", None),
+        global_provider=getattr(args, "provider", None),
+        global_model=getattr(args, "model", None),
+        default_local=True,
+    )
 
 
-def _paper_reader(provider_name: str, manager: SecretManager) -> LLMProvider:
-    if provider_name == "deepseek":
-        return DeepSeekProvider(manager)
-    raise ResearchRadarError(f"Unsupported provider: {provider_name}")
-
-
-def _paper_model(provider_name: str, model: str | None) -> str:
-    if provider_name == "deepseek":
-        return model or "deepseek-chat"
-    raise ResearchRadarError(f"Unsupported provider: {provider_name}")
+def _resolve_verifier_route(
+    args: argparse.Namespace,
+    config: AppConfig,
+    manager: SecretManager,
+    *,
+    fallback: TaskModelRoute,
+) -> TaskModelRoute:
+    try:
+        return resolve_task_route(
+            config,
+            manager,
+            "verifier",
+            provider_override=getattr(args, "verifier_provider", None),
+            model_override=getattr(args, "verifier_model", None),
+            global_provider=getattr(args, "provider", None),
+            global_model=getattr(args, "model", None),
+            default_local=False,
+        )
+    except ConfigError:
+        if getattr(args, "verifier_provider", None) or getattr(args, "provider", None):
+            raise
+        return fallback
 
 
 def _daily_connectors(

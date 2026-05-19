@@ -92,10 +92,47 @@ cadence:
   daily_monitor: "09:00"
   weekly_deep_dive: "Sunday 10:00"
 
+model_providers:
+  deepseek:
+    kind: openai_compatible
+    base_url: https://api.deepseek.com/chat/completions
+    api_key_secret: deepseek.api_key
+  openai:
+    kind: openai_compatible
+    base_url: https://api.openai.com/v1/chat/completions
+    api_key_secret: openai.api_key
+  anthropic:
+    kind: anthropic_messages
+    api_key_secret: anthropic.api_key
+  codex:
+    kind: codex_cli
+    command: /Applications/Codex.app/Contents/Resources/codex
+  claude:
+    kind: claude_code_cli
+    command: claude
+  von_claude:
+    kind: claude_code_cli
+    command: von-claude
+  local:
+    kind: local
+
 models:
   scout: deepseek-v4-flash
   analyst: deepseek-v4-pro
   verifier: codex_or_openai_high_reasoning
+  task_routes:
+    topic_bootstrap:
+      provider: deepseek
+      model: deepseek-chat
+    source_gist:
+      provider: deepseek
+      model: deepseek-chat
+    deep_reading:
+      provider: codex
+      model: gpt-5.4
+    verifier:
+      provider: von_claude
+      model: sonnet
 
 publishing:
   channel: wechat_draft

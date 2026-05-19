@@ -58,12 +58,32 @@ class CadenceConfig:
 
 
 @dataclass(frozen=True)
+class ModelProviderConfig:
+    """One named model provider instance."""
+
+    kind: str
+    base_url: str | None = None
+    api_key_secret: str | None = None
+    command: str | None = None
+    timeout_seconds: int = 120
+
+
+@dataclass(frozen=True)
+class TaskRouteConfig:
+    """Model route for one ResearchRadar task."""
+
+    provider: str
+    model: str
+
+
+@dataclass(frozen=True)
 class ModelConfig:
     """Model selection configuration."""
 
     scout: str = "deepseek-v4-flash"
     analyst: str = "deepseek-v4-pro"
     verifier: str = "codex_or_openai_high_reasoning"
+    task_routes: dict[str, TaskRouteConfig] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -88,6 +108,7 @@ class AppConfig:
 
     project: ProjectConfig
     topics: list[TopicConfig]
+    model_providers: dict[str, ModelProviderConfig] = field(default_factory=dict)
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     cadence: CadenceConfig = field(default_factory=CadenceConfig)
     models: ModelConfig = field(default_factory=ModelConfig)
@@ -182,9 +203,12 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
     return AppConfig(
         project=ProjectConfig(name=str(project_data.get("name", "ResearchRadar"))),
         topics=topics,
+        model_providers=_model_provider_configs(
+            _mapping(data.get("model_providers", {}), "model_providers")
+        ),
         discovery=_discovery_config(_mapping(data.get("discovery", {}), "discovery")),
         cadence=CadenceConfig(**_mapping(data.get("cadence", {}), "cadence")),
-        models=ModelConfig(**_mapping(data.get("models", {}), "models")),
+        models=_model_config(_mapping(data.get("models", {}), "models")),
         publishing=PublishingConfig(**publishing),
         security=SecurityConfig(**_mapping(data.get("security", {}), "security")),
     )
@@ -209,6 +233,104 @@ def _discovery_config(data: dict[str, Any]) -> DiscoveryConfig:
             ),
         ),
     )
+
+
+def _model_config(data: dict[str, Any]) -> ModelConfig:
+    routes = _task_route_configs(_mapping(data.get("task_routes", {}), "models.task_routes"))
+    allowed = {"scout", "analyst", "verifier", "task_routes"}
+    unknown = sorted(set(data) - allowed)
+    if unknown:
+        raise ConfigError(f"Unknown models keys: {', '.join(unknown)}")
+    return ModelConfig(
+        scout=str(data.get("scout", "deepseek-v4-flash")),
+        analyst=str(data.get("analyst", "deepseek-v4-pro")),
+        verifier=str(data.get("verifier", "codex_or_openai_high_reasoning")),
+        task_routes=routes,
+    )
+
+
+def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConfig]:
+    configs = _default_model_providers()
+    for name, raw in data.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ConfigError("model_providers keys must be non-empty strings.")
+        item = _mapping(raw, f"model_providers.{name}")
+        kind = _provider_kind(item.get("kind"), f"model_providers.{name}.kind")
+        timeout_seconds = _positive_int(
+            item.get("timeout_seconds", 120),
+            f"model_providers.{name}.timeout_seconds",
+        )
+        configs[name.strip()] = ModelProviderConfig(
+            kind=kind,
+            base_url=_optional_string(item.get("base_url"), f"model_providers.{name}.base_url"),
+            api_key_secret=_optional_string(
+                item.get("api_key_secret"),
+                f"model_providers.{name}.api_key_secret",
+            ),
+            command=_optional_string(item.get("command"), f"model_providers.{name}.command"),
+            timeout_seconds=timeout_seconds,
+        )
+    return configs
+
+
+def _default_model_providers() -> dict[str, ModelProviderConfig]:
+    return {
+        "local": ModelProviderConfig(kind="local"),
+        "deepseek": ModelProviderConfig(
+            kind="openai_compatible",
+            base_url="https://api.deepseek.com/chat/completions",
+            api_key_secret="deepseek.api_key",
+        ),
+        "openai": ModelProviderConfig(
+            kind="openai_compatible",
+            base_url="https://api.openai.com/v1/chat/completions",
+            api_key_secret="openai.api_key",
+        ),
+        "anthropic": ModelProviderConfig(
+            kind="anthropic_messages",
+            api_key_secret="anthropic.api_key",
+        ),
+        "codex": ModelProviderConfig(
+            kind="codex_cli",
+            command="/Applications/Codex.app/Contents/Resources/codex",
+        ),
+        "claude": ModelProviderConfig(kind="claude_code_cli", command="claude"),
+        "von_claude": ModelProviderConfig(kind="claude_code_cli", command="von-claude"),
+    }
+
+
+def _task_route_configs(data: dict[str, Any]) -> dict[str, TaskRouteConfig]:
+    routes: dict[str, TaskRouteConfig] = {}
+    for task_name, raw in data.items():
+        if not isinstance(task_name, str) or not task_name.strip():
+            raise ConfigError("models.task_routes keys must be non-empty strings.")
+        item = _mapping(raw, f"models.task_routes.{task_name}")
+        routes[task_name.strip()] = TaskRouteConfig(
+            provider=_required_string(item, "provider"),
+            model=_required_string(item, "model"),
+        )
+    return routes
+
+
+def _provider_kind(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{name} must be a non-empty string.")
+    kind = value.strip()
+    if kind not in {
+        "local",
+        "openai_compatible",
+        "anthropic_messages",
+        "codex_cli",
+        "claude_code_cli",
+    }:
+        raise ConfigError(f"Unsupported provider kind: {kind}")
+    return kind
+
+
+def _positive_int(value: Any, name: str) -> int:
+    if not isinstance(value, int) or value < 1:
+        raise ConfigError(f"{name} must be a positive integer.")
+    return value
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
