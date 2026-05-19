@@ -135,25 +135,22 @@ def run_daily(
     readings = []
     deep_claims = []
     selected_deep_candidates: list[SourceCandidate] = []
+    deep_reading_status_by_url: dict[str, str] = {}
     deep_required = deep_reader is not None and deep_limit > 0
     if deep_required:
-        selected_deep_candidates = select_deep_candidates(
+        deep_candidate_pool = select_deep_candidates(
             reportable_candidates,
-            deep_limit,
+            len(reportable_candidates),
             source_intent=topic.source_intent,
         )
-        findings.extend(
-            _deep_selection_findings(
-                reportable_candidates,
-                selected_deep_candidates,
-                source_intent=topic.source_intent,
-            )
-        )
-        for candidate in selected_deep_candidates:
+        for candidate in deep_candidate_pool:
+            if len(selected_deep_candidates) >= deep_limit:
+                break
             try:
                 artifact = ingest_source(candidate, run_dir / "artifacts")
                 deep_artifacts.append(artifact)
             except IngestionError as exc:
+                deep_reading_status_by_url[candidate.url] = "ingestion_failed"
                 findings.append(
                     ReviewFinding(
                         severity="warning",
@@ -171,6 +168,7 @@ def run_daily(
                     language=report_language,
                 )
             except AnalysisError as exc:
+                deep_reading_status_by_url[candidate.url] = "reading_failed"
                 findings.append(
                     ReviewFinding(
                         severity="error",
@@ -180,10 +178,20 @@ def run_daily(
                     )
                 )
                 continue
+            selected_deep_candidates.append(candidate)
+            deep_reading_status_by_url[candidate.url] = "succeeded"
             readings.append(reading)
             reading_claims, reading_findings = validate_paper_reading(reading, artifact)
             deep_claims.extend(reading_claims)
             findings.extend(reading_findings)
+        findings.extend(
+            _deep_selection_findings(
+                reportable_candidates,
+                selected_deep_candidates,
+                source_intent=topic.source_intent,
+                deep_reading_status_by_url=deep_reading_status_by_url,
+            )
+        )
 
     paper_coverage = paper_coverage_diagnostics(candidates, source_intent=topic.source_intent)
     findings.extend(_quality_gate_findings(paper_coverage))
@@ -259,6 +267,7 @@ def run_daily(
             reportable_candidates,
             selected_deep_candidates,
             source_intent=topic.source_intent,
+            deep_reading_status_by_url=deep_reading_status_by_url,
         ),
     )
     artifacts = _merge_artifacts(summary_artifacts, deep_artifacts)
@@ -370,12 +379,15 @@ def _deep_selection_findings(
     selected: list[SourceCandidate],
     *,
     source_intent: str,
+    deep_reading_status_by_url: dict[str, str] | None = None,
 ) -> list[ReviewFinding]:
     selected_urls = {candidate.url for candidate in selected}
+    status_map = deep_reading_status_by_url or {}
     findings: list[ReviewFinding] = []
     for candidate in candidates:
         source_role = candidate.metadata.get("source_role", {})
         selected_text = "selected" if candidate.url in selected_urls else "not selected"
+        deep_status = status_map.get(candidate.url, "not_attempted")
         severity = "info"
         if selected_text == "selected" and source_role.get("role") == "survey_or_list":
             severity = "warning"
@@ -388,6 +400,7 @@ def _deep_selection_findings(
                     f"priority={source_role.get('deep_read_priority')}, "
                     f"score={source_selection_score(candidate, source_intent=source_intent):.3f}, "
                     f"intent={source_intent}, "
+                    f"deep_status={deep_status}, "
                     f"reason={source_role.get('reason')}"
                 ),
                 claim_text=candidate.title,
@@ -402,6 +415,8 @@ def _deep_selection_findings(
                         source_intent=source_intent,
                     ),
                     "source_intent": source_intent,
+                    "attempted_for_deep_reading": deep_status != "not_attempted",
+                    "deep_reading_status": deep_status,
                 },
             )
         )

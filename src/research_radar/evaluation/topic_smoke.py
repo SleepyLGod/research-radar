@@ -137,12 +137,18 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
                 "LLM reasoning",
                 "large language model reasoning",
                 "reasoning model",
+                "chain-of-thought",
+                "mathematical reasoning",
+                "deliberation",
+                "verifier",
             ),
             "memory_mechanism": (
                 "reasoning evaluation",
                 "reasoning benchmark",
                 "test-time scaling",
                 "test time scaling",
+                "test-time compute",
+                "test time compute",
                 "reasoning trace",
                 "self consistency",
             ),
@@ -151,6 +157,9 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
                 "evaluation",
                 "pass@",
                 "accuracy",
+                "AIME",
+                "MATH",
+                "GPQA",
             ),
             "negative_compute_or_training": (
                 "kv cache",
@@ -180,17 +189,23 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
                 "RAG",
                 "retrieval augmented generation",
                 "retrieval-augmented generation",
+                "RAG system",
+                "RAG systems",
+                "retrieval augmented generation system",
             ),
             "memory_mechanism": (
-                "retrieval",
-                "retriever",
-                "grounded generation",
-                "knowledge grounding",
+                "RAG pipeline",
+                "retrieval pipeline",
+                "retrieval system",
+                "retriever-generator architecture",
+                "grounded generation system",
+                "knowledge grounding system",
             ),
             "evaluation_signal": (
                 "RAG benchmark",
                 "retrieval benchmark",
                 "RAG evaluation",
+                "RAG systems evaluation",
                 "retrieval augmented generation evaluation",
             ),
             "negative_compute_or_training": (
@@ -198,6 +213,11 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
                 "prefill serving",
                 "fine-tuning",
                 "quantization",
+                "peer review",
+                "e-commerce",
+                "optical retail",
+                "project assessment",
+                "generic project assessment",
             ),
         },
     ),
@@ -601,6 +621,16 @@ def _paper_selection_reason(
         return "no relevant paper"
     if not viable_papers:
         return "paper below threshold"
+    attempted_statuses = _paper_attempt_statuses(viable_papers, findings)
+    if attempted_statuses and all(
+        status == "ingestion_failed" for status in attempted_statuses.values()
+    ):
+        return "all paper ingestion failed"
+    if attempted_statuses and all(
+        status in {"ingestion_failed", "reading_failed"}
+        for status in attempted_statuses.values()
+    ):
+        return "all paper attempts failed"
     return "viable paper skipped"
 
 
@@ -619,6 +649,29 @@ def _selected_paper_failure_reason(
         if kind == "deep_reading_failed":
             return "selected paper reading failed"
     return None
+
+
+def _paper_attempt_statuses(
+    viable_papers: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+) -> dict[str, str]:
+    viable_urls = {str(source.get("url")) for source in viable_papers if source.get("url")}
+    statuses: dict[str, str] = {}
+    for finding in findings:
+        metadata = finding.get("metadata", {})
+        source_url = metadata.get("source_url")
+        if source_url not in viable_urls:
+            continue
+        kind = metadata.get("kind")
+        if kind == "deep_ingestion_failed":
+            statuses[str(source_url)] = "ingestion_failed"
+        elif kind == "deep_reading_failed":
+            statuses[str(source_url)] = "reading_failed"
+        elif kind == "deep_source_selection" and metadata.get("attempted_for_deep_reading"):
+            status = metadata.get("deep_reading_status")
+            if isinstance(status, str) and status != "not_attempted":
+                statuses[str(source_url)] = status
+    return statuses
 
 
 def _non_list_relevant_count(sources: list[dict[str, Any]]) -> int:
@@ -667,6 +720,10 @@ def _acceptance_failures(
     failures: list[str] = []
     if selected_source is None:
         failures.append("no deep-read source was selected")
+        if paper_selection_reason == "all paper ingestion failed":
+            failures.append("all paper ingestion failed")
+        elif paper_selection_reason == "all paper attempts failed":
+            failures.append("all paper deep-reading attempts failed")
     else:
         selected_role = selected_source.get("role")
         if selected_role == "survey_or_list" and non_list_relevant_count > 0:

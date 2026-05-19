@@ -200,6 +200,57 @@ def test_topic_smoke_fails_selected_paper_ingestion_failure(tmp_path: Path) -> N
     assert "selected paper failed ingestion" in result.failures
 
 
+def test_topic_smoke_reports_all_paper_ingestion_failures(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[0],
+        selected_url="https://example.com/no-selection",
+        sources=[
+            _source(
+                "Broken Agent Memory Paper",
+                "https://example.com/broken-paper",
+                "benchmark_paper",
+                "A paper about agent memory benchmark evaluation.",
+            ),
+            _source(
+                "Also Broken Agent Memory Paper",
+                "https://example.com/also-broken-paper",
+                "benchmark_paper",
+                "A paper about agent memory benchmark evaluation.",
+            ),
+        ],
+        publishable_claim_count=0,
+        claims=[],
+        extra_findings=[
+            {
+                "severity": "warning",
+                "message": "Deep ingestion failed: fixture parse failure",
+                "claim_text": "Broken Agent Memory Paper",
+                "metadata": {
+                    "kind": "deep_ingestion_failed",
+                    "source_url": "https://example.com/broken-paper",
+                },
+            },
+            {
+                "severity": "warning",
+                "message": "Deep ingestion failed: fixture parse failure",
+                "claim_text": "Also Broken Agent Memory Paper",
+                "metadata": {
+                    "kind": "deep_ingestion_failed",
+                    "source_url": "https://example.com/also-broken-paper",
+                },
+            },
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[0])
+
+    assert not result.passed
+    assert result.selected_source is None
+    assert result.paper_selection_reason == "all paper ingestion failed"
+    assert "all paper ingestion failed" in result.failures
+
+
 def test_topic_smoke_reports_downgraded_claim_render_leak(tmp_path: Path) -> None:
     leaked_claim = "Critique: This is a leaked unsupported critique."
     run_dir = _write_run(

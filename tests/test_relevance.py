@@ -1,5 +1,6 @@
 from research_radar.config import TopicConfig
 from research_radar.discovery.relevance import gate_relevant_sources, score_source
+from research_radar.evaluation.topic_smoke import DEFAULT_TOPIC_SMOKE_SPECS
 from research_radar.models import SourceCandidate, SourceType
 
 
@@ -34,6 +35,19 @@ def _agent_memory_concept_topic(source_intent: str = "research_brief") -> TopicC
                 "fine-tuning",
                 "QLoRA",
             ],
+        },
+    )
+
+
+def _smoke_topic(topic_id: str) -> TopicConfig:
+    spec = next(item for item in DEFAULT_TOPIC_SMOKE_SPECS if item.id == topic_id)
+    return TopicConfig(
+        id=spec.id,
+        queries=list(spec.queries),
+        paper_queries=list(spec.paper_queries),
+        source_intent=spec.source_intent,
+        concept_groups={
+            group: list(aliases) for group, aliases in spec.concept_groups.items()
         },
     )
 
@@ -439,3 +453,63 @@ def test_implementation_scan_does_not_apply_concept_gate_to_repositories() -> No
 
     assert scored.metadata["relevance"]["status"] == "relevant"
     assert "concept gate missing" not in scored.metadata["relevance"]["reason"]
+
+
+def test_reasoning_eval_concept_profile_accepts_paper_level_signals() -> None:
+    source = SourceCandidate(
+        title="Verifier-Guided Chain-of-Thought for Mathematical Reasoning",
+        url="https://arxiv.org/abs/2605.01020",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary=(
+            "This paper evaluates LLM reasoning on AIME, MATH, and GPQA with "
+            "test-time compute and deliberation."
+        ),
+    )
+
+    scored = score_source(source, _smoke_topic("llm-reasoning-eval"))
+
+    assert scored.metadata["relevance"]["status"] == "relevant"
+    concept_gate = scored.metadata["relevance"]["concept_gate"]
+    assert concept_gate["passed"] is True
+    assert "chain-of-thought" in concept_gate["matched_aliases"]["agent_context"]
+    assert "test-time compute" in concept_gate["matched_aliases"]["memory_mechanism"]
+
+
+def test_rag_concept_profile_downgrades_application_noise() -> None:
+    source = SourceCandidate(
+        title="RAG for Optical Retail E-Commerce Project Assessment",
+        url="https://arxiv.org/abs/2605.01021",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary=(
+            "This application uses retrieval augmented generation for peer review "
+            "and generic project assessment."
+        ),
+    )
+
+    scored = score_source(source, _smoke_topic("rag-systems"))
+
+    assert scored.metadata["relevance"]["status"] != "relevant"
+    concept_gate = scored.metadata["relevance"]["concept_gate"]
+    assert "peer review" in concept_gate["matched_negative_aliases"]
+    assert "e-commerce" in concept_gate["matched_negative_aliases"]
+    assert "negative concept matched" in scored.metadata["relevance"]["reason"]
+
+
+def test_rag_concept_profile_keeps_system_evaluation_paper() -> None:
+    source = SourceCandidate(
+        title="RAG Systems Evaluation Benchmark",
+        url="https://arxiv.org/abs/2605.01022",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary=(
+            "A retrieval augmented generation system benchmark for RAG systems "
+            "evaluation with retrieval pipeline analysis."
+        ),
+    )
+
+    scored = score_source(source, _smoke_topic("rag-systems"))
+
+    assert scored.metadata["relevance"]["status"] == "relevant"
+    assert scored.metadata["relevance"]["concept_gate"]["passed"] is True

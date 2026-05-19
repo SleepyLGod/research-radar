@@ -31,18 +31,23 @@ def build_source_selection_report(
     selected: list[SourceCandidate],
     *,
     source_intent: str,
+    deep_reading_status_by_url: dict[str, str] | None = None,
 ) -> dict[str, object]:
     """Render source selection rationale as a machine-readable artifact."""
 
     selected_urls = {candidate.url for candidate in selected}
+    status_map = deep_reading_status_by_url or {}
     rows = []
     for candidate in sorted(
         candidates,
         key=lambda item: source_selection_score(item, source_intent=source_intent),
         reverse=True,
     ):
+        deep_status = status_map.get(candidate.url, "not_attempted")
         row = _source_row(candidate)
         row["selected_for_deep_reading"] = candidate.url in selected_urls
+        row["attempted_for_deep_reading"] = deep_status != "not_attempted"
+        row["deep_reading_status"] = deep_status
         row["selection_score"] = round(
             source_selection_score(candidate, source_intent=source_intent),
             3,

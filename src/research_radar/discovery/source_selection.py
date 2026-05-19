@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from research_radar.discovery.source_role import IMPLEMENTATION_REPO_PRIORITY
 from research_radar.models import SourceCandidate
 
 RESEARCH_BRIEF = "research_brief"
@@ -55,26 +54,12 @@ def _candidate_pool(
         candidate for candidate in candidates if _role(candidate) != "survey_or_list"
     ]
     if source_intent == RESEARCH_BRIEF:
-        papers = [
+        return [
             candidate
             for candidate in candidates
             if _role(candidate) in PAPER_ROLES
             and _relevance_score(candidate) >= RESEARCH_BRIEF_PAPER_RELEVANCE_FLOOR
         ]
-        if papers:
-            return papers
-        serious_repositories = [
-            candidate
-            for candidate in candidates
-            if _role(candidate) == "implementation_repo"
-            and _deep_read_priority(candidate) >= IMPLEMENTATION_REPO_PRIORITY
-        ]
-        if serious_repositories:
-            return serious_repositories
-        blogs = [candidate for candidate in candidates if _role(candidate) == "blog_or_web"]
-        if blogs:
-            return blogs
-        return non_list_candidates or candidates
     if source_intent == IMPLEMENTATION_SCAN:
         return non_list_candidates or candidates
     return non_list_candidates or candidates

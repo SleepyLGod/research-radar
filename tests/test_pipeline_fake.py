@@ -761,7 +761,7 @@ class RepoOnlyConnector:
         ]
 
 
-def test_daily_deep_reading_falls_back_to_repo_when_no_paper(
+def test_daily_deep_reading_does_not_fallback_to_repo_for_research_brief(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -790,10 +790,18 @@ def test_daily_deep_reading_falls_back_to_repo_when_no_paper(
         deep_limit=1,
     )
 
+    manifest = read_json(run_dir / "manifest.json")
     readings = read_jsonl(run_dir / "readings.jsonl")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    source_selection = read_json(run_dir / "source_selection.json")
+    draft = (run_dir / "daily.md").read_text(encoding="utf-8")
 
-    assert ingested[0].title == "agent-memory-benchmark"
-    assert readings
+    assert ingested == []
+    assert readings == []
+    assert claims == []
+    assert manifest["publishable_claim_count"] == 0
+    assert source_selection["selected_count"] == 0
+    assert "No claim passed evidence verification" in draft
 
 
 def test_daily_deep_reading_suppresses_resource_list_for_research_brief(
@@ -867,7 +875,7 @@ class LowRelevancePaperAndStrongRepoConnector:
         ]
 
 
-def test_daily_deep_reading_keeps_topic_relevance_ahead_of_role_priority(
+def test_daily_deep_reading_ignores_repo_when_only_viable_research_brief_source(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -886,7 +894,7 @@ def test_daily_deep_reading_keeps_topic_relevance_ahead_of_role_priority(
 
     monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
 
-    run_daily(
+    run_dir = run_daily(
         tmp_path,
         config,
         "agent-memory",
@@ -896,7 +904,123 @@ def test_daily_deep_reading_keeps_topic_relevance_ahead_of_role_priority(
         deep_limit=1,
     )
 
-    assert ingested[0].title == "go-agent-memory"
+    source_selection = read_json(run_dir / "source_selection.json")
+
+    assert ingested == []
+    assert source_selection["selected_count"] == 0
+
+
+def test_implementation_scan_can_deep_read_repo(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [
+                {
+                    "id": "agent-memory",
+                    "queries": ["agent memory"],
+                    "source_intent": "implementation_scan",
+                }
+            ],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [RepoOnlyConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    readings = read_jsonl(run_dir / "readings.jsonl")
+
+    assert ingested[0].title == "agent-memory-benchmark"
+    assert readings
+
+
+class TwoPaperRetryConnector:
+    name = "two-paper-retry"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Agent Memory Paper with Broken PDF",
+                url="https://example.com/broken-paper",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="A paper about agent memory benchmark evaluation.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="Agent Memory Paper with Valid PDF",
+                url="https://example.com/valid-paper",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="A paper about agent memory benchmark evaluation.",
+                score=0.9,
+            ),
+        ]
+
+
+def test_daily_deep_reading_retries_next_paper_after_ingestion_failure(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        if source.url == "https://example.com/broken-paper":
+            raise IngestionError("fixture ingestion failure")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [TwoPaperRetryConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    source_selection = read_json(run_dir / "source_selection.json")
+    rows = {row["title"]: row for row in source_selection["ranked_sources"]}
+
+    assert [source.title for source in ingested] == [
+        "Agent Memory Paper with Broken PDF",
+        "Agent Memory Paper with Valid PDF",
+    ]
+    assert manifest["metadata"]["deep_reading"]["reading_count"] == 1
+    assert rows["Agent Memory Paper with Broken PDF"]["attempted_for_deep_reading"] is True
+    assert rows["Agent Memory Paper with Broken PDF"]["deep_reading_status"] == "ingestion_failed"
+    assert rows["Agent Memory Paper with Broken PDF"]["selected_for_deep_reading"] is False
+    assert rows["Agent Memory Paper with Valid PDF"]["attempted_for_deep_reading"] is True
+    assert rows["Agent Memory Paper with Valid PDF"]["deep_reading_status"] == "succeeded"
+    assert rows["Agent Memory Paper with Valid PDF"]["selected_for_deep_reading"] is True
 
 
 def _deep_reading_json() -> str:

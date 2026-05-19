@@ -47,7 +47,7 @@ def test_research_brief_selects_benchmark_paper_over_benchmark_repo() -> None:
     assert selected == [paper]
 
 
-def test_research_brief_falls_back_to_repo_without_viable_paper() -> None:
+def test_research_brief_does_not_fallback_to_repo_without_viable_paper() -> None:
     low_relevance_paper = _candidate(
         "Agentic Discovery for Test-Time Scaling",
         SourceType.PAPER,
@@ -67,7 +67,7 @@ def test_research_brief_falls_back_to_repo_without_viable_paper() -> None:
         source_intent=RESEARCH_BRIEF,
     )
 
-    assert selected == [repo]
+    assert selected == []
 
 
 def test_implementation_scan_keeps_relevance_first_repo_selection() -> None:
