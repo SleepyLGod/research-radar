@@ -440,12 +440,13 @@ def _quote_resolution(
     span: tuple[int, int],
     reason: str,
 ) -> AnchorResolution:
-    resolved = _line_window(artifact.text, span[0], span[1])
+    resolved, table_context = _evidence_window(artifact.text, span[0], span[1])
+    resolution_reason = f"table {reason}" if table_context else reason
     return AnchorResolution(
         0,
         "",
         "matched",
-        reason,
+        resolution_reason,
         quote=quote,
         resolved_quote=resolved,
         location=_page_location(artifact.text, span[0]),
@@ -555,6 +556,99 @@ def _line_window(text: str, start: int, end: int) -> str:
     return text[window_start:window_end].strip()
 
 
+def _evidence_window(text: str, start: int, end: int) -> tuple[str, bool]:
+    lines = _line_spans(text)
+    line_index = _line_index_for_position(lines, start)
+    if line_index is None:
+        return _line_window(text, start, end), False
+    if _has_table_context(lines, line_index):
+        return _table_window(lines, line_index), True
+    return _line_window(text, start, end), False
+
+
+def _line_spans(text: str) -> list[tuple[int, int, str]]:
+    spans: list[tuple[int, int, str]] = []
+    cursor = 0
+    for line in text.splitlines():
+        end = cursor + len(line)
+        spans.append((cursor, end, line))
+        cursor = end + 1
+    return spans
+
+
+def _line_index_for_position(
+    lines: list[tuple[int, int, str]],
+    position: int,
+) -> int | None:
+    for index, (start, end, _) in enumerate(lines):
+        if start <= position <= end:
+            return index
+    return None
+
+
+def _has_table_context(lines: list[tuple[int, int, str]], line_index: int) -> bool:
+    current = lines[line_index][2]
+    nearby = [
+        line
+        for _, _, line in lines[max(0, line_index - 4) : min(len(lines), line_index + 4)]
+    ]
+    if _is_table_signal_line(current):
+        return True
+    return _is_table_data_line(current) and any(
+        _is_table_signal_line(line) for line in nearby
+    )
+
+
+def _table_window(lines: list[tuple[int, int, str]], line_index: int) -> str:
+    start = max(0, line_index - 4)
+    end = min(len(lines), line_index + 4)
+    while start < line_index and _is_unrelated_table_boundary(lines[start][2]):
+        start += 1
+    while end > line_index + 1 and _is_unrelated_table_boundary(lines[end - 1][2]):
+        end -= 1
+    selected = [line for _, _, line in lines[start:end]]
+    while len("\n".join(selected).strip()) > 600 and len(selected) > 1:
+        center = line_index - start
+        if center > 1:
+            selected.pop(0)
+            start += 1
+            continue
+        if center < len(selected) - 2:
+            selected.pop()
+            continue
+        break
+    return "\n".join(selected).strip()
+
+
+def _is_unrelated_table_boundary(line: str) -> bool:
+    stripped = line.strip()
+    return not stripped or re.fullmatch(r"\[page \d+\]", stripped) is not None
+
+
+def _is_table_signal_line(line: str) -> bool:
+    normalized = line.casefold()
+    if re.search(r"\btable\s+\d+", normalized):
+        return True
+    return sum(
+        1
+        for token in (
+            "method",
+            "overall",
+            "benchmark",
+            "dataset",
+            "f1",
+            "bleu",
+            "score",
+            "accuracy",
+        )
+        if token in normalized
+    ) >= 2
+
+
+def _is_table_data_line(line: str) -> bool:
+    return len(_numbers(line)) >= 2 and bool(re.search(r"[A-Za-z]", line))
+
+
 def _page_number(text: str, position: int) -> int | None:
     markers = list(re.finditer(r"(?m)^\[page (?P<page>\d+)\]\s*$", text[: position + 1]))
     if not markers:
@@ -585,6 +679,9 @@ def _key_entity_anchor_failure(
     claim: Claim,
     resolutions: list[AnchorResolution],
 ) -> str | None:
+    table_failure = _table_anchor_row_failure(claim, resolutions)
+    if table_failure is not None:
+        return table_failure
     entities = _key_entities(claim.text)
     if not entities:
         return None
@@ -596,6 +693,82 @@ def _key_entity_anchor_failure(
     if missing:
         return "anchor missing key entities: " + ", ".join(missing)
     return None
+
+
+def _table_anchor_row_failure(
+    claim: Claim,
+    resolutions: list[AnchorResolution],
+) -> str | None:
+    method_entities = [
+        entity for entity in _key_entities(claim.text) if _is_method_like_entity(entity)
+    ]
+    if not method_entities:
+        return None
+    for resolution in resolutions:
+        if not _is_table_resolution(resolution):
+            continue
+        row = _quote_row(resolution)
+        if row is None or not _is_table_data_line(row):
+            continue
+        row_key = _compact_key(row)
+        for entity in method_entities:
+            if _compact_key(entity) not in row_key:
+                return f"table anchor row missing method entity: {entity}"
+    return None
+
+
+def _is_table_resolution(resolution: AnchorResolution) -> bool:
+    return bool(
+        resolution.resolved_quote
+        and (
+            resolution.reason.startswith("table ")
+            or _looks_like_table_window(resolution.resolved_quote)
+        )
+    )
+
+
+def _looks_like_table_window(text: str) -> bool:
+    lines = text.splitlines()
+    return any(_is_table_signal_line(line) for line in lines) and any(
+        _is_table_data_line(line) for line in lines
+    )
+
+
+def _quote_row(resolution: AnchorResolution) -> str | None:
+    quote = resolution.quote or ""
+    quote_key = _compact_key(quote)
+    if not quote_key:
+        return None
+    for line in (resolution.resolved_quote or "").splitlines():
+        if quote in line or quote_key in _compact_key(line):
+            return line
+    return None
+
+
+def _is_method_like_entity(entity: str) -> bool:
+    key = _compact_key(entity)
+    if not key:
+        return False
+    blocked = {
+        "aime",
+        "bleu",
+        "bleu1",
+        "f1",
+        "gpqa",
+        "locomo",
+        "longmemeval",
+        "math",
+    }
+    model_markers = (
+        "bert",
+        "embedding",
+        "gpt",
+        "instruct",
+        "llama",
+        "minilm",
+        "qwen",
+    )
+    return key not in blocked and not any(marker in key for marker in model_markers)
 
 
 def _key_entities(text: str) -> list[str]:

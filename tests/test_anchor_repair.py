@@ -374,6 +374,93 @@ def test_anchor_completeness_normalizes_math_italic_letters() -> None:
     assert resolutions[0].status == "matched"
 
 
+def test_table_window_can_complete_late_numeric_experiment_anchor() -> None:
+    artifact = _artifact(
+        "[page 12]\n"
+        "Table 7: LOCOMO results with Qwen2.5-7B-Instruct.\n"
+        "Method Overall F1 Overall BLEU-1\n"
+        "A-MEM 25.53 20.11\n"
+        "MemOS 37.05 30.30\n"
+        "Ours 38.03 31.73\n"
+    )
+    claim = Claim(
+        text=(
+            "Experiment: On LOCOMO with Qwen2.5-7B-Instruct, MemOS reaches "
+            "37.05 overall F1 and 30.30 overall BLEU-1."
+        ),
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=artifact.source.url,
+                quote="MemOS 37.05 30.30",
+            )
+        ],
+    )
+
+    resolutions = resolve_claim_anchors([claim], artifact)
+
+    assert resolutions[0].status == "matched"
+    assert "Table 7: LOCOMO results with Qwen2.5-7B-Instruct." in (
+        resolutions[0].resolved_quote or ""
+    )
+    assert "Method Overall F1 Overall BLEU-1" in (resolutions[0].resolved_quote or "")
+
+
+def test_table_window_does_not_complete_wrong_benchmark_claim() -> None:
+    artifact = _artifact(
+        "[page 12]\n"
+        "Table 7: LOCOMO results with Qwen2.5-7B-Instruct.\n"
+        "Method Overall F1 Overall BLEU-1\n"
+        "MemOS 37.05 30.30\n"
+    )
+    claim = Claim(
+        text=(
+            "Experiment: On LONGMEMEVAL with Qwen2.5-7B-Instruct, MemOS reaches "
+            "37.05 overall F1 and 30.30 overall BLEU-1."
+        ),
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=artifact.source.url,
+                quote="MemOS 37.05 30.30",
+            )
+        ],
+    )
+
+    resolutions = resolve_claim_anchors([claim], artifact)
+
+    assert resolutions[0].status == "failed"
+    assert resolutions[0].reason == "anchor missing key entities: LONGMEMEVAL"
+
+
+def test_table_window_does_not_publish_method_misread() -> None:
+    artifact = _artifact(
+        "[page 12]\n"
+        "Table 7: LOCOMO results with Qwen2.5-7B-Instruct.\n"
+        "Method Overall F1 Overall BLEU-1\n"
+        "MemTree 36.92 31.05\n"
+        "Ours 38.79 32.11\n"
+    )
+    claim = Claim(
+        text=(
+            "Experiment: On LOCOMO with Qwen2.5-7B-Instruct, MemTree reaches "
+            "38.79 overall F1."
+        ),
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=artifact.source.url,
+                quote="Ours 38.79 32.11",
+            )
+        ],
+    )
+
+    resolutions = resolve_claim_anchors([claim], artifact)
+
+    assert resolutions[0].status == "failed"
+    assert resolutions[0].reason == "table anchor row missing method entity: MemTree"
+
+
 def test_anchor_repair_does_not_upgrade_claim_linted_broad_claim() -> None:
     quote = (
         "Qwen2.5-7B-Instruct is the default backbone, all-MiniLM-L6-v2 is the "
