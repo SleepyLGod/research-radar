@@ -24,28 +24,28 @@ def render_paper_brief(
         _claim_body(verified, "Essence:") or "No verified essence claim.",
         "",
         f"## {labels['background']}",
-        reading.area_context.background,
+        labels["no_background"],
         "",
         f"## {labels['problem']}",
-        _problem_body(reading, verified, labels),
+        _claim_body(verified, "Problem:") or labels["no_problem"],
         "",
         f"## {labels['solution']}",
-        _solution_body(reading, verified, labels),
+        _claim_body(verified, "Solution:") or labels["no_solution"],
         "",
         f"## {labels['experiment']}",
         _claim_body(verified, "Experiment:") or "No verified experiment claim.",
         "",
         f"## {labels['plain_example']}",
-        reading.plain_language_example or labels["no_example"],
+        labels["no_example"],
         "",
         f"## {labels['related_work']}",
-        _related_work_body(reading, verified, labels),
+        _claim_body(verified, "Related work:") or labels["no_related_work"],
         "",
         f"## {labels['limitations']}",
-        _limitations_body(reading, verified, labels),
+        _claim_body(verified, "Limitations:") or labels["no_limitations"],
         "",
         f"## {labels['critique']}",
-        _critical_body(reading, verified, labels),
+        _claim_body(verified, "Critical assessment:") or labels["no_critique"],
         "",
         f"## {labels['evidence']}",
         _evidence_trail(verified, language=language),
@@ -54,100 +54,12 @@ def render_paper_brief(
 
 
 def _claim_body(claims: list[Claim], prefix: str) -> str:
-    for claim in claims:
-        if claim.text.startswith(prefix):
-            return claim.text[len(prefix) :].strip()
-    return ""
-
-
-def _problem_body(
-    reading: PaperReading,
-    claims: list[Claim],
-    labels: dict[str, str],
-) -> str:
-    claim = _claim_body(claims, "Problem:")
-    if not claim:
-        return labels["no_problem"]
-    lines = [claim, f"- {labels['why_it_matters']}: {reading.problem_solution.why_it_matters}"]
-    if reading.problem_solution.hidden_assumptions:
-        lines.append(
-            f"- {labels['hidden_assumptions']}: "
-            + "; ".join(reading.problem_solution.hidden_assumptions)
-        )
-    return "\n".join(lines)
-
-
-def _solution_body(
-    reading: PaperReading,
-    claims: list[Claim],
-    labels: dict[str, str],
-) -> str:
-    claim = _claim_body(claims, "Solution:")
-    if not claim:
-        return labels["no_solution"]
-    return "\n".join([claim, f"- {labels['mechanism']}: {reading.problem_solution.mechanism}"])
-
-
-def _related_work_body(
-    reading: PaperReading,
-    claims: list[Claim],
-    labels: dict[str, str],
-) -> str:
-    claim = _claim_body(claims, "Related work:")
-    if not claim:
-        return labels["no_related_work"]
-    lines = [claim]
-    if reading.related_work.prior_work:
-        lines.append(f"- {labels['prior_work']}: " + "; ".join(reading.related_work.prior_work))
-    lines.append(f"- {labels['repackaging_risk']}: {reading.related_work.repackaging_risk}")
-    return "\n".join(lines)
-
-
-def _limitations_body(
-    reading: PaperReading,
-    claims: list[Claim],
-    labels: dict[str, str],
-) -> str:
-    claim = _claim_body(claims, "Limitations:")
-    if not claim:
-        return labels["no_limitations"]
-    lines = [claim]
-    if reading.limitations.inferred_weaknesses:
-        lines.append(
-            f"- {labels['inferred_weaknesses']}: "
-            + "; ".join(reading.limitations.inferred_weaknesses)
-        )
-    if reading.limitations.future_work:
-        lines.append(f"- {labels['future_work']}: " + "; ".join(reading.limitations.future_work))
-    return "\n".join(lines)
-
-
-def _critical_body(
-    reading: PaperReading,
-    claims: list[Claim],
-    labels: dict[str, str],
-) -> str:
-    claim = _claim_body(claims, "Critical assessment:")
-    if not claim:
-        return labels["no_critique"]
-    lines = [
-        claim,
-        (
-            f"- {labels['overclaiming_risk']}: "
-            f"{reading.critical_assessment.overclaiming_risk}"
-        ),
+    bodies = [
+        claim.text[len(prefix) :].strip()
+        for claim in claims
+        if claim.text.startswith(prefix)
     ]
-    if reading.critical_assessment.weak_evaluations:
-        lines.append(
-            f"- {labels['weak_evaluations']}: "
-            + "; ".join(reading.critical_assessment.weak_evaluations)
-        )
-    if reading.critical_assessment.missing_ablations:
-        lines.append(
-            f"- {labels['missing_ablations']}: "
-            + "; ".join(reading.critical_assessment.missing_ablations)
-        )
-    return "\n".join(lines)
+    return "\n".join(bodies)
 
 
 def _paper_labels(language: str) -> dict[str, str]:
@@ -175,6 +87,7 @@ def _paper_labels(language: str) -> dict[str, str]:
             "weak_evaluations": "薄弱评估",
             "missing_ablations": "缺失消融",
             "no_example": "没有可发布的通俗例子。",
+            "no_background": "没有已核验的背景陈述。",
             "no_problem": "没有已核验的问题陈述。",
             "no_solution": "没有已核验的方法陈述。",
             "no_related_work": "没有已核验的相关工作判断。",
@@ -204,6 +117,7 @@ def _paper_labels(language: str) -> dict[str, str]:
         "weak_evaluations": "Weak evaluations",
         "missing_ablations": "Missing ablations",
         "no_example": "No grounded example is available.",
+        "no_background": "No verified background claim.",
         "no_problem": "No verified problem claim.",
         "no_solution": "No verified solution claim.",
         "no_related_work": "No verified related-work claim.",

@@ -6,14 +6,18 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from research_radar.analysis.deep_reading import run_artifact_deep_reading
 from research_radar.analysis.paper_reading import (
-    model_paper_reading,
     reading_to_dict,
     render_deep_reading_report,
-    validate_paper_reading,
+)
+from research_radar.analysis.paper_sections import (
+    build_paper_sections,
+    build_reading_packet,
+    render_reading_packet,
 )
 from research_radar.analysis.providers import LLMProvider
-from research_radar.analysis.review import model_review
+from research_radar.analysis.review import model_review, rule_based_review
 from research_radar.compose.paper import render_paper_brief
 from research_radar.config import AppConfig, TopicConfig
 from research_radar.evidence.ledger import write_claims, write_evidence
@@ -35,6 +39,8 @@ def run_paper(
     model: str,
     verifier: LLMProvider | None = None,
     verifier_model: str | None = None,
+    anchor_repair_provider: LLMProvider | None = None,
+    anchor_repair_model: str | None = None,
     language: str | None = None,
 ) -> Path:
     """Run the single-paper pipeline and return the run directory."""
@@ -44,19 +50,27 @@ def run_paper(
     source = build_direct_paper_source(url)
     run_dir, manifest = _create_paper_run_dir(root, topic, source)
     artifact = ingest_source(source, run_dir / "artifacts")
-    reading = model_paper_reading(
+    paper_sections = build_paper_sections(artifact)
+    reading_packet = build_reading_packet(artifact, sections=paper_sections)
+    deep_result = run_artifact_deep_reading(
         artifact,
         reader,
         model=model,
         area_context=_area_context(topic),
         language=report_language,
+        packet=reading_packet,
+        anchor_repair_provider=anchor_repair_provider,
+        anchor_repair_model=anchor_repair_model,
     )
-    claims, findings = validate_paper_reading(reading, artifact)
+    reading = deep_result.reading
+    claims = deep_result.claims
+    findings = deep_result.findings
     model_feedback = None
+    verification_actions = []
     review_provider = verifier or reader
     review_model = verifier_model or model
     if claims and review_provider is not None:
-        claims, model_findings, model_feedback = model_review(
+        claims, model_findings, model_feedback, verification_actions = model_review(
             claims,
             review_provider,
             model=review_model,
@@ -64,6 +78,8 @@ def run_paper(
             queries=topic.queries,
         )
         findings.extend(model_findings)
+        claims, post_model_findings = rule_based_review(claims)
+        findings.extend(post_model_findings)
     manifest = RunManifest(
         run_id=manifest.run_id,
         topic_id=topic_id,
@@ -77,16 +93,33 @@ def run_paper(
             "canonical_id": source.canonical_id,
             "reading_count": 1,
             "report_language": report_language,
+            "paper_reading_packet": {
+                "chunk_count": len(reading_packet.chunks),
+                "warnings": reading_packet.warnings,
+            },
+            "anchor_repair": {
+                "resolution_count": len(deep_result.anchor_resolutions),
+                "repair_attempt_count": len(deep_result.anchor_repairs),
+                "accepted_count": sum(
+                    1 for repair in deep_result.anchor_repairs if repair.status == "accepted"
+                ),
+            },
         },
     )
 
     write_json(run_dir / "manifest.json", manifest)
     write_jsonl(run_dir / "sources.jsonl", [source])
     write_jsonl(run_dir / "artifacts.jsonl", [artifact])
+    write_jsonl(run_dir / "paper_sections.jsonl", paper_sections)
+    write_text(run_dir / "paper_reading_input.md", render_reading_packet(reading_packet))
+    write_jsonl(run_dir / "reader_attempts.jsonl", deep_result.reader_attempts)
     write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(reading)])
+    write_jsonl(run_dir / "anchor_resolution.jsonl", deep_result.anchor_resolutions)
+    write_jsonl(run_dir / "anchor_repair.jsonl", deep_result.anchor_repairs)
     write_claims(run_dir / "claims.jsonl", claims)
     write_evidence(run_dir / "evidence.jsonl", claims)
     write_jsonl(run_dir / "review_findings.jsonl", findings)
+    write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
     write_text(
         run_dir / "deep_reading.md",
         render_deep_reading_report([reading], claims, language=report_language),
@@ -94,7 +127,12 @@ def run_paper(
     write_text(run_dir / "paper.md", render_paper_brief(reading, claims, language=report_language))
     write_text(
         run_dir / "review_report.md",
-        render_review_report(findings, model_feedback=model_feedback),
+        render_review_report(
+            findings,
+            model_feedback=model_feedback,
+            verification_actions=verification_actions,
+            reader_attempts=deep_result.reader_attempts,
+        ),
     )
     return run_dir
 

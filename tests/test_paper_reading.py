@@ -6,6 +6,7 @@ from research_radar.analysis.paper_reading import (
     ProblemSolution,
     RelatedWorkAssessment,
     heuristic_paper_reading,
+    model_paper_reading_with_attempts,
     paper_reading_prompt,
     parse_paper_reading,
     render_deep_reading_report,
@@ -17,6 +18,7 @@ from research_radar.analysis.prompts import (
     triage_prompt,
     verifier_prompt,
 )
+from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.exceptions import AnalysisError
 from research_radar.models import (
     Artifact,
@@ -26,6 +28,24 @@ from research_radar.models import (
     SourceCandidate,
     SourceType,
 )
+
+
+class SequenceProvider:
+    """Test provider that returns a sequence of model responses."""
+
+    name = "sequence"
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = responses
+        self.messages: list[list[Message]] = []
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        """Return the next response and record the prompt."""
+
+        self.messages.append(messages)
+        if not self.responses:
+            raise AssertionError("No more fixture responses")
+        return ModelResponse(content=self.responses.pop(0), model=model)
 
 
 def test_heuristic_paper_reading_extracts_researcher_rubric() -> None:
@@ -71,6 +91,67 @@ Unsupported Claim: The paper proves all memory agents are unreliable.""",
     assert "evaluation lens" in reading.critical_assessment.bottom_line
     assert any(claim.status == ClaimStatus.UNSUPPORTED for claim in claims)
     assert any("proves all memory agents" in (finding.claim_text or "") for finding in findings)
+
+
+def test_model_paper_reading_retries_invalid_json_once() -> None:
+    provider = SequenceProvider(
+        [
+            "not json",
+            _claim_units_fixture(["Memory benchmark fixture."]),
+        ]
+    )
+
+    result = model_paper_reading_with_attempts(_artifact(), provider, model="fake-reader")
+
+    assert result.reading.title == "Evidence-Checked Memory Agents"
+    assert [attempt.status for attempt in result.attempts] == ["failed", "succeeded"]
+    assert "not valid JSON" in (result.attempts[0].error_message or "")
+    assert "Repair the previous paper-reading JSON response" in provider.messages[1][-1].content
+    assert "exact substring" in provider.messages[1][-1].content
+
+
+def test_model_paper_reading_retries_missing_required_problem_field_once() -> None:
+    provider = SequenceProvider(
+        [
+            _claim_unit_fixture(
+                section="experiment",
+                claim_kind="fact",
+                text="Memory benchmark fixture.",
+            ).replace('"problem": "Memory benchmark fixture.",', ""),
+            _claim_units_fixture(["Memory benchmark fixture."]),
+        ]
+    )
+
+    result = model_paper_reading_with_attempts(_artifact(), provider, model="fake-reader")
+
+    assert result.reading.problem_solution.problem == "Memory benchmark fixture."
+    assert result.attempts[0].status == "failed"
+    assert "problem" in (result.attempts[0].error_message or "")
+    assert result.attempts[1].status == "succeeded"
+
+
+def test_model_paper_reading_does_not_retry_when_first_attempt_succeeds() -> None:
+    provider = SequenceProvider([_claim_units_fixture(["Memory benchmark fixture."])])
+
+    result = model_paper_reading_with_attempts(_artifact(), provider, model="fake-reader")
+
+    assert len(result.attempts) == 1
+    assert result.attempts[0].status == "succeeded"
+    assert len(provider.messages) == 1
+
+
+def test_model_paper_reading_reports_attempt_count_after_two_failures() -> None:
+    provider = SequenceProvider(["not json", "still not json"])
+
+    try:
+        model_paper_reading_with_attempts(_artifact(), provider, model="fake-reader")
+    except AnalysisError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+    assert "after 2 attempts" in message
+    assert "not valid JSON" in message
 
 
 def test_unsupported_critical_claim_without_anchor_is_rejected() -> None:
@@ -160,7 +241,15 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "deep-reading stage" in deep
     assert "perspective_questions" in deep
     assert "2-4 concrete sentences per field" in deep
-    assert "exact substring copied from TEXT" in deep
+    assert "exact substring copied from the full paper reading packet" in deep
+    assert "ResearchRadar research contract" in deep
+    assert "claim_units" in deep
+    assert "required list of atomic claims" in deep
+    assert "representative methods, baselines, datasets, or" in deep
+    assert "related_work.prior_work" in deep
+    assert "Experiments must separate setup" in deep
+    assert "Author-reported superlatives" in deep
+    assert "Broad essence statements must not bundle" in deep
     assert "Do not draft the final article here" in deep
     assert "synthesis_outline" in outline
     assert "researcher, builder, evaluator, and skeptic" in outline
@@ -172,6 +261,8 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "MONITORED TOPIC: agent-memory" in verifier
     assert "- agent memory benchmark" in verifier
     assert "not supported by evidence" in verifier
+    assert "follow_up_actions" in verifier
+    assert "do not create new publishable claims" in verifier
 
 
 def test_paper_reading_prompt_can_request_chinese_without_translating_quotes() -> None:
@@ -234,6 +325,628 @@ def test_parse_model_json_into_paper_reading() -> None:
     assert reading.essence.startswith("The paper reframes")
     assert any(claim.text.startswith("Problem:") for claim in claims)
     assert any("proves all agents" in (finding.claim_text or "") for finding in findings)
+
+
+def test_parse_model_json_allows_prose_around_json_object() -> None:
+    artifact = _artifact()
+    raw = """
+    Here is the structured reading:
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture."
+      }
+    }
+    End.
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+
+    assert reading.essence == "Memory benchmark fixture."
+
+
+def test_area_context_background_can_fall_back_without_publishable_claims() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "active_questions": ["How should retrieval evidence be evaluated?"],
+          "common_baselines": ["Answer-only scoring"]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture."
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+
+    assert reading.area_context.background == "unknown"
+
+
+def test_missing_essence_can_fall_back_without_publishable_claims() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "plain_language_example": "Memory benchmark fixture."
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert reading.essence == "unknown"
+    assert not any(claim.text == "Essence: unknown" for claim in claims)
+
+
+def test_claim_units_convert_to_atomic_evidence_backed_claims() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture.",
+        "claim_units": [
+          {
+            "section": "problem",
+            "claim_kind": "fact",
+            "text": "Memory benchmark fixture.",
+            "evidence": [{"quote": "Memory benchmark fixture."}],
+            "publishable_default": true
+          },
+          {
+            "section": "critical_assessment",
+            "claim_kind": "critique",
+            "text": "This unmatched critique should not publish.",
+            "evidence": [{"quote": "absent quote"}],
+            "publishable_default": true
+          },
+          {
+            "section": "related_work",
+            "claim_kind": "novelty",
+            "text": "This needs reviewer confirmation.",
+            "evidence": [{"quote": "Memory benchmark fixture."}],
+            "publishable_default": false
+          }
+        ]
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, findings = validate_paper_reading(reading, artifact)
+
+    assert [claim.text for claim in claims] == [
+        "Problem: Memory benchmark fixture.",
+        "Critical assessment: This unmatched critique should not publish.",
+        "Related work: This needs reviewer confirmation.",
+    ]
+    assert claims[0].status == ClaimStatus.SUPPORTED
+    assert claims[1].status == ClaimStatus.UNSUPPORTED
+    assert claims[2].status == ClaimStatus.NEEDS_REVIEW
+    assert any(
+        finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings
+    )
+
+
+def test_top_level_claim_units_are_preserved_for_model_compatibility() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture."
+      },
+      "claim_units": [
+        {
+          "section": "essence",
+          "claim_kind": "essence",
+          "text": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}],
+          "publishable_default": true
+        }
+      ]
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert len(reading.claim_units) == 1
+    assert claims[0].text == "Essence: Memory benchmark fixture."
+
+
+def test_experiment_detail_fields_are_preserved_in_summary() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": ["Memory benchmark fixture."],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "experiments": {
+          "setup": "Memory benchmark fixture.",
+          "metrics_benchmarks": ["Memory benchmark fixture."],
+          "main_findings": "Memory benchmark fixture.",
+          "cost_robustness_findings": "Memory benchmark fixture.",
+          "known_caveats": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture."
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+
+    assert "Setup: Memory benchmark fixture." in reading.experiment_summary
+    assert "Metrics/benchmarks: Memory benchmark fixture." in reading.experiment_summary
+    assert "Known caveats: Memory benchmark fixture." in reading.experiment_summary
+
+
+def test_experiment_summary_object_is_preserved_in_summary() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": ["Memory benchmark fixture."],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "experiments": {
+          "summary": {
+            "setup": "Memory benchmark fixture.",
+            "metrics_or_benchmarks": "Memory benchmark fixture.",
+            "cost_or_robustness_findings": "Memory benchmark fixture."
+          },
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture."
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+
+    assert "{" not in reading.experiment_summary
+    assert "Metrics/benchmarks: Memory benchmark fixture." in reading.experiment_summary
+    assert "Cost/robustness findings: Memory benchmark fixture." in reading.experiment_summary
+
+
+def test_model_dict_fields_are_normalized_for_rendering() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [
+            {
+              "name": "MemGPT",
+              "reported_profile": "hierarchical vector storage"
+            }
+          ],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": {
+          "text": "A grounded memory example.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        }
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+
+    assert reading.plain_language_example == "A grounded memory example."
+    assert reading.related_work.prior_work == ["MemGPT: hierarchical vector storage"]
+
+
+def test_unattributed_superlative_claim_needs_review() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="solution",
+        claim_kind="fact",
+        text="The method achieves the best performance.",
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert (
+        claims[0].metadata["paper_reading"]["status_reason"]
+        == "author-reported superlative needs attribution"
+    )
+
+
+def test_author_reported_superlative_claim_can_remain_publishable() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="solution",
+        claim_kind="fact",
+        text="The authors report that the method achieves the best performance.",
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert claims[0].status == ClaimStatus.SUPPORTED
+
+
+def test_setup_facet_bundle_claim_needs_review() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="experiment",
+        claim_kind="fact",
+        text=(
+            "Default LLM backbone is Qwen2.5-7B-Instruct; embedding model is "
+            "all-MiniLM-L6-v2; top-k retrieval uses k=10; greedy decoding is used."
+        ),
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert claims[0].metadata["paper_reading"]["status_reason"] == (
+        "claim too broad; split setup facets"
+    )
+
+
+def test_split_setup_facets_can_remain_publishable() -> None:
+    artifact = _artifact()
+    raw = _claim_units_fixture(
+        [
+            "Default LLM backbone is Qwen2.5-7B-Instruct.",
+            "The embedding model is all-MiniLM-L6-v2.",
+            "Top-k retrieval uses k=10.",
+            "Greedy decoding is used.",
+        ]
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert [claim.status for claim in claims] == [ClaimStatus.SUPPORTED] * 4
+
+
+def test_result_and_cost_bundle_claim_needs_review() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="experiment",
+        claim_kind="fact",
+        text=(
+            "The method achieves the best overall F1 score while consuming fewer "
+            "than 450 tokens per dialogue."
+        ),
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading, artifact)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert claims[0].metadata["paper_reading"]["status_reason"] == (
+        "claim too broad; split result and cost"
+    )
+
+
+def test_method_and_result_bundle_claim_needs_review() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="solution",
+        claim_kind="fact",
+        text=(
+            "The method integrates tree-based organization and reports best "
+            "performance on both benchmarks."
+        ),
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading, artifact)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert claims[0].metadata["paper_reading"]["status_reason"] == (
+        "claim too broad; split method and result"
+    )
+
+
+def test_same_kind_benchmark_pair_is_not_claim_linted() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="experiment",
+        claim_kind="fact",
+        text="LOCOMO and LONGMEMEVAL are benchmark datasets.",
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading, artifact)
+
+    assert claims[0].status == ClaimStatus.SUPPORTED
+
+
+def test_metric_definition_is_not_result_cost_linted() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="experiment",
+        claim_kind="fact",
+        text=(
+            "Evaluation metrics are F1 (token-level overlap) and BLEU-1 "
+            "(unigram modified precision with brevity penalty)."
+        ),
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading)
+
+    assert claims[0].status == ClaimStatus.SUPPORTED
+
+
+def test_bundled_essence_claim_needs_review() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="essence",
+        claim_kind="essence",
+        text=(
+            "The paper proposes a framework, compares existing methods, "
+            "and introduces a new method."
+        ),
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading, artifact)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert claims[0].metadata["paper_reading"]["status_reason"] == (
+        "essence bundles multiple claims"
+    )
+
+
+def test_external_replication_critique_needs_review() -> None:
+    artifact = _artifact()
+    raw = _claim_unit_fixture(
+        section="critical_assessment",
+        claim_kind="critique",
+        text="The result lacks independent replication evidence.",
+    )
+
+    reading = parse_paper_reading(raw, artifact)
+    claims, _ = validate_paper_reading(reading, artifact)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert claims[0].metadata["paper_reading"]["status_reason"] == (
+        "claim requires external verification"
+    )
 
 
 def test_render_deep_reading_report_supports_chinese_labels() -> None:
@@ -533,3 +1246,108 @@ def _artifact() -> Artifact:
         ),
         text="Memory benchmark fixture.",
     )
+
+
+def _claim_unit_fixture(*, section: str, claim_kind: str, text: str) -> str:
+    return f"""
+    {{
+      "deep_readings": {{
+        "area_context": {{
+          "background": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "problem_solution": {{
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "related_work": {{
+          "prior_work": ["Memory benchmark fixture."],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "limitations": {{
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "critical_assessment": {{
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture.",
+        "claim_units": [
+          {{
+            "section": "{section}",
+            "claim_kind": "{claim_kind}",
+            "text": "{text}",
+            "evidence": [{{"quote": "Memory benchmark fixture."}}],
+            "publishable_default": true
+          }}
+        ]
+      }}
+    }}
+    """
+
+
+def _claim_units_fixture(texts: list[str]) -> str:
+    units = ",\n".join(
+        f"""
+          {{
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "{text}",
+            "evidence": [{{"quote": "Memory benchmark fixture."}}],
+            "publishable_default": true
+          }}"""
+        for text in texts
+    )
+    return f"""
+    {{
+      "deep_readings": {{
+        "area_context": {{
+          "background": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "problem_solution": {{
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "related_work": {{
+          "prior_work": ["Memory benchmark fixture."],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "limitations": {{
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "critical_assessment": {{
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{{"quote": "Memory benchmark fixture."}}]
+        }},
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture.",
+        "claim_units": [
+{units}
+        ]
+      }}
+    }}
+    """

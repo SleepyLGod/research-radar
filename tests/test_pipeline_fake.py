@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from research_radar.analysis.providers import StaticProvider
+from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
 from research_radar.discovery.base import DiscoveryContext
 from research_radar.exceptions import IngestionError
@@ -16,6 +16,9 @@ The paper studies grounded answerability rather than answer match alone.
 The system only evaluates benchmark-style tasks.
 The useful contribution is the evaluation lens.
 Memory benchmarks reward unsupported answers.
+The evaluation runs on a fixture benchmark.
+Accuracy is the main fixture metric.
+The fixture result shows grounded answers score higher.
 """.strip()
 
 
@@ -33,6 +36,22 @@ class FakeConnector:
                 score=1.0,
             )
         ]
+
+
+class SequenceProvider:
+    """Test provider that returns responses in order."""
+
+    name = "sequence"
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = responses
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        """Return the next fixture response."""
+
+        if not self.responses:
+            raise AssertionError("No more fixture responses")
+        return ModelResponse(content=self.responses.pop(0), model=model)
 
 
 class CapturingPaperConnector:
@@ -79,6 +98,7 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "synthesis_outline.md").exists()
     assert (run_dir / "review_report.md").exists()
     assert (run_dir / "review_findings.jsonl").exists()
+    assert (run_dir / "verification_actions.jsonl").exists()
     assert "A careful paper" in (run_dir / "daily.md").read_text(encoding="utf-8")
 
 
@@ -110,6 +130,55 @@ def test_daily_pipeline_expands_queries_for_paper_connectors(tmp_path: Path) -> 
         "agent memory survey",
         "agent memory arxiv",
     ]
+
+
+def test_daily_deep_reading_retry_writes_reader_attempt_audit(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = SequenceProvider(["not json", _deep_reading_claim_units_json()])
+    verifier = StaticProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 2, "status": "unsupported", "risk": "high", "reason": "overbroad"}
+          ]
+        }
+        """
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=reader,
+        deep_model="fake-analyst",
+        deep_limit=1,
+        verifier=verifier,
+        verifier_model="fake-reviewer",
+    )
+
+    attempts = read_jsonl(run_dir / "reader_attempts.jsonl")
+    review_report = (run_dir / "review_report.md").read_text(encoding="utf-8")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert [attempt["status"] for attempt in attempts] == ["failed", "succeeded"]
+    assert attempts[0]["error_message"]
+    assert "## Reader Attempts" in review_report
+    assert "Memory benchmarks reward unsupported answers." in daily_text
 
 
 class MixedConnector:
@@ -421,7 +490,135 @@ def test_daily_pipeline_writes_deep_reading_outputs(monkeypatch, tmp_path: Path)
     assert "The source reframes memory quality as grounded recall." in deep_report
     assert "**Core:** Memory benchmarks reward unsupported answers." in deep_report
     assert "Why it matters: Scores can hide ungrounded guessing." in deep_report
+    assert "Setup: The evaluation runs on a fixture benchmark." in deep_report
+    assert "Metrics/benchmarks: Accuracy is the main fixture metric." in deep_report
     assert "Repackaging risk: It is an evaluation lens, not a new memory store." in deep_report
+
+
+def test_daily_pipeline_writes_verification_actions_for_atomic_claims(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = StaticProvider(_deep_reading_claim_units_json())
+    verifier = StaticProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"},
+            {
+              "claim_index": 2,
+              "status": "unsupported",
+              "risk": "high",
+              "reason": "The evaluation claim is broader than its evidence."
+            }
+          ],
+          "follow_up_actions": [
+            {
+              "action_type": "split_claim",
+              "claim_index": 2,
+              "reason": "Separate benchmark scope from broad evaluation quality.",
+              "query": "agent memory benchmark evidence support",
+              "source_url": "https://example.com/paper"
+            }
+          ]
+        }
+        """
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=reader,
+        deep_model="fake-analyst",
+        deep_limit=1,
+        verifier=verifier,
+        verifier_model="fake-reviewer",
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    actions = read_jsonl(run_dir / "verification_actions.jsonl")
+    sources_before = read_jsonl(run_dir / "sources.jsonl")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+    review_report = (run_dir / "review_report.md").read_text(encoding="utf-8")
+
+    assert manifest["claim_count"] == 2
+    assert manifest["publishable_claim_count"] == 1
+    assert claims[0]["status"] == ClaimStatus.SUPPORTED
+    assert claims[1]["status"] == ClaimStatus.UNSUPPORTED
+    assert "Problem: Memory benchmarks reward unsupported answers." in daily_text
+    assert "Experiment: The paper proves all agent memory evaluations are solved." not in daily_text
+    assert actions[0]["action_type"] == "split_claim"
+    assert actions[0]["claim_text"] == claims[1]["text"]
+    assert "## Verification Actions" in review_report
+    assert "Separate benchmark scope" in review_report
+    assert read_jsonl(run_dir / "sources.jsonl") == sources_before
+
+
+def test_daily_pipeline_repairs_deep_reading_anchor(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    table_quote = "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"
+    reader = StaticProvider(_missing_anchor_deep_reading_json())
+    repair = StaticProvider(
+        f"""
+        {{
+          "repairs": [
+            {{
+              "claim_index": 1,
+              "quote": "{table_quote}",
+              "location": "page 12, Table 7",
+              "reason": "Exact table row supports the numeric claim."
+            }}
+          ]
+        }}
+        """
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=f"[page 12]\n{table_quote}")
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=reader,
+        deep_model="fake-reader",
+        deep_limit=1,
+        anchor_repair_provider=repair,
+        anchor_repair_model="fake-repair",
+    )
+
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    repairs = read_jsonl(run_dir / "anchor_repair.jsonl")
+    draft = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert claims[0]["status"] == ClaimStatus.SUPPORTED
+    assert repairs[0]["status"] == "accepted"
+    assert "Ours reaches 38.79 overall F1" in draft
 
 
 def test_daily_deep_required_disables_summary_fallback_when_ingestion_fails(
@@ -1047,6 +1244,14 @@ def _deep_reading_json() -> str:
           "repackaging_risk": "It is an evaluation lens, not a new memory store.",
           "evidence": [{"quote": "grounded answerability rather than answer match"}]
         },
+        "experiments": {
+          "setup": "The evaluation runs on a fixture benchmark.",
+          "metrics_benchmarks": ["Accuracy is the main fixture metric."],
+          "main_findings": "The fixture result shows grounded answers score higher.",
+          "cost_robustness_findings": "unknown",
+          "known_caveats": "unknown",
+          "evidence": [{"quote": "The evaluation runs on a fixture benchmark."}]
+        },
         "limitations": {
           "explicit_limitations": ["It only evaluates benchmark-style tasks."],
           "inferred_weaknesses": ["Deployment behavior remains untested."],
@@ -1061,6 +1266,119 @@ def _deep_reading_json() -> str:
         },
         "plain_language_example": "A correct answer without evidence should not get full credit.",
         "essence": "The source reframes memory quality as grounded recall.",
+        "unsupported_or_rejected_claims": []
+      }
+    }
+    """
+
+
+def _deep_reading_claim_units_json() -> str:
+    return """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Agent memory systems require grounded retrieval.",
+          "active_questions": ["How should memory evidence be scored?"],
+          "common_baselines": ["Answer-only scoring"],
+          "evidence": [{"quote": "Agent memory systems require grounded retrieval."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmarks reward unsupported answers.",
+          "why_it_matters": "Scores can hide ungrounded guessing.",
+          "hidden_assumptions": ["Retrieved memory evidence exists."],
+          "solution": "Require cited memory evidence before crediting answers.",
+          "mechanism": "The evaluator checks answers against retrieved memory items.",
+          "evidence": [{"quote": "Require cited memory evidence before crediting answers."}]
+        },
+        "related_work": {
+          "prior_work": ["Answer-only memory benchmarks"],
+          "novelty": "It evaluates grounded answerability rather than answer match alone.",
+          "repackaging_risk": "It is an evaluation lens, not a new memory store.",
+          "evidence": [{"quote": "grounded answerability rather than answer match"}]
+        },
+        "limitations": {
+          "explicit_limitations": ["It only evaluates benchmark-style tasks."],
+          "inferred_weaknesses": ["Deployment behavior remains untested."],
+          "evidence": [{"quote": "only evaluates benchmark-style tasks"}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Medium",
+          "weak_evaluations": ["No long-horizon deployment evaluation"],
+          "missing_ablations": ["No retrieval-format ablation"],
+          "bottom_line": "The useful contribution is the evaluation lens.",
+          "evidence": [{"quote": "useful contribution is the evaluation lens"}]
+        },
+        "plain_language_example": "A correct answer without evidence should not get full credit.",
+        "essence": "The source reframes memory quality as grounded recall.",
+        "claim_units": [
+          {
+            "section": "problem",
+            "claim_kind": "fact",
+            "text": "Memory benchmarks reward unsupported answers.",
+            "evidence": [{"quote": "Memory benchmarks reward unsupported answers."}],
+            "publishable_default": true
+          },
+          {
+            "section": "experiment",
+            "claim_kind": "interpretation",
+            "text": "The paper proves all agent memory evaluations are solved.",
+            "evidence": [
+              {"quote": "The paper studies grounded answerability rather than answer match alone."}
+            ],
+            "publishable_default": true
+          }
+        ],
+        "unsupported_or_rejected_claims": []
+      }
+    }
+    """
+
+
+def _missing_anchor_deep_reading_json() -> str:
+    return """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Agent memory systems require grounded retrieval.",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "problem_solution": {
+          "problem": "Agent memory systems require grounded retrieval.",
+          "why_it_matters": "Benchmark tables compare methods.",
+          "hidden_assumptions": [],
+          "solution": "Agent memory systems require grounded retrieval.",
+          "mechanism": "Agent memory systems require grounded retrieval.",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "related_work": {
+          "prior_work": ["unknown"],
+          "novelty": "unknown",
+          "repackaging_risk": "unknown",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "limitations": {
+          "explicit_limitations": [],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "The table supports only a narrow numeric claim.",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "plain_language_example": "A table row compares methods.",
+        "essence": "The paper compares memory methods.",
+        "claim_units": [
+          {
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "Ours reaches 38.79 overall F1 in Table 7.",
+            "evidence": [],
+            "publishable_default": true
+          }
+        ],
         "unsupported_or_rejected_claims": []
       }
     }

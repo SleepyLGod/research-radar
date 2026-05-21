@@ -9,7 +9,7 @@ from dataclasses import replace
 from research_radar.analysis.prompts import verifier_prompt
 from research_radar.analysis.providers import LLMProvider, Message
 from research_radar.evidence.policy import enforce_evidence_policy
-from research_radar.models import Claim, ClaimStatus, ReviewFinding
+from research_radar.models import Claim, ClaimStatus, ReviewFinding, VerificationAction
 
 
 def rule_based_review(claims: list[Claim]) -> tuple[list[Claim], list[ReviewFinding]]:
@@ -25,7 +25,7 @@ def model_review(
     model: str,
     topic_id: str | None = None,
     queries: list[str] | None = None,
-) -> tuple[list[Claim], list[ReviewFinding], str]:
+) -> tuple[list[Claim], list[ReviewFinding], str, list[VerificationAction]]:
     """Run a model review pass and apply structured claim decisions."""
 
     messages = [
@@ -37,7 +37,8 @@ def model_review(
     ]
     raw_feedback = provider.complete(messages, model=model).content
     reviewed_claims, findings = apply_model_review_decisions(claims, raw_feedback)
-    return reviewed_claims, findings, raw_feedback
+    actions = extract_verification_actions(raw_feedback, claims)
+    return reviewed_claims, findings, raw_feedback, actions
 
 
 def apply_model_review_decisions(
@@ -72,8 +73,8 @@ def apply_model_review_decisions(
             continue
         reviewed_indexes.add(index)
         claim = reviewed[index - 1]
-        status = _decision_status(decision)
-        if status is None:
+        requested_status = _decision_status(decision)
+        if requested_status is None:
             findings.append(
                 ReviewFinding(
                     severity="warning",
@@ -83,8 +84,14 @@ def apply_model_review_decisions(
                 )
             )
             continue
+        status = _non_promoting_status(claim.status, requested_status)
         reason = str(decision.get("reason") or decision.get("rationale") or "")
         risk = str(decision.get("risk") or "")
+        if status != requested_status:
+            reason = (
+                f"{reason} Verifier requested {requested_status.value}, but review "
+                f"cannot promote an existing {claim.status.value} claim."
+            ).strip()
         reviewed[index - 1] = replace(
             claim,
             status=status,
@@ -93,6 +100,7 @@ def apply_model_review_decisions(
                 **claim.metadata,
                 "model_review": {
                     "status": status.value,
+                    "requested_status": requested_status.value,
                     "risk": risk,
                     "reason": reason,
                 },
@@ -140,11 +148,69 @@ def apply_model_review_decisions(
     return reviewed, findings
 
 
+def extract_verification_actions(
+    raw_feedback: str,
+    claims: list[Claim],
+) -> list[VerificationAction]:
+    """Extract non-mutating follow-up verification actions from model feedback."""
+
+    payload = _parse_payload(raw_feedback)
+    if payload is None or not isinstance(payload, dict):
+        return []
+    raw_actions = payload.get("follow_up_actions", [])
+    if not isinstance(raw_actions, list):
+        return []
+    actions = []
+    for raw_action in raw_actions:
+        if not isinstance(raw_action, dict):
+            continue
+        action_type = str(
+            raw_action.get("action_type")
+            or raw_action.get("type")
+            or raw_action.get("action")
+            or ""
+        ).strip()
+        reason = str(raw_action.get("reason") or raw_action.get("rationale") or "").strip()
+        if not action_type or not reason:
+            continue
+        claim_index = _decision_index(raw_action)
+        claim_text = None
+        if claim_index is not None and 1 <= claim_index <= len(claims):
+            claim_text = claims[claim_index - 1].text
+        actions.append(
+            VerificationAction(
+                action_type=action_type,
+                reason=reason,
+                claim_index=claim_index,
+                claim_text=claim_text,
+                query=_optional_string(raw_action.get("query")),
+                source_url=_optional_string(raw_action.get("source_url")),
+                metadata={
+                    "provider_payload": {
+                        key: value
+                        for key, value in raw_action.items()
+                        if key
+                        not in {
+                            "action_type",
+                            "type",
+                            "action",
+                            "reason",
+                            "rationale",
+                            "claim_index",
+                            "index",
+                            "query",
+                            "source_url",
+                        }
+                    }
+                },
+            )
+        )
+    return actions
+
+
 def _parse_decisions(raw_feedback: str) -> list[dict[str, object]] | None:
-    raw_feedback = _strip_json_fence(raw_feedback)
-    try:
-        payload = json.loads(raw_feedback)
-    except json.JSONDecodeError:
+    payload = _parse_payload(raw_feedback)
+    if payload is None:
         return None
     if isinstance(payload, dict):
         decisions = payload.get("decisions")
@@ -153,6 +219,14 @@ def _parse_decisions(raw_feedback: str) -> list[dict[str, object]] | None:
     if not isinstance(decisions, list):
         return None
     return [decision for decision in decisions if isinstance(decision, dict)]
+
+
+def _parse_payload(raw_feedback: str) -> object | None:
+    raw_feedback = _strip_json_fence(raw_feedback)
+    try:
+        return json.loads(raw_feedback)
+    except json.JSONDecodeError:
+        return None
 
 
 def _strip_json_fence(raw_feedback: str) -> str:
@@ -180,3 +254,20 @@ def _decision_status(decision: dict[str, object]) -> ClaimStatus | None:
         return ClaimStatus(value)
     except ValueError:
         return None
+
+
+def _non_promoting_status(current: ClaimStatus, requested: ClaimStatus) -> ClaimStatus:
+    rank = {
+        ClaimStatus.UNSUPPORTED: 0,
+        ClaimStatus.SPECULATIVE: 1,
+        ClaimStatus.NEEDS_REVIEW: 2,
+        ClaimStatus.SUPPORTED: 3,
+    }
+    return requested if rank[requested] <= rank[current] else current
+
+
+def _optional_string(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

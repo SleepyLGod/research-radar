@@ -158,6 +158,19 @@ class ReviewFinding:
 
 
 @dataclass(frozen=True)
+class VerificationAction:
+    """A follow-up verification task suggested by a reviewer."""
+
+    action_type: str
+    reason: str
+    claim_index: int | None = None
+    claim_text: str | None = None
+    query: str | None = None
+    source_url: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class RunManifest:
     """Durable manifest for a single pipeline run."""
 

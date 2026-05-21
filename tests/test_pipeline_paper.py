@@ -1,11 +1,43 @@
 from pathlib import Path
 
-from research_radar.analysis.providers import StaticProvider
+from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 from research_radar.pipeline import paper
 from research_radar.pipeline.paper import build_direct_paper_source, run_paper
 from research_radar.storage.files import read_json, read_jsonl
+
+
+class CapturingProvider:
+    """Test provider that records prompts before returning fixture JSON."""
+
+    name = "capturing"
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.messages: list[list[Message]] = []
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        """Return fixture content and keep the request for assertions."""
+
+        self.messages.append(messages)
+        return ModelResponse(content=self.content, model=model)
+
+
+class SequenceProvider:
+    """Test provider that returns a sequence of responses."""
+
+    name = "sequence"
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = responses
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        """Return the next fixture response."""
+
+        if not self.responses:
+            raise AssertionError("No more fixture responses")
+        return ModelResponse(content=self.responses.pop(0), model=model)
 
 
 def test_build_direct_paper_source_from_arxiv_pdf_url() -> None:
@@ -63,6 +95,10 @@ def test_single_paper_pipeline_writes_auditable_outputs(monkeypatch, tmp_path: P
     assert manifest["mode"] == "paper"
     assert manifest["metadata"]["canonical_id"] == "2604.01707v1"
     assert (run_dir / "artifacts.jsonl").exists()
+    assert (run_dir / "paper_sections.jsonl").exists()
+    assert (run_dir / "paper_reading_input.md").exists()
+    assert (run_dir / "anchor_resolution.jsonl").exists()
+    assert (run_dir / "anchor_repair.jsonl").exists()
     assert (run_dir / "readings.jsonl").exists()
     assert (run_dir / "deep_reading.md").exists()
     assert any(claim["text"].startswith("Experiment:") for claim in claims)
@@ -76,6 +112,226 @@ def test_single_paper_pipeline_writes_auditable_outputs(monkeypatch, tmp_path: P
     assert "overclaims universal coverage" not in deep_report
     assert "evidence_anchor_unmatched" in str(findings)
     assert "No evidence anchors for this claim were found" in report
+
+
+def test_single_paper_pipeline_writes_reader_attempt_audit_after_retry(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    claim_text = "Experiment: Memory benchmark fixture."
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = SequenceProvider(["not json", _claim_unit_reading_json(claim_text)])
+    verifier = StaticProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"}
+          ]
+        }
+        """
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=claim_text)
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    run_dir = run_paper(
+        tmp_path,
+        config,
+        "agent-memory",
+        "https://arxiv.org/pdf/2604.01707v1",
+        reader,
+        model="fake-analyst",
+        verifier=verifier,
+        verifier_model="fake-reviewer",
+    )
+
+    attempts = read_jsonl(run_dir / "reader_attempts.jsonl")
+    review_report = (run_dir / "review_report.md").read_text(encoding="utf-8")
+    brief = (run_dir / "paper.md").read_text(encoding="utf-8")
+
+    assert [attempt["status"] for attempt in attempts] == ["failed", "succeeded"]
+    assert attempts[0]["error_message"]
+    assert "not json" in attempts[0]["response_excerpt"]
+    assert "## Reader Attempts" in review_report
+    assert claim_text in brief
+
+
+def test_single_paper_pipeline_repairs_missing_table_anchor(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    table_quote = "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = StaticProvider(_missing_anchor_reading_json())
+    repair = CapturingProvider(
+        f"""
+        {{
+          "repairs": [
+            {{
+              "claim_index": 1,
+              "quote": "{table_quote}",
+              "location": "page 12, Table 7",
+              "reason": "Exact table row supports the numeric claim."
+            }}
+          ]
+        }}
+        """
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(
+            source=source,
+            text=f"[page 12]\n{table_quote}",
+            artifact_path=str(artifact_dir / "paper.pdf"),
+            content_type="application/pdf",
+        )
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    run_dir = run_paper(
+        tmp_path,
+        config,
+        "agent-memory",
+        "https://arxiv.org/pdf/2604.01707v1",
+        reader,
+        model="fake-reader",
+        anchor_repair_provider=repair,
+        anchor_repair_model="fake-repair",
+    )
+
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    repairs = read_jsonl(run_dir / "anchor_repair.jsonl")
+    brief = (run_dir / "paper.md").read_text(encoding="utf-8")
+    report = (run_dir / "review_report.md").read_text(encoding="utf-8")
+
+    assert claims[0]["status"] == ClaimStatus.SUPPORTED
+    assert claims[0]["evidence"][0]["source_url"] == "https://arxiv.org/pdf/2604.01707v1"
+    assert repairs[0]["status"] == "accepted"
+    assert "Ours reaches 38.79 overall F1" in brief
+    assert "No evidence anchors for this claim were found" not in report
+
+
+def test_single_paper_pipeline_keeps_broad_setup_claim_out_of_brief(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    wide_claim = (
+        "Default LLM backbone is Qwen2.5-7B-Instruct; embedding model is "
+        "all-MiniLM-L6-v2; top-k retrieval uses k=10; greedy decoding is used."
+    )
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_claim_unit_reading_json(wide_claim))
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(
+            source=source,
+            text=wide_claim,
+            artifact_path=str(artifact_dir / "paper.pdf"),
+            content_type="application/pdf",
+        )
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    run_dir = run_paper(
+        tmp_path,
+        config,
+        "agent-memory",
+        "https://arxiv.org/pdf/2604.01707v1",
+        provider,
+        model="fake-reader",
+    )
+
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    brief = (run_dir / "paper.md").read_text(encoding="utf-8")
+    report = (run_dir / "review_report.md").read_text(encoding="utf-8")
+
+    assert claims[0]["status"] == ClaimStatus.NEEDS_REVIEW
+    assert "claim too broad; split setup facets" in report
+    assert wide_claim not in brief
+
+
+def test_single_paper_pipeline_uses_late_full_paper_sections(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    late_result = "LATE_RESULT: LOCOMO improves after modular memory routing."
+    late_limitation = "LATE_LIMITATION: Deployment behavior remains untested."
+    artifact_text = "\n\n".join(
+        [
+            "[page 1]\nAbstract\n" + ("early abstract filler " * 900),
+            "[page 5]\n3 Framework\nThe framework separates memory write and retrieval.",
+            f"[page 14]\n5 Experiments\n{late_result}",
+            f"[page 16]\n7 Conclusion\n{late_limitation}",
+            "[page 17]\nReferences\n[1] A reference about LOCOMO.",
+        ]
+    )
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = CapturingProvider(_late_section_reading_json(late_result, late_limitation))
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(
+            source=source,
+            text=artifact_text,
+            artifact_path=str(artifact_dir / "paper.pdf"),
+            content_type="application/pdf",
+        )
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    run_dir = run_paper(
+        tmp_path,
+        config,
+        "agent-memory",
+        "https://arxiv.org/pdf/2604.01707v1",
+        provider,
+        model="fake-analyst",
+    )
+
+    prompt = provider.messages[0][1].content
+    sections = read_jsonl(run_dir / "paper_sections.jsonl")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    brief = (run_dir / "paper.md").read_text(encoding="utf-8")
+    reading_input = (run_dir / "paper_reading_input.md").read_text(encoding="utf-8")
+
+    assert late_result not in artifact_text[:12_000]
+    assert late_result in prompt
+    assert late_limitation in prompt
+    assert "role=experiments_results" in reading_input
+    assert "role=limitations_conclusion" in reading_input
+    assert any(row["role"] == "references" for row in sections)
+    assert all(
+        not (
+            row["role"] == "references"
+            and row["metadata"].get("selection_reason") == "role coverage: references"
+        )
+        for row in sections
+    )
+    assert any(late_result in claim["text"] for claim in claims)
+    assert any(late_limitation in claim["text"] for claim in claims)
+    assert late_result in brief
+    assert late_limitation in brief
 
 
 def test_single_paper_pipeline_supports_chinese_report_language(
@@ -222,4 +478,168 @@ def _paper_reading_zh_json() -> str:
         "unsupported_or_rejected_claims": []
       }
     }
+    """
+
+
+def _missing_anchor_reading_json() -> str:
+    return """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "The paper studies agent memory.",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "problem_solution": {
+          "problem": "The paper studies agent memory.",
+          "why_it_matters": "It compares benchmark performance.",
+          "hidden_assumptions": [],
+          "solution": "The paper studies agent memory.",
+          "mechanism": "The paper studies agent memory.",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "related_work": {
+          "prior_work": ["unknown"],
+          "novelty": "unknown",
+          "repackaging_risk": "unknown",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "limitations": {
+          "explicit_limitations": [],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "The table supports only a narrow numeric claim.",
+          "evidence": [{"quote": "Table 7 Overall F1 A-MEM 25.53 MemTree 36.92 Ours 38.79"}]
+        },
+        "plain_language_example": "A table row compares methods.",
+        "essence": "The paper compares memory methods.",
+        "claim_units": [
+          {
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "Ours reaches 38.79 overall F1 in Table 7.",
+            "evidence": [],
+            "publishable_default": true
+          }
+        ],
+        "unsupported_or_rejected_claims": []
+      }
+    }
+    """
+
+
+def _claim_unit_reading_json(claim_text: str) -> str:
+    return f"""
+    {{
+      "deep_readings": {{
+        "area_context": {{
+          "background": "The paper studies agent memory.",
+          "evidence": [{{"quote": "{claim_text}"}}]
+        }},
+        "problem_solution": {{
+          "problem": "The paper studies agent memory.",
+          "why_it_matters": "It compares benchmark performance.",
+          "hidden_assumptions": [],
+          "solution": "The paper studies agent memory.",
+          "mechanism": "The paper studies agent memory.",
+          "evidence": [{{"quote": "{claim_text}"}}]
+        }},
+        "related_work": {{
+          "prior_work": ["unknown"],
+          "novelty": "unknown",
+          "repackaging_risk": "unknown",
+          "evidence": [{{"quote": "{claim_text}"}}]
+        }},
+        "limitations": {{
+          "explicit_limitations": [],
+          "inferred_weaknesses": [],
+          "evidence": [{{"quote": "{claim_text}"}}]
+        }},
+        "critical_assessment": {{
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "The paper studies agent memory.",
+          "evidence": [{{"quote": "{claim_text}"}}]
+        }},
+        "plain_language_example": "A paper setup can be split into atomic facts.",
+        "essence": "The paper studies agent memory.",
+        "claim_units": [
+          {{
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "{claim_text}",
+            "evidence": [{{"quote": "{claim_text}"}}],
+            "publishable_default": true
+          }}
+        ],
+        "unsupported_or_rejected_claims": []
+      }}
+    }}
+    """
+
+
+def _late_section_reading_json(late_result: str, late_limitation: str) -> str:
+    return f"""
+    {{
+      "deep_readings": {{
+        "area_context": {{
+          "background": "The paper studies agent memory.",
+          "evidence": [{{"quote": "The framework separates memory write and retrieval."}}]
+        }},
+        "problem_solution": {{
+          "problem": "Agent memory systems need comparable decomposition.",
+          "why_it_matters": "The decomposition makes memory choices easier to inspect.",
+          "hidden_assumptions": [],
+          "solution": "The framework separates memory write and retrieval.",
+          "mechanism": "The framework separates memory write and retrieval.",
+          "evidence": [{{"quote": "The framework separates memory write and retrieval."}}]
+        }},
+        "related_work": {{
+          "prior_work": ["unknown"],
+          "novelty": "unknown",
+          "repackaging_risk": "unknown",
+          "evidence": [{{"quote": "The framework separates memory write and retrieval."}}]
+        }},
+        "experiments": {{
+          "summary": "{late_result}",
+          "evidence": [{{"quote": "{late_result}"}}]
+        }},
+        "limitations": {{
+          "explicit_limitations": ["{late_limitation}"],
+          "inferred_weaknesses": [],
+          "evidence": [{{"quote": "{late_limitation}"}}]
+        }},
+        "critical_assessment": {{
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "The strongest supported caution is limited deployment evidence.",
+          "evidence": [{{"quote": "{late_limitation}"}}]
+        }},
+        "plain_language_example": "It is like separating notes from lookup.",
+        "essence": "The paper frames agent memory as separable write and retrieval choices.",
+        "claim_units": [
+          {{
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "Experiment: {late_result}",
+            "evidence": [{{"quote": "{late_result}"}}],
+            "publishable_default": true
+          }},
+          {{
+            "section": "limitations",
+            "claim_kind": "limitation",
+            "text": "Limitations: {late_limitation}",
+            "evidence": [{{"quote": "{late_limitation}"}}],
+            "publishable_default": true
+          }}
+        ],
+        "unsupported_or_rejected_claims": []
+      }}
+    }}
     """

@@ -5,11 +5,10 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from research_radar.analysis.deep_reading import run_artifact_deep_reading
 from research_radar.analysis.paper_reading import (
-    model_paper_reading,
     reading_to_dict,
     render_deep_reading_report,
-    validate_paper_reading,
 )
 from research_radar.analysis.providers import LLMProvider
 from research_radar.analysis.research_plan import build_research_plan, research_plan_to_dict
@@ -70,6 +69,8 @@ def run_daily(
     deep_reader: LLMProvider | None = None,
     deep_model: str | None = None,
     deep_limit: int = 0,
+    anchor_repair_provider: LLMProvider | None = None,
+    anchor_repair_model: str | None = None,
     language: str | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
@@ -136,6 +137,9 @@ def run_daily(
     deep_artifacts: list[Artifact] = []
     readings = []
     deep_claims = []
+    anchor_resolutions = []
+    anchor_repairs = []
+    reader_attempts = []
     selected_deep_candidates: list[SourceCandidate] = []
     deep_reading_status_by_url: dict[str, str] = {}
     deep_required = deep_reader is not None and deep_limit > 0
@@ -163,11 +167,13 @@ def run_daily(
                 )
                 continue
             try:
-                reading = model_paper_reading(
+                deep_result = run_artifact_deep_reading(
                     artifact,
                     deep_reader,
                     model=deep_model or config.models.analyst,
                     language=report_language,
+                    anchor_repair_provider=anchor_repair_provider,
+                    anchor_repair_model=anchor_repair_model,
                 )
             except AnalysisError as exc:
                 deep_reading_status_by_url[candidate.url] = "reading_failed"
@@ -182,10 +188,12 @@ def run_daily(
                 continue
             selected_deep_candidates.append(candidate)
             deep_reading_status_by_url[candidate.url] = "succeeded"
-            readings.append(reading)
-            reading_claims, reading_findings = validate_paper_reading(reading, artifact)
-            deep_claims.extend(reading_claims)
-            findings.extend(reading_findings)
+            readings.append(deep_result.reading)
+            deep_claims.extend(deep_result.claims)
+            findings.extend(deep_result.findings)
+            anchor_resolutions.extend(deep_result.anchor_resolutions)
+            anchor_repairs.extend(deep_result.anchor_repairs)
+            reader_attempts.extend(deep_result.reader_attempts)
         findings.extend(
             _deep_selection_findings(
                 reportable_candidates,
@@ -209,8 +217,9 @@ def run_daily(
     findings.extend(policy_findings)
 
     model_feedback = None
+    verification_actions = []
     if verifier is not None and claims:
-        claims, model_findings, model_feedback = model_review(
+        claims, model_findings, model_feedback, verification_actions = model_review(
             claims,
             verifier,
             model=verifier_model or config.models.verifier,
@@ -255,6 +264,13 @@ def run_daily(
                 "reading_count": len(readings),
                 "deep_claim_count": len(deep_claims),
             },
+            "anchor_repair": {
+                "resolution_count": len(anchor_resolutions),
+                "repair_attempt_count": len(anchor_repairs),
+                "accepted_count": sum(
+                    1 for repair in anchor_repairs if repair.status == "accepted"
+                ),
+            },
             "report_language": report_language,
         },
     )
@@ -278,10 +294,14 @@ def run_daily(
         [dataclass_to_dict(artifact) for artifact in artifacts],
     )
     write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(reading) for reading in readings])
+    write_jsonl(run_dir / "reader_attempts.jsonl", reader_attempts)
+    write_jsonl(run_dir / "anchor_resolution.jsonl", anchor_resolutions)
+    write_jsonl(run_dir / "anchor_repair.jsonl", anchor_repairs)
     write_claims(run_dir / "deep_claims.jsonl", deep_claims)
     write_claims(run_dir / "claims.jsonl", claims)
     write_evidence(run_dir / "evidence.jsonl", claims)
     write_jsonl(run_dir / "review_findings.jsonl", findings)
+    write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
     draft = build_daily_draft(topic_id, reportable_candidates, claims, language=report_language)
     write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
     write_text(
@@ -296,7 +316,12 @@ def run_daily(
     )
     write_text(
         run_dir / "review_report.md",
-        render_review_report(findings, model_feedback=model_feedback),
+        render_review_report(
+            findings,
+            model_feedback=model_feedback,
+            verification_actions=verification_actions,
+            reader_attempts=reader_attempts,
+        ),
     )
     write_json(
         run_dir / "summary.json",

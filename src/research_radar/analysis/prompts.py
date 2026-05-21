@@ -4,6 +4,17 @@ from __future__ import annotations
 
 from research_radar.models import Artifact, Claim
 
+RESEARCH_RADAR_RUNTIME_CONTRACT = (
+    "ResearchRadar research contract:\n"
+    "- Separate source facts, evidence-backed interpretation, speculation, critique, "
+    "and rejected claims.\n"
+    "- Do not turn author marketing, claimed novelty, popularity, or framing into a "
+    "system conclusion.\n"
+    "- No factual, novelty, limitation, or critique claim is publishable without a "
+    "source anchor.\n"
+    "- Prefer precise, atomic claims over broad multi-part claims.\n"
+)
+
 
 def research_planner_prompt(topic_id: str, queries: list[str]) -> str:
     """Build a prompt for conservative topic planning before discovery."""
@@ -94,6 +105,8 @@ def verifier_prompt(
     query_lines = "\n".join(f"- {query}" for query in (queries or [])) or "- Unknown"
     topic_context = topic_id or "Unknown"
     return (
+        RESEARCH_RADAR_RUNTIME_CONTRACT
+        + "\n"
         "Review these claims for hallucination risk. "
         "Flag claims that are not supported by evidence, overstate novelty, "
         "convert speculation into fact, or make unsupported critique.\n"
@@ -110,8 +123,23 @@ def verifier_prompt(
         '      "risk": "low|medium|high",\n'
         '      "reason": "short evidence-grounded rationale"\n'
         "    }\n"
+        "  ],\n"
+        '  "follow_up_actions": [\n'
+        "    {\n"
+        '      "action_type": "missing_anchor|needs_primary_source|claim_too_broad|'
+        'split_claim|rerun_deep_reading|source_recheck_query",\n'
+        '      "claim_index": 1,\n'
+        '      "reason": "what must be checked next",\n'
+        '      "query": "optional conservative search query",\n'
+        '      "source_url": "optional existing source URL"\n'
+        "    }\n"
         "  ]\n"
         "}\n\n"
+        "Rules:\n"
+        "- You may only downgrade, reject, or keep claims; do not create new publishable claims.\n"
+        "- Use follow_up_actions for missing evidence, too-broad claims, or "
+        "primary-source checks.\n"
+        "- Follow-up actions are audit tasks only; they are not article content.\n\n"
         + claim_lines
     )
 
