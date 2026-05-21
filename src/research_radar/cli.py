@@ -173,6 +173,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Model for claim verification.",
     )
     daily.add_argument(
+        "--anchor-repair-provider",
+        default=None,
+        help="Provider instance for quote-only anchor repair.",
+    )
+    daily.add_argument(
+        "--anchor-repair-model",
+        default=None,
+        help="Model for quote-only anchor repair.",
+    )
+    daily.add_argument(
         "--secret-source",
         choices=["keychain", "env"],
         default="keychain",
@@ -221,6 +231,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--verifier-model",
         default=None,
         help="Model for claim verification.",
+    )
+    paper.add_argument(
+        "--anchor-repair-provider",
+        default=None,
+        help="Provider instance for quote-only anchor repair.",
+    )
+    paper.add_argument(
+        "--anchor-repair-model",
+        default=None,
+        help="Model for quote-only anchor repair.",
     )
     paper.add_argument(
         "--secret-source",
@@ -304,6 +324,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--verifier-model",
         default=None,
         help="Model for claim verification.",
+    )
+    eval_topics.add_argument(
+        "--anchor-repair-provider",
+        default=None,
+        help="Provider instance for quote-only anchor repair.",
+    )
+    eval_topics.add_argument(
+        "--anchor-repair-model",
+        default=None,
+        help="Model for quote-only anchor repair.",
     )
     eval_topics.add_argument(
         "--secret-source",
@@ -454,6 +484,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         default_local=True,
     )
     reader_route = _resolve_daily_reader_route(args, config, manager)
+    anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
     verifier_route = resolve_task_route(
         config,
         manager,
@@ -477,6 +508,8 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         deep_reader=reader_route.provider,
         deep_model=reader_route.model,
         deep_limit=args.deep_limit,
+        anchor_repair_provider=anchor_repair_route.provider,
+        anchor_repair_model=anchor_repair_route.model,
         language=getattr(args, "language", None),
     )
     print(f"Created run: {run_dir}")
@@ -507,6 +540,7 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         default_local=False,
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
+    anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
     if reader_route.provider is None or reader_route.model is None:
         raise ResearchRadarError("Single-paper reading requires a non-local reader provider.")
     run_dir = run_paper(
@@ -518,6 +552,8 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         model=reader_route.model,
         verifier=verifier_route.provider,
         verifier_model=verifier_route.model,
+        anchor_repair_provider=anchor_repair_route.provider,
+        anchor_repair_model=anchor_repair_route.model,
         language=getattr(args, "language", None),
     )
     print(f"Created paper run: {run_dir}")
@@ -551,6 +587,7 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         default_local=False,
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
+    anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
     connectors = _daily_connectors(config, manager)
     report = run_topic_smoke(
         args.root,
@@ -562,6 +599,8 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         reader_model=reader_route.model,
         verifier=verifier_route.provider,
         verifier_model=verifier_route.model,
+        anchor_repair_provider=anchor_repair_route.provider,
+        anchor_repair_model=anchor_repair_route.model,
         specs=select_topic_specs(args.topics),
         limit=args.limit,
         deep_limit=args.deep_limit,
@@ -675,6 +714,28 @@ def _resolve_verifier_route(
         if getattr(args, "verifier_provider", None) or getattr(args, "provider", None):
             raise
         return fallback
+
+
+def _resolve_anchor_repair_route(
+    args: argparse.Namespace,
+    config: AppConfig,
+    manager: SecretManager,
+) -> TaskModelRoute:
+    try:
+        return resolve_task_route(
+            config,
+            manager,
+            "anchor_repair",
+            provider_override=getattr(args, "anchor_repair_provider", None),
+            model_override=getattr(args, "anchor_repair_model", None),
+            global_provider=getattr(args, "provider", None),
+            global_model=getattr(args, "model", None),
+            default_local=True,
+        )
+    except ConfigError:
+        if getattr(args, "anchor_repair_provider", None) or getattr(args, "provider", None):
+            raise
+        return TaskModelRoute(provider=None, model=None, provider_name="local")
 
 
 def _daily_connectors(

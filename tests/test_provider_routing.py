@@ -8,7 +8,7 @@ from research_radar.analysis.cli_providers import ClaudeCodeCliProvider, CodexCl
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message
 from research_radar.analysis.routing import build_provider, resolve_task_route
-from research_radar.config import ConfigError, parse_config
+from research_radar.config import AppConfig, ConfigError, parse_config
 from research_radar.exceptions import AnalysisError
 from research_radar.security.secrets import InMemorySecretBackend, SecretManager
 
@@ -169,6 +169,22 @@ def test_cli_provider_failure_reports_stdout_when_stderr_is_empty(tmp_path: Path
         raise AssertionError("Expected AnalysisError")
 
 
+def test_cli_provider_timeout_reports_configured_seconds(tmp_path: Path) -> None:
+    command = tmp_path / "fake-slow-codex"
+    command.write_text("#!/bin/sh\nsleep 2\n", encoding="utf-8")
+    command.chmod(0o755)
+    provider = CodexCliProvider(name="codex", command=str(command), timeout_seconds=1)
+
+    try:
+        provider.complete([Message(role="user", content="hello")], model="fake-model")
+    except AnalysisError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+    assert "codex command timed out after 1 seconds" in message
+
+
 def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
     command = _fake_codex_command(tmp_path)
     config = parse_config(
@@ -195,6 +211,96 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
     assert route.provider_name == "codex"
     assert route.model == "gpt-5.4"
     assert isinstance(route.provider, CodexCliProvider)
+
+
+def test_deep_reading_route_defaults_to_deepseek_v4_pro() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(config, manager, "deep_reading")
+
+    assert route.provider_name == "deepseek"
+    assert route.model == "deepseek-v4-pro"
+    assert isinstance(route.provider, OpenAICompatibleProvider)
+
+
+def test_provider_override_keeps_matching_task_model() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_override="deepseek",
+    )
+
+    assert route.provider_name == "deepseek"
+    assert route.model == "deepseek-v4-pro"
+
+
+def test_model_override_wins_over_matching_task_model() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_override="deepseek",
+        model_override="deepseek-explicit",
+    )
+
+    assert route.provider_name == "deepseek"
+    assert route.model == "deepseek-explicit"
+
+
+def test_source_gist_route_stays_on_lightweight_deepseek_model() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "source_gist",
+        provider_override="deepseek",
+    )
+
+    assert route.provider_name == "deepseek"
+    assert route.model == "deepseek-chat"
+
+
+def test_anchor_repair_route_defaults_to_deepseek_v4_pro() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(config, manager, "anchor_repair")
+
+    assert route.provider_name == "deepseek"
+    assert route.model == "deepseek-v4-pro"
+    assert isinstance(route.provider, OpenAICompatibleProvider)
+
+
+def _deepseek_route_config() -> AppConfig:
+    return parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "models": {
+                "task_routes": {
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-chat"},
+                    "deep_reading": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                    },
+                    "anchor_repair": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                    },
+                }
+            },
+        }
+    )
 
 
 def _fake_codex_command(tmp_path: Path) -> Path:

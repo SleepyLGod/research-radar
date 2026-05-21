@@ -144,7 +144,9 @@ def _run_command(
     except FileNotFoundError as exc:
         raise AnalysisError(f"{provider_name} command not found: {command[0]}") from exc
     except subprocess.TimeoutExpired as exc:
-        raise AnalysisError(f"{provider_name} command timed out.") from exc
+        raise AnalysisError(
+            f"{provider_name} command timed out after {timeout_seconds} seconds."
+        ) from exc
     except subprocess.CalledProcessError as exc:
         detail_text = exc.stderr.strip() or exc.stdout.strip()
         detail = f": {detail_text}" if detail_text else ""

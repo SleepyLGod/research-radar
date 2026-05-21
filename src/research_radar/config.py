@@ -293,17 +293,17 @@ def _default_model_providers() -> dict[str, ModelProviderConfig]:
         "codex": ModelProviderConfig(
             kind="codex_cli",
             command="/Applications/Codex.app/Contents/Resources/codex",
-            timeout_seconds=300,
+            timeout_seconds=900,
         ),
         "claude": ModelProviderConfig(
             kind="claude_code_cli",
             command="claude",
-            timeout_seconds=300,
+            timeout_seconds=900,
         ),
         "von_claude": ModelProviderConfig(
             kind="claude_code_cli",
             command="von-claude",
-            timeout_seconds=300,
+            timeout_seconds=900,
         ),
     }
 

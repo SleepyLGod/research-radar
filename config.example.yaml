@@ -107,15 +107,15 @@ model_providers:
   codex:
     kind: codex_cli
     command: /Applications/Codex.app/Contents/Resources/codex
-    timeout_seconds: 300
+    timeout_seconds: 900
   claude:
     kind: claude_code_cli
     command: claude
-    timeout_seconds: 300
+    timeout_seconds: 900
   von_claude:
     kind: claude_code_cli
     command: von-claude
-    timeout_seconds: 300
+    timeout_seconds: 900
   local:
     kind: local
 
@@ -131,8 +131,11 @@ models:
       provider: deepseek
       model: deepseek-chat
     deep_reading:
-      provider: codex
-      model: gpt-5.4
+      provider: deepseek
+      model: deepseek-v4-pro
+    anchor_repair:
+      provider: deepseek
+      model: deepseek-v4-pro
     verifier:
       provider: von_claude
       model: sonnet

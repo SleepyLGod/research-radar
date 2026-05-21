@@ -38,10 +38,14 @@ def resolve_task_route(
     route = config.models.task_routes.get(task_name)
     if provider_override:
         provider_name = provider_override
-        model = model_override or _default_model(provider_name)
+        model = model_override or _task_model_for_provider(route, provider_name)
     elif global_provider:
         provider_name = global_provider
-        model = model_override or global_model or _default_model(provider_name)
+        model = (
+            model_override
+            or global_model
+            or _task_model_for_provider(route, provider_name)
+        )
     elif route:
         provider_name = route.provider
         model = model_override or route.model
@@ -57,6 +61,15 @@ def resolve_task_route(
         raise ConfigError(f"No model configured for task {task_name} provider {provider_name}.")
     provider = build_provider(config, secrets, provider_name)
     return TaskModelRoute(provider=provider, model=model, provider_name=provider_name)
+
+
+def _task_model_for_provider(
+    route: object | None,
+    provider_name: str,
+) -> str | None:
+    if route is not None and getattr(route, "provider", None) == provider_name:
+        return getattr(route, "model", None)
+    return _default_model(provider_name)
 
 
 def build_provider(

@@ -322,6 +322,14 @@ def test_run_paper_can_use_deepseek_from_env(
         {
             "project": {"name": "ResearchRadar"},
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "models": {
+                "task_routes": {
+                    "deep_reading": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                    }
+                }
+            },
         }
     )
     captured: dict[str, object] = {}
@@ -354,4 +362,4 @@ def test_run_paper_can_use_deepseek_from_env(
     assert isinstance(captured["reader"], OpenAICompatibleProvider)
     assert captured["reader"].name == "deepseek"
     assert captured["url"] == "https://arxiv.org/pdf/2604.01707v1"
-    assert captured["model"] == "deepseek-chat"
+    assert captured["model"] == "deepseek-v4-pro"

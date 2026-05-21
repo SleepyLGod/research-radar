@@ -184,9 +184,27 @@ def test_default_command_providers_have_longer_timeout() -> None:
         }
     )
 
-    assert config.model_providers["codex"].timeout_seconds == 300
-    assert config.model_providers["claude"].timeout_seconds == 300
-    assert config.model_providers["von_claude"].timeout_seconds == 300
+    assert config.model_providers["codex"].timeout_seconds == 900
+    assert config.model_providers["claude"].timeout_seconds == 900
+    assert config.model_providers["von_claude"].timeout_seconds == 900
+
+
+def test_command_provider_timeout_can_be_overridden() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "codex": {
+                    "kind": "codex_cli",
+                    "command": "codex",
+                    "timeout_seconds": 120,
+                }
+            },
+        }
+    )
+
+    assert config.model_providers["codex"].timeout_seconds == 120
 
 
 def test_parse_config_rejects_empty_web_search_endpoint() -> None:
