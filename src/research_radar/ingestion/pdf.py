@@ -66,6 +66,18 @@ def _pdf_url(source: SourceCandidate) -> str:
     return url
 
 
+def has_pdf_signal(source: SourceCandidate) -> bool:
+    """Return whether a paper source has enough information for PDF ingestion."""
+
+    pdf_url = source.metadata.get("pdf_url")
+    if isinstance(pdf_url, str) and pdf_url:
+        return True
+    if _external_arxiv_id(source) is not None:
+        return True
+    url = source.url.lower()
+    return url.endswith(".pdf") or "arxiv.org/pdf/" in url or "arxiv.org/abs/" in url
+
+
 def _external_arxiv_id(source: SourceCandidate) -> str | None:
     external_ids = source.metadata.get("external_ids", {})
     if isinstance(external_ids, dict):

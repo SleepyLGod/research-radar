@@ -33,3 +33,23 @@ def test_redact_text_removes_sensitive_values() -> None:
     assert "sk-fake" not in redacted
     assert "/Users/someone" not in redacted
     assert "localhost:12345" not in redacted
+
+
+def test_redact_text_removes_common_quoted_and_dotted_secret_forms() -> None:
+    value = (
+        'app_secret="fake-wechat-secret-value" '
+        "token=fake-runtime-token-value "
+        "github.token=ghp_fakefakefakefake "
+        "access_token='fake-wechat-access-token' "
+        'api_key: "fake-provider-key-value"'
+    )
+
+    redacted = redact_text(value)
+
+    assert "fake-wechat-secret-value" not in redacted
+    assert "fake-runtime-token-value" not in redacted
+    assert "ghp_fakefakefakefake" not in redacted
+    assert "fake-wechat-access-token" not in redacted
+    assert "fake-provider-key-value" not in redacted
+    assert "app_secret" in redacted
+    assert "github.token" in redacted

@@ -6,14 +6,14 @@ from pathlib import Path
 
 from research_radar.ingestion.github_repo import ingest_github_repo
 from research_radar.ingestion.html import ingest_html
-from research_radar.ingestion.pdf import ingest_pdf
+from research_radar.ingestion.pdf import has_pdf_signal, ingest_pdf
 from research_radar.models import Artifact, SourceCandidate, SourceType
 
 
 def ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
     """Ingest a source according to its source type."""
 
-    if source.source_type == SourceType.PAPER:
+    if source.source_type == SourceType.PAPER and has_pdf_signal(source):
         return ingest_pdf(source, artifact_dir)
     if source.source_type == SourceType.REPOSITORY:
         return ingest_github_repo(source)

@@ -49,6 +49,18 @@ def test_readme_describes_foundation_not_current_v1() -> None:
     assert "product" in readme
 
 
+def test_readme_wechat_publish_command_includes_required_flags() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    command_start = readme.index("uv run research-radar publish wechat-draft")
+    command_block = readme[command_start : readme.index("```", command_start)]
+
+    assert "--run runs/<date-topic>" in command_block
+    assert "--title" in command_block
+    assert "--digest" in command_block
+    assert "--thumb-media-id" in command_block
+
+
 def test_architecture_contains_canonical_e2e_flow() -> None:
     architecture = Path("docs/architecture.md").read_text(encoding="utf-8")
 

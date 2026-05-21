@@ -5,10 +5,13 @@ from __future__ import annotations
 import re
 
 SECRET_PATTERNS = [
-    re.compile(r"(?i)(api[_-]?key|app[_-]?secret|access[_-]?token|secret)\s*[:=]\s*([^\s\"']+)"),
+    re.compile(
+        r"(?i)\b([A-Za-z0-9_.-]*(?:api[_-]?key|app[_-]?secret|access[_-]?token|token|secret))"
+        r"\s*[:=]\s*(['\"]?)[A-Za-z0-9._/-]{8,}\2"
+    ),
     re.compile(r"sk-[A-Za-z0-9_-]{16,}"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._-]{16,}"),
-    re.compile(r"(?i)(openid|unionid)\s*[:=]\s*([A-Za-z0-9_-]{8,})"),
+    re.compile(r"(?i)(openid|unionid)\s*[:=]\s*(['\"]?)[A-Za-z0-9_-]{8,}\2"),
 ]
 
 LOCAL_PATH_PATTERN = re.compile(r"/Users/[^/\s]+(?:/[^\s]+)*")
@@ -27,6 +30,6 @@ def redact_text(value: str) -> str:
 
 
 def _replace_secret(match: re.Match[str]) -> str:
-    if len(match.groups()) >= 2:
+    if len(match.groups()) >= 1:
         return f"{match.group(1)}=[REDACTED]"
     return "[REDACTED_SECRET]"

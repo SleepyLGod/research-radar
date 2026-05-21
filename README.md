@@ -70,8 +70,10 @@ Run the same daily pipeline with a compatibility provider from an explicit local
 uv run research-radar run daily --topic agent-memory --provider deepseek --secret-source env --env-file .env --deep-limit 1
 ```
 
-Task-specific routes can override that compatibility default. This example uses DeepSeek for
-reading and Codex CLI for verification:
+Task-specific routes can override that compatibility default. Deep reading uses
+`deepseek-v4-pro` by default when the DeepSeek reader route is selected; source gists still
+use the lighter DeepSeek route. This example uses DeepSeek for reading and Codex CLI for
+verification:
 
 ```bash
 uv run research-radar run daily --topic agent-memory --reader-provider deepseek --verifier-provider codex --secret-source env --env-file .env --deep-limit 1
@@ -111,7 +113,11 @@ uv run research-radar compose wechat --run runs/<date-topic>
 Create a WeChat draft after manual review:
 
 ```bash
-uv run research-radar publish wechat-draft --run runs/<date-topic>
+uv run research-radar publish wechat-draft \
+  --run runs/<date-topic> \
+  --title "ResearchRadar: <topic>" \
+  --digest "One-sentence reviewed digest" \
+  --thumb-media-id "<wechat-thumb-media-id>"
 ```
 
 The publisher creates a draft only. It does not auto-publish or mass-send.
