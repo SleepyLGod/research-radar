@@ -4,8 +4,10 @@ from research_radar.config import TopicConfig
 from research_radar.discovery import arxiv as arxiv_module
 from research_radar.discovery import openalex as openalex_module
 from research_radar.discovery import semantic_scholar as semantic_scholar_module
+from research_radar.discovery import web_search as web_search_module
 from research_radar.discovery.base import DiscoveryContext
 from research_radar.discovery.dedupe import dedupe_candidates, priority_score
+from research_radar.exceptions import DiscoveryError
 from research_radar.models import SourceCandidate, SourceType
 
 
@@ -213,6 +215,81 @@ def test_openalex_connector_continues_after_one_query_failure(monkeypatch) -> No
     )
 
     assert candidates[0].title == "Agent Memory Paper"
+
+
+def test_tavily_web_search_posts_query_and_parses_web_candidates(monkeypatch) -> None:
+    seen_requests = []
+
+    def fake_urlopen(request, timeout: int):
+        seen_requests.append(request)
+        return FakeResponse(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "title": "Agent Memory Project Page",
+                            "url": "https://example.com/agent-memory",
+                            "content": "An official page about agent memory systems.",
+                            "score": 0.9,
+                        }
+                    ],
+                    "response_time": 1.23,
+                    "request_id": "req-1",
+                }
+            ).encode("utf-8")
+        )
+
+    monkeypatch.setattr(web_search_module, "urlopen", fake_urlopen)
+    connector = web_search_module.TavilyWebSearchConnector(
+        api_key="tvly-test",
+        endpoint="https://api.tavily.test/search",
+        max_results=3,
+        search_depth="basic",
+    )
+
+    candidates = connector.discover(
+        DiscoveryContext(
+            topic=TopicConfig(
+                id="agent-memory",
+                queries=["agent memory systems"],
+                priority_sources=["example.com"],
+            ),
+            limit=2,
+        )
+    )
+
+    body = json.loads(seen_requests[0].data.decode("utf-8"))
+    assert seen_requests[0].headers["Authorization"] == "Bearer tvly-test"
+    assert body["query"] == "agent memory systems"
+    assert body["max_results"] == 2
+    assert body["include_answer"] is False
+    assert body["include_raw_content"] is False
+    assert candidates[0].source_type == SourceType.WEB
+    assert candidates[0].source_name == "web_search"
+    assert candidates[0].summary == "An official page about agent memory systems."
+    assert candidates[0].metadata["search_provider"] == "tavily"
+    assert candidates[0].metadata["search_query"] == "agent memory systems"
+    assert candidates[0].metadata["request_id"] == "req-1"
+
+
+def test_tavily_web_search_failure_becomes_discovery_error(monkeypatch) -> None:
+    def fake_urlopen(request, timeout: int):
+        raise OSError("network down")
+
+    monkeypatch.setattr(web_search_module, "urlopen", fake_urlopen)
+    connector = web_search_module.TavilyWebSearchConnector(api_key="tvly-test")
+
+    try:
+        connector.discover(
+            DiscoveryContext(
+                topic=TopicConfig(id="agent-memory", queries=["agent memory systems"]),
+                limit=2,
+            )
+        )
+    except DiscoveryError as exc:
+        assert "Tavily web search failed" in str(exc)
+    else:
+        raise AssertionError("Expected discovery failure")
 
 
 class FakeResponse:

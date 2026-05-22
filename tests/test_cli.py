@@ -265,6 +265,59 @@ def test_run_daily_adds_configured_web_search_connector(
     ]
 
 
+def test_run_daily_adds_tavily_web_search_connector(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "discovery": {
+                "web_search": {
+                    "provider": "tavily",
+                    "header_secret_name": "web_search.api_key",
+                    "max_results": 4,
+                }
+            },
+        }
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_daily(*args, **kwargs):
+        captured["connectors"] = args[3]
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.setenv("WEB_SEARCH_API_KEY", "tvly-test")
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider="local",
+            model=None,
+            secret_source="env",
+            env_file=None,
+            limit=10,
+            deep_limit=0,
+        )
+    )
+
+    connectors = captured["connectors"]
+    assert [connector.name for connector in connectors] == [
+        "arxiv",
+        "semantic_scholar",
+        "openalex",
+        "web_search",
+        "github",
+    ]
+    assert connectors[3].__class__.__name__ == "TavilyWebSearchConnector"
+    assert connectors[3].max_results == 4
+
+
 def test_run_daily_skips_web_search_when_configured_secret_is_missing(
     monkeypatch,
     tmp_path: Path,

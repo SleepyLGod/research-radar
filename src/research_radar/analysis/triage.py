@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from research_radar.analysis.prompts import triage_prompt
 from research_radar.analysis.providers import LLMProvider, Message
-from research_radar.models import Artifact, Claim, ClaimStatus, EvidenceAnchor
+from research_radar.models import Artifact, Claim, ClaimStatus, EvidenceAnchor, SourceType
 
 
 def heuristic_claims(artifacts: list[Artifact]) -> list[Claim]:
@@ -12,6 +12,11 @@ def heuristic_claims(artifacts: list[Artifact]) -> list[Claim]:
 
     claims: list[Claim] = []
     for artifact in artifacts:
+        if (
+            artifact.source.source_type == SourceType.WEB
+            and artifact.content_type == "discovery-summary"
+        ):
+            continue
         first_line = next((line.strip() for line in artifact.text.splitlines() if line.strip()), "")
         if not first_line:
             continue

@@ -164,16 +164,61 @@ def test_parse_config_accepts_discovery_settings() -> None:
             "discovery": {
                 "trusted_domains": ["arxiv.org", "openreview.net"],
                 "web_search": {
+                    "provider": "generic",
                     "endpoint": "https://search.example.test/api",
                     "header_secret_name": "web_search.api_key",
+                    "max_results": 7,
+                    "search_depth": "fast",
                 },
             },
         }
     )
 
     assert config.discovery.trusted_domains == ["arxiv.org", "openreview.net"]
+    assert config.discovery.web_search.provider == "generic"
     assert config.discovery.web_search.endpoint == "https://search.example.test/api"
     assert config.discovery.web_search.header_secret_name == "web_search.api_key"
+    assert config.discovery.web_search.max_results == 7
+    assert config.discovery.web_search.search_depth == "fast"
+
+
+def test_parse_config_accepts_tavily_web_search() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "discovery": {
+                "web_search": {
+                    "provider": "tavily",
+                    "header_secret_name": "web_search.api_key",
+                    "search_depth": "basic",
+                },
+            },
+        }
+    )
+
+    assert config.discovery.web_search.provider == "tavily"
+    assert config.discovery.web_search.endpoint is None
+    assert config.discovery.web_search.header_secret_name == "web_search.api_key"
+
+
+def test_parse_config_rejects_unknown_web_search_provider() -> None:
+    data = {
+        "project": {"name": "ResearchRadar"},
+        "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        "discovery": {
+            "web_search": {
+                "provider": "unknown",
+            }
+        },
+    }
+
+    try:
+        parse_config(data)
+    except ConfigError as exc:
+        assert "discovery.web_search.provider" in str(exc)
+    else:
+        raise AssertionError("Expected ConfigError")
 
 
 def test_default_command_providers_have_longer_timeout() -> None:

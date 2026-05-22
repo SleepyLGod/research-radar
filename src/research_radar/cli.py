@@ -16,7 +16,11 @@ from research_radar.discovery.base import DiscoveryConnector
 from research_radar.discovery.github import GitHubRepoConnector
 from research_radar.discovery.openalex import OpenAlexConnector
 from research_radar.discovery.semantic_scholar import SemanticScholarConnector
-from research_radar.discovery.web_search import GenericWebSearchConnector
+from research_radar.discovery.web_search import (
+    TAVILY_SEARCH_ENDPOINT,
+    GenericWebSearchConnector,
+    TavilyWebSearchConnector,
+)
 from research_radar.evaluation.topic_smoke import run_topic_smoke, select_topic_specs
 from research_radar.evidence.ledger import load_claims
 from research_radar.exceptions import ConfigError, ResearchRadarError, SecretError
@@ -757,8 +761,27 @@ def _daily_connectors(
 def _web_search_connector(
     config: AppConfig,
     manager: SecretManager,
-) -> GenericWebSearchConnector | None:
+) -> DiscoveryConnector | None:
     web_search = config.discovery.web_search
+    provider = web_search.provider or ("generic" if web_search.endpoint is not None else None)
+    if provider is None:
+        return None
+    if provider == "tavily":
+        secret_name = web_search.header_secret_name or "web_search.api_key"
+        try:
+            token = manager.get_named_secret(secret_name)
+        except SecretError:
+            print(
+                "Web search disabled: missing configured Tavily API key.",
+                file=sys.stderr,
+            )
+            return None
+        return TavilyWebSearchConnector(
+            api_key=token,
+            endpoint=web_search.endpoint or TAVILY_SEARCH_ENDPOINT,
+            max_results=web_search.max_results,
+            search_depth=web_search.search_depth,
+        )
     if web_search.endpoint is None:
         return None
     headers: dict[str, str] = {}

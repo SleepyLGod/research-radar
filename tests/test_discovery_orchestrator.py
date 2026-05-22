@@ -162,3 +162,27 @@ def test_discovery_orchestrator_keeps_running_after_connector_failure() -> None:
     assert result.findings[0].severity == "warning"
     assert result.findings[0].metadata["kind"] == "discovery_failed"
     assert result.findings[0].metadata["discovery_stage"] == "primary_sources"
+
+
+def test_discovery_orchestrator_treats_web_search_failure_as_warning() -> None:
+    class FailingWebConnector:
+        name = "web_search"
+
+        def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+            raise DiscoveryError("search unavailable")
+
+    calls: list[str] = []
+    arxiv = RecordingConnector(
+        "arxiv",
+        SourceType.PAPER,
+        "https://arxiv.org/abs/2604.01707",
+        calls,
+    )
+    topic = TopicConfig(id="agent-memory", queries=["agent memory"])
+
+    result = DiscoveryOrchestrator([FailingWebConnector(), arxiv]).discover(topic, limit=1)
+
+    assert [candidate.source_name for candidate in result.candidates] == ["arxiv"]
+    assert result.findings[0].severity == "warning"
+    assert result.findings[0].metadata["kind"] == "discovery_failed"
+    assert result.findings[0].metadata["discovery_stage"] == "web_search"

@@ -30,8 +30,11 @@ class TopicConfig:
 class WebSearchConfig:
     """Optional generic web-search connector configuration."""
 
+    provider: str | None = None
     endpoint: str | None = None
     header_secret_name: str | None = None
+    max_results: int = 5
+    search_depth: str = "basic"
 
 
 @dataclass(frozen=True)
@@ -223,6 +226,10 @@ def _discovery_config(data: dict[str, Any]) -> DiscoveryConfig:
             allow_empty=True,
         ),
         web_search=WebSearchConfig(
+            provider=_web_search_provider(
+                web_search.get("provider"),
+                "discovery.web_search.provider",
+            ),
             endpoint=_optional_string(
                 web_search.get("endpoint"),
                 "discovery.web_search.endpoint",
@@ -230,6 +237,14 @@ def _discovery_config(data: dict[str, Any]) -> DiscoveryConfig:
             header_secret_name=_optional_string(
                 web_search.get("header_secret_name"),
                 "discovery.web_search.header_secret_name",
+            ),
+            max_results=_positive_int(
+                web_search.get("max_results", 5),
+                "discovery.web_search.max_results",
+            ),
+            search_depth=_web_search_depth(
+                web_search.get("search_depth", "basic"),
+                "discovery.web_search.search_depth",
             ),
         ),
     )
@@ -391,6 +406,26 @@ def _optional_string(value: Any, name: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{name} must be a non-empty string or null.")
     return value.strip()
+
+
+def _web_search_provider(value: Any, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{name} must be generic, tavily, or null.")
+    provider = value.strip()
+    if provider not in {"generic", "tavily"}:
+        raise ConfigError(f"{name} must be generic, tavily, or null.")
+    return provider
+
+
+def _web_search_depth(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{name} must be a supported Tavily search depth.")
+    depth = value.strip()
+    if depth not in {"basic", "advanced", "fast", "ultra-fast"}:
+        raise ConfigError(f"{name} must be basic, advanced, fast, or ultra-fast.")
+    return depth
 
 
 def _source_intent(value: Any) -> str:

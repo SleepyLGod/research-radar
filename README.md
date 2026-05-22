@@ -95,6 +95,21 @@ whether downgraded claims leaked into rendered briefs.
 For `research_brief` topics, paper connectors use deterministic paper-focused query variants and
 the smoke summary reports paper candidate diagnostics.
 
+Enable strong web search by configuring the Tavily adapter and setting `WEB_SEARCH_API_KEY` through
+Keychain or an explicit local `.env` file:
+
+```yaml
+discovery:
+  web_search:
+    provider: tavily
+    header_secret_name: web_search.api_key
+    max_results: 5
+    search_depth: basic
+```
+
+Web search expands discovery recall only. Web snippets are not promoted into publishable research
+claims.
+
 Run a single-paper golden smoke without discovery:
 
 ```bash
