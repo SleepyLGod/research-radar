@@ -6,7 +6,7 @@ import re
 
 SECRET_PATTERNS = [
     re.compile(
-        r"(?i)\b([A-Za-z0-9_.-]*(?:api[_-]?key|app[_-]?secret|access[_-]?token|token|secret))"
+        r"(?i)\b([\"']?[A-Za-z0-9_.-]*(?:api[_-]?key|app[_-]?secret|access[_-]?token|token|secret)[\"']?)"
         r"\s*[:=]\s*(['\"]?)[A-Za-z0-9._/-]{8,}\2"
     ),
     re.compile(r"sk-[A-Za-z0-9_-]{16,}"),

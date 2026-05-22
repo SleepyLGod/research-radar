@@ -1,7 +1,9 @@
 import json
 import os
 from http.client import IncompleteRead
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
 
 from research_radar.analysis.anthropic import AnthropicMessagesProvider
 from research_radar.analysis.cli_providers import ClaudeCodeCliProvider, CodexCliProvider
@@ -103,6 +105,86 @@ def test_openai_compatible_wraps_incomplete_http_reads(monkeypatch) -> None:
         assert "openai request failed" in str(exc)
     else:
         raise AssertionError("Expected AnalysisError")
+
+
+def test_openai_compatible_error_includes_redacted_diagnostics(monkeypatch) -> None:
+    manager = SecretManager(InMemorySecretBackend())
+    manager.set_openai_api_key("fake-key")
+    provider = OpenAICompatibleProvider(
+        name="openai",
+        endpoint="https://api.example.test/chat/completions",
+        api_key_secret="openai.api_key",
+        secrets=manager,
+        timeout_seconds=17,
+    )
+
+    def fake_urlopen(*args, **kwargs):
+        raise HTTPError(
+            "https://api.example.test/chat/completions",
+            429,
+            "Too Many Requests",
+            hdrs=None,
+            fp=BytesIO(b'{"error":"rate limited","access_token":"fake-token-12345"}'),
+        )
+
+    monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
+
+    try:
+        provider.complete([Message(role="user", content="private prompt")], model="gpt-test")
+    except AnalysisError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+    assert "openai request failed" in message
+    assert "model=gpt-test" in message
+    assert "host=api.example.test" in message
+    assert "timeout=17s" in message
+    assert "HTTPError" in message
+    assert "status=429" in message
+    assert "rate limited" in message
+    assert "fake-token-12345" not in message
+    assert "private prompt" not in message
+
+
+def test_openai_compatible_invalid_json_reports_provider_context(monkeypatch) -> None:
+    manager = SecretManager(InMemorySecretBackend())
+    manager.set_openai_api_key("fake-key")
+    provider = OpenAICompatibleProvider(
+        name="openai",
+        endpoint="https://api.example.test/chat/completions",
+        api_key_secret="openai.api_key",
+        secrets=manager,
+        timeout_seconds=17,
+    )
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"not json"
+
+    def fake_urlopen(*args, **kwargs):
+        return FakeResponse()
+
+    monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
+
+    try:
+        provider.complete([Message(role="user", content="private prompt")], model="gpt-test")
+    except AnalysisError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+    assert "openai request failed" in message
+    assert "model=gpt-test" in message
+    assert "JSONDecodeError" in message
+    assert "not json" in message
+    assert "private prompt" not in message
 
 
 def test_anthropic_provider_parses_messages_response(monkeypatch) -> None:

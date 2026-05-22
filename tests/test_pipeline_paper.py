@@ -2,6 +2,7 @@ from pathlib import Path
 
 from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
+from research_radar.exceptions import AnalysisError
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 from research_radar.pipeline import paper
 from research_radar.pipeline.paper import build_direct_paper_source, run_paper
@@ -40,6 +41,17 @@ class SequenceProvider:
         return ModelResponse(content=self.responses.pop(0), model=model)
 
 
+class FailingProvider:
+    """Test provider that raises an analysis error."""
+
+    name = "failing-reader"
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        """Raise a deterministic analysis failure."""
+
+        raise AnalysisError("failing-reader request failed: model=fake-reader")
+
+
 def test_build_direct_paper_source_from_arxiv_pdf_url() -> None:
     source = build_direct_paper_source("https://arxiv.org/pdf/2604.01707v1")
 
@@ -47,6 +59,54 @@ def test_build_direct_paper_source_from_arxiv_pdf_url() -> None:
     assert source.source_name == "direct"
     assert source.canonical_id == "2604.01707v1"
     assert source.title == "arXiv 2604.01707v1"
+
+
+def test_single_paper_pipeline_writes_failed_run_artifacts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text="Paper text.")
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    try:
+        run_paper(
+            tmp_path,
+            config,
+            "agent-memory",
+            "https://arxiv.org/pdf/2604.01707v1",
+            FailingProvider(),
+            model="fake-reader",
+        )
+    except AnalysisError as exc:
+        assert "failing-reader request failed" in str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+    run_dir = next((tmp_path / "runs").iterdir())
+    manifest = read_json(run_dir / "manifest.json")
+    run_error = read_json(run_dir / "run_error.json")
+
+    assert manifest["source_count"] == 0
+    assert manifest["claim_count"] == 0
+    assert manifest["publishable_claim_count"] == 0
+    assert manifest["metadata"]["failure"]["stage"] == "reader"
+    assert manifest["metadata"]["failure"]["provider"] == "failing-reader"
+    assert manifest["metadata"]["failure"]["model"] == "fake-reader"
+    assert manifest["metadata"]["failure"]["error_type"] == "AnalysisError"
+    assert run_error["stage"] == "reader"
+    assert "failing-reader request failed" in run_error["message"]
+    assert not (run_dir / "claims.jsonl").exists()
+    assert not (run_dir / "readings.jsonl").exists()
+    assert not (run_dir / "paper.md").exists()
 
 
 def test_single_paper_pipeline_writes_auditable_outputs(monkeypatch, tmp_path: Path) -> None:

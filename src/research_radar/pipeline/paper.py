@@ -49,19 +49,27 @@ def run_paper(
     report_language = language or topic.report_language
     source = build_direct_paper_source(url)
     run_dir, manifest = _create_paper_run_dir(root, topic, source)
-    artifact = ingest_source(source, run_dir / "artifacts")
+    try:
+        artifact = ingest_source(source, run_dir / "artifacts")
+    except ResearchRadarError as exc:
+        _write_failed_run(run_dir, manifest, "ingestion", None, None, exc)
+        raise
     paper_sections = build_paper_sections(artifact)
     reading_packet = build_reading_packet(artifact, sections=paper_sections)
-    deep_result = run_artifact_deep_reading(
-        artifact,
-        reader,
-        model=model,
-        area_context=_area_context(topic),
-        language=report_language,
-        packet=reading_packet,
-        anchor_repair_provider=anchor_repair_provider,
-        anchor_repair_model=anchor_repair_model,
-    )
+    try:
+        deep_result = run_artifact_deep_reading(
+            artifact,
+            reader,
+            model=model,
+            area_context=_area_context(topic),
+            language=report_language,
+            packet=reading_packet,
+            anchor_repair_provider=anchor_repair_provider,
+            anchor_repair_model=anchor_repair_model,
+        )
+    except ResearchRadarError as exc:
+        _write_failed_run(run_dir, manifest, "reader", reader.name, model, exc)
+        raise
     reading = deep_result.reading
     claims = deep_result.claims
     findings = deep_result.findings
@@ -70,13 +78,24 @@ def run_paper(
     review_provider = verifier or reader
     review_model = verifier_model or model
     if claims and review_provider is not None:
-        claims, model_findings, model_feedback, verification_actions = model_review(
-            claims,
-            review_provider,
-            model=review_model,
-            topic_id=topic.id,
-            queries=topic.queries,
-        )
+        try:
+            claims, model_findings, model_feedback, verification_actions = model_review(
+                claims,
+                review_provider,
+                model=review_model,
+                topic_id=topic.id,
+                queries=topic.queries,
+            )
+        except ResearchRadarError as exc:
+            _write_failed_run(
+                run_dir,
+                manifest,
+                "verifier",
+                review_provider.name,
+                review_model,
+                exc,
+            )
+            raise
         findings.extend(model_findings)
         claims, post_model_findings = rule_based_review(claims)
         findings.extend(post_model_findings)
@@ -168,6 +187,32 @@ def _create_paper_run_dir(
     manifest = RunManifest(run_id=run_id, topic_id=topic.id, mode="paper")
     write_json(run_dir / "manifest.json", manifest)
     return run_dir, manifest
+
+
+def _write_failed_run(
+    run_dir: Path,
+    manifest: RunManifest,
+    stage: str,
+    provider: str | None,
+    model: str | None,
+    exc: ResearchRadarError,
+) -> None:
+    failure = {
+        "stage": stage,
+        "provider": provider,
+        "model": model,
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+    }
+    failed_manifest = RunManifest(
+        run_id=manifest.run_id,
+        topic_id=manifest.topic_id,
+        mode=manifest.mode,
+        created_at=manifest.created_at,
+        metadata={**manifest.metadata, "failure": failure},
+    )
+    write_json(run_dir / "manifest.json", failed_manifest)
+    write_json(run_dir / "run_error.json", failure)
 
 
 def _paper_id(path: str) -> str | None:
