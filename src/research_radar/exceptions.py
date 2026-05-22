@@ -29,6 +29,14 @@ class AnalysisError(ResearchRadarError):
     """Raised when model analysis fails."""
 
 
+class ProviderTransportError(AnalysisError):
+    """Raised when an LLM provider request fails with transport diagnostics."""
+
+    def __init__(self, message: str, diagnostics: dict[str, object]) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
+
+
 class EvidenceError(ResearchRadarError):
     """Raised when evidence validation fails."""
 

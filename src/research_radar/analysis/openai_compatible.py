@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from http.client import HTTPException
+from http.client import HTTPException, IncompleteRead
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from research_radar.analysis.providers import Message, ModelResponse
-from research_radar.exceptions import AnalysisError
+from research_radar.exceptions import ProviderTransportError
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import SecretManager
 
@@ -58,19 +58,15 @@ class OpenAICompatibleProvider:
                 raw_response = response.read().decode("utf-8", errors="replace")
                 data = json.loads(raw_response)
         except (HTTPException, OSError, json.JSONDecodeError) as exc:
-            raise AnalysisError(
-                self._failure_message(exc, model=model, response_text=raw_response)
-            ) from exc
+            raise self._transport_error(exc, model=model, response_text=raw_response) from exc
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise AnalysisError(
-                self._failure_message(
-                    exc,
-                    model=model,
-                    response_text=raw_response,
-                    summary="response did not contain a chat message",
-                )
+            raise self._transport_error(
+                exc,
+                model=model,
+                response_text=raw_response,
+                summary="response did not contain a chat message",
             ) from exc
         return ModelResponse(
             content=str(content),
@@ -78,29 +74,75 @@ class OpenAICompatibleProvider:
             metadata={"provider": self.name, "endpoint": self.endpoint},
         )
 
-    def _failure_message(
+    def _transport_error(
         self,
         exc: BaseException,
         *,
         model: str,
         response_text: str = "",
         summary: str = "request failed",
-    ) -> str:
+    ) -> ProviderTransportError:
+        diagnostics = self._failure_diagnostics(
+            exc,
+            model=model,
+            response_text=response_text,
+            summary=summary,
+        )
+        return ProviderTransportError(_failure_message(diagnostics), diagnostics)
+
+    def _failure_diagnostics(
+        self,
+        exc: BaseException,
+        *,
+        model: str,
+        response_text: str = "",
+        summary: str = "request failed",
+    ) -> dict[str, object]:
         host = urlparse(self.endpoint).netloc or self.endpoint
-        parts = [
-            f"{self.name} {summary}",
-            f"model={model}",
-            f"host={host}",
-            f"timeout={self._timeout_seconds}s",
-            f"error_type={type(exc).__name__}",
-        ]
+        diagnostics: dict[str, object] = {
+            "provider": self.name,
+            "summary": summary,
+            "model": model,
+            "host": host,
+            "timeout_seconds": self._timeout_seconds,
+            "error_type": type(exc).__name__,
+        }
         if isinstance(exc, HTTPError):
-            parts.append(f"status={exc.code}")
+            diagnostics["status"] = exc.code
             response_text = _read_http_error_body(exc) or response_text
+        if isinstance(exc, IncompleteRead):
+            response_text = exc.partial.decode("utf-8", errors="replace")
+            diagnostics.update(
+                {
+                    "partial_byte_count": len(exc.partial),
+                    "expected_byte_count": exc.expected,
+                    "transport_state": _incomplete_read_state(response_text),
+                }
+            )
         excerpt = _safe_excerpt(response_text)
         if excerpt:
-            parts.append(f"response_excerpt={excerpt}")
-        return "; ".join(parts) + "."
+            diagnostics["response_excerpt"] = excerpt
+        return diagnostics
+
+
+def _failure_message(diagnostics: dict[str, object]) -> str:
+    parts = [
+        f"{diagnostics['provider']} {diagnostics['summary']}",
+        f"model={diagnostics['model']}",
+        f"host={diagnostics['host']}",
+        f"timeout={diagnostics['timeout_seconds']}s",
+        f"error_type={diagnostics['error_type']}",
+    ]
+    for key in (
+        "status",
+        "partial_byte_count",
+        "expected_byte_count",
+        "transport_state",
+        "response_excerpt",
+    ):
+        if key in diagnostics and diagnostics[key] is not None:
+            parts.append(f"{key}={diagnostics[key]}")
+    return "; ".join(parts) + "."
 
 
 def _read_http_error_body(exc: HTTPError) -> str:
@@ -117,3 +159,17 @@ def _safe_excerpt(value: str, *, limit: int = 500) -> str:
     if len(redacted) <= limit:
         return redacted
     return redacted[:limit].rstrip() + "..."
+
+
+def _incomplete_read_state(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        return "empty_partial"
+    lowered = stripped.casefold()
+    if '"error"' in lowered:
+        return "partial_provider_error"
+    if '"choices"' in lowered or '"message"' in lowered or '"content"' in lowered:
+        return "partial_model_response"
+    if stripped.startswith("{") or stripped.startswith("["):
+        return "partial_json"
+    return "unknown_partial"

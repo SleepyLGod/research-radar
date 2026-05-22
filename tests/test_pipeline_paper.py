@@ -1,11 +1,14 @@
+from http.client import IncompleteRead
 from pathlib import Path
 
+from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
 from research_radar.exceptions import AnalysisError
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 from research_radar.pipeline import paper
 from research_radar.pipeline.paper import build_direct_paper_source, run_paper
+from research_radar.security.secrets import InMemorySecretBackend, SecretManager
 from research_radar.storage.files import read_json, read_jsonl
 
 
@@ -107,6 +110,62 @@ def test_single_paper_pipeline_writes_failed_run_artifacts(
     assert not (run_dir / "claims.jsonl").exists()
     assert not (run_dir / "readings.jsonl").exists()
     assert not (run_dir / "paper.md").exists()
+
+
+def test_single_paper_pipeline_persists_transport_diagnostics(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    manager = SecretManager(InMemorySecretBackend())
+    manager.set_openai_api_key("fake-key")
+    reader = OpenAICompatibleProvider(
+        name="openai",
+        endpoint="https://api.example.test/chat/completions",
+        api_key_secret="openai.api_key",
+        secrets=manager,
+        timeout_seconds=17,
+    )
+    partial = b'{"choices":[{"message":{"content":"partial model answer'
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text="Paper text.")
+
+    def fake_urlopen(*args, **kwargs):
+        raise IncompleteRead(partial, expected=100)
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+    monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
+
+    try:
+        run_paper(
+            tmp_path,
+            config,
+            "agent-memory",
+            "https://arxiv.org/pdf/2604.01707v1",
+            reader,
+            model="gpt-test",
+        )
+    except AnalysisError as exc:
+        assert "transport_state=partial_model_response" in str(exc)
+    else:
+        raise AssertionError("Expected AnalysisError")
+
+    run_dir = next((tmp_path / "runs").iterdir())
+    manifest = read_json(run_dir / "manifest.json")
+    run_error = read_json(run_dir / "run_error.json")
+
+    transport = run_error["transport"]
+    assert transport["partial_byte_count"] == len(partial)
+    assert transport["expected_byte_count"] == 100
+    assert transport["transport_state"] == "partial_model_response"
+    assert "partial model answer" in transport["response_excerpt"]
+    assert manifest["metadata"]["failure"]["transport"] == transport
 
 
 def test_single_paper_pipeline_writes_auditable_outputs(monkeypatch, tmp_path: Path) -> None:

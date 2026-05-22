@@ -204,6 +204,9 @@ def _write_failed_run(
         "error_type": type(exc).__name__,
         "message": str(exc),
     }
+    diagnostics = getattr(exc, "diagnostics", None)
+    if isinstance(diagnostics, dict):
+        failure["transport"] = diagnostics
     failed_manifest = RunManifest(
         run_id=manifest.run_id,
         topic_id=manifest.topic_id,
