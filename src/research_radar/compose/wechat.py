@@ -5,6 +5,7 @@ from __future__ import annotations
 from html import escape
 
 from research_radar.compose.draft import build_weekly_draft
+from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, Claim
 
 
@@ -87,21 +88,23 @@ def _source_list(raw_sources: object, *, language: str) -> str:
     if not isinstance(raw_sources, list):
         return ""
     blocks = []
-    for item in raw_sources:
-        if not isinstance(item, dict):
+    for group, items in group_source_entries(raw_sources):
+        if not items:
             continue
-        title = escape(str(item.get("title", "Untitled source")))
-        url = escape(str(item.get("url", "")))
-        gist = escape(str(item.get("gist", "")))
-        descriptor = escape(_source_descriptor(item))
-        gist_label = "摘要" if language == "zh" else "Gist"
-        blocks.append(
-            f"""<section class="rr-card">
+        blocks.append(f"<h3>{escape(source_group_label(group, language=language))}</h3>")
+        for item in items:
+            title = escape(str(item.get("title", "Untitled source")))
+            url = escape(str(item.get("url", "")))
+            gist = escape(str(item.get("gist", "")))
+            descriptor = escape(_source_descriptor(item))
+            gist_label = "摘要" if language == "zh" else "Gist"
+            blocks.append(
+                f"""<section class="rr-card">
 <h3><a href="{url}">{title}</a></h3>
 <p>{descriptor}</p>
 <p><strong>{gist_label}:</strong> {gist}</p>
 </section>"""
-        )
+            )
     return "".join(blocks)
 
 

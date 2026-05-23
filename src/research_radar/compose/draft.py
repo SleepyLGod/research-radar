@@ -6,7 +6,7 @@ import re
 
 from research_radar.analysis.source_gist import sanitize_source_gist
 from research_radar.evidence.policy import publishable_claims
-from research_radar.models import ArticleDraft, ArticleSection, Claim, SourceCandidate
+from research_radar.models import ArticleDraft, ArticleSection, Claim, SourceCandidate, SourceType
 
 
 def build_daily_draft(
@@ -152,10 +152,13 @@ def _source_entry(source: SourceCandidate, *, language: str = "en") -> dict[str,
     history = source.metadata.get("source_history", {})
     role = source.metadata.get("source_role", {})
     gist = source.metadata.get("source_gist", {})
+    role_value = str(role.get("role", source.source_type.value))
     return {
         "title": source.title,
         "url": source.url,
-        "role": str(role.get("role", source.source_type.value)),
+        "role": role_value,
+        "source_type": source.source_type.value,
+        "source_group": _source_group(source, role_value),
         "history_status": str(history.get("status", "not_tracked")),
         "published_at": source.published_at,
         "version": _display_version(history.get("version")),
@@ -179,3 +182,19 @@ def _fallback_gist(source: SourceCandidate, *, language: str = "en") -> str:
     return sanitize_source_gist(
         f"Based on title and source metadata, this source is about {title}."
     )
+
+
+def _source_group(source: SourceCandidate, role: str) -> str:
+    if role == "primary_paper":
+        return "research_papers"
+    if role == "benchmark_paper":
+        return "benchmarks"
+    if source.source_type == SourceType.REPOSITORY or role == "implementation_repo":
+        return "implementation_repos"
+    if source.source_type == SourceType.PAPER:
+        return "research_papers"
+    if source.source_type in {SourceType.BLOG, SourceType.WEB, SourceType.RSS}:
+        return "web_blog_context"
+    if role in {"blog_or_web", "survey_or_list"}:
+        return "web_blog_context"
+    return "other"

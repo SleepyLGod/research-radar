@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from research_radar.compose.draft import build_daily_draft, build_weekly_draft
+from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, Claim, SourceCandidate
 
 
@@ -50,19 +51,24 @@ def _source_lines(raw_sources: object, *, language: str) -> list[str]:
     if not isinstance(raw_sources, list):
         return []
     lines: list[str] = []
-    for item in raw_sources:
-        if not isinstance(item, dict):
+    for group, items in group_source_entries(raw_sources):
+        if not items:
             continue
-        title = _escape_markdown_text(str(item.get("title", "Untitled source")))
-        url = str(item.get("url", ""))
-        descriptor = _source_descriptor(item)
-        gist = str(item.get("gist") or "").strip()
-        lines.append(f"- [{title}](<{url}>)")
-        if descriptor:
-            lines.append(f"  - {descriptor}")
-        if gist:
-            label = "摘要" if language == "zh" else "Gist"
-            lines.append(f"  - {label}: {gist}")
+        lines.extend([f"### {source_group_label(group, language=language)}", ""])
+        for item in items:
+            title = _escape_markdown_text(str(item.get("title", "Untitled source")))
+            url = str(item.get("url", ""))
+            descriptor = _source_descriptor(item)
+            gist = str(item.get("gist") or "").strip()
+            lines.append(f"- [{title}](<{url}>)")
+            if descriptor:
+                lines.append(f"  - {descriptor}")
+            if gist:
+                label = "摘要" if language == "zh" else "Gist"
+                lines.append(f"  - {label}: {gist}")
+        lines.append("")
+    if lines and lines[-1] == "":
+        lines.pop()
     return lines
 
 
