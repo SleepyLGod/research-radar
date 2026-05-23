@@ -272,6 +272,76 @@ def test_tavily_web_search_posts_query_and_parses_web_candidates(monkeypatch) ->
     assert candidates[0].metadata["request_id"] == "req-1"
 
 
+def test_tavily_web_search_canonicalizes_research_source_urls(monkeypatch) -> None:
+    def fake_urlopen(request, timeout: int):
+        return FakeResponse(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "title": "MemBench arXiv HTML",
+                            "url": "https://arxiv.org/html/2506.21605v1",
+                            "content": "A paper page.",
+                            "score": 0.9,
+                        },
+                        {
+                            "title": "ACL paper PDF",
+                            "url": "https://aclanthology.org/2025.findings-acl.989.pdf",
+                            "content": "An ACL paper.",
+                            "score": 0.8,
+                        },
+                        {
+                            "title": "OpenReview paper",
+                            "url": "https://openreview.net/forum?id=LLtUtzSOL5",
+                            "content": "An OpenReview paper.",
+                            "score": 0.7,
+                        },
+                        {
+                            "title": "Awesome Agent Memory",
+                            "url": "https://github.com/TeleAI-UAGI/Awesome-Agent-Memory",
+                            "content": "A GitHub repository.",
+                            "score": 0.6,
+                        },
+                        {
+                            "title": "Agent memory blog",
+                            "url": "https://example.com/agent-memory",
+                            "content": "A blog post.",
+                            "score": 0.5,
+                        },
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+    monkeypatch.setattr(web_search_module, "urlopen", fake_urlopen)
+    connector = web_search_module.TavilyWebSearchConnector(api_key="tvly-test")
+
+    candidates = connector.discover(
+        DiscoveryContext(
+            topic=TopicConfig(id="agent-memory", queries=["agent memory systems"]),
+            limit=5,
+        )
+    )
+
+    assert candidates[0].source_type == SourceType.PAPER
+    assert candidates[0].url == "https://arxiv.org/abs/2506.21605v1"
+    assert candidates[0].canonical_id == "2506.21605v1"
+    assert candidates[0].metadata["search_provider"] == "tavily"
+    assert candidates[0].metadata["web_canonicalization"]["rule"] == "arxiv"
+    assert candidates[0].metadata["web_canonicalization"]["original_url"] == (
+        "https://arxiv.org/html/2506.21605v1"
+    )
+    assert candidates[1].source_type == SourceType.PAPER
+    assert candidates[1].canonical_id == "ACL:2025.findings-acl.989"
+    assert candidates[2].source_type == SourceType.PAPER
+    assert candidates[2].canonical_id == "OpenReview:LLtUtzSOL5"
+    assert candidates[3].source_type == SourceType.REPOSITORY
+    assert candidates[3].url == "https://github.com/TeleAI-UAGI/Awesome-Agent-Memory"
+    assert candidates[3].canonical_id == "github:teleai-uagi/awesome-agent-memory"
+    assert candidates[4].source_type == SourceType.WEB
+    assert candidates[4].metadata["web_canonicalization"]["rule"] == "none"
+
+
 def test_tavily_web_search_failure_becomes_discovery_error(monkeypatch) -> None:
     def fake_urlopen(request, timeout: int):
         raise OSError("network down")
@@ -290,6 +360,41 @@ def test_tavily_web_search_failure_becomes_discovery_error(monkeypatch) -> None:
         assert "Tavily web search failed" in str(exc)
     else:
         raise AssertionError("Expected discovery failure")
+
+
+def test_tavily_web_search_continues_after_one_query_failure(monkeypatch) -> None:
+    def fake_urlopen(request, timeout: int):
+        body = json.loads(request.data.decode("utf-8"))
+        if body["query"] == "first":
+            raise OSError("temporary failure")
+        return FakeResponse(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "title": "Agent Memory Paper",
+                            "url": "https://arxiv.org/html/2506.21605v1",
+                            "content": "A paper about agent memory.",
+                            "score": 0.9,
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+    monkeypatch.setattr(web_search_module, "urlopen", fake_urlopen)
+    connector = web_search_module.TavilyWebSearchConnector(api_key="tvly-test")
+
+    candidates = connector.discover(
+        DiscoveryContext(
+            topic=TopicConfig(id="agent-memory", queries=["first", "second"]),
+            limit=1,
+        )
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].title == "Agent Memory Paper"
+    assert candidates[0].source_type == SourceType.PAPER
 
 
 class FakeResponse:

@@ -12,9 +12,10 @@ def heuristic_claims(artifacts: list[Artifact]) -> list[Claim]:
 
     claims: list[Claim] = []
     for artifact in artifacts:
-        if (
+        if artifact.content_type == "discovery-summary" and (
             artifact.source.source_type == SourceType.WEB
-            and artifact.content_type == "discovery-summary"
+            or artifact.source.source_name == "web_search"
+            or artifact.source.metadata.get("search_provider")
         ):
             continue
         first_line = next((line.strip() for line in artifact.text.splitlines() if line.strip()), "")

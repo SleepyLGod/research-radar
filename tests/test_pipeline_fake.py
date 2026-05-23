@@ -772,6 +772,71 @@ def test_daily_pipeline_records_discovery_stage_metadata(tmp_path: Path) -> None
     assert sources[0]["metadata"]["trusted_domain_match"] == "example.com"
 
 
+class WebCanonicalPaperConnector:
+    name = "web_search"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="MemBench arXiv HTML",
+                url="https://arxiv.org/abs/2506.21605v1",
+                canonical_id="2506.21605v1",
+                source_type=SourceType.PAPER,
+                source_name=self.name,
+                summary="An agent memory benchmark paper.",
+                score=1.0,
+                metadata={
+                    "search_provider": "tavily",
+                    "web_canonicalization": {
+                        "source_type": "paper",
+                        "rule": "arxiv",
+                        "original_url": "https://arxiv.org/html/2506.21605v1",
+                    },
+                },
+            ),
+            SourceCandidate(
+                title="Generic LLM app blog",
+                url="https://example.com/generic-llm-app",
+                source_type=SourceType.WEB,
+                source_name=self.name,
+                summary="A generic LLM application post.",
+                score=0.4,
+                metadata={"search_provider": "tavily"},
+            ),
+        ]
+
+
+def test_daily_pipeline_writes_web_search_summary(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [
+                {
+                    "id": "agent-memory",
+                    "queries": ["agent memory"],
+                    "required_phrases": ["agent memory"],
+                }
+            ],
+        }
+    )
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [WebCanonicalPaperConnector()],
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    summary = read_json(run_dir / "web_search_summary.json")
+
+    assert manifest["metadata"]["web_search"]["canonical_paper_count"] == 1
+    assert summary["provider_counts"] == {"tavily": 2}
+    assert summary["canonical_paper_count"] == 1
+    assert summary["generic_web_count"] == 1
+    assert summary["filtered_web_noise_examples"][0]["title"] == "Generic LLM app blog"
+
+
 def test_daily_pipeline_marks_research_brief_without_paper_as_degraded(tmp_path: Path) -> None:
     config = parse_config(
         {

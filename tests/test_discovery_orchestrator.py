@@ -186,3 +186,48 @@ def test_discovery_orchestrator_treats_web_search_failure_as_warning() -> None:
     assert result.findings[0].severity == "warning"
     assert result.findings[0].metadata["kind"] == "discovery_failed"
     assert result.findings[0].metadata["discovery_stage"] == "web_search"
+
+
+def test_discovery_orchestrator_dedupes_web_paper_against_primary_source() -> None:
+    class ArxivPaperConnector:
+        name = "arxiv"
+
+        def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+            return [
+                SourceCandidate(
+                    title="MemBench",
+                    url="https://arxiv.org/abs/2506.21605v1",
+                    canonical_id="2506.21605v1",
+                    source_type=SourceType.PAPER,
+                    source_name=self.name,
+                    summary="An agent memory benchmark paper.",
+                    score=1.7,
+                )
+            ]
+
+    class WebPaperConnector:
+        name = "web_search"
+
+        def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+            return [
+                SourceCandidate(
+                    title="MemBench arXiv HTML",
+                    url="https://arxiv.org/abs/2506.21605v1",
+                    canonical_id="2506.21605v1",
+                    source_type=SourceType.PAPER,
+                    source_name=self.name,
+                    summary="The same paper discovered through web search.",
+                    score=1.6,
+                    metadata={"search_provider": "tavily"},
+                )
+            ]
+
+    result = DiscoveryOrchestrator([WebPaperConnector(), ArxivPaperConnector()]).discover(
+        TopicConfig(id="agent-memory", queries=["agent memory"]),
+        limit=1,
+    )
+
+    assert len(result.candidates) == 1
+    assert result.candidates[0].source_name == "arxiv"
+    assert result.candidates[0].source_type == SourceType.PAPER
+    assert result.duplicate_count == 1

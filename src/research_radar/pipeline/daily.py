@@ -44,6 +44,7 @@ from research_radar.models import (
     Claim,
     ReviewFinding,
     SourceCandidate,
+    SourceType,
     dataclass_to_dict,
 )
 from research_radar.pipeline.reporting import render_review_report
@@ -230,6 +231,11 @@ def run_daily(
         claims, post_model_policy_findings = rule_based_review(claims)
         findings.extend(post_model_policy_findings)
 
+    web_search_summary = _web_search_summary(
+        candidates,
+        selected_deep_candidates,
+        duplicate_count=discovery.duplicate_count,
+    )
     manifest = replace(
         manifest,
         source_count=len(candidates),
@@ -245,8 +251,10 @@ def run_daily(
             "discovery": {
                 "stage_counts": discovery.stage_counts,
                 "provider_counts": discovery.provider_counts,
+                "duplicate_count": discovery.duplicate_count,
                 "trusted_domains": config.discovery.trusted_domains,
             },
+            "web_search": web_search_summary,
             "relevance": {
                 "relevant_count": len(relevant_candidates),
                 "needs_review_count": _relevance_count(candidates, "needs_review"),
@@ -277,6 +285,7 @@ def run_daily(
     update_manifest(run_dir, manifest)
     write_json(run_dir / "research_plan.json", research_plan_to_dict(research_plan))
     write_jsonl(run_dir / "sources.jsonl", candidates)
+    write_json(run_dir / "web_search_summary.json", web_search_summary)
     write_json(run_dir / "source_history_report.json", history_report)
     write_json(run_dir / "wide_scan.json", build_wide_scan(candidates))
     write_json(
@@ -342,6 +351,68 @@ def _relevance_count(candidates: list[SourceCandidate], status: str) -> int:
         for candidate in candidates
         if candidate.metadata.get("relevance", {}).get("status") == status
     )
+
+
+def _web_search_summary(
+    candidates: list[SourceCandidate],
+    selected_deep_candidates: list[SourceCandidate],
+    *,
+    duplicate_count: int,
+) -> dict[str, object]:
+    web_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.source_name == "web_search" or candidate.metadata.get("search_provider")
+    ]
+    provider_counts: dict[str, int] = {}
+    for candidate in web_candidates:
+        provider = str(candidate.metadata.get("search_provider") or candidate.source_name)
+        provider_counts[provider] = provider_counts.get(provider, 0) + 1
+    selected_urls = {candidate.url for candidate in selected_deep_candidates}
+    return {
+        "candidate_count": len(web_candidates),
+        "provider_counts": provider_counts,
+        "canonical_paper_count": sum(
+            1 for candidate in web_candidates if candidate.source_type == SourceType.PAPER
+        ),
+        "canonical_repository_count": sum(
+            1 for candidate in web_candidates if candidate.source_type == SourceType.REPOSITORY
+        ),
+        "generic_web_count": sum(
+            1 for candidate in web_candidates if candidate.source_type == SourceType.WEB
+        ),
+        "discovery_duplicate_count": duplicate_count,
+        "selected_deep_sources": [
+            {
+                "title": candidate.title,
+                "url": candidate.url,
+                "source_type": candidate.source_type.value,
+            }
+            for candidate in web_candidates
+            if candidate.url in selected_urls
+        ],
+        "filtered_web_noise_examples": _filtered_web_noise_examples(web_candidates),
+    }
+
+
+def _filtered_web_noise_examples(candidates: list[SourceCandidate]) -> list[dict[str, str]]:
+    examples: list[dict[str, str]] = []
+    for candidate in candidates:
+        relevance = candidate.metadata.get("relevance", {})
+        status = str(relevance.get("status", "unknown"))
+        if status == "relevant":
+            continue
+        examples.append(
+            {
+                "title": candidate.title,
+                "url": candidate.url,
+                "status": status,
+                "reason": str(relevance.get("reason") or ""),
+            }
+        )
+        if len(examples) >= 5:
+            break
+    return examples
 
 
 def _apply_daily_report_gate(

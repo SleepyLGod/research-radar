@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from research_radar.discovery.base import DiscoveryContext
@@ -57,10 +58,9 @@ class GenericWebSearchConnector:
             if not isinstance(title, str) or not isinstance(url, str):
                 continue
             candidates.append(
-                SourceCandidate(
+                _web_result_candidate(
                     title=title,
                     url=url,
-                    source_type=SourceType.WEB,
                     source_name=self.name,
                     summary=row.get("snippet") if isinstance(row.get("snippet"), str) else None,
                     score=0.35 + priority_score(url, context.topic.priority_sources),
@@ -85,6 +85,8 @@ class TavilyWebSearchConnector:
         """Return Tavily web candidates for each topic query."""
 
         candidates: list[SourceCandidate] = []
+        failed_queries: list[str] = []
+        last_error: Exception | None = None
         for query in context.topic.queries:
             payload = {
                 "query": query,
@@ -109,10 +111,21 @@ class TavilyWebSearchConnector:
                 with urlopen(request, timeout=30) as response:
                     result = json.loads(response.read().decode("utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
-                raise DiscoveryError(f"Tavily web search failed for query: {query}") from exc
+                failed_queries.append(query)
+                last_error = exc
+                continue
             if not isinstance(result, dict):
-                raise DiscoveryError(f"Tavily web search returned non-object payload: {query}")
+                failed_queries.append(query)
+                last_error = DiscoveryError(
+                    f"Tavily web search returned non-object payload: {query}"
+                )
+                continue
             candidates.extend(self._parse(result, context, query=query))
+        if not candidates and last_error is not None:
+            raise DiscoveryError(
+                "Tavily web search failed for all queries: "
+                f"{_failed_query_summary(failed_queries)}"
+            ) from last_error
         return candidates
 
     def _parse(
@@ -137,10 +150,9 @@ class TavilyWebSearchConnector:
             tavily_score = row.get("score")
             score_boost = tavily_score if isinstance(tavily_score, (int, float)) else 0.0
             candidates.append(
-                SourceCandidate(
+                _web_result_candidate(
                     title=title,
                     url=url,
-                    source_type=SourceType.WEB,
                     source_name=self.name,
                     summary=content if isinstance(content, str) else None,
                     score=0.4
@@ -158,3 +170,120 @@ class TavilyWebSearchConnector:
                 )
             )
         return candidates
+
+
+def _web_result_candidate(
+    *,
+    title: str,
+    url: str,
+    source_name: str,
+    summary: str | None,
+    score: float,
+    metadata: dict[str, object],
+) -> SourceCandidate:
+    canonical = _canonical_web_source(url)
+    source_type = canonical["source_type"]
+    if not isinstance(source_type, SourceType):
+        raise DiscoveryError("Web source canonicalization returned invalid source type.")
+    return SourceCandidate(
+        title=title,
+        url=str(canonical["url"]),
+        canonical_id=(
+            str(canonical["canonical_id"]) if canonical["canonical_id"] is not None else None
+        ),
+        source_type=source_type,
+        source_name=source_name,
+        summary=summary,
+        score=score,
+        metadata={
+            **metadata,
+            "web_canonicalization": {
+                "source_type": source_type.value,
+                "rule": str(canonical["rule"]),
+                "original_url": url,
+            },
+        },
+    )
+
+
+def _canonical_web_source(url: str) -> dict[str, object]:
+    parsed = urlparse(url)
+    host = parsed.netloc.casefold()
+    path = parsed.path.strip("/")
+
+    arxiv_id = _arxiv_id_from_path(path)
+    if _host_matches(host, "arxiv.org") and arxiv_id is not None:
+        return {
+            "source_type": SourceType.PAPER,
+            "url": f"https://arxiv.org/abs/{arxiv_id}",
+            "canonical_id": arxiv_id,
+            "rule": "arxiv",
+        }
+
+    if _host_matches(host, "aclanthology.org") and path:
+        acl_id = path.removesuffix(".pdf").strip("/")
+        return {
+            "source_type": SourceType.PAPER,
+            "url": url,
+            "canonical_id": f"ACL:{acl_id}",
+            "rule": "acl_anthology",
+        }
+
+    if _host_matches(host, "openreview.net") and path == "forum":
+        paper_id = parse_qs(parsed.query).get("id", [""])[0]
+        if paper_id:
+            return {
+                "source_type": SourceType.PAPER,
+                "url": url,
+                "canonical_id": f"OpenReview:{paper_id}",
+                "rule": "openreview_forum",
+            }
+
+    github_repo = _github_repo(host, path)
+    if github_repo is not None:
+        owner, repo = github_repo
+        return {
+            "source_type": SourceType.REPOSITORY,
+            "url": f"https://github.com/{owner}/{repo}",
+            "canonical_id": f"github:{owner.casefold()}/{repo.casefold()}",
+            "rule": "github_repo",
+        }
+
+    return {
+        "source_type": SourceType.WEB,
+        "url": url,
+        "canonical_id": None,
+        "rule": "none",
+    }
+
+
+def _arxiv_id_from_path(path: str) -> str | None:
+    match = re.fullmatch(r"(?:abs|html|pdf)/([^/#?]+)", path, flags=re.IGNORECASE)
+    if not match:
+        return None
+    candidate = match.group(1).removesuffix(".pdf")
+    if re.fullmatch(r"\d{4}\.\d{4,5}(?:v\d+)?", candidate, flags=re.IGNORECASE):
+        return candidate
+    return None
+
+
+def _github_repo(host: str, path: str) -> tuple[str, str] | None:
+    if not _host_matches(host, "github.com"):
+        return None
+    parts = [part for part in path.split("/") if part]
+    if len(parts) < 2 or parts[0] in {"topics", "marketplace", "features", "search"}:
+        return None
+    if parts[1].endswith(".git"):
+        parts[1] = parts[1].removesuffix(".git")
+    return parts[0], parts[1]
+
+
+def _host_matches(host: str, domain: str) -> bool:
+    return host == domain or host.endswith("." + domain)
+
+
+def _failed_query_summary(queries: list[str]) -> str:
+    shown = ", ".join(queries[:3])
+    if len(queries) > 3:
+        return f"{shown}, ..."
+    return shown

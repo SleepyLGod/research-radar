@@ -50,6 +50,7 @@ class DiscoveryResult:
     query_expansions: dict[str, object]
     stage_counts: dict[str, int]
     provider_counts: dict[str, int]
+    duplicate_count: int = 0
 
 
 class DiscoveryOrchestrator:
@@ -115,12 +116,14 @@ class DiscoveryOrchestrator:
                 candidates
             )
 
+        candidates = dedupe_candidates(all_candidates)
         return DiscoveryResult(
-            candidates=dedupe_candidates(all_candidates),
+            candidates=candidates,
             findings=findings,
             query_expansions=query_expansions,
             stage_counts=stage_counts,
             provider_counts=provider_counts,
+            duplicate_count=max(0, len(all_candidates) - len(candidates)),
         )
 
     def _ordered_connectors(self) -> list[tuple[DiscoveryConnector, str]]:
