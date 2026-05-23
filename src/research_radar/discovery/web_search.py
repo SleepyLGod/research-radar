@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
@@ -12,6 +13,7 @@ from research_radar.discovery.base import DiscoveryContext
 from research_radar.discovery.dedupe import priority_score
 from research_radar.exceptions import DiscoveryError
 from research_radar.models import SourceCandidate, SourceType
+from research_radar.security.redaction import redact_text
 
 TAVILY_SEARCH_ENDPOINT = "https://api.tavily.com/search"
 
@@ -21,9 +23,16 @@ class GenericWebSearchConnector:
 
     name = "web_search"
 
-    def __init__(self, endpoint: str, headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        headers: dict[str, str] | None = None,
+        *,
+        timeout_seconds: int = 20,
+    ) -> None:
         self._endpoint = endpoint
         self._headers = headers or {}
+        self._timeout_seconds = timeout_seconds
 
     def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
         """Return web candidates from a generic JSON search endpoint."""
@@ -34,7 +43,7 @@ class GenericWebSearchConnector:
             url = f"{self._endpoint}{separator}{urlencode({'q': query, 'limit': context.limit})}"
             request = Request(url, headers=self._headers)
             try:
-                with urlopen(request, timeout=20) as response:
+                with urlopen(request, timeout=self._timeout_seconds) as response:
                     payload = json.loads(response.read().decode("utf-8"))
             except OSError as exc:
                 raise DiscoveryError(f"Web search failed for query: {query}") from exc
@@ -70,7 +79,7 @@ class GenericWebSearchConnector:
         return candidates
 
 
-@dataclass(frozen=True)
+@dataclass
 class TavilyWebSearchConnector:
     """Search adapter for Tavily's `/search` API."""
 
@@ -78,6 +87,8 @@ class TavilyWebSearchConnector:
     endpoint: str = TAVILY_SEARCH_ENDPOINT
     max_results: int = 5
     search_depth: str = "basic"
+    timeout_seconds: int = 30
+    diagnostics: dict[str, object] = field(default_factory=dict, init=False)
 
     name = "web_search"
 
@@ -86,8 +97,10 @@ class TavilyWebSearchConnector:
 
         candidates: list[SourceCandidate] = []
         failed_queries: list[str] = []
+        query_diagnostics: list[dict[str, object]] = []
         last_error: Exception | None = None
         for query in context.topic.queries:
+            started = time.monotonic()
             payload = {
                 "query": query,
                 "max_results": min(context.limit, self.max_results),
@@ -108,19 +121,57 @@ class TavilyWebSearchConnector:
                 method="POST",
             )
             try:
-                with urlopen(request, timeout=30) as response:
+                with urlopen(request, timeout=self.timeout_seconds) as response:
                     result = json.loads(response.read().decode("utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
+                elapsed = time.monotonic() - started
                 failed_queries.append(query)
                 last_error = exc
+                query_diagnostics.append(
+                    _query_diagnostic(
+                        query=query,
+                        status="failed",
+                        elapsed_seconds=elapsed,
+                        timeout_seconds=self.timeout_seconds,
+                        error=exc,
+                    )
+                )
                 continue
             if not isinstance(result, dict):
+                elapsed = time.monotonic() - started
                 failed_queries.append(query)
                 last_error = DiscoveryError(
                     f"Tavily web search returned non-object payload: {query}"
                 )
+                query_diagnostics.append(
+                    _query_diagnostic(
+                        query=query,
+                        status="invalid_response",
+                        elapsed_seconds=elapsed,
+                        timeout_seconds=self.timeout_seconds,
+                        error=last_error,
+                    )
+                )
                 continue
-            candidates.extend(self._parse(result, context, query=query))
+            elapsed = time.monotonic() - started
+            parsed = self._parse(result, context, query=query, elapsed_seconds=elapsed)
+            candidates.extend(parsed)
+            query_diagnostics.append(
+                _query_diagnostic(
+                    query=query,
+                    status="succeeded",
+                    elapsed_seconds=elapsed,
+                    timeout_seconds=self.timeout_seconds,
+                    candidate_count=len(parsed),
+                    provider_response_time=result.get("response_time"),
+                )
+            )
+        self.diagnostics = _connector_diagnostics(
+            query_diagnostics,
+            candidates,
+            provider="tavily",
+            timeout_seconds=self.timeout_seconds,
+        )
         if not candidates and last_error is not None:
             raise DiscoveryError(
                 "Tavily web search failed for all queries: "
@@ -134,6 +185,7 @@ class TavilyWebSearchConnector:
         context: DiscoveryContext,
         *,
         query: str,
+        elapsed_seconds: float,
     ) -> list[SourceCandidate]:
         rows = payload.get("results", [])
         if not isinstance(rows, list):
@@ -166,6 +218,8 @@ class TavilyWebSearchConnector:
                         "tavily_score": tavily_score,
                         "request_id": payload.get("request_id"),
                         "response_time": payload.get("response_time"),
+                        "query_elapsed_seconds": round(elapsed_seconds, 3),
+                        "timeout_seconds": self.timeout_seconds,
                     },
                 )
             )
@@ -287,3 +341,69 @@ def _failed_query_summary(queries: list[str]) -> str:
     if len(queries) > 3:
         return f"{shown}, ..."
     return shown
+
+
+def _query_diagnostic(
+    *,
+    query: str,
+    status: str,
+    elapsed_seconds: float,
+    timeout_seconds: int,
+    candidate_count: int = 0,
+    provider_response_time: object = None,
+    error: Exception | None = None,
+) -> dict[str, object]:
+    diagnostic: dict[str, object] = {
+        "query": query,
+        "status": status,
+        "candidate_count": candidate_count,
+        "elapsed_seconds": round(elapsed_seconds, 3),
+        "timeout_seconds": timeout_seconds,
+        "slow": elapsed_seconds >= timeout_seconds * 0.8,
+    }
+    if provider_response_time is not None:
+        diagnostic["provider_response_time"] = provider_response_time
+    if error is not None:
+        diagnostic["error_type"] = type(error).__name__
+        diagnostic["error"] = redact_text(str(error))[:300]
+    return diagnostic
+
+
+def _connector_diagnostics(
+    query_diagnostics: list[dict[str, object]],
+    candidates: list[SourceCandidate],
+    *,
+    provider: str,
+    timeout_seconds: int,
+) -> dict[str, object]:
+    return {
+        "provider": provider,
+        "query_count": len(query_diagnostics),
+        "successful_query_count": sum(
+            1 for item in query_diagnostics if item.get("status") == "succeeded"
+        ),
+        "failed_query_count": sum(
+            1 for item in query_diagnostics if item.get("status") != "succeeded"
+        ),
+        "slow_query_count": sum(1 for item in query_diagnostics if item.get("slow")),
+        "candidate_count": len(candidates),
+        "canonical_paper_count": sum(
+            1 for candidate in candidates if candidate.source_type == SourceType.PAPER
+        ),
+        "canonical_repository_count": sum(
+            1 for candidate in candidates if candidate.source_type == SourceType.REPOSITORY
+        ),
+        "generic_web_count": sum(
+            1 for candidate in candidates if candidate.source_type == SourceType.WEB
+        ),
+        "timeout_seconds": timeout_seconds,
+        "elapsed_seconds": round(
+            sum(
+                float(item.get("elapsed_seconds", 0.0))
+                for item in query_diagnostics
+                if isinstance(item.get("elapsed_seconds"), (int, float))
+            ),
+            3,
+        ),
+        "queries": query_diagnostics,
+    }

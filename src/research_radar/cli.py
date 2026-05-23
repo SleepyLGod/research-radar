@@ -781,6 +781,7 @@ def _web_search_connector(
             endpoint=web_search.endpoint or TAVILY_SEARCH_ENDPOINT,
             max_results=web_search.max_results,
             search_depth=web_search.search_depth,
+            timeout_seconds=web_search.timeout_seconds,
         )
     if web_search.endpoint is None:
         return None
@@ -795,7 +796,11 @@ def _web_search_connector(
             )
             return None
         headers["Authorization"] = f"Bearer {token}"
-    return GenericWebSearchConnector(web_search.endpoint, headers=headers)
+    return GenericWebSearchConnector(
+        web_search.endpoint,
+        headers=headers,
+        timeout_seconds=web_search.timeout_seconds,
+    )
 
 
 def _load_env_file(path: Path) -> None:

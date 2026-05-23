@@ -235,6 +235,7 @@ def run_daily(
         candidates,
         selected_deep_candidates,
         duplicate_count=discovery.duplicate_count,
+        diagnostics=discovery.connector_diagnostics.get("web_search"),
     )
     manifest = replace(
         manifest,
@@ -252,6 +253,7 @@ def run_daily(
                 "stage_counts": discovery.stage_counts,
                 "provider_counts": discovery.provider_counts,
                 "duplicate_count": discovery.duplicate_count,
+                "connector_diagnostics": discovery.connector_diagnostics,
                 "trusted_domains": config.discovery.trusted_domains,
             },
             "web_search": web_search_summary,
@@ -358,6 +360,7 @@ def _web_search_summary(
     selected_deep_candidates: list[SourceCandidate],
     *,
     duplicate_count: int,
+    diagnostics: object = None,
 ) -> dict[str, object]:
     web_candidates = [
         candidate
@@ -369,7 +372,7 @@ def _web_search_summary(
         provider = str(candidate.metadata.get("search_provider") or candidate.source_name)
         provider_counts[provider] = provider_counts.get(provider, 0) + 1
     selected_urls = {candidate.url for candidate in selected_deep_candidates}
-    return {
+    summary: dict[str, object] = {
         "candidate_count": len(web_candidates),
         "provider_counts": provider_counts,
         "canonical_paper_count": sum(
@@ -393,6 +396,19 @@ def _web_search_summary(
         ],
         "filtered_web_noise_examples": _filtered_web_noise_examples(web_candidates),
     }
+    if isinstance(diagnostics, dict):
+        summary.update(
+            {
+                "query_count": diagnostics.get("query_count", 0),
+                "successful_query_count": diagnostics.get("successful_query_count", 0),
+                "failed_query_count": diagnostics.get("failed_query_count", 0),
+                "slow_query_count": diagnostics.get("slow_query_count", 0),
+                "timeout_seconds": diagnostics.get("timeout_seconds"),
+                "elapsed_seconds": diagnostics.get("elapsed_seconds"),
+                "query_diagnostics": diagnostics.get("queries", []),
+            }
+        )
+    return summary
 
 
 def _filtered_web_noise_examples(candidates: list[SourceCandidate]) -> list[dict[str, str]]:

@@ -219,9 +219,11 @@ def test_openalex_connector_continues_after_one_query_failure(monkeypatch) -> No
 
 def test_tavily_web_search_posts_query_and_parses_web_candidates(monkeypatch) -> None:
     seen_requests = []
+    seen_timeouts = []
 
     def fake_urlopen(request, timeout: int):
         seen_requests.append(request)
+        seen_timeouts.append(timeout)
         return FakeResponse(
             json.dumps(
                 {
@@ -245,6 +247,7 @@ def test_tavily_web_search_posts_query_and_parses_web_candidates(monkeypatch) ->
         endpoint="https://api.tavily.test/search",
         max_results=3,
         search_depth="basic",
+        timeout_seconds=11,
     )
 
     candidates = connector.discover(
@@ -259,6 +262,7 @@ def test_tavily_web_search_posts_query_and_parses_web_candidates(monkeypatch) ->
     )
 
     body = json.loads(seen_requests[0].data.decode("utf-8"))
+    assert seen_timeouts == [11]
     assert seen_requests[0].headers["Authorization"] == "Bearer tvly-test"
     assert body["query"] == "agent memory systems"
     assert body["max_results"] == 2
@@ -270,6 +274,11 @@ def test_tavily_web_search_posts_query_and_parses_web_candidates(monkeypatch) ->
     assert candidates[0].metadata["search_provider"] == "tavily"
     assert candidates[0].metadata["search_query"] == "agent memory systems"
     assert candidates[0].metadata["request_id"] == "req-1"
+    assert candidates[0].metadata["timeout_seconds"] == 11
+    assert connector.diagnostics["provider"] == "tavily"
+    assert connector.diagnostics["query_count"] == 1
+    assert connector.diagnostics["candidate_count"] == 1
+    assert connector.diagnostics["failed_query_count"] == 0
 
 
 def test_tavily_web_search_canonicalizes_research_source_urls(monkeypatch) -> None:
@@ -395,6 +404,13 @@ def test_tavily_web_search_continues_after_one_query_failure(monkeypatch) -> Non
     assert len(candidates) == 1
     assert candidates[0].title == "Agent Memory Paper"
     assert candidates[0].source_type == SourceType.PAPER
+    assert connector.diagnostics["query_count"] == 2
+    assert connector.diagnostics["failed_query_count"] == 1
+    assert connector.diagnostics["successful_query_count"] == 1
+    assert connector.diagnostics["canonical_paper_count"] == 1
+    assert connector.diagnostics["queries"][0]["status"] == "failed"
+    assert connector.diagnostics["queries"][0]["error_type"] == "OSError"
+    assert connector.diagnostics["queries"][1]["status"] == "succeeded"
 
 
 class FakeResponse:

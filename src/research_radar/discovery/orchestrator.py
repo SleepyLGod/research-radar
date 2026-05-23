@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlparse
 
 from research_radar.analysis.research_plan import (
@@ -51,6 +51,7 @@ class DiscoveryResult:
     stage_counts: dict[str, int]
     provider_counts: dict[str, int]
     duplicate_count: int = 0
+    connector_diagnostics: dict[str, object] = field(default_factory=dict)
 
 
 class DiscoveryOrchestrator:
@@ -74,6 +75,7 @@ class DiscoveryOrchestrator:
         query_expansions: dict[str, object] = {}
         stage_counts: dict[str, int] = {stage: 0 for stage in STAGE_ORDER}
         provider_counts: dict[str, int] = {}
+        connector_diagnostics: dict[str, object] = {}
         configured_trusted_domains = trusted_domains or []
 
         for connector, stage in self._ordered_connectors():
@@ -98,8 +100,17 @@ class DiscoveryOrchestrator:
             try:
                 raw_candidates = connector.discover(context)
             except DiscoveryError as exc:
+                diagnostics = _connector_diagnostics(connector)
+                if diagnostics is not None:
+                    connector_diagnostics[connector.name] = diagnostics
                 findings.append(_discovery_failure(connector.name, stage, exc))
                 continue
+            diagnostics = _connector_diagnostics(connector)
+            if diagnostics is not None:
+                connector_diagnostics[connector.name] = diagnostics
+                findings.extend(
+                    _connector_diagnostic_findings(connector.name, stage, diagnostics)
+                )
             candidates = [
                 _annotate_candidate(
                     candidate,
@@ -124,6 +135,7 @@ class DiscoveryOrchestrator:
             stage_counts=stage_counts,
             provider_counts=provider_counts,
             duplicate_count=max(0, len(all_candidates) - len(candidates)),
+            connector_diagnostics=connector_diagnostics,
         )
 
     def _ordered_connectors(self) -> list[tuple[DiscoveryConnector, str]]:
@@ -217,6 +229,45 @@ def _discovery_failure(
             "discovery_stage": stage,
         },
     )
+
+
+def _connector_diagnostics(connector: DiscoveryConnector) -> dict[str, object] | None:
+    diagnostics = getattr(connector, "diagnostics", None)
+    if isinstance(diagnostics, dict) and diagnostics:
+        return diagnostics
+    return None
+
+
+def _connector_diagnostic_findings(
+    connector_name: str,
+    stage: str,
+    diagnostics: dict[str, object],
+) -> list[ReviewFinding]:
+    findings: list[ReviewFinding] = []
+    queries = diagnostics.get("queries", [])
+    if not isinstance(queries, list):
+        return findings
+    for item in queries:
+        if not isinstance(item, dict) or item.get("status") == "succeeded":
+            continue
+        query = str(item.get("query") or "")
+        findings.append(
+            ReviewFinding(
+                severity="warning",
+                message=f"{connector_name} query failed: {query}",
+                metadata={
+                    "kind": "web_search_query_failed",
+                    "discovery_provider": connector_name,
+                    "discovery_stage": stage,
+                    "query": query,
+                    "status": item.get("status"),
+                    "error_type": item.get("error_type"),
+                    "elapsed_seconds": item.get("elapsed_seconds"),
+                    "timeout_seconds": item.get("timeout_seconds"),
+                },
+            )
+        )
+    return findings
 
 
 def _normalize(text: str) -> str:

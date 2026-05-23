@@ -35,6 +35,7 @@ class WebSearchConfig:
     header_secret_name: str | None = None
     max_results: int = 5
     search_depth: str = "basic"
+    timeout_seconds: int = 30
 
 
 @dataclass(frozen=True)
@@ -245,6 +246,10 @@ def _discovery_config(data: dict[str, Any]) -> DiscoveryConfig:
             search_depth=_web_search_depth(
                 web_search.get("search_depth", "basic"),
                 "discovery.web_search.search_depth",
+            ),
+            timeout_seconds=_positive_int(
+                web_search.get("timeout_seconds", 30),
+                "discovery.web_search.timeout_seconds",
             ),
         ),
     )

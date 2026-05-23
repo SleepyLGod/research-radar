@@ -774,6 +774,36 @@ def test_daily_pipeline_records_discovery_stage_metadata(tmp_path: Path) -> None
 
 class WebCanonicalPaperConnector:
     name = "web_search"
+    diagnostics = {
+        "provider": "tavily",
+        "query_count": 2,
+        "successful_query_count": 1,
+        "failed_query_count": 1,
+        "slow_query_count": 0,
+        "candidate_count": 2,
+        "canonical_paper_count": 1,
+        "canonical_repository_count": 0,
+        "generic_web_count": 1,
+        "timeout_seconds": 30,
+        "elapsed_seconds": 1.5,
+        "queries": [
+            {
+                "query": "agent memory",
+                "status": "failed",
+                "candidate_count": 0,
+                "elapsed_seconds": 0.5,
+                "timeout_seconds": 30,
+                "error_type": "TimeoutError",
+            },
+            {
+                "query": "agent memory benchmark",
+                "status": "succeeded",
+                "candidate_count": 2,
+                "elapsed_seconds": 1.0,
+                "timeout_seconds": 30,
+            },
+        ],
+    }
 
     def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
         return [
@@ -831,10 +861,21 @@ def test_daily_pipeline_writes_web_search_summary(tmp_path: Path) -> None:
     summary = read_json(run_dir / "web_search_summary.json")
 
     assert manifest["metadata"]["web_search"]["canonical_paper_count"] == 1
+    assert manifest["metadata"]["web_search"]["failed_query_count"] == 1
+    assert manifest["metadata"]["discovery"]["connector_diagnostics"]["web_search"][
+        "query_count"
+    ] == 2
     assert summary["provider_counts"] == {"tavily": 2}
     assert summary["canonical_paper_count"] == 1
     assert summary["generic_web_count"] == 1
+    assert summary["query_diagnostics"][0]["status"] == "failed"
     assert summary["filtered_web_noise_examples"][0]["title"] == "Generic LLM app blog"
+
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+    assert any(
+        finding["metadata"].get("kind") == "web_search_query_failed"
+        for finding in findings
+    )
 
 
 def test_daily_pipeline_marks_research_brief_without_paper_as_degraded(tmp_path: Path) -> None:

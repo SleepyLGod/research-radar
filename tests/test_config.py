@@ -169,6 +169,7 @@ def test_parse_config_accepts_discovery_settings() -> None:
                     "header_secret_name": "web_search.api_key",
                     "max_results": 7,
                     "search_depth": "fast",
+                    "timeout_seconds": 12,
                 },
             },
         }
@@ -180,6 +181,7 @@ def test_parse_config_accepts_discovery_settings() -> None:
     assert config.discovery.web_search.header_secret_name == "web_search.api_key"
     assert config.discovery.web_search.max_results == 7
     assert config.discovery.web_search.search_depth == "fast"
+    assert config.discovery.web_search.timeout_seconds == 12
 
 
 def test_parse_config_accepts_tavily_web_search() -> None:
@@ -200,6 +202,7 @@ def test_parse_config_accepts_tavily_web_search() -> None:
     assert config.discovery.web_search.provider == "tavily"
     assert config.discovery.web_search.endpoint is None
     assert config.discovery.web_search.header_secret_name == "web_search.api_key"
+    assert config.discovery.web_search.timeout_seconds == 30
 
 
 def test_parse_config_rejects_unknown_web_search_provider() -> None:

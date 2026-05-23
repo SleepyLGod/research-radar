@@ -278,6 +278,7 @@ def test_run_daily_adds_tavily_web_search_connector(
                     "provider": "tavily",
                     "header_secret_name": "web_search.api_key",
                     "max_results": 4,
+                    "timeout_seconds": 9,
                 }
             },
         }
@@ -316,6 +317,7 @@ def test_run_daily_adds_tavily_web_search_connector(
     ]
     assert connectors[3].__class__.__name__ == "TavilyWebSearchConnector"
     assert connectors[3].max_results == 4
+    assert connectors[3].timeout_seconds == 9
 
 
 def test_run_daily_skips_web_search_when_configured_secret_is_missing(
