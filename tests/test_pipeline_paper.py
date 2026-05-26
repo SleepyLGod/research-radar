@@ -185,6 +185,62 @@ def test_single_paper_pipeline_uses_model_cache_on_second_run(
     assert claims[0]["status"] == ClaimStatus.SUPPORTED
 
 
+def test_single_paper_pipeline_sends_only_publishable_claims_to_verifier(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    broad_claim = (
+        "Default backbone is Qwen2.5-7B and embedding model is all-MiniLM-L6-v2."
+    )
+    supported_claim = "LOCOMO is a benchmark dataset for long-context memory."
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = CountingProvider(_two_claim_reading_json(broad_claim, supported_claim))
+    verifier = CapturingProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"}
+          ]
+        }
+        """
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=f"{broad_claim}\n{supported_claim}")
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    run_dir = run_paper(
+        tmp_path,
+        config,
+        "agent-memory",
+        "https://arxiv.org/pdf/2604.01707v1",
+        reader,
+        model="fake-reader",
+        verifier=verifier,
+        verifier_model="fake-verifier",
+    )
+
+    runtime = read_json(run_dir / "runtime_summary.json")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    verifier_prompt = verifier.messages[0][1].content
+    verifier_stage = next(stage for stage in runtime["stages"] if stage["stage"] == "verifier")
+
+    assert broad_claim not in verifier_prompt
+    assert supported_claim in verifier_prompt
+    assert verifier_stage["verifier_input_count"] == 1
+    assert verifier_stage["verifier_skipped_claim_count"] == 1
+    assert [claim["status"] for claim in claims] == [
+        ClaimStatus.NEEDS_REVIEW,
+        ClaimStatus.SUPPORTED,
+    ]
+
+
 def test_single_paper_pipeline_persists_transport_diagnostics(
     monkeypatch,
     tmp_path: Path,
@@ -766,6 +822,64 @@ def _claim_unit_reading_json(claim_text: str) -> str:
             "claim_kind": "fact",
             "text": "{claim_text}",
             "evidence": [{{"quote": "{claim_text}"}}],
+            "publishable_default": true
+          }}
+        ],
+        "unsupported_or_rejected_claims": []
+      }}
+    }}
+    """
+
+
+def _two_claim_reading_json(broad_claim: str, supported_claim: str) -> str:
+    return f"""
+    {{
+      "deep_readings": {{
+        "area_context": {{
+          "background": "The paper studies agent memory.",
+          "evidence": [{{"quote": "{supported_claim}"}}]
+        }},
+        "problem_solution": {{
+          "problem": "The paper studies agent memory.",
+          "why_it_matters": "It compares benchmark performance.",
+          "hidden_assumptions": [],
+          "solution": "The paper studies agent memory.",
+          "mechanism": "The paper studies agent memory.",
+          "evidence": [{{"quote": "{supported_claim}"}}]
+        }},
+        "related_work": {{
+          "prior_work": ["unknown"],
+          "novelty": "unknown",
+          "repackaging_risk": "unknown",
+          "evidence": [{{"quote": "{supported_claim}"}}]
+        }},
+        "limitations": {{
+          "explicit_limitations": [],
+          "inferred_weaknesses": [],
+          "evidence": [{{"quote": "{supported_claim}"}}]
+        }},
+        "critical_assessment": {{
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "The paper studies agent memory.",
+          "evidence": [{{"quote": "{supported_claim}"}}]
+        }},
+        "plain_language_example": "A paper setup can be split into atomic facts.",
+        "essence": "The paper studies agent memory.",
+        "claim_units": [
+          {{
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "{broad_claim}",
+            "evidence": [{{"quote": "{broad_claim}"}}],
+            "publishable_default": true
+          }},
+          {{
+            "section": "experiment",
+            "claim_kind": "fact",
+            "text": "{supported_claim}",
+            "evidence": [{{"quote": "{supported_claim}"}}],
             "publishable_default": true
           }}
         ],

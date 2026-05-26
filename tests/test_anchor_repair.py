@@ -62,6 +62,7 @@ def test_apply_anchor_repair_accepts_exact_quote_for_unanchored_claim() -> None:
         text="Experiment: Ours reaches 38.79 overall F1 in Table 7.",
         status=ClaimStatus.UNSUPPORTED,
         evidence=[],
+        metadata={"paper_reading": {"status_reason": "missing evidence"}},
     )
     provider = CapturingRepairProvider(
         """
@@ -101,6 +102,7 @@ def test_apply_anchor_repair_rejects_nonexistent_quote() -> None:
         text="Experiment: Ours reaches 38.79 overall F1 in Table 7.",
         status=ClaimStatus.UNSUPPORTED,
         evidence=[],
+        metadata={"paper_reading": {"status_reason": "missing evidence"}},
     )
     provider = CapturingRepairProvider(
         """{"repairs": [
@@ -131,6 +133,7 @@ def test_apply_anchor_repair_records_missing_provider_result() -> None:
         text="Experiment: Ours reaches 38.79 overall F1 in Table 7.",
         status=ClaimStatus.UNSUPPORTED,
         evidence=[],
+        metadata={"paper_reading": {"status_reason": "missing evidence"}},
     )
     provider = CapturingRepairProvider("""{"repairs": []}""")
 
@@ -145,6 +148,46 @@ def test_apply_anchor_repair_records_missing_provider_result() -> None:
     assert attempts[0].status == "rejected"
     assert attempts[0].reason == "no repair returned"
     assert findings[0].metadata["reason"] == "no repair returned"
+
+
+def test_apply_anchor_repair_skips_broad_claims() -> None:
+    artifact = _artifact(
+        "[page 7]\n"
+        "The default backbone is Qwen2.5-7B and retrieval uses top-k 10."
+    )
+    claim = Claim(
+        text=(
+            "Experiment: The default backbone is Qwen2.5-7B and retrieval uses "
+            "top-k 10 with greedy decoding."
+        ),
+        status=ClaimStatus.NEEDS_REVIEW,
+        evidence=[
+            EvidenceAnchor(
+                source_url="https://example.com/paper",
+                quote="missing setup quote",
+            )
+        ],
+        metadata={
+            "paper_reading": {
+                "status_reason": "claim too broad; split setup facets",
+            }
+        },
+    )
+    provider = CapturingRepairProvider("""{"repairs": []}""")
+
+    repaired, resolutions, attempts, findings = apply_anchor_repair(
+        [claim],
+        artifact,
+        provider,
+        model="fake-repair",
+    )
+
+    assert provider.messages == []
+    assert repaired[0].status == ClaimStatus.NEEDS_REVIEW
+    assert resolutions[0].status == "failed"
+    assert attempts[0].status == "skipped"
+    assert attempts[0].reason == "claim too broad; split setup facets"
+    assert any(finding.metadata.get("status") == "skipped" for finding in findings)
 
 
 def test_partial_anchor_claim_is_not_publishable_without_repair() -> None:
@@ -501,9 +544,11 @@ def test_anchor_repair_does_not_upgrade_claim_linted_broad_claim() -> None:
         model="fake-repair",
     )
 
-    assert attempts[0].status == "accepted"
+    assert provider.messages == []
+    assert attempts[0].status == "skipped"
+    assert attempts[0].reason == "claim too broad; split setup facets"
     assert repaired[0].status == ClaimStatus.NEEDS_REVIEW
-    assert repaired[0].metadata["anchor_repair"]["status"] == "accepted"
+    assert "anchor_repair" not in repaired[0].metadata
 
 
 def _artifact(text: str) -> Artifact:

@@ -1,9 +1,23 @@
+from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.analysis.review import (
     apply_model_review_decisions,
     extract_verification_actions,
+    model_review_publishable_claims,
 )
 from research_radar.evidence.policy import enforce_evidence_policy, publishable_claims
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor
+
+
+class CapturingProvider:
+    name = "reviewer"
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.messages: list[list[Message]] = []
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        self.messages.append(messages)
+        return ModelResponse(content=self.content, model=model)
 
 
 def test_model_review_decision_downgrades_supported_claim() -> None:
@@ -143,3 +157,83 @@ def test_model_review_extracts_fenced_follow_up_actions() -> None:
     assert actions[0].claim_index == 1
     assert actions[0].claim_text == claim.text
     assert actions[0].query == "agent memory benchmark grounded answerability"
+
+
+def test_model_review_publishable_claims_skips_non_publishable_claims() -> None:
+    claims = [
+        Claim(
+            text="Supported claim",
+            status=ClaimStatus.SUPPORTED,
+            evidence=[EvidenceAnchor(source_url="https://example.com/1", quote="Evidence 1")],
+        ),
+        Claim(
+            text="Needs-review claim",
+            status=ClaimStatus.NEEDS_REVIEW,
+            evidence=[EvidenceAnchor(source_url="https://example.com/2", quote="Evidence 2")],
+            metadata={"paper_reading": {"status_reason": "claim too broad; split setup facets"}},
+        ),
+        Claim(text="Unsupported claim", status=ClaimStatus.UNSUPPORTED, evidence=[]),
+    ]
+    provider = CapturingProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "needs_review", "risk": "medium", "reason": "weak"}
+          ],
+          "follow_up_actions": [
+            {"claim_index": 1, "action_type": "split_claim", "reason": "Narrow it."}
+          ]
+        }
+        """
+    )
+
+    result = model_review_publishable_claims(
+        claims,
+        provider,
+        model="fake-reviewer",
+        topic_id="agent-memory",
+        queries=["agent memory"],
+    )
+
+    assert len(provider.messages) == 1
+    prompt = provider.messages[0][1].content
+    assert "Supported claim" in prompt
+    assert "Needs-review claim" not in prompt
+    assert result.reviewed_count == 1
+    assert result.skipped_count == 2
+    assert result.claims[0].status == ClaimStatus.NEEDS_REVIEW
+    assert result.claims[1].status == ClaimStatus.NEEDS_REVIEW
+    assert result.claims[2].status == ClaimStatus.UNSUPPORTED
+    assert result.actions[0].claim_index == 1
+    assert any(
+        finding.metadata.get("kind") == "model_review_skipped_claims"
+        for finding in result.findings
+    )
+
+
+def test_model_review_publishable_claims_remaps_subset_action_indexes() -> None:
+    claims = [
+        Claim(text="Skipped", status=ClaimStatus.UNSUPPORTED, evidence=[]),
+        Claim(
+            text="Reviewed",
+            status=ClaimStatus.SUPPORTED,
+            evidence=[EvidenceAnchor(source_url="https://example.com", quote="Evidence")],
+        ),
+    ]
+    provider = CapturingProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"}
+          ],
+          "follow_up_actions": [
+            {"claim_index": 1, "action_type": "needs_primary_source", "reason": "Check."}
+          ]
+        }
+        """
+    )
+
+    result = model_review_publishable_claims(claims, provider, model="fake-reviewer")
+
+    assert result.actions[0].claim_index == 2
+    assert result.actions[0].claim_text == "Reviewed"

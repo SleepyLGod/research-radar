@@ -220,20 +220,31 @@ def apply_anchor_repair(
     resolved_claims, resolutions, resolution_findings = apply_anchor_resolution(claims, artifact)
     if provider is None or model is None:
         return resolved_claims, resolutions, [], resolution_findings
-    target_indexes = [
-        resolution.claim_index
-        for resolution in resolutions
-        if resolution.status in {"failed", "partial"}
-        and not _skip_repair(resolved_claims[resolution.claim_index - 1])
-    ]
+    target_indexes: list[int] = []
+    attempts: list[AnchorRepairAttempt] = []
+    findings: list[ReviewFinding] = []
+    for resolution in resolutions:
+        if resolution.status not in {"failed", "partial"}:
+            continue
+        claim = resolved_claims[resolution.claim_index - 1]
+        skip_reason = _skip_repair_reason(claim)
+        if skip_reason is not None:
+            attempt = AnchorRepairAttempt(
+                resolution.claim_index,
+                claim.text,
+                "skipped",
+                skip_reason,
+            )
+            attempts.append(attempt)
+            findings.append(_repair_finding(attempt, "info"))
+            continue
+        target_indexes.append(resolution.claim_index)
     if not target_indexes:
-        return resolved_claims, resolutions, [], resolution_findings
+        return resolved_claims, resolutions, attempts, [*resolution_findings, *findings]
 
     payload = _repair_payload(provider, model, resolved_claims, artifact, target_indexes)
     repairs = _parse_repairs(payload)
     repaired = list(resolved_claims)
-    attempts: list[AnchorRepairAttempt] = []
-    findings: list[ReviewFinding] = []
     seen_attempt_indexes: set[int] = set()
     for repair in repairs:
         index = _repair_index(repair)
@@ -396,9 +407,27 @@ def _repair_index(repair: dict[str, object]) -> int | None:
     return None
 
 
-def _skip_repair(claim: Claim) -> bool:
+def _skip_repair_reason(claim: Claim) -> str | None:
     source = claim.metadata.get("paper_reading", {}).get("source")
-    return source == "unsupported_or_rejected_claims"
+    if source == "unsupported_or_rejected_claims":
+        return "unsupported or rejected by reader"
+    reason = str(claim.metadata.get("paper_reading", {}).get("status_reason") or "")
+    if reason.startswith("claim too broad"):
+        return reason
+    if reason in {
+        "not publishable by default",
+        "author-reported superlative needs attribution",
+        "essence bundles multiple claims",
+        "claim requires external verification",
+    }:
+        return reason
+    if reason in {"missing evidence", "supported by supplied evidence"}:
+        return None
+    if claim.status in {ClaimStatus.NEEDS_REVIEW, ClaimStatus.SPECULATIVE}:
+        return f"claim status is {claim.status.value}"
+    if claim.status == ClaimStatus.UNSUPPORTED and not claim.evidence:
+        return "unsupported claim lacks repairable reader metadata"
+    return None
 
 
 def _repair_status(claim: Claim) -> ClaimStatus:

@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
 from research_radar.analysis.model_cache import (
     merge_cache_deltas,
@@ -22,7 +23,7 @@ from research_radar.analysis.paper_sections import (
     render_reading_packet,
 )
 from research_radar.analysis.providers import LLMProvider
-from research_radar.analysis.review import model_review, rule_based_review
+from research_radar.analysis.review import model_review_publishable_claims, rule_based_review
 from research_radar.compose.paper import render_paper_brief
 from research_radar.config import AppConfig, TopicConfig
 from research_radar.evidence.ledger import write_claims, write_evidence
@@ -120,6 +121,8 @@ def run_paper(
         provider=reader.name,
         model=model,
         claim_count=len(deep_result.claims),
+        anchor_repair_target_count=_anchor_repair_target_count(deep_result.anchor_repairs),
+        anchor_repair_skipped_count=_anchor_repair_skipped_count(deep_result.anchor_repairs),
         **reader_cache_delta,
     )
     reading = deep_result.reading
@@ -136,16 +139,22 @@ def run_paper(
             provider=review_provider.name,
             model=review_model,
             claim_count=len(claims),
+            verifier_input_count=sum(1 for claim in claims if claim.is_publishable()),
+            verifier_skipped_claim_count=sum(1 for claim in claims if not claim.is_publishable()),
         )
         verifier_cache_before = provider_cache_stats(review_provider)
         try:
-            claims, model_findings, model_feedback, verification_actions = model_review(
+            review_result = model_review_publishable_claims(
                 claims,
                 review_provider,
                 model=review_model,
                 topic_id=topic.id,
                 queries=topic.queries,
             )
+            claims = review_result.claims
+            model_findings = review_result.findings
+            model_feedback = review_result.raw_feedback
+            verification_actions = review_result.actions
         except ResearchRadarError as exc:
             progress.record(
                 "verifier",
@@ -174,6 +183,8 @@ def run_paper(
             model=review_model,
             publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
             action_count=len(verification_actions),
+            verifier_input_count=review_result.reviewed_count,
+            verifier_skipped_claim_count=review_result.skipped_count,
             **provider_cache_delta(verifier_cache_before, review_provider),
         )
     manifest = RunManifest(
@@ -317,3 +328,11 @@ def _paper_id(path: str) -> str | None:
 def _area_context(topic: TopicConfig) -> str:
     queries = ", ".join(topic.queries)
     return f"Topic: {topic.id}. User queries: {queries}."
+
+
+def _anchor_repair_target_count(repairs: list[AnchorRepairAttempt]) -> int:
+    return sum(1 for repair in repairs if repair.status != "skipped")
+
+
+def _anchor_repair_skipped_count(repairs: list[AnchorRepairAttempt]) -> int:
+    return sum(1 for repair in repairs if repair.status == "skipped")

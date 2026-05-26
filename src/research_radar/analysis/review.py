@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from research_radar.analysis.prompts import verifier_prompt
 from research_radar.analysis.providers import LLMProvider, Message
@@ -16,6 +16,18 @@ def rule_based_review(claims: list[Claim]) -> tuple[list[Claim], list[ReviewFind
     """Run deterministic evidence policy checks."""
 
     return enforce_evidence_policy(claims)
+
+
+@dataclass(frozen=True)
+class ModelReviewResult:
+    """Result of a model review pass."""
+
+    claims: list[Claim]
+    findings: list[ReviewFinding]
+    raw_feedback: str | None
+    actions: list[VerificationAction]
+    reviewed_count: int
+    skipped_count: int
 
 
 def model_review(
@@ -39,6 +51,52 @@ def model_review(
     reviewed_claims, findings = apply_model_review_decisions(claims, raw_feedback)
     actions = extract_verification_actions(raw_feedback, claims)
     return reviewed_claims, findings, raw_feedback, actions
+
+
+def model_review_publishable_claims(
+    claims: list[Claim],
+    provider: LLMProvider,
+    *,
+    model: str,
+    topic_id: str | None = None,
+    queries: list[str] | None = None,
+) -> ModelReviewResult:
+    """Review only claims that remain publishable after deterministic gates."""
+
+    review_indexes = [index for index, claim in enumerate(claims) if claim.is_publishable()]
+    skipped_count = len(claims) - len(review_indexes)
+    findings: list[ReviewFinding] = []
+    if skipped_count:
+        findings.append(_skipped_review_finding(claims, review_indexes))
+    if not review_indexes:
+        return ModelReviewResult(
+            claims=claims,
+            findings=findings,
+            raw_feedback=None,
+            actions=[],
+            reviewed_count=0,
+            skipped_count=skipped_count,
+        )
+
+    review_claims = [claims[index] for index in review_indexes]
+    reviewed_subset, model_findings, raw_feedback, actions = model_review(
+        review_claims,
+        provider,
+        model=model,
+        topic_id=topic_id,
+        queries=queries,
+    )
+    reviewed = list(claims)
+    for subset_index, original_index in enumerate(review_indexes):
+        reviewed[original_index] = reviewed_subset[subset_index]
+    return ModelReviewResult(
+        claims=reviewed,
+        findings=[*findings, *model_findings],
+        raw_feedback=raw_feedback,
+        actions=_remap_actions(actions, review_indexes, claims),
+        reviewed_count=len(review_indexes),
+        skipped_count=skipped_count,
+    )
 
 
 def apply_model_review_decisions(
@@ -264,6 +322,68 @@ def _non_promoting_status(current: ClaimStatus, requested: ClaimStatus) -> Claim
         ClaimStatus.SUPPORTED: 3,
     }
     return requested if rank[requested] <= rank[current] else current
+
+
+def _skipped_review_finding(
+    claims: list[Claim],
+    review_indexes: list[int],
+) -> ReviewFinding:
+    review_index_set = set(review_indexes)
+    reason_counts: dict[str, int] = {}
+    for index, claim in enumerate(claims):
+        if index in review_index_set:
+            continue
+        reason = _review_skip_reason(claim)
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+    return ReviewFinding(
+        severity="info",
+        message="Model review skipped non-publishable claims.",
+        metadata={
+            "kind": "model_review_skipped_claims",
+            "reviewed_count": len(review_indexes),
+            "skipped_count": len(claims) - len(review_indexes),
+            "reasons": reason_counts,
+        },
+    )
+
+
+def _review_skip_reason(claim: Claim) -> str:
+    paper_reason = claim.metadata.get("paper_reading", {}).get("status_reason")
+    anchor_reason = claim.metadata.get("anchor_resolution", {}).get("reason")
+    if claim.status != ClaimStatus.SUPPORTED and isinstance(anchor_reason, str) and anchor_reason:
+        return anchor_reason
+    if isinstance(paper_reason, str) and paper_reason:
+        return paper_reason
+    if isinstance(anchor_reason, str) and anchor_reason:
+        return anchor_reason
+    if not claim.evidence:
+        return "missing evidence"
+    return f"status={claim.status.value}"
+
+
+def _remap_actions(
+    actions: list[VerificationAction],
+    review_indexes: list[int],
+    claims: list[Claim],
+) -> list[VerificationAction]:
+    remapped: list[VerificationAction] = []
+    for action in actions:
+        if action.claim_index is None:
+            remapped.append(action)
+            continue
+        subset_index = action.claim_index - 1
+        if subset_index < 0 or subset_index >= len(review_indexes):
+            remapped.append(action)
+            continue
+        original_index = review_indexes[subset_index] + 1
+        remapped.append(
+            replace(
+                action,
+                claim_index=original_index,
+                claim_text=claims[original_index - 1].text,
+            )
+        )
+    return remapped
 
 
 def _optional_string(value: object) -> str | None:
