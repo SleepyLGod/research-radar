@@ -23,6 +23,7 @@ from research_radar.config import AppConfig, TopicConfig
 from research_radar.discovery.base import DiscoveryConnector
 from research_radar.discovery.orchestrator import DiscoveryOrchestrator
 from research_radar.discovery.relevance import gate_relevant_sources
+from research_radar.discovery.source_centrality import score_source_centrality
 from research_radar.discovery.source_quality import (
     paper_coverage_diagnostics,
     score_source_quality,
@@ -37,7 +38,7 @@ from research_radar.discovery.wide_scan import (
     build_wide_scan,
 )
 from research_radar.evidence.ledger import write_claims, write_evidence
-from research_radar.exceptions import AnalysisError, IngestionError
+from research_radar.exceptions import AnalysisError, IngestionError, ResearchRadarError
 from research_radar.ingestion.router import ingest_source
 from research_radar.models import (
     Artifact,
@@ -47,6 +48,8 @@ from research_radar.models import (
     SourceType,
     dataclass_to_dict,
 )
+from research_radar.pipeline.progress import ProgressWriter
+from research_radar.pipeline.public_sources import select_public_report_sources
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.storage.files import write_json, write_jsonl, write_text
 from research_radar.storage.runs import create_run_dir, update_manifest
@@ -79,24 +82,72 @@ def run_daily(
     topic = config.topic(topic_id)
     report_language = language or topic.report_language
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
+    progress = ProgressWriter(run_dir / "run_progress.jsonl")
+    progress.record("run", "created", topic_id=topic_id, mode="daily")
     findings: list[ReviewFinding] = []
     research_plan = build_research_plan(topic, trusted_domains=config.discovery.trusted_domains)
-    discovery = DiscoveryOrchestrator(connectors).discover(
-        topic,
-        limit=limit,
-        trusted_domains=config.discovery.trusted_domains,
-        research_plan=research_plan,
+    progress.record(
+        "discovery",
+        "started",
+        paper_query_count=len(research_plan.paper_queries),
+        web_query_count=len(research_plan.web_queries),
     )
+    try:
+        discovery = DiscoveryOrchestrator(connectors).discover(
+            topic,
+            limit=limit,
+            trusted_domains=config.discovery.trusted_domains,
+            research_plan=research_plan,
+        )
+    except ResearchRadarError as exc:
+        progress.record(
+            "discovery",
+            "failed",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        raise
     candidates = discovery.candidates
     findings.extend(discovery.findings)
+    discovery_warning_count = sum(
+        1 for finding in discovery.findings if finding.severity == "warning"
+    )
+    discovery_error_count = sum(
+        1 for finding in discovery.findings if finding.severity == "error"
+    )
+    progress.record(
+        "discovery",
+        "completed",
+        candidate_count=len(candidates),
+        duplicate_count=discovery.duplicate_count,
+        provider_counts=discovery.provider_counts,
+        finding_count=len(discovery.findings),
+        warning_count=discovery_warning_count,
+        error_count=discovery_error_count,
+    )
+    progress.record("relevance", "started", candidate_count=len(candidates))
     candidates, relevant_candidates, relevance_findings = gate_relevant_sources(candidates, topic)
-    candidates = [score_source_quality(classify_source_role(candidate)) for candidate in candidates]
+    candidates = [
+        score_source_centrality(
+            score_source_quality(classify_source_role(candidate)),
+            topic,
+        )
+        for candidate in candidates
+    ]
+    progress.record(
+        "relevance",
+        "completed",
+        relevant_count=len(relevant_candidates),
+        needs_review_count=_relevance_count(candidates, "needs_review"),
+        irrelevant_count=_relevance_count(candidates, "irrelevant"),
+    )
     candidates, history_report = annotate_source_history(
         root,
         topic.id,
         candidates,
         run_id=manifest.run_id,
     )
+    progress.record("history", "completed", counts=history_report["counts"])
     candidates, daily_report_findings = _apply_daily_report_gate(candidates, topic)
     findings.extend(daily_report_findings)
     relevant_candidates = [
@@ -109,11 +160,39 @@ def run_daily(
         for candidate in relevant_candidates
         if is_reportable_source(candidate) and _passes_daily_report_gate(candidate)
     ]
-    reportable_candidates = attach_source_gists(
-        reportable_candidates,
-        provider=gist_provider,
+    progress.record(
+        "source_gist",
+        "started",
+        source_count=len(reportable_candidates),
+        provider=gist_provider.name if gist_provider is not None else "local",
         model=gist_model or config.models.scout,
-        language=report_language,
+    )
+    try:
+        reportable_candidates = attach_source_gists(
+            reportable_candidates,
+            provider=gist_provider,
+            model=gist_model or config.models.scout,
+            language=report_language,
+        )
+    except AnalysisError as exc:
+        progress.record(
+            "source_gist",
+            "failed",
+            provider=gist_provider.name if gist_provider is not None else "local",
+            model=gist_model or config.models.scout,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        raise
+    progress.record(
+        "source_gist",
+        "completed",
+        source_count=len(reportable_candidates),
+    )
+    progress.record(
+        "reportable_sources",
+        "completed",
+        reportable_count=len(reportable_candidates),
     )
     candidates = _replace_candidates(candidates, reportable_candidates)
     relevant_candidates = [
@@ -145,19 +224,44 @@ def run_daily(
     deep_reading_status_by_url: dict[str, str] = {}
     deep_required = deep_reader is not None and deep_limit > 0
     if deep_required:
+        progress.record(
+            "deep_selection",
+            "started",
+            reportable_count=len(reportable_candidates),
+            deep_limit=deep_limit,
+        )
         deep_candidate_pool = select_deep_candidates(
             reportable_candidates,
             len(reportable_candidates),
             source_intent=topic.source_intent,
         )
+        progress.record(
+            "deep_selection",
+            "ranked",
+            candidate_count=len(deep_candidate_pool),
+        )
         for candidate in deep_candidate_pool:
             if len(selected_deep_candidates) >= deep_limit:
                 break
+            progress.record(
+                "ingestion",
+                "started",
+                source_title=candidate.title,
+                source_url=candidate.url,
+            )
             try:
                 artifact = ingest_source(candidate, run_dir / "artifacts")
                 deep_artifacts.append(artifact)
             except IngestionError as exc:
                 deep_reading_status_by_url[candidate.url] = "ingestion_failed"
+                progress.record(
+                    "ingestion",
+                    "failed",
+                    source_title=candidate.title,
+                    source_url=candidate.url,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
                 findings.append(
                     ReviewFinding(
                         severity="warning",
@@ -167,6 +271,21 @@ def run_daily(
                     )
                 )
                 continue
+            progress.record(
+                "ingestion",
+                "succeeded",
+                source_title=candidate.title,
+                source_url=candidate.url,
+                content_type=artifact.content_type,
+            )
+            progress.record(
+                "reader",
+                "started",
+                source_title=candidate.title,
+                source_url=candidate.url,
+                provider=deep_reader.name,
+                model=deep_model or config.models.analyst,
+            )
             try:
                 deep_result = run_artifact_deep_reading(
                     artifact,
@@ -178,6 +297,16 @@ def run_daily(
                 )
             except AnalysisError as exc:
                 deep_reading_status_by_url[candidate.url] = "reading_failed"
+                progress.record(
+                    "reader",
+                    "failed",
+                    source_title=candidate.title,
+                    source_url=candidate.url,
+                    provider=deep_reader.name,
+                    model=deep_model or config.models.analyst,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
                 findings.append(
                     ReviewFinding(
                         severity="error",
@@ -187,6 +316,15 @@ def run_daily(
                     )
                 )
                 continue
+            progress.record(
+                "reader",
+                "succeeded",
+                source_title=candidate.title,
+                source_url=candidate.url,
+                provider=deep_reader.name,
+                model=deep_model or config.models.analyst,
+                claim_count=len(deep_result.claims),
+            )
             selected_deep_candidates.append(candidate)
             deep_reading_status_by_url[candidate.url] = "succeeded"
             readings.append(deep_result.reading)
@@ -220,22 +358,53 @@ def run_daily(
     model_feedback = None
     verification_actions = []
     if verifier is not None and claims:
-        claims, model_findings, model_feedback, verification_actions = model_review(
-            claims,
-            verifier,
+        progress.record(
+            "verifier",
+            "started",
+            provider=verifier.name,
             model=verifier_model or config.models.verifier,
-            topic_id=topic.id,
-            queries=topic.queries,
+            claim_count=len(claims),
         )
+        try:
+            claims, model_findings, model_feedback, verification_actions = model_review(
+                claims,
+                verifier,
+                model=verifier_model or config.models.verifier,
+                topic_id=topic.id,
+                queries=topic.queries,
+            )
+        except AnalysisError as exc:
+            progress.record(
+                "verifier",
+                "failed",
+                provider=verifier.name,
+                model=verifier_model or config.models.verifier,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
         findings.extend(model_findings)
         claims, post_model_policy_findings = rule_based_review(claims)
         findings.extend(post_model_policy_findings)
+        progress.record(
+            "verifier",
+            "succeeded",
+            provider=verifier.name,
+            model=verifier_model or config.models.verifier,
+            publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
+            action_count=len(verification_actions),
+        )
 
     web_search_summary = _web_search_summary(
         candidates,
         selected_deep_candidates,
         duplicate_count=discovery.duplicate_count,
         diagnostics=discovery.connector_diagnostics.get("web_search"),
+    )
+    public_reportable_candidates = select_public_report_sources(
+        reportable_candidates,
+        selected_deep_candidates,
+        source_intent=topic.source_intent,
     )
     manifest = replace(
         manifest,
@@ -265,6 +434,7 @@ def run_daily(
             "source_history": {
                 "counts": history_report["counts"],
                 "reportable_count": len(reportable_candidates),
+                "public_reportable_count": len(public_reportable_candidates),
                 "omitted_seen_count": len(history_report["omitted_seen_sources"]),
             },
             "quality_gate": paper_coverage,
@@ -284,66 +454,94 @@ def run_daily(
             "report_language": report_language,
         },
     )
-    update_manifest(run_dir, manifest)
-    write_json(run_dir / "research_plan.json", research_plan_to_dict(research_plan))
-    write_jsonl(run_dir / "sources.jsonl", candidates)
-    write_json(run_dir / "web_search_summary.json", web_search_summary)
-    write_json(run_dir / "source_history_report.json", history_report)
-    write_json(run_dir / "wide_scan.json", build_wide_scan(candidates))
-    write_json(
-        run_dir / "source_selection.json",
-        build_source_selection_report(
-            reportable_candidates,
-            selected_deep_candidates,
-            source_intent=topic.source_intent,
-            deep_reading_status_by_url=deep_reading_status_by_url,
-        ),
+    progress.record("artifacts", "started")
+    try:
+        update_manifest(run_dir, manifest)
+        write_json(run_dir / "research_plan.json", research_plan_to_dict(research_plan))
+        write_jsonl(run_dir / "sources.jsonl", candidates)
+        write_json(run_dir / "web_search_summary.json", web_search_summary)
+        write_json(run_dir / "source_history_report.json", history_report)
+        write_json(run_dir / "wide_scan.json", build_wide_scan(candidates))
+        write_json(
+            run_dir / "source_selection.json",
+            build_source_selection_report(
+                reportable_candidates,
+                selected_deep_candidates,
+                source_intent=topic.source_intent,
+                deep_reading_status_by_url=deep_reading_status_by_url,
+            ),
+        )
+        artifacts = _merge_artifacts(summary_artifacts, deep_artifacts)
+        write_jsonl(
+            run_dir / "artifacts.jsonl",
+            [dataclass_to_dict(artifact) for artifact in artifacts],
+        )
+        write_jsonl(
+            run_dir / "readings.jsonl",
+            [reading_to_dict(reading) for reading in readings],
+        )
+        write_jsonl(run_dir / "reader_attempts.jsonl", reader_attempts)
+        write_jsonl(run_dir / "anchor_resolution.jsonl", anchor_resolutions)
+        write_jsonl(run_dir / "anchor_repair.jsonl", anchor_repairs)
+        write_claims(run_dir / "deep_claims.jsonl", deep_claims)
+        write_claims(run_dir / "claims.jsonl", claims)
+        write_evidence(run_dir / "evidence.jsonl", claims)
+        write_jsonl(run_dir / "review_findings.jsonl", findings)
+        write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
+        draft = build_daily_draft(
+            topic_id,
+            public_reportable_candidates,
+            claims,
+            language=report_language,
+        )
+        write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
+        write_text(
+            run_dir / "synthesis_outline.md",
+            render_synthesis_outline(topic_id, reportable_candidates, claims, readings),
+        )
+        write_text(run_dir / "daily.md", render_markdown(draft))
+        write_text(run_dir / "wechat.html", render_wechat_html(draft))
+        write_text(
+            run_dir / "deep_reading.md",
+            render_deep_reading_report(readings, claims, language=report_language),
+        )
+        write_text(
+            run_dir / "review_report.md",
+            render_review_report(
+                findings,
+                model_feedback=model_feedback,
+                verification_actions=verification_actions,
+                reader_attempts=reader_attempts,
+            ),
+        )
+        write_json(
+            run_dir / "summary.json",
+            {
+                "run_dir": str(run_dir),
+                "source_count": len(candidates),
+                "relevant_source_count": len(relevant_candidates),
+                "reportable_source_count": len(reportable_candidates),
+                "public_reportable_source_count": len(public_reportable_candidates),
+                "publishable_claim_count": sum(
+                    1 for claim in claims if claim.is_publishable()
+                ),
+            },
+        )
+    except (OSError, TypeError, ValueError, ResearchRadarError) as exc:
+        progress.record(
+            "artifacts",
+            "failed",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        raise
+    progress.record(
+        "artifacts",
+        "completed",
+        source_count=len(candidates),
+        publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
     )
-    artifacts = _merge_artifacts(summary_artifacts, deep_artifacts)
-    write_jsonl(
-        run_dir / "artifacts.jsonl",
-        [dataclass_to_dict(artifact) for artifact in artifacts],
-    )
-    write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(reading) for reading in readings])
-    write_jsonl(run_dir / "reader_attempts.jsonl", reader_attempts)
-    write_jsonl(run_dir / "anchor_resolution.jsonl", anchor_resolutions)
-    write_jsonl(run_dir / "anchor_repair.jsonl", anchor_repairs)
-    write_claims(run_dir / "deep_claims.jsonl", deep_claims)
-    write_claims(run_dir / "claims.jsonl", claims)
-    write_evidence(run_dir / "evidence.jsonl", claims)
-    write_jsonl(run_dir / "review_findings.jsonl", findings)
-    write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
-    draft = build_daily_draft(topic_id, reportable_candidates, claims, language=report_language)
-    write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
-    write_text(
-        run_dir / "synthesis_outline.md",
-        render_synthesis_outline(topic_id, reportable_candidates, claims, readings),
-    )
-    write_text(run_dir / "daily.md", render_markdown(draft))
-    write_text(run_dir / "wechat.html", render_wechat_html(draft))
-    write_text(
-        run_dir / "deep_reading.md",
-        render_deep_reading_report(readings, claims, language=report_language),
-    )
-    write_text(
-        run_dir / "review_report.md",
-        render_review_report(
-            findings,
-            model_feedback=model_feedback,
-            verification_actions=verification_actions,
-            reader_attempts=reader_attempts,
-        ),
-    )
-    write_json(
-        run_dir / "summary.json",
-        {
-            "run_dir": str(run_dir),
-            "source_count": len(candidates),
-            "relevant_source_count": len(relevant_candidates),
-            "reportable_source_count": len(reportable_candidates),
-            "publishable_claim_count": sum(1 for claim in claims if claim.is_publishable()),
-        },
-    )
+    progress.record("run", "completed")
     return run_dir
 
 
@@ -500,6 +698,7 @@ def _deep_selection_findings(
     findings: list[ReviewFinding] = []
     for candidate in candidates:
         source_role = candidate.metadata.get("source_role", {})
+        centrality = candidate.metadata.get("source_centrality", {})
         selected_text = "selected" if candidate.url in selected_urls else "not selected"
         deep_status = status_map.get(candidate.url, "not_attempted")
         severity = "info"
@@ -513,9 +712,11 @@ def _deep_selection_findings(
                     f"{selected_text}: role={source_role.get('role')}, "
                     f"priority={source_role.get('deep_read_priority')}, "
                     f"score={source_selection_score(candidate, source_intent=source_intent):.3f}, "
+                    f"centrality={centrality.get('score')}, "
                     f"intent={source_intent}, "
                     f"deep_status={deep_status}, "
-                    f"reason={source_role.get('reason')}"
+                    f"reason={source_role.get('reason')}; "
+                    f"centrality_reason={centrality.get('reason')}"
                 ),
                 claim_text=candidate.title,
                 metadata={
@@ -524,6 +725,8 @@ def _deep_selection_findings(
                     "selected": candidate.url in selected_urls,
                     "role": source_role.get("role"),
                     "deep_read_priority": source_role.get("deep_read_priority"),
+                    "centrality_score": centrality.get("score"),
+                    "centrality_reason": centrality.get("reason"),
                     "selection_score": source_selection_score(
                         candidate,
                         source_intent=source_intent,

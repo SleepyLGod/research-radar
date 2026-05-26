@@ -92,6 +92,7 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "daily.md").exists()
     assert (run_dir / "wechat.html").exists()
     assert (run_dir / "research_plan.json").exists()
+    assert (run_dir / "run_progress.jsonl").exists()
     assert (run_dir / "wide_scan.json").exists()
     assert (run_dir / "source_selection.json").exists()
     assert (run_dir / "source_history_report.json").exists()
@@ -100,6 +101,14 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "review_findings.jsonl").exists()
     assert (run_dir / "verification_actions.jsonl").exists()
     assert "A careful paper" in (run_dir / "daily.md").read_text(encoding="utf-8")
+    progress = read_jsonl(run_dir / "run_progress.jsonl")
+    assert [event["stage"] for event in progress][:3] == [
+        "run",
+        "discovery",
+        "discovery",
+    ]
+    assert progress[-1]["stage"] == "run"
+    assert progress[-1]["status"] == "completed"
 
 
 def test_daily_pipeline_expands_queries_for_paper_connectors(tmp_path: Path) -> None:
@@ -172,11 +181,17 @@ def test_daily_deep_reading_retry_writes_reader_attempt_audit(
     )
 
     attempts = read_jsonl(run_dir / "reader_attempts.jsonl")
+    progress = read_jsonl(run_dir / "run_progress.jsonl")
     review_report = (run_dir / "review_report.md").read_text(encoding="utf-8")
     daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
 
     assert [attempt["status"] for attempt in attempts] == ["failed", "succeeded"]
     assert attempts[0]["error_message"]
+    assert any(
+        event["stage"] == "reader" and event["status"] == "started"
+        for event in progress
+    )
+    assert not any("api_key" in str(event).lower() for event in progress)
     assert "## Reader Attempts" in review_report
     assert "Memory benchmarks reward unsupported answers." in daily_text
 
@@ -1208,9 +1223,12 @@ def test_daily_deep_reading_ignores_repo_when_only_viable_research_brief_source(
     )
 
     source_selection = read_json(run_dir / "source_selection.json")
+    sources = read_jsonl(run_dir / "sources.jsonl")
 
     assert ingested == []
     assert source_selection["selected_count"] == 0
+    assert "centrality_score" in source_selection["ranked_sources"][0]
+    assert "source_centrality" in sources[0]["metadata"]
 
 
 def test_implementation_scan_can_deep_read_repo(
@@ -1278,6 +1296,47 @@ class TwoPaperRetryConnector:
         ]
 
 
+class MixedRagPublicSourcesConnector:
+    name = "mixed-rag-public"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="RAGChecker",
+                url="https://openreview.net/forum?id=ragchecker",
+                source_type=SourceType.PAPER,
+                source_name="openreview",
+                summary=(
+                    "A retrieval augmented generation evaluation benchmark framework "
+                    "for diagnosing RAG systems."
+                ),
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="An LLM-RAG Approach for Healthy Eating",
+                url="https://arxiv.org/abs/2605.15213",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary=(
+                    "A retrieval augmented generation evaluation benchmark for "
+                    "personalized food and nutrition recommendations."
+                ),
+                score=0.9,
+            ),
+            SourceCandidate(
+                title="DRAGON: Dynamic RAG Benchmark On News",
+                url="https://arxiv.org/abs/2507.05713",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary=(
+                    "A retrieval augmented generation evaluation benchmark for Russian "
+                    "news corpora."
+                ),
+                score=0.8,
+            ),
+        ]
+
+
 def test_daily_deep_reading_retries_next_paper_after_ingestion_failure(
     monkeypatch,
     tmp_path: Path,
@@ -1324,6 +1383,76 @@ def test_daily_deep_reading_retries_next_paper_after_ingestion_failure(
     assert rows["Agent Memory Paper with Valid PDF"]["attempted_for_deep_reading"] is True
     assert rows["Agent Memory Paper with Valid PDF"]["deep_reading_status"] == "succeeded"
     assert rows["Agent Memory Paper with Valid PDF"]["selected_for_deep_reading"] is True
+
+
+def test_daily_public_sources_are_curated_without_changing_audit(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [
+                {
+                    "id": "rag-systems",
+                    "queries": ["RAG systems evaluation"],
+                    "paper_queries": ["retrieval augmented generation evaluation benchmark"],
+                    "concept_groups": {
+                        "agent_context": ["RAG", "retrieval augmented generation"],
+                        "memory_mechanism": ["RAG systems", "retrieval system"],
+                        "evaluation_signal": ["RAG benchmark", "RAG evaluation", "benchmark"],
+                    },
+                }
+            ],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "rag-systems",
+        [MixedRagPublicSourcesConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    sources = read_jsonl(run_dir / "sources.jsonl")
+    source_selection = read_json(run_dir / "source_selection.json")
+    article_draft = read_json(run_dir / "article_draft.json")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+
+    assert {source["title"] for source in sources} == {
+        "RAGChecker",
+        "An LLM-RAG Approach for Healthy Eating",
+        "DRAGON: Dynamic RAG Benchmark On News",
+    }
+    assert source_selection["selected_sources"][0]["title"] == "RAGChecker"
+    assert {row["title"] for row in source_selection["ranked_sources"]} == {
+        "RAGChecker",
+        "An LLM-RAG Approach for Healthy Eating",
+        "DRAGON: Dynamic RAG Benchmark On News",
+    }
+    assert "RAGChecker" in daily_text
+    assert "Healthy Eating" not in daily_text
+    assert "DRAGON" not in daily_text
+    source_titles = [
+        item["title"]
+        for section in article_draft["sections"]
+        if section["metadata"].get("kind") == "new_updated_sources"
+        for item in section["metadata"]["sources"]
+    ]
+    assert source_titles == ["RAGChecker"]
+    synthesis_outline = (run_dir / "synthesis_outline.md").read_text(encoding="utf-8")
+    assert "RAGChecker" in synthesis_outline
+    assert "Healthy Eating" in synthesis_outline
+    assert "DRAGON" in synthesis_outline
 
 
 def _deep_reading_json() -> str:

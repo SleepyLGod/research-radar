@@ -14,7 +14,9 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)(openid|unionid)\s*[:=]\s*(['\"]?)[A-Za-z0-9_-]{8,}\2"),
 ]
 
-LOCAL_PATH_PATTERN = re.compile(r"/Users/[^/\s]+(?:/[^\s]+)*")
+LOCAL_PATH_PATTERN = re.compile(
+    r"(?:/Users/[^/\s]+|/private/tmp|/tmp|/var/folders)(?:/[^\s]+)*(?=\s|$)"
+)
 PORT_PATTERN = re.compile(r"\b(?:127\.0\.0\.1|localhost):\d{2,5}\b")
 
 

@@ -109,6 +109,8 @@ def _is_allowed_example_line(line: str) -> bool:
         return True
     if "local_path_pattern" in lowered or 're.compile(r"/users/' in lowered:
         return True
+    if "private/tmp" in lowered and "var/folders" in lowered:
+        return True
     if "/Users/someone" in stripped:
         return True
     if stripped.endswith("=") and any(

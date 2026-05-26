@@ -16,6 +16,7 @@ from research_radar.discovery.source_selection import (
 )
 from research_radar.exceptions import ResearchRadarError
 from research_radar.pipeline.daily import run_daily
+from research_radar.pipeline.progress import ProgressWriter
 from research_radar.storage.files import ensure_dir, read_json, read_jsonl, write_json, write_text
 
 QUALITY_ROLES = {"primary_paper", "benchmark_paper", "implementation_repo"}
@@ -292,9 +293,12 @@ def run_topic_smoke(
         raise ResearchRadarError("--deep-limit must be at least 1 for topic smoke.")
 
     root = ensure_dir(root)
+    progress = ProgressWriter(root / "topic_smoke_progress.jsonl")
+    progress.record("eval", "started", topic_count=len(specs))
     smoke_config = with_smoke_topics(config, specs)
     results: list[TopicSmokeResult] = []
     for spec in specs:
+        progress.record("topic", "started", topic_id=spec.id)
         try:
             run_dir = runner(
                 root,
@@ -314,9 +318,25 @@ def run_topic_smoke(
                 language=language,
             )
         except ResearchRadarError as exc:
+            progress.record(
+                "topic",
+                "failed",
+                topic_id=spec.id,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
             results.append(_failed_topic_result(spec.id, str(exc)))
             continue
-        results.append(summarize_topic_run(run_dir, spec))
+        result = summarize_topic_run(run_dir, spec)
+        results.append(result)
+        progress.record(
+            "topic",
+            "completed",
+            topic_id=spec.id,
+            passed=result.passed,
+            run_dir=str(run_dir),
+            publishable_claim_count=result.publishable_claim_count,
+        )
 
     summary_path = root / "topic_smoke_summary.json"
     markdown_path = root / "topic_smoke_summary.md"
@@ -329,6 +349,7 @@ def run_topic_smoke(
     )
     write_json(summary_path, _report_to_dict(report))
     write_text(markdown_path, render_topic_smoke_markdown(report))
+    progress.record("eval", "completed", passed=report.passed)
     return report
 
 
@@ -396,15 +417,18 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
         f"- Summary JSON: `{report.summary_path}`",
         "",
         "| Topic | Status | Selected Source | Role | "
-        "Best Skipped Paper | Papers | Paper Status | Claims | Warnings | Failures |",
-        "| --- | --- | --- | --- | --- | ---: | --- | ---: | ---: | --- |",
+        "Centrality | Best Skipped Paper | Skipped Centrality | "
+        "Papers | Paper Status | Claims | Warnings | Failures |",
+        "| --- | --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | --- |",
     ]
     for result in report.results:
         selected = result.selected_source or {}
         selected_title = str(selected.get("title", "-")).replace("|", "\\|")
         selected_role = str(selected.get("role", "-")).replace("|", "\\|")
+        centrality = _format_optional_float(selected.get("centrality_score"))
         skipped = result.best_skipped_paper or {}
         skipped_title = str(skipped.get("title", "-")).replace("|", "\\|")
+        skipped_centrality = _format_optional_float(skipped.get("centrality_score"))
         paper_status = result.paper_selection_reason.replace("|", "\\|")
         failures = ("; ".join(result.failures) if result.failures else "-").replace("|", "\\|")
         lines.append(
@@ -413,7 +437,9 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
             f"{'PASS' if result.passed else 'FAIL'} | "
             f"{selected_title} | "
             f"{selected_role} | "
+            f"{centrality} | "
             f"{skipped_title} | "
+            f"{skipped_centrality} | "
             f"{result.paper_candidate_count}/{result.relevant_paper_count}/"
             f"{result.viable_paper_count} | "
             f"{paper_status} | "
@@ -485,6 +511,8 @@ def _selected_source(
             "role": role or selected_role,
             "summary": source.get("summary"),
             "relevance_score": _relevance_score(source),
+            "centrality_score": _centrality_score(source),
+            "centrality_reason": _centrality_reason(source),
             "selection_score": _selection_score_from_findings(findings, selected_url),
         }
     return {
@@ -495,6 +523,8 @@ def _selected_source(
         "role": selected_role,
         "summary": None,
         "relevance_score": 0.0,
+        "centrality_score": _centrality_score_from_findings(findings, selected_url),
+        "centrality_reason": _centrality_reason_from_findings(findings, selected_url),
         "selection_score": _selection_score_from_findings(findings, selected_url),
     }
 
@@ -510,6 +540,30 @@ def _selection_score_from_findings(
     return None
 
 
+def _centrality_score_from_findings(
+    findings: list[dict[str, Any]],
+    source_url: str,
+) -> float | None:
+    for finding in findings:
+        metadata = finding.get("metadata", {})
+        if metadata.get("source_url") == source_url and "centrality_score" in metadata:
+            value = metadata["centrality_score"]
+            return float(value) if value is not None else None
+    return None
+
+
+def _centrality_reason_from_findings(
+    findings: list[dict[str, Any]],
+    source_url: str,
+) -> str | None:
+    for finding in findings:
+        metadata = finding.get("metadata", {})
+        if metadata.get("source_url") == source_url and "centrality_reason" in metadata:
+            value = metadata["centrality_reason"]
+            return str(value) if value is not None else None
+    return None
+
+
 def _best_skipped_paper(
     sources: list[dict[str, Any]],
     selected_source: dict[str, Any] | None,
@@ -521,12 +575,14 @@ def _best_skipped_paper(
         if source.get("url") != selected_url
         and _source_role(source) in {"primary_paper", "benchmark_paper"}
         and source.get("metadata", {}).get("relevance", {}).get("status") == "relevant"
+        and _relevance_score(source) >= RESEARCH_BRIEF_PAPER_RELEVANCE_FLOOR
     ]
     if not skipped_papers:
         return None
     best = sorted(
         skipped_papers,
         key=lambda source: (
+            _centrality_score(source) if _centrality_score(source) is not None else -1.0,
             _paper_role_rank(source),
             _relevance_score(source),
             float(source.get("score", 0.0)),
@@ -534,14 +590,18 @@ def _best_skipped_paper(
         reverse=True,
     )[0]
     selected_role = selected_source.get("role") if selected_source else None
+    centrality_score = _centrality_score(best)
     return {
         "title": best.get("title"),
         "url": best.get("url"),
         "role": _source_role(best),
         "relevance_score": _relevance_score(best),
+        "centrality_score": centrality_score,
+        "centrality_reason": _centrality_reason(best),
         "reason": (
             f"Skipped while selected role was {selected_role}; "
-            f"paper relevance={_relevance_score(best):.3f}"
+            f"paper relevance={_relevance_score(best):.3f}; "
+            f"centrality={_format_optional_float(centrality_score)}"
         ),
     }
 
@@ -718,6 +778,25 @@ def _relevance_score(source: dict[str, Any]) -> float:
     return float(source.get("metadata", {}).get("relevance", {}).get("score", 0.0))
 
 
+def _centrality_score(source: dict[str, Any]) -> float | None:
+    centrality = source.get("metadata", {}).get("source_centrality", {})
+    if "score" not in centrality:
+        return None
+    value = centrality.get("score")
+    return float(value) if value is not None else None
+
+
+def _centrality_reason(source: dict[str, Any]) -> str | None:
+    value = source.get("metadata", {}).get("source_centrality", {}).get("reason")
+    return str(value) if value is not None else None
+
+
+def _format_optional_float(value: object) -> str:
+    if value is None:
+        return "-"
+    return f"{float(value):.3f}"
+
+
 def _acceptance_failures(
     *,
     spec: TopicSmokeSpec,
@@ -742,6 +821,8 @@ def _acceptance_failures(
             failures.append("selected source is a survey/list despite non-list relevant sources")
         if _hides_comparable_paper(spec, selected_source, best_skipped_paper):
             failures.append("selected repository hides a comparable relevant paper")
+        if _hides_more_central_paper(spec, selected_source, best_skipped_paper):
+            failures.append("selected paper has low centrality despite a stronger viable paper")
         if not _has_required_signal(selected_source, spec):
             failures.append("selected source lacks topic phrase or quality source signal")
         if (
@@ -778,6 +859,26 @@ def _hides_comparable_paper(
     selected_score = float(selected_source.get("relevance_score", 0.0))
     paper_score = float(best_skipped_paper.get("relevance_score", 0.0))
     return paper_score >= max(0.6, selected_score - 0.2)
+
+
+def _hides_more_central_paper(
+    spec: TopicSmokeSpec,
+    selected_source: dict[str, Any],
+    best_skipped_paper: dict[str, Any] | None,
+) -> bool:
+    if spec.source_intent != RESEARCH_BRIEF:
+        return False
+    if selected_source.get("role") not in {"primary_paper", "benchmark_paper"}:
+        return False
+    if best_skipped_paper is None:
+        return False
+    selected_centrality = selected_source.get("centrality_score")
+    skipped_centrality = best_skipped_paper.get("centrality_score")
+    if selected_centrality is None or skipped_centrality is None:
+        return False
+    selected_score = float(selected_centrality)
+    skipped_score = float(skipped_centrality)
+    return selected_score < 0.55 and skipped_score >= selected_score + 0.20
 
 
 def _has_required_signal(source: dict[str, Any], spec: TopicSmokeSpec) -> bool:

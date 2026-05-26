@@ -26,13 +26,25 @@ def test_envelope_encryption_round_trip() -> None:
 
 
 def test_redact_text_removes_sensitive_values() -> None:
-    value = "api_key=sk-fakefakefakefakefake path=/Users/someone/private localhost:12345"
+    value = (
+        "api_key=sk-fakefakefakefakefake path=/Users/someone/private "
+        "/tmp/research-radar /var/folders/abc localhost:12345"
+    )
 
     redacted = redact_text(value)
 
     assert "sk-fake" not in redacted
     assert "/Users/someone" not in redacted
+    assert "/tmp/research-radar" not in redacted
+    assert "/var/folders/abc" not in redacted
     assert "localhost:12345" not in redacted
+
+
+def test_redact_text_does_not_overmatch_tmp_prefix() -> None:
+    redacted = redact_text("keep /tmpfile but redact /tmp/research-radar")
+
+    assert "/tmpfile" in redacted
+    assert "/tmp/research-radar" not in redacted
 
 
 def test_redact_text_removes_common_quoted_and_dotted_secret_forms() -> None:

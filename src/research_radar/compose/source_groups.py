@@ -1,5 +1,7 @@
 """Shared source grouping helpers for rendered daily reports."""
 
+from research_radar.models import SourceCandidate, SourceType
+
 SOURCE_GROUPS = (
     "research_papers",
     "benchmarks",
@@ -43,3 +45,21 @@ def source_group_label(group: str, *, language: str) -> str:
         "web_blog_context": "Web / Blog Context",
         "other": "Other Sources",
     }.get(group, "Other Sources")
+
+
+def source_group_for_candidate(source: SourceCandidate, role: str) -> str:
+    """Return the rendered source group for a candidate."""
+
+    if role == "primary_paper":
+        return "research_papers"
+    if role == "benchmark_paper":
+        return "benchmarks"
+    if source.source_type == SourceType.REPOSITORY or role == "implementation_repo":
+        return "implementation_repos"
+    if source.source_type == SourceType.PAPER:
+        return "research_papers"
+    if source.source_type in {SourceType.BLOG, SourceType.WEB, SourceType.RSS}:
+        return "web_blog_context"
+    if role in {"blog_or_web", "survey_or_list"}:
+        return "web_blog_context"
+    return "other"

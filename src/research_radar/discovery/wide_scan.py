@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 
-from research_radar.discovery.source_selection import source_selection_score
+from research_radar.discovery.source_selection import (
+    source_selection_key,
+    source_selection_score,
+)
 from research_radar.models import SourceCandidate
 
 
@@ -40,7 +43,7 @@ def build_source_selection_report(
     rows = []
     for candidate in sorted(
         candidates,
-        key=lambda item: source_selection_score(item, source_intent=source_intent),
+        key=lambda item: source_selection_key(item, source_intent=source_intent),
         reverse=True,
     ):
         deep_status = status_map.get(candidate.url, "not_attempted")
@@ -78,6 +81,7 @@ def _source_row(candidate: SourceCandidate) -> dict[str, object]:
     relevance = candidate.metadata.get("relevance", {})
     role = candidate.metadata.get("source_role", {})
     quality = candidate.metadata.get("source_quality", {})
+    centrality = candidate.metadata.get("source_centrality", {})
     return {
         "title": candidate.title,
         "url": candidate.url,
@@ -93,6 +97,10 @@ def _source_row(candidate: SourceCandidate) -> dict[str, object]:
         "relevance_reason": relevance.get("reason"),
         "quality_score": quality.get("score"),
         "quality_reason": quality.get("reason"),
+        "centrality_score": centrality.get("score"),
+        "centrality_reason": centrality.get("reason"),
+        "centrality_positive_signals": centrality.get("positive_signals", []),
+        "centrality_negative_signals": centrality.get("negative_signals", []),
     }
 
 
@@ -100,10 +108,11 @@ def _selection_reason(candidate: SourceCandidate, selected: bool) -> str:
     role = candidate.metadata.get("source_role", {}).get("role")
     relevance = candidate.metadata.get("relevance", {})
     quality = candidate.metadata.get("source_quality", {})
+    centrality = candidate.metadata.get("source_centrality", {})
     prefix = "selected" if selected else "not selected"
     return (
         f"{prefix}: role={role}, relevance={relevance.get('score')}, "
-        f"quality={quality.get('score')}"
+        f"quality={quality.get('score')}, centrality={centrality.get('score')}"
     )
 
 

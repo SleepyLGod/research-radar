@@ -4,7 +4,9 @@ from research_radar.analysis.providers import StaticProvider
 from research_radar.config import parse_config
 from research_radar.evaluation.topic_smoke import (
     DEFAULT_TOPIC_SMOKE_SPECS,
+    TopicSmokeReport,
     TopicSmokeSpec,
+    render_topic_smoke_markdown,
     run_topic_smoke,
     summarize_topic_run,
 )
@@ -87,6 +89,141 @@ def test_topic_smoke_reports_repo_hiding_comparable_paper(tmp_path: Path) -> Non
     assert result.best_skipped_paper["title"] == "Grounded Agent Memory Benchmark"
     assert result.paper_selection_reason == "viable paper skipped"
     assert "selected repository hides a comparable relevant paper" in result.failures
+
+
+def test_topic_smoke_reports_low_centrality_selection(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[2],
+        selected_url="https://example.com/legal-rag",
+        sources=[
+            _source(
+                "Fine-grained Claim-level RAG Benchmark for Law",
+                "https://example.com/legal-rag",
+                "benchmark_paper",
+                "A law-specific RAG benchmark.",
+                centrality=0.42,
+            ),
+            _source(
+                "RAG Systems Evaluation Benchmark",
+                "https://example.com/general-rag",
+                "benchmark_paper",
+                "A general retrieval augmented generation evaluation benchmark.",
+                centrality=0.78,
+            ),
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[2])
+
+    assert not result.passed
+    assert result.selected_source is not None
+    assert result.selected_source["centrality_score"] == 0.42
+    assert result.best_skipped_paper is not None
+    assert result.best_skipped_paper["centrality_score"] == 0.78
+    assert "selected paper has low centrality despite a stronger viable paper" in result.failures
+
+
+def test_topic_smoke_does_not_treat_missing_centrality_as_low_centrality(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[2],
+        selected_url="https://example.com/general-rag",
+        sources=[
+            _source(
+                "RAG Systems Evaluation Benchmark",
+                "https://example.com/general-rag",
+                "benchmark_paper",
+                "A general retrieval augmented generation evaluation benchmark.",
+            ),
+            _source(
+                "Another RAG Benchmark",
+                "https://example.com/other-rag",
+                "benchmark_paper",
+                "A general retrieval augmented generation benchmark.",
+                centrality=0.78,
+            ),
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[2])
+
+    assert result.passed
+    assert result.selected_source is not None
+    assert result.selected_source["centrality_score"] is None
+    assert "selected paper has low centrality despite a stronger viable paper" not in (
+        result.failures
+    )
+
+
+def test_topic_smoke_ignores_below_threshold_best_skipped_paper(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[2],
+        selected_url="https://example.com/general-rag",
+        sources=[
+            _source(
+                "RAG Systems Evaluation Benchmark",
+                "https://example.com/general-rag",
+                "benchmark_paper",
+                "A general retrieval augmented generation evaluation benchmark.",
+                relevance=0.8,
+                centrality=0.42,
+            ),
+            _source(
+                "Low-Relevance RAG Candidate",
+                "https://example.com/low-rag",
+                "benchmark_paper",
+                "A weak retrieval augmented generation match.",
+                relevance=0.45,
+                centrality=0.88,
+            ),
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[2])
+
+    assert result.passed
+    assert result.best_skipped_paper is None
+
+
+def test_topic_smoke_markdown_includes_skipped_paper_centrality(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[2],
+        selected_url="https://example.com/legal-rag",
+        sources=[
+            _source(
+                "Fine-grained Claim-level RAG Benchmark for Law",
+                "https://example.com/legal-rag",
+                "benchmark_paper",
+                "A law-specific RAG benchmark.",
+                centrality=0.42,
+            ),
+            _source(
+                "RAG Systems Evaluation Benchmark",
+                "https://example.com/general-rag",
+                "benchmark_paper",
+                "A general retrieval augmented generation evaluation benchmark.",
+                centrality=0.78,
+            ),
+        ],
+    )
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[2])
+    report = TopicSmokeReport(
+        root=str(tmp_path),
+        summary_path=str(tmp_path / "summary.json"),
+        markdown_path=str(tmp_path / "summary.md"),
+        passed=result.passed,
+        results=[result],
+    )
+
+    markdown = render_topic_smoke_markdown(report)
+
+    assert "Skipped Centrality" in markdown
+    assert "0.780" in markdown
 
 
 def test_topic_smoke_distinguishes_missing_paper_from_below_threshold(tmp_path: Path) -> None:
@@ -307,6 +444,7 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
     assert "best_skipped_paper" in summary["results"][0]
     assert "paper_candidate_count" in summary["results"][0]
     assert "rejected_paper_candidates" in summary["results"][0]
+    assert (tmp_path / "topic_smoke_progress.jsonl").exists()
 
 
 def _write_run(
@@ -377,21 +515,30 @@ def _source(
     source_type: str = "paper",
     source_name: str = "arxiv",
     relevance: float = 1.0,
+    centrality: float | None = None,
 ) -> dict:
+    metadata = {
+        "relevance": {"status": "relevant", "score": relevance},
+        "source_role": {
+            "role": role,
+            "reason": f"classified as {role}",
+            "deep_read_priority": 450 if role != "survey_or_list" else 50,
+        },
+    }
+    if centrality is not None:
+        metadata["source_centrality"] = {
+            "score": centrality,
+            "positive_signals": ["fixture"],
+            "negative_signals": [],
+            "reason": "fixture centrality",
+        }
     return {
         "title": title,
         "url": url,
         "source_type": source_type,
         "source_name": source_name,
         "summary": summary,
-        "metadata": {
-            "relevance": {"status": "relevant", "score": relevance},
-            "source_role": {
-                "role": role,
-                "reason": f"classified as {role}",
-                "deep_read_priority": 450 if role != "survey_or_list" else 50,
-            },
-        },
+        "metadata": metadata,
     }
 
 

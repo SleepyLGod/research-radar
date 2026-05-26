@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 
 from research_radar.analysis.source_gist import sanitize_source_gist
+from research_radar.compose.source_groups import source_group_for_candidate
 from research_radar.evidence.policy import publishable_claims
-from research_radar.models import ArticleDraft, ArticleSection, Claim, SourceCandidate, SourceType
+from research_radar.models import ArticleDraft, ArticleSection, Claim, SourceCandidate
 
 
 def build_daily_draft(
@@ -185,16 +186,4 @@ def _fallback_gist(source: SourceCandidate, *, language: str = "en") -> str:
 
 
 def _source_group(source: SourceCandidate, role: str) -> str:
-    if role == "primary_paper":
-        return "research_papers"
-    if role == "benchmark_paper":
-        return "benchmarks"
-    if source.source_type == SourceType.REPOSITORY or role == "implementation_repo":
-        return "implementation_repos"
-    if source.source_type == SourceType.PAPER:
-        return "research_papers"
-    if source.source_type in {SourceType.BLOG, SourceType.WEB, SourceType.RSS}:
-        return "web_blog_context"
-    if role in {"blog_or_web", "survey_or_list"}:
-        return "web_blog_context"
-    return "other"
+    return source_group_for_candidate(source, role)
