@@ -9,6 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
 from research_radar.config import AppConfig, load_config, parse_config
 from research_radar.discovery.arxiv import ArxivConnector
@@ -204,6 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the configured report language.",
     )
+    daily.add_argument(
+        "--model-cache",
+        action="store_true",
+        help="Cache model responses under <root>/cache/model_calls for repeat local runs.",
+    )
     daily.set_defaults(handler=handle_run_daily)
     paper = run_subparsers.add_parser("paper", help="Run a single-paper deep reading.")
     paper.add_argument("--topic", required=True)
@@ -263,6 +269,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["en", "zh"],
         default=None,
         help="Override the configured report language.",
+    )
+    paper.add_argument(
+        "--model-cache",
+        action="store_true",
+        help="Cache model responses under <root>/cache/model_calls for repeat local runs.",
     )
     paper.set_defaults(handler=handle_run_paper)
     weekly = run_subparsers.add_parser("weekly", help="Compose weekly draft from latest run.")
@@ -356,6 +367,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["en", "zh"],
         default=None,
         help="Override the configured report language.",
+    )
+    eval_topics.add_argument(
+        "--model-cache",
+        action="store_true",
+        help="Cache model responses under <root>/cache/model_calls for repeat local eval runs.",
     )
     eval_topics.set_defaults(handler=handle_eval_topics)
 
@@ -499,6 +515,15 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         global_model=getattr(args, "model", None),
         default_local=True,
     )
+    gist_route = _maybe_cached_route(gist_route, args.root, "source_gist", args)
+    reader_route = _maybe_cached_route(reader_route, args.root, "deep_reading", args)
+    anchor_repair_route = _maybe_cached_route(
+        anchor_repair_route,
+        args.root,
+        "anchor_repair",
+        args,
+    )
+    verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
     run_dir = run_daily(
         args.root,
         config,
@@ -545,6 +570,14 @@ def handle_run_paper(args: argparse.Namespace) -> None:
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
     anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
+    reader_route = _maybe_cached_route(reader_route, args.root, "deep_reading", args)
+    verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
+    anchor_repair_route = _maybe_cached_route(
+        anchor_repair_route,
+        args.root,
+        "anchor_repair",
+        args,
+    )
     if reader_route.provider is None or reader_route.model is None:
         raise ResearchRadarError("Single-paper reading requires a non-local reader provider.")
     run_dir = run_paper(
@@ -592,6 +625,15 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
     anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
+    gist_route = _maybe_cached_route(gist_route, args.root, "source_gist", args)
+    reader_route = _maybe_cached_route(reader_route, args.root, "deep_reading", args)
+    verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
+    anchor_repair_route = _maybe_cached_route(
+        anchor_repair_route,
+        args.root,
+        "anchor_repair",
+        args,
+    )
     connectors = _daily_connectors(config, manager)
     report = run_topic_smoke(
         args.root,
@@ -740,6 +782,25 @@ def _resolve_anchor_repair_route(
         if getattr(args, "anchor_repair_provider", None) or getattr(args, "provider", None):
             raise
         return TaskModelRoute(provider=None, model=None, provider_name="local")
+
+
+def _maybe_cached_route(
+    route: TaskModelRoute,
+    root: Path,
+    task_name: str,
+    args: argparse.Namespace,
+) -> TaskModelRoute:
+    if not getattr(args, "model_cache", False) or route.provider is None:
+        return route
+    return TaskModelRoute(
+        provider=CachedLLMProvider(
+            route.provider,
+            cache_dir=root / "cache" / "model_calls",
+            task_name=task_name,
+        ),
+        model=route.model,
+        provider_name=route.provider_name,
+    )
 
 
 def _daily_connectors(

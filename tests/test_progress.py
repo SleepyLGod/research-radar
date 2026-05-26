@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from research_radar.pipeline import progress as progress_module
 from research_radar.pipeline.progress import ProgressWriter
 from research_radar.storage.files import read_jsonl
 
@@ -58,3 +59,19 @@ def test_progress_writer_metadata_cannot_override_core_fields(tmp_path: Path) ->
     assert events[0]["stage"] == "reader"
     assert events[0]["status"] == "failed"
     assert events[0]["elapsed_seconds"] != 999
+
+
+def test_progress_writer_adds_duration_to_terminal_events(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    times = iter([100.0, 101.0, 106.0])
+    monkeypatch.setattr(progress_module.time, "monotonic", lambda: next(times))
+    progress_path = tmp_path / "run_progress.jsonl"
+    writer = ProgressWriter(progress_path)
+
+    writer.record("reader", "started")
+    writer.record("reader", "succeeded")
+
+    events = read_jsonl(progress_path)
+    assert events[1]["duration_seconds"] == 5.0

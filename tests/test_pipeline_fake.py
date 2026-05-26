@@ -93,6 +93,7 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     assert (run_dir / "wechat.html").exists()
     assert (run_dir / "research_plan.json").exists()
     assert (run_dir / "run_progress.jsonl").exists()
+    assert (run_dir / "runtime_summary.json").exists()
     assert (run_dir / "wide_scan.json").exists()
     assert (run_dir / "source_selection.json").exists()
     assert (run_dir / "source_history_report.json").exists()
@@ -109,6 +110,9 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     ]
     assert progress[-1]["stage"] == "run"
     assert progress[-1]["status"] == "completed"
+    runtime = read_json(run_dir / "runtime_summary.json")
+    assert "total_elapsed_seconds" in runtime
+    assert runtime["cache"] == {"hit_count": 0, "miss_count": 0}
 
 
 def test_daily_pipeline_expands_queries_for_paper_connectors(tmp_path: Path) -> None:

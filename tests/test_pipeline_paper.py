@@ -1,6 +1,7 @@
 from http.client import IncompleteRead
 from pathlib import Path
 
+from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
@@ -53,6 +54,20 @@ class FailingProvider:
         """Raise a deterministic analysis failure."""
 
         raise AnalysisError("failing-reader request failed: model=fake-reader")
+
+
+class CountingProvider:
+    """Provider that returns fixed content and counts real model calls."""
+
+    name = "counting"
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.call_count = 0
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        self.call_count += 1
+        return ModelResponse(content=self.content, model=model, metadata={"provider": self.name})
 
 
 def test_build_direct_paper_source_from_arxiv_pdf_url() -> None:
@@ -110,6 +125,64 @@ def test_single_paper_pipeline_writes_failed_run_artifacts(
     assert not (run_dir / "claims.jsonl").exists()
     assert not (run_dir / "readings.jsonl").exists()
     assert not (run_dir / "paper.md").exists()
+
+
+def test_single_paper_pipeline_uses_model_cache_on_second_run(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    claim_text = "Memory benchmark fixture claim."
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = CountingProvider(_claim_unit_reading_json(claim_text))
+    verifier = CountingProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"}
+          ]
+        }
+        """
+    )
+    cached_reader = CachedLLMProvider(
+        reader,
+        cache_dir=tmp_path / "cache" / "model_calls",
+        task_name="deep_reading",
+    )
+    cached_verifier = CachedLLMProvider(
+        verifier,
+        cache_dir=tmp_path / "cache" / "model_calls",
+        task_name="verifier",
+    )
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=claim_text)
+
+    monkeypatch.setattr(paper, "ingest_source", fake_ingest_source)
+
+    for _ in range(2):
+        run_dir = run_paper(
+            tmp_path,
+            config,
+            "agent-memory",
+            "https://arxiv.org/pdf/2604.01707v1",
+            cached_reader,
+            model="fake-reader",
+            verifier=cached_verifier,
+            verifier_model="fake-verifier",
+        )
+
+    runtime = read_json(run_dir / "runtime_summary.json")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    assert reader.call_count == 1
+    assert verifier.call_count == 1
+    assert runtime["cache"]["hit_count"] == 2
+    assert runtime["cache"]["miss_count"] == 0
+    assert claims[0]["status"] == ClaimStatus.SUPPORTED
 
 
 def test_single_paper_pipeline_persists_transport_diagnostics(

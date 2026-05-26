@@ -20,18 +20,29 @@ class ProgressWriter:
     def __init__(self, path: Path) -> None:
         self.path = path
         self._started_at = time.monotonic()
+        self._active_stages: dict[str, float] = {}
+        self.events: list[dict[str, Any]] = []
         ensure_dir(path.parent)
 
     def record(self, stage: str, status: str, **metadata: Any) -> None:
         """Append one redacted progress event without interrupting the pipeline."""
 
+        now = time.monotonic()
+        duration = None
+        if status in {"started", "created"}:
+            self._active_stages[stage] = now
+        elif stage in self._active_stages:
+            duration = round(now - self._active_stages.pop(stage), 3)
         try:
             event = {
                 **_redact_metadata(metadata),
                 "stage": stage,
                 "status": status,
-                "elapsed_seconds": round(time.monotonic() - self._started_at, 3),
+                "elapsed_seconds": round(now - self._started_at, 3),
             }
+            if duration is not None:
+                event["duration_seconds"] = duration
+            self.events.append(event)
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(event, ensure_ascii=False) + "\n")
         except (OSError, TypeError, ValueError, RuntimeError):

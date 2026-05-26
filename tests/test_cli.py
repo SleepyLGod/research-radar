@@ -3,6 +3,7 @@ from pathlib import Path
 
 from research_radar import cli
 from research_radar.analysis.cli_providers import CodexCliProvider
+from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.config import parse_config
 
@@ -156,6 +157,61 @@ def test_run_daily_local_provider_does_not_configure_verifier(
     assert captured["limit"] == 10
     assert captured["deep_reader"] is None
     assert captured["deep_limit"] == 1
+
+
+def test_run_daily_model_cache_wraps_model_routes(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    captured: dict[str, object] = {}
+    env_file = tmp_path / ".env"
+    env_file.write_text("DEEPSEEK_API_KEY='fake-deepseek-key'\n", encoding="utf-8")
+
+    def fake_run_daily(*args, **kwargs):
+        captured.update(kwargs)
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider="deepseek",
+            model=None,
+            gist_provider=None,
+            gist_model=None,
+            reader_provider=None,
+            reader_model=None,
+            verifier_provider=None,
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            secret_source="env",
+            env_file=env_file,
+            limit=3,
+            deep_limit=1,
+            language=None,
+            model_cache=True,
+        )
+    )
+
+    assert isinstance(captured["gist_provider"], CachedLLMProvider)
+    assert isinstance(captured["deep_reader"], CachedLLMProvider)
+    assert isinstance(captured["verifier"], CachedLLMProvider)
+    assert (
+        captured["deep_reader"].cache_dir
+        == tmp_path / "cache" / "model_calls" / "deep_reading"
+    )
 
 
 def test_run_daily_supports_task_specific_provider_routes(

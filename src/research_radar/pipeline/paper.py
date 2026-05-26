@@ -7,6 +7,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
+from research_radar.analysis.model_cache import (
+    merge_cache_deltas,
+    provider_cache_delta,
+    provider_cache_stats,
+)
 from research_radar.analysis.paper_reading import (
     reading_to_dict,
     render_deep_reading_report,
@@ -24,7 +29,9 @@ from research_radar.evidence.ledger import write_claims, write_evidence
 from research_radar.exceptions import ResearchRadarError
 from research_radar.ingestion.router import ingest_source
 from research_radar.models import RunManifest, SourceCandidate, SourceType
+from research_radar.pipeline.progress import ProgressWriter
 from research_radar.pipeline.reporting import render_review_report
+from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.storage.files import ensure_dir, write_json, write_jsonl, write_text
 from research_radar.storage.runs import make_run_id
 
@@ -49,13 +56,34 @@ def run_paper(
     report_language = language or topic.report_language
     source = build_direct_paper_source(url)
     run_dir, manifest = _create_paper_run_dir(root, topic, source)
+    progress = ProgressWriter(run_dir / "run_progress.jsonl")
+    progress.record("run", "created", topic_id=topic_id, mode="paper")
+    progress.record("ingestion", "started", source_title=source.title, source_url=source.url)
     try:
         artifact = ingest_source(source, run_dir / "artifacts")
     except ResearchRadarError as exc:
+        progress.record("ingestion", "failed", error_type=type(exc).__name__, error=str(exc))
         _write_failed_run(run_dir, manifest, "ingestion", None, None, exc)
         raise
+    progress.record(
+        "ingestion",
+        "succeeded",
+        source_title=source.title,
+        source_url=source.url,
+        content_type=artifact.content_type,
+    )
     paper_sections = build_paper_sections(artifact)
     reading_packet = build_reading_packet(artifact, sections=paper_sections)
+    progress.record(
+        "reader",
+        "started",
+        source_title=source.title,
+        source_url=source.url,
+        provider=reader.name,
+        model=model,
+    )
+    reader_cache_before = provider_cache_stats(reader)
+    repair_cache_before = provider_cache_stats(anchor_repair_provider)
     try:
         deep_result = run_artifact_deep_reading(
             artifact,
@@ -68,8 +96,32 @@ def run_paper(
             anchor_repair_model=anchor_repair_model,
         )
     except ResearchRadarError as exc:
+        progress.record(
+            "reader",
+            "failed",
+            source_title=source.title,
+            source_url=source.url,
+            provider=reader.name,
+            model=model,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
         _write_failed_run(run_dir, manifest, "reader", reader.name, model, exc)
         raise
+    reader_cache_delta = merge_cache_deltas(
+        provider_cache_delta(reader_cache_before, reader),
+        provider_cache_delta(repair_cache_before, anchor_repair_provider),
+    )
+    progress.record(
+        "reader",
+        "succeeded",
+        source_title=source.title,
+        source_url=source.url,
+        provider=reader.name,
+        model=model,
+        claim_count=len(deep_result.claims),
+        **reader_cache_delta,
+    )
     reading = deep_result.reading
     claims = deep_result.claims
     findings = deep_result.findings
@@ -78,6 +130,14 @@ def run_paper(
     review_provider = verifier or reader
     review_model = verifier_model or model
     if claims and review_provider is not None:
+        progress.record(
+            "verifier",
+            "started",
+            provider=review_provider.name,
+            model=review_model,
+            claim_count=len(claims),
+        )
+        verifier_cache_before = provider_cache_stats(review_provider)
         try:
             claims, model_findings, model_feedback, verification_actions = model_review(
                 claims,
@@ -87,6 +147,14 @@ def run_paper(
                 queries=topic.queries,
             )
         except ResearchRadarError as exc:
+            progress.record(
+                "verifier",
+                "failed",
+                provider=review_provider.name,
+                model=review_model,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
             _write_failed_run(
                 run_dir,
                 manifest,
@@ -99,6 +167,15 @@ def run_paper(
         findings.extend(model_findings)
         claims, post_model_findings = rule_based_review(claims)
         findings.extend(post_model_findings)
+        progress.record(
+            "verifier",
+            "succeeded",
+            provider=review_provider.name,
+            model=review_model,
+            publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
+            action_count=len(verification_actions),
+            **provider_cache_delta(verifier_cache_before, review_provider),
+        )
     manifest = RunManifest(
         run_id=manifest.run_id,
         topic_id=topic_id,
@@ -126,6 +203,7 @@ def run_paper(
         },
     )
 
+    progress.record("artifacts", "started")
     write_json(run_dir / "manifest.json", manifest)
     write_jsonl(run_dir / "sources.jsonl", [source])
     write_jsonl(run_dir / "artifacts.jsonl", [artifact])
@@ -153,6 +231,14 @@ def run_paper(
             reader_attempts=deep_result.reader_attempts,
         ),
     )
+    progress.record(
+        "artifacts",
+        "completed",
+        source_count=1,
+        publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
+    )
+    progress.record("run", "completed")
+    write_json(run_dir / "runtime_summary.json", build_runtime_summary(progress.events))
     return run_dir
 
 

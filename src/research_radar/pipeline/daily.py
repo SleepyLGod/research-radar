@@ -6,6 +6,11 @@ from dataclasses import replace
 from pathlib import Path
 
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
+from research_radar.analysis.model_cache import (
+    merge_cache_deltas,
+    provider_cache_delta,
+    provider_cache_stats,
+)
 from research_radar.analysis.paper_reading import (
     reading_to_dict,
     render_deep_reading_report,
@@ -51,6 +56,7 @@ from research_radar.models import (
 from research_radar.pipeline.progress import ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
 from research_radar.pipeline.reporting import render_review_report
+from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.storage.files import write_json, write_jsonl, write_text
 from research_radar.storage.runs import create_run_dir, update_manifest
 from research_radar.storage.source_history import (
@@ -167,6 +173,7 @@ def run_daily(
         provider=gist_provider.name if gist_provider is not None else "local",
         model=gist_model or config.models.scout,
     )
+    gist_cache_before = provider_cache_stats(gist_provider)
     try:
         reportable_candidates = attach_source_gists(
             reportable_candidates,
@@ -184,10 +191,12 @@ def run_daily(
             error=str(exc),
         )
         raise
+    gist_cache_delta = provider_cache_delta(gist_cache_before, gist_provider)
     progress.record(
         "source_gist",
         "completed",
         source_count=len(reportable_candidates),
+        **gist_cache_delta,
     )
     progress.record(
         "reportable_sources",
@@ -286,6 +295,8 @@ def run_daily(
                 provider=deep_reader.name,
                 model=deep_model or config.models.analyst,
             )
+            reader_cache_before = provider_cache_stats(deep_reader)
+            repair_cache_before = provider_cache_stats(anchor_repair_provider)
             try:
                 deep_result = run_artifact_deep_reading(
                     artifact,
@@ -316,6 +327,10 @@ def run_daily(
                     )
                 )
                 continue
+            reader_cache_delta = merge_cache_deltas(
+                provider_cache_delta(reader_cache_before, deep_reader),
+                provider_cache_delta(repair_cache_before, anchor_repair_provider),
+            )
             progress.record(
                 "reader",
                 "succeeded",
@@ -324,6 +339,7 @@ def run_daily(
                 provider=deep_reader.name,
                 model=deep_model or config.models.analyst,
                 claim_count=len(deep_result.claims),
+                **reader_cache_delta,
             )
             selected_deep_candidates.append(candidate)
             deep_reading_status_by_url[candidate.url] = "succeeded"
@@ -365,6 +381,7 @@ def run_daily(
             model=verifier_model or config.models.verifier,
             claim_count=len(claims),
         )
+        verifier_cache_before = provider_cache_stats(verifier)
         try:
             claims, model_findings, model_feedback, verification_actions = model_review(
                 claims,
@@ -393,6 +410,7 @@ def run_daily(
             model=verifier_model or config.models.verifier,
             publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
             action_count=len(verification_actions),
+            **provider_cache_delta(verifier_cache_before, verifier),
         )
 
     web_search_summary = _web_search_summary(
@@ -527,6 +545,14 @@ def run_daily(
                 ),
             },
         )
+        progress.record(
+            "artifacts",
+            "completed",
+            source_count=len(candidates),
+            publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
+        )
+        progress.record("run", "completed")
+        write_json(run_dir / "runtime_summary.json", build_runtime_summary(progress.events))
     except (OSError, TypeError, ValueError, ResearchRadarError) as exc:
         progress.record(
             "artifacts",
@@ -535,13 +561,6 @@ def run_daily(
             error=str(exc),
         )
         raise
-    progress.record(
-        "artifacts",
-        "completed",
-        source_count=len(candidates),
-        publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
-    )
-    progress.record("run", "completed")
     return run_dir
 
 
