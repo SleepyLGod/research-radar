@@ -21,6 +21,9 @@ drive the research model.
 - Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
   model work.
 - Failed-run diagnostics for provider and transport failures.
+- WeChat draft-only artifacts for manual review; no auto-publish or mass-send.
+- Long-form daily article rendering with a top contents list, deep-read paper sections, other-source
+  links, seen-before fallback, and concise evidence notes.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
 ## Non-Negotiable Quality Rules
@@ -50,14 +53,20 @@ drive the research model.
   - Avoid vague abstract-style prose when concrete verified claims are available.
 - `deep_reading.md` can remain a researcher audit note; `paper.md` should be suitable for careful
   human reading.
+- WeChat HTML should read like a long article rather than a raw audit page:
+  - Include a top contents list instead of relying on unsupported fixed sidebar behavior.
+  - Put selected papers in a dedicated deep-read section.
+  - Keep non-deep-read papers, repos, and web context as links plus conservative gists.
+  - Prefer self-drawn explanatory diagrams; original paper figures require license and attribution
+    audit before reuse.
 
 ## Prioritized TODO
 
-1. Validate minimal daily E2E with WeChat draft-only output.
-   - Run daily research, generate an evidence-gated `ArticleDraft`, render WeChat HTML, and create a
-     manual-review draft.
+1. Validate long-form WeChat daily article output with real draft-only smoke.
+   - Run daily research, generate an evidence-gated long-form `ArticleDraft`, render WeChat HTML,
+     and create a manual-review draft.
    - Do not auto-publish or mass-send.
-   - Write publish success/failure artifacts for audit.
+   - Inspect readability, contents links, deep-read sections, other-source links, and evidence notes.
 
 2. Add scheduler and local automation for confirmed topics.
    - Start with local scheduled runs for reviewed topic configs.
@@ -81,9 +90,8 @@ drive the research model.
    - Use Codex reader for high-value weekly runs only after timeout and schema-retry behavior is
      reliable.
 
-6. Polish article rendering and diagrams.
-   - Improve article structure, titles, introductions, and transitions using only verified claims.
-   - Prefer self-drawn explanatory diagrams.
+6. Expand diagrams and figure handling.
+   - Improve self-drawn explanatory diagrams using only verified structured readings.
    - Reuse original paper figures only with license and attribution audit.
 
 7. Continue cost and first-run runtime optimization.
@@ -93,7 +101,7 @@ drive the research model.
 
 ## Near-Term Execution Order
 
-1. Validate WeChat draft-only E2E from an existing daily run.
-2. Run one real `agent-memory` daily under `/private/tmp` and inspect the draft artifacts.
-3. Add local scheduler only after draft-only publishing is safe and auditable.
+1. Run one real `agent-memory` daily under `/private/tmp` and inspect the long-form WeChat draft.
+2. Validate WeChat draft-only creation from that run.
+3. Add local scheduler only after long-form draft-only publishing is readable and auditable.
 4. Re-run multi-topic evaluation before expanding providers beyond the current Tavily-based recall.

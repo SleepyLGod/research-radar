@@ -15,6 +15,8 @@ preferences stay out of git and are stored through a secret backend.
 - Keeps durable run directories with source manifests, evidence ledgers, drafts, and review reports.
 - Uses typed interfaces for discovery, ingestion, LLM analysis, evidence verification, neutral
   article drafts, renderers, and publishers.
+- Renders daily WeChat HTML as a long-form article with a contents list, deep-read paper sections,
+  other-source links, seen-before fallback, and concise evidence notes.
 - Includes a dedicated researcher-grade paper reading skill under `docs/skills/research-radar/`.
 - Stores secrets through macOS Keychain via `keyring`.
 - Encrypts sensitive runtime state with envelope encryption and AES-GCM.
@@ -124,6 +126,12 @@ Generate WeChat-compatible HTML from a run:
 ```bash
 uv run research-radar compose wechat --run runs/<date-topic>
 ```
+
+Daily WeChat HTML is a reader-facing long article, not the internal audit report: selected papers
+are expanded into deep-read sections, non-selected sources stay as links plus conservative gists,
+and evidence notes only include verified source anchors. Original paper figures are not reused
+automatically; use self-drawn explanatory diagrams unless figure license and attribution have been
+checked.
 
 Create a WeChat draft after manual review:
 

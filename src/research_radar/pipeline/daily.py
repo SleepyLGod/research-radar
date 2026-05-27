@@ -526,6 +526,9 @@ def run_daily(
             public_reportable_candidates,
             claims,
             language=report_language,
+            readings=readings,
+            deep_read_sources=selected_deep_candidates,
+            seen_sources=history_report["omitted_seen_sources"],
         )
         write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
         write_text(

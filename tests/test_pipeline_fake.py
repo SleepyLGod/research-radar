@@ -704,8 +704,8 @@ def test_daily_pipeline_omits_seen_sources_from_second_daily_run(tmp_path: Path)
     assert manifest["publishable_claim_count"] == 0
     assert manifest["metadata"]["source_history"]["omitted_seen_count"] == 1
     assert history_report["omitted_seen_sources"][0]["title"] == "A careful paper"
-    assert "No new or updated sources passed the report gate." in daily_text
-    assert "A careful paper" not in daily_text
+    assert "No new paper or new version entered deep reading today" in daily_text
+    assert "A careful paper" in daily_text
 
 
 class VersionedArxivConnector:
@@ -1446,13 +1446,20 @@ def test_daily_public_sources_are_curated_without_changing_audit(
     assert "RAGChecker" in daily_text
     assert "Healthy Eating" not in daily_text
     assert "DRAGON" not in daily_text
+    deep_titles = [
+        item["source"]["title"]
+        for section in article_draft["sections"]
+        if section["metadata"].get("kind") == "deep_reads"
+        for item in section["metadata"]["deep_reads"]
+    ]
     source_titles = [
         item["title"]
         for section in article_draft["sections"]
         if section["metadata"].get("kind") == "new_updated_sources"
         for item in section["metadata"]["sources"]
     ]
-    assert source_titles == ["RAGChecker"]
+    assert deep_titles == ["RAGChecker"]
+    assert source_titles == []
     synthesis_outline = (run_dir / "synthesis_outline.md").read_text(encoding="utf-8")
     assert "RAGChecker" in synthesis_outline
     assert "Healthy Eating" in synthesis_outline

@@ -20,8 +20,24 @@ def render_markdown(draft: ArticleDraft) -> str:
                 lines.extend(source_lines)
             elif section.body:
                 lines.append(section.body)
+        elif _section_kind(section) == "deep_reads":
+            deep_lines = _deep_read_lines(section.metadata.get("deep_reads", []), language=language)
+            if deep_lines:
+                lines.extend(deep_lines)
+            elif section.body:
+                lines.append(section.body)
+        elif _section_kind(section) == "seen_before":
+            seen_lines = _seen_source_lines(section.metadata.get("sources", []))
+            if seen_lines:
+                lines.extend(seen_lines)
+            elif section.body:
+                lines.append(section.body)
         elif _section_kind(section) == "evidence_trail":
             lines.append(section.body)
+        elif _section_kind(section) == "evidence_notes":
+            lines.append(section.body)
+        elif _section_kind(section) == "today_summary":
+            lines.extend(section.body.splitlines())
         else:
             for line in section.body.splitlines():
                 lines.append(f"- {line}" if line else "")
@@ -70,6 +86,114 @@ def _source_lines(raw_sources: object, *, language: str) -> list[str]:
     if lines and lines[-1] == "":
         lines.pop()
     return lines
+
+
+def _deep_read_lines(raw_deep_reads: object, *, language: str) -> list[str]:
+    if not isinstance(raw_deep_reads, list):
+        return []
+    labels = _deep_read_labels(language)
+    lines: list[str] = []
+    for entry in raw_deep_reads:
+        if not isinstance(entry, dict):
+            continue
+        title = str(entry.get("title") or labels["untitled"])
+        source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+        url = str(source.get("url") or "") if isinstance(source, dict) else ""
+        lines.extend([f"### [{title}](<{url}>)" if url else f"### {title}", ""])
+        _append_text(lines, labels["essence"], entry.get("essence"))
+        _append_nested(lines, labels["problem"], entry.get("problem"), ["core", "why_it_matters"])
+        _append_nested(lines, labels["solution"], entry.get("solution"), ["core", "mechanism"])
+        _append_nested(lines, labels["experiments"], entry.get("experiments"), ["summary"])
+        _append_nested(
+            lines,
+            labels["related_work"],
+            entry.get("related_work"),
+            ["novelty", "prior_work", "repackaging_risk"],
+        )
+        _append_nested(
+            lines,
+            labels["limitations"],
+            entry.get("limitations"),
+            ["explicit_limitations", "inferred_weaknesses", "future_work"],
+        )
+        _append_nested(
+            lines,
+            labels["critical"],
+            entry.get("critical_assessment"),
+            ["bottom_line", "overclaiming_risk", "weak_evaluations", "missing_ablations"],
+        )
+        _append_text(lines, labels["plain_example"], entry.get("plain_language_example"))
+        claims = entry.get("claims")
+        if isinstance(claims, list) and claims:
+            lines.extend([f"#### {labels['key_evidence']}", ""])
+            for claim in claims[:8]:
+                if isinstance(claim, dict) and claim.get("text"):
+                    lines.append(f"- {claim['text']}")
+            lines.append("")
+    return lines
+
+
+def _seen_source_lines(raw_sources: object) -> list[str]:
+    if not isinstance(raw_sources, list):
+        return []
+    lines = []
+    for item in raw_sources[:12]:
+        if not isinstance(item, dict):
+            continue
+        title = _escape_markdown_text(str(item.get("title", "Untitled source")))
+        url = str(item.get("url", ""))
+        version = str(item.get("version") or "")
+        suffix = f" ({version})" if version else ""
+        lines.append(f"- [{title}](<{url}>){suffix}")
+    return lines
+
+
+def _append_text(lines: list[str], label: str, value: object) -> None:
+    text = str(value or "").strip()
+    if text:
+        lines.extend([f"#### {label}", "", text, ""])
+
+
+def _append_nested(lines: list[str], label: str, value: object, keys: list[str]) -> None:
+    if not isinstance(value, dict):
+        return
+    content: list[str] = []
+    for key in keys:
+        raw = value.get(key)
+        if isinstance(raw, list):
+            content.extend(f"- {item}" for item in raw if str(item).strip())
+        elif raw:
+            content.append(str(raw))
+    if content:
+        lines.extend([f"#### {label}", "", *content, ""])
+
+
+def _deep_read_labels(language: str) -> dict[str, str]:
+    if language == "zh":
+        return {
+            "untitled": "未命名论文",
+            "essence": "本质判断",
+            "problem": "问题与动机",
+            "solution": "方法与机制",
+            "experiments": "实验与评估",
+            "related_work": "相关工作",
+            "limitations": "局限与未来工作",
+            "critical": "中立批判",
+            "plain_example": "通俗例子",
+            "key_evidence": "关键证据",
+        }
+    return {
+        "untitled": "Untitled paper",
+        "essence": "Essence",
+        "problem": "Problem and Motivation",
+        "solution": "Solution Mechanism",
+        "experiments": "Experiments",
+        "related_work": "Related Work",
+        "limitations": "Limitations and Future Work",
+        "critical": "Critical Assessment",
+        "plain_example": "Plain-language Example",
+        "key_evidence": "Key Evidence",
+    }
 
 
 def _section_kind(section: object) -> str:

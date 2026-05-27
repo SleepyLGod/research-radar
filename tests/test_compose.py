@@ -1,3 +1,11 @@
+from research_radar.analysis.paper_reading import (
+    AreaContext,
+    CriticalAssessment,
+    LimitationAssessment,
+    PaperReading,
+    ProblemSolution,
+    RelatedWorkAssessment,
+)
 from research_radar.compose.draft import build_daily_draft, build_weekly_draft
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.markdown import render_markdown
@@ -316,3 +324,216 @@ def test_daily_markdown_supports_chinese_language() -> None:
     assert "证据链" in markdown
     assert "long-term memory" in markdown
     assert "ResearchRadar 日报：agent-memory" in html
+
+
+def test_long_form_wechat_renders_toc_deep_reads_and_evidence_notes() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+    )
+
+    html = render_wechat_html(draft)
+
+    assert "Contents" in html
+    assert "Deep Reads" in html
+    assert "Other New / Updated Sources" in html
+    assert "Evidence Notes" in html
+    assert "Problem and Motivation" in html
+    assert "Solution Mechanism" in html
+    assert "Experiments" in html
+    assert "Related Work" in html
+    assert "Explicit limitations" in html
+    assert "Plain-language Example" in html
+    assert "Key Evidence" in html
+    assert "rr-diagram" in html
+    assert "Supported paper claim" in html
+
+
+def test_long_form_wechat_keeps_unsupported_claims_out() -> None:
+    source = _paper_source()
+    supported = _supported_paper_claim(source)
+    unsupported = Claim(
+        text="Unsupported public claim",
+        status=ClaimStatus.UNSUPPORTED,
+        evidence=[EvidenceAnchor(source_url=source.url, quote="Unsupported public claim")],
+    )
+
+    html = render_wechat_html(
+        build_daily_draft(
+            "agent-memory",
+            [source],
+            [supported, unsupported],
+            readings=[_paper_reading(source.title)],
+            deep_read_sources=[source],
+        )
+    )
+
+    assert "Supported paper claim" in html
+    assert "Unsupported public claim" not in html
+
+
+def test_long_form_wechat_separates_deep_read_and_other_sources() -> None:
+    deep_source = _paper_source()
+    other_source = SourceCandidate(
+        title="Follow-up benchmark",
+        url="https://arxiv.org/abs/2605.00002",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        metadata={
+            "source_role": {"role": "benchmark_paper"},
+            "source_gist": {"text": "A benchmark to inspect later."},
+        },
+    )
+
+    draft = build_daily_draft(
+        "agent-memory",
+        [deep_source, other_source],
+        [_supported_paper_claim(deep_source)],
+        readings=[_paper_reading(deep_source.title)],
+        deep_read_sources=[deep_source],
+    )
+
+    deep_section = next(
+        section for section in draft.sections if section.metadata["kind"] == "deep_reads"
+    )
+    other_section = next(
+        section for section in draft.sections if section.metadata["kind"] == "new_updated_sources"
+    )
+
+    assert deep_section.metadata["deep_reads"][0]["source"]["title"] == deep_source.title
+    assert all(source["title"] != deep_source.title for source in other_section.metadata["sources"])
+    assert other_section.metadata["sources"][0]["title"] == other_source.title
+
+
+def test_long_form_wechat_supports_no_new_papers_with_seen_sources() -> None:
+    draft = build_daily_draft(
+        "agent-memory",
+        [],
+        [],
+        readings=[],
+        deep_read_sources=[],
+        seen_sources=[
+            {
+                "title": "Already read paper",
+                "url": "https://arxiv.org/abs/2605.00003",
+                "version": "v1",
+            }
+        ],
+    )
+
+    html = render_wechat_html(draft)
+    markdown = render_markdown(draft)
+
+    assert "No new paper or new version entered deep reading today" in html
+    assert "Seen Before" in html
+    assert "Already read paper" in html
+    assert "Already read paper" in markdown
+
+
+def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
+    source = _paper_source()
+    claim = Claim(
+        text="Problem: 这篇论文讨论长期记忆。",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="long-term memory evidence",
+                location="page 1",
+            )
+        ],
+    )
+
+    html = render_wechat_html(
+        build_daily_draft(
+            "agent-memory",
+            [source],
+            [claim],
+            language="zh",
+            readings=[_paper_reading(source.title)],
+            deep_read_sources=[source],
+        )
+    )
+
+    assert "目录" in html
+    assert "今日精读" in html
+    assert "问题与动机" in html
+    assert "关键证据" in html
+    assert "long-term memory evidence" in html
+
+
+def _paper_source() -> SourceCandidate:
+    return SourceCandidate(
+        title="Memory Paper",
+        url="https://arxiv.org/abs/2605.00001",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        metadata={
+            "source_role": {"role": "primary_paper"},
+            "source_gist": {"text": "This paper proposes a memory system for agents."},
+        },
+    )
+
+
+def _supported_paper_claim(source: SourceCandidate) -> Claim:
+    return Claim(
+        text="Solution: Supported paper claim",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="Supported paper claim",
+                location="page 2",
+            )
+        ],
+    )
+
+
+def _paper_reading(title: str) -> PaperReading:
+    return PaperReading(
+        title=title,
+        area_context=AreaContext(
+            background="Agent memory needs durable recall.",
+            active_questions=["How should agents retrieve old facts?"],
+            common_baselines=["Vector memory"],
+        ),
+        problem_solution=ProblemSolution(
+            problem="Agents forget useful long-term context.",
+            why_it_matters="Without durable memory, repeated tasks lose continuity.",
+            hidden_assumptions=["The stored memory is trustworthy."],
+            solution="The paper adds a structured memory layer.",
+            mechanism="It retrieves, consolidates, and filters stored memories.",
+            evidence=[],
+        ),
+        related_work=RelatedWorkAssessment(
+            prior_work=["MemGPT", "Zep"],
+            novelty="It combines persistent recall with agent-specific retrieval.",
+            repackaging_risk="Some pieces resemble existing vector-memory systems.",
+            evidence=[],
+        ),
+        limitations=LimitationAssessment(
+            explicit_limitations=["The evaluation is narrow."],
+            inferred_weaknesses=["Ablations may not isolate each component."],
+            future_work=["Evaluate on longer deployments."],
+            evidence=[],
+        ),
+        critical_assessment=CriticalAssessment(
+            overclaiming_risk="The paper's strongest claims need broader benchmarks.",
+            weak_evaluations=["Small benchmark coverage."],
+            missing_ablations=["No isolated retrieval-channel ablation."],
+            bottom_line="The idea is useful but needs stronger evaluation.",
+            evidence=[],
+        ),
+        essence="The paper turns agent memory into a managed retrieval layer.",
+        plain_language_example=(
+            "An assistant can remember a project preference and reuse it in a later session."
+        ),
+        experiment_summary="The paper reports improved memory QA accuracy on a benchmark.",
+    )
