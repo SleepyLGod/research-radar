@@ -11,6 +11,8 @@ from pathlib import Path
 
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
+from research_radar.compose.draft_io import load_article_draft
+from research_radar.compose.wechat import render_wechat_html
 from research_radar.config import AppConfig, load_config, parse_config
 from research_radar.discovery.arxiv import ArxivConnector
 from research_radar.discovery.base import DiscoveryConnector
@@ -31,14 +33,13 @@ from research_radar.pipeline.weekly import compose_weekly_from_run
 from research_radar.publishers.wechat.client import (
     WeChatArticle,
     WeChatDraftClient,
-    load_wechat_html,
 )
 from research_radar.security.crypto import EnvelopeEncryptor, SecretMasterKeyProvider
 from research_radar.security.privacy_scan import assert_clean
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import EnvSecretBackend, KeychainSecretBackend, SecretManager
 from research_radar.storage.encrypted_store import EncryptedJsonStore
-from research_radar.storage.files import write_text
+from research_radar.storage.files import write_json, write_text
 from research_radar.topic_bootstrap import (
     bootstrap_topic_draft,
     render_topic_draft_yaml,
@@ -390,6 +391,11 @@ def build_parser() -> argparse.ArgumentParser:
     publish_wechat.add_argument("--digest", required=True)
     publish_wechat.add_argument("--thumb-media-id", required=True)
     publish_wechat.add_argument("--author", default="ResearchRadar")
+    publish_wechat.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Prepare the draft request artifact without calling the WeChat API.",
+    )
     publish_wechat.set_defaults(handler=handle_publish_wechat)
 
     privacy_parser = subparsers.add_parser("privacy", help="Privacy utilities.")
@@ -671,19 +677,44 @@ def handle_compose_wechat(args: argparse.Namespace) -> None:
 def handle_publish_wechat(args: argparse.Namespace) -> None:
     """Create a WeChat draft."""
 
-    manager = SecretManager(KeychainSecretBackend())
-    encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
-    token_store = EncryptedJsonStore(args.run_dir / "wechat_token.enc.json", encryptor)
-    client = WeChatDraftClient(manager, token_store)
-    article = WeChatArticle(
-        title=args.title,
-        author=args.author,
-        digest=args.digest,
-        content=load_wechat_html(args.run_dir),
-        thumb_media_id=args.thumb_media_id,
-    )
-    result = client.add_draft(article)
-    print(f"Created WeChat draft: {result}")
+    try:
+        draft = load_article_draft(args.run_dir / "article_draft.json")
+        content = render_wechat_html(draft)
+        write_text(args.run_dir / "wechat.html", content)
+        article = WeChatArticle(
+            title=args.title,
+            author=args.author,
+            digest=args.digest,
+            content=content,
+            thumb_media_id=args.thumb_media_id,
+        )
+        request = _wechat_publish_request(args, draft_topic=draft.topic_id)
+        write_json(args.run_dir / "publish_wechat_draft_request.json", request)
+        if args.dry_run:
+            result = {
+                "status": "dry_run",
+                "draft_created": False,
+                "request": request,
+            }
+            write_json(args.run_dir / "publish_wechat_draft.json", result)
+            print(f"Prepared WeChat draft dry run: {args.run_dir / 'publish_wechat_draft.json'}")
+            return
+        manager = SecretManager(KeychainSecretBackend())
+        encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
+        token_store = EncryptedJsonStore(args.run_dir / "wechat_token.enc.json", encryptor)
+        client = WeChatDraftClient(manager, token_store)
+        response = client.add_draft(article)
+        result = {
+            "status": "created",
+            "draft_created": True,
+            "request": request,
+            "response": response,
+        }
+        write_json(args.run_dir / "publish_wechat_draft.json", result)
+        print(f"Created WeChat draft: {response}")
+    except ResearchRadarError as exc:
+        _write_publish_error(args.run_dir, exc)
+        raise
 
 
 def handle_privacy_scan(args: argparse.Namespace) -> None:
@@ -691,6 +722,33 @@ def handle_privacy_scan(args: argparse.Namespace) -> None:
 
     assert_clean(args.path)
     print("Privacy scan passed.")
+
+
+def _wechat_publish_request(args: argparse.Namespace, *, draft_topic: str) -> dict[str, object]:
+    return {
+        "target": "wechat_draft",
+        "draft_only": True,
+        "auto_publish": False,
+        "topic_id": draft_topic,
+        "title": args.title,
+        "author": args.author,
+        "digest": args.digest,
+        "thumb_media_id": args.thumb_media_id,
+        "article_draft_path": str(args.run_dir / "article_draft.json"),
+        "content_path": str(args.run_dir / "wechat.html"),
+    }
+
+
+def _write_publish_error(run_dir: Path, exc: ResearchRadarError) -> None:
+    write_json(
+        run_dir / "publish_error.json",
+        {
+            "target": "wechat_draft",
+            "stage": "publish",
+            "error_type": type(exc).__name__,
+            "message": redact_text(str(exc)),
+        },
+    )
 
 
 def _prompt_secret(label: str) -> str:

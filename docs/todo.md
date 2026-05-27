@@ -13,8 +13,13 @@ drive the research model.
 - Full-paper reading packets from PDF extraction.
 - Atomic claim units, claim linting, anchor completeness checks, and quote-only anchor repair.
 - Table-aware evidence windows for experiment and result claims.
+- Tavily web search adapter, web-result canonicalization, and web search diagnostics.
+- Source centrality reranking and curated public daily source lists.
 - DeepSeek v4 Pro as the default reader route.
 - Codex or command-backed providers as verifier routes.
+- Opt-in model call cache and runtime summaries for reader/verifier cost audit.
+- Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
+  model work.
 - Failed-run diagnostics for provider and transport failures.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
@@ -48,46 +53,47 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Add a strong web search provider.
-   - Use web search to improve discovery recall.
-   - Do not let web snippets become publishable claims.
-   - Keep web connector failures as warnings when paper discovery still succeeds.
+1. Validate minimal daily E2E with WeChat draft-only output.
+   - Run daily research, generate an evidence-gated `ArticleDraft`, render WeChat HTML, and create a
+     manual-review draft.
+   - Do not auto-publish or mass-send.
+   - Write publish success/failure artifacts for audit.
 
-2. Add multi-topic recall and precision evaluation.
+2. Add scheduler and local automation for confirmed topics.
+   - Start with local scheduled runs for reviewed topic configs.
+   - Keep source history append-only so daily reports focus on new papers and new versions.
+   - Keep secrets out of prompts, logs, generated reports, and committed files.
+
+3. Add multi-topic recall and precision evaluation as a recurring quality gate.
    - Evaluate `agent-memory`, `llm-reasoning-eval`, `rag-systems`, and user-provided topics.
    - Track source counts, primary-paper counts, selected deep sources, publishable claims, filtered
      noise, and reviewer downgrades.
    - Use the results to tune topic profiles before adding more publishing features.
 
-3. Evaluate DeepSeek topic bootstrap quality.
+4. Evaluate DeepSeek topic bootstrap quality.
    - Generate editable topic YAML drafts.
    - Check whether queries, concept groups, negative phrases, and priority sources are too broad or
      too narrow.
    - Keep manual review for new topic onboarding until quality is proven.
 
-4. Stabilize Codex reader for weekly deep dives.
+5. Stabilize Codex reader for weekly deep dives.
    - Keep DeepSeek v4 Pro as the default daily reader until Codex reader schema stability improves.
    - Use Codex reader for high-value weekly runs only after timeout and schema-retry behavior is
      reliable.
 
-5. Polish article rendering and diagrams.
+6. Polish article rendering and diagrams.
    - Improve article structure, titles, introductions, and transitions using only verified claims.
    - Prefer self-drawn explanatory diagrams.
    - Reuse original paper figures only with license and attribution audit.
 
-6. Validate WeChat draft end to end.
-   - Create draft-only output after manual review.
-   - Do not auto-publish or mass-send.
-   - Write publish failure artifacts instead of swallowing errors.
-
-7. Add scheduler and cloud automation.
-   - Start with local scheduled runs for confirmed topic configs.
-   - Add cloud or Codex automation only after daily research output is stable.
-   - Keep secrets out of prompts, logs, generated reports, and committed files.
+7. Continue cost and first-run runtime optimization.
+   - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
+   - Consider reader/verifier budget strategies only after the daily E2E path is stable.
+   - Preserve `--model-cache` for repeat smoke and debugging runs.
 
 ## Near-Term Execution Order
 
-1. Implement strong web search provider and fake tests.
-2. Run multi-topic recall and precision evaluation under `/private/tmp`.
-3. Tune topic profiles only where the evaluation exposes concrete misses.
-4. Re-run real smoke before touching WeChat, scheduler, or cloud automation.
+1. Validate WeChat draft-only E2E from an existing daily run.
+2. Run one real `agent-memory` daily under `/private/tmp` and inspect the draft artifacts.
+3. Add local scheduler only after draft-only publishing is safe and auditable.
+4. Re-run multi-topic evaluation before expanding providers beyond the current Tavily-based recall.

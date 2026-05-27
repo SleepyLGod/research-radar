@@ -135,7 +135,9 @@ uv run research-radar publish wechat-draft \
   --thumb-media-id "<wechat-thumb-media-id>"
 ```
 
-The publisher creates a draft only. It does not auto-publish or mass-send.
+For local E2E validation without calling the WeChat API, add `--dry-run`. The publisher renders
+content from `article_draft.json`, writes `wechat.html` and publish audit artifacts, and creates a
+draft only. It does not auto-publish or mass-send.
 
 ## Research Reading Standard
 

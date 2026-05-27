@@ -5,7 +5,11 @@ from research_radar import cli
 from research_radar.analysis.cli_providers import CodexCliProvider
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
+from research_radar.compose.draft import build_daily_draft
 from research_radar.config import parse_config
+from research_radar.exceptions import PublishError
+from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
+from research_radar.storage.files import read_json, write_json
 
 
 def test_topic_bootstrap_cli_writes_default_draft_and_prints_yaml(
@@ -376,6 +380,135 @@ def test_run_daily_adds_tavily_web_search_connector(
     assert connectors[3].timeout_seconds == 9
 
 
+def test_publish_wechat_draft_dry_run_uses_article_draft(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path)
+    (run_dir / "wechat.html").write_text("stale unverified html", encoding="utf-8")
+
+    cli.main(
+        [
+            "publish",
+            "wechat-draft",
+            "--run",
+            str(run_dir),
+            "--title",
+            "Daily title",
+            "--digest",
+            "Manual digest",
+            "--thumb-media-id",
+            "thumb123",
+            "--dry-run",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    result = read_json(run_dir / "publish_wechat_draft.json")
+    request = read_json(run_dir / "publish_wechat_draft_request.json")
+    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    assert "Prepared WeChat draft dry run" in output
+    assert result["status"] == "dry_run"
+    assert result["draft_created"] is False
+    assert request["draft_only"] is True
+    assert request["auto_publish"] is False
+    assert "Verified claim for WeChat draft." in html
+    assert "stale unverified html" not in html
+
+
+def test_publish_wechat_draft_posts_rendered_article_draft(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path)
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_draft(self, article) -> dict[str, object]:
+            captured["article"] = article
+            return {"media_id": "draft-media"}
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+
+    cli.main(
+        [
+            "publish",
+            "wechat-draft",
+            "--run",
+            str(run_dir),
+            "--title",
+            "Daily title",
+            "--digest",
+            "Manual digest",
+            "--thumb-media-id",
+            "thumb123",
+        ]
+    )
+
+    result = read_json(run_dir / "publish_wechat_draft.json")
+    article = captured["article"]
+    assert result["status"] == "created"
+    assert result["draft_created"] is True
+    assert result["response"] == {"media_id": "draft-media"}
+    assert article.title == "Daily title"
+    assert "Verified claim for WeChat draft." in article.content
+
+
+def test_publish_wechat_draft_writes_failure_artifact(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path)
+
+    class FailingClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_draft(self, article) -> dict[str, object]:
+            raise PublishError("WeChat draft request failed: token=secret-value")
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FailingClient)
+
+    try:
+        cli.main(
+            [
+                "publish",
+                "wechat-draft",
+                "--run",
+                str(run_dir),
+                "--title",
+                "Daily title",
+                "--digest",
+                "Manual digest",
+                "--thumb-media-id",
+                "thumb123",
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 1
+    else:
+        raise AssertionError("Expected publish failure")
+
+    error = read_json(run_dir / "publish_error.json")
+    assert error["target"] == "wechat_draft"
+    assert error["error_type"] == "PublishError"
+    assert "secret-value" not in error["message"]
+
+
+def test_publish_wechat_parser_requires_manual_metadata() -> None:
+    parser = cli.build_parser()
+
+    try:
+        parser.parse_args(["publish", "wechat-draft", "--run", "runs/example"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("Expected parser failure")
+
+
 def test_run_daily_skips_web_search_when_configured_secret_is_missing(
     monkeypatch,
     tmp_path: Path,
@@ -474,3 +607,27 @@ def test_run_paper_can_use_deepseek_from_env(
     assert captured["reader"].name == "deepseek"
     assert captured["url"] == "https://arxiv.org/pdf/2604.01707v1"
     assert captured["model"] == "deepseek-v4-pro"
+
+
+def _write_publishable_article_draft(tmp_path: Path) -> Path:
+    run_dir = tmp_path / "runs" / "daily-run"
+    claim = Claim(
+        text="Verified claim for WeChat draft.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url="https://example.com/paper",
+                source_title="Fixture Paper",
+                quote="Verified claim for WeChat draft.",
+            )
+        ],
+    )
+    source = SourceCandidate(
+        title="Fixture Paper",
+        url="https://example.com/paper",
+        source_type=SourceType.PAPER,
+        source_name="fixture",
+        metadata={"source_role": {"role": "primary_paper"}},
+    )
+    write_json(run_dir / "article_draft.json", build_daily_draft("agent-memory", [source], [claim]))
+    return run_dir

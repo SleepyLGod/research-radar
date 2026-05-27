@@ -1,8 +1,11 @@
 from research_radar.compose.draft import build_daily_draft, build_weekly_draft
+from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.markdown import render_markdown
 from research_radar.compose.source_groups import group_source_entries
 from research_radar.compose.wechat import compose_wechat_html, render_wechat_html
+from research_radar.exceptions import PublishError
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
+from research_radar.storage.files import write_json
 
 
 def test_wechat_html_uses_verified_claims_only() -> None:
@@ -25,6 +28,54 @@ def test_wechat_html_uses_verified_claims_only() -> None:
     assert "Verified insight" in html
     assert "Direct evidence" in html
     assert "Unsupported insight" not in html
+
+
+def test_article_draft_loader_preserves_zero_confidence(tmp_path) -> None:
+    draft = build_daily_draft(
+        "agent-memory",
+        [],
+        [
+            Claim(
+                text="Zero-confidence audit fixture.",
+                status=ClaimStatus.SUPPORTED,
+                evidence=[
+                    EvidenceAnchor(
+                        source_url="https://example.com/paper",
+                        quote="Zero-confidence audit fixture.",
+                        confidence=0.0,
+                    )
+                ],
+            )
+        ],
+    )
+    path = tmp_path / "article_draft.json"
+    write_json(path, draft)
+
+    loaded = load_article_draft(path)
+
+    assert loaded.claims[0].evidence[0].confidence == 0.0
+
+
+def test_article_draft_loader_rejects_empty_required_fields(tmp_path) -> None:
+    path = tmp_path / "article_draft.json"
+    write_json(
+        path,
+        {
+            "title": "",
+            "topic_id": "agent-memory",
+            "digest": "Digest",
+            "lede": "Lede",
+            "sections": [],
+            "claims": [],
+        },
+    )
+
+    try:
+        load_article_draft(path)
+    except PublishError as exc:
+        assert "title" in str(exc)
+    else:
+        raise AssertionError("Expected PublishError")
 
 
 def test_markdown_and_wechat_render_same_article_draft() -> None:
