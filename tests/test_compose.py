@@ -1,9 +1,12 @@
+from dataclasses import replace
+
 from research_radar.analysis.paper_reading import (
     AreaContext,
     CriticalAssessment,
     LimitationAssessment,
     PaperReading,
     ProblemSolution,
+    ReaderExplanation,
     RelatedWorkAssessment,
 )
 from research_radar.compose.draft import build_daily_draft, build_weekly_draft
@@ -326,7 +329,7 @@ def test_daily_markdown_supports_chinese_language() -> None:
     assert "ResearchRadar 日报：agent-memory" in html
 
 
-def test_long_form_wechat_renders_toc_deep_reads_and_evidence_notes() -> None:
+def test_long_form_wechat_renders_toc_deep_reads_and_collapsed_references() -> None:
     source = _paper_source()
     claim = _supported_paper_claim(source)
     draft = build_daily_draft(
@@ -342,14 +345,18 @@ def test_long_form_wechat_renders_toc_deep_reads_and_evidence_notes() -> None:
     assert "Contents" in html
     assert "Deep Reads" in html
     assert "Other New / Updated Sources" in html
-    assert "Evidence Notes" in html
+    assert "Evidence Notes" not in html
+    assert "References" in html
+    assert "<summary>Open references</summary>" in html
+    assert "Source links" in html
+    assert "arXiv:2605.00001" in html
     assert "Problem and Motivation" in html
     assert "Solution Mechanism" in html
     assert "Experiments" in html
     assert "Related Work" in html
     assert "Explicit limitations" in html
     assert "Plain-language Example" in html
-    assert "Key Evidence" in html
+    assert "<summary>Key Evidence</summary>" in html
     assert "rr-diagram" in html
     assert "Supported paper claim" in html
 
@@ -375,6 +382,43 @@ def test_long_form_wechat_keeps_unsupported_claims_out() -> None:
 
     assert "Supported paper claim" in html
     assert "Unsupported public claim" not in html
+
+
+def test_long_form_wechat_prefers_reader_explanation_prose() -> None:
+    source = _paper_source()
+    reading = replace(
+        _paper_reading(source.title),
+        reader_explanation=ReaderExplanation(
+            opening_context="Start from the long-term memory problem.",
+            core_thesis="The paper treats memory as a managed retrieval layer.",
+            problem_walkthrough="The reader should first see why repeated tasks lose context.",
+            solution_walkthrough="The mechanism retrieves and filters stored memories.",
+            experiment_interpretation=(
+                "The reported benchmark result should be read as scoped evidence."
+            ),
+            related_work_context="MemGPT and Zep frame the comparison.",
+            limitations_discussion="The evidence remains narrow.",
+            plain_language_story=(
+                "Imagine an assistant carrying project preferences across sessions."
+            ),
+            reader_takeaway="The useful question is whether recall stays grounded.",
+        ),
+    )
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [_supported_paper_claim(source)],
+        readings=[reading],
+        deep_read_sources=[source],
+    )
+
+    html = render_wechat_html(draft)
+    markdown = render_markdown(draft)
+
+    assert "Start from the long-term memory problem." in html
+    assert "The mechanism retrieves and filters stored memories." in html
+    assert "Start from the long-term memory problem." in markdown
+    assert "The mechanism retrieves and filters stored memories." in markdown
 
 
 def test_long_form_wechat_separates_deep_read_and_other_sources() -> None:
@@ -456,7 +500,15 @@ def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
             [source],
             [claim],
             language="zh",
-            readings=[_paper_reading(source.title)],
+            readings=[
+                replace(
+                    _paper_reading(source.title),
+                    reader_explanation=ReaderExplanation(
+                        opening_context="这是一段背景知识。",
+                        problem_walkthrough="这是一段问题与动机说明。",
+                    ),
+                )
+            ],
             deep_read_sources=[source],
         )
     )
@@ -464,8 +516,256 @@ def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
     assert "目录" in html
     assert "今日精读" in html
     assert "问题与动机" in html
-    assert "关键证据" in html
+    assert "<summary>关键证据</summary>" in html
+    assert "参考资料" in html
+    assert "<summary>展开参考证据</summary>" in html
     assert "long-term memory evidence" in html
+
+
+def test_long_form_wechat_renders_paper_figures_without_new_claims() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        figures_by_source_url={source.url: [_paper_figure(source, claim.text)]},
+    )
+
+    html = render_wechat_html(draft)
+
+    assert "Key Figures" in html
+    assert '<img src="figures/2605.00001/images/01-architecture.png"' in html
+    assert "Architecture overview for the memory retrieval pipeline." in html
+    assert "Reuse status: needs_manual_review" in html
+    assert "Figure license and reuse" in html
+    assert "license=unknown; reuse_status=needs_manual_review" in html
+    assert "This figure is included because its caption aligns with a verified observation" in html
+    assert "fabricated interpretation" not in html
+
+
+def test_wechat_publish_mode_does_not_emit_local_figure_image_src() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        figures_by_source_url={source.url: [_paper_figure(source, claim.text)]},
+    )
+
+    html = render_wechat_html(draft, publish_mode=True)
+
+    assert '<img src="figures/' not in html
+    assert "Figure image requires WeChat media upload before publishing." in html
+    assert "Architecture overview for the memory retrieval pipeline." in html
+
+
+def test_long_form_chinese_renders_figures_and_keeps_evidence_quote_english() -> None:
+    source = _paper_source()
+    claim = Claim(
+        text="Solution: 这篇论文使用检索式记忆。",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="retrieval memory pipeline",
+            )
+        ],
+    )
+
+    html = render_wechat_html(
+        build_daily_draft(
+            "agent-memory",
+            [source],
+            [claim],
+            language="zh",
+            readings=[
+                replace(
+                    _paper_reading(source.title),
+                    reader_explanation=ReaderExplanation(
+                        opening_context="这是一段背景知识。",
+                    ),
+                )
+            ],
+            deep_read_sources=[source],
+            figures_by_source_url={
+                source.url: [
+                    {
+                        **_paper_figure(source, claim.text),
+                        "caption": (
+                            "SLM~V3.3 architecture with 32$$ cold-start speedup "
+                            "and retention tier $R 0.35$."
+                        ),
+                        "localized_caption": (
+                            "SLM~V3.3 架构图，展示 32$$ 冷启动加速和保留层级 $R 0.35$。"
+                        ),
+                        "explanation": "这张图说明检索式记忆 pipeline 的架构。",
+                    }
+                ]
+            },
+        )
+    )
+
+    assert "论文关键图" in html
+    assert "背景知识速读" in html
+    assert "SLM V3.3 架构图，展示 32 冷启动加速和保留层级" in html
+    assert 'class="rr-formula"' in html
+    assert "R 0.35" in html
+    assert "原始图注" in html
+    assert "SLM V3.3 architecture with 32 cold-start speedup" in html
+    assert "SLM~V3.3" not in html
+    assert "32$$" not in html
+    assert "$R 0.35$" not in html
+    assert "这张图说明检索式记忆 pipeline 的架构。" in html
+    assert "来源:" in html
+    assert "复用状态: needs_manual_review" in html
+    assert "retrieval memory pipeline" in html
+
+
+def test_wechat_static_formula_formatting_keeps_raw_evidence_quote() -> None:
+    source = _paper_source()
+    claim = Claim(
+        text="Solution: Retention follows R(t)=e^{-t/S(m)} with κ=2.0.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="Retention follows R(t)=e^{-t/S(m)} with κ=2.0.",
+                location="page 3",
+            )
+        ],
+    )
+
+    html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
+
+    assert html.count('class="rr-formula"') >= 2
+    assert "R(t)=e^{-t/S(m)}" in html
+    assert "κ=2.0" in html
+    assert (
+        "<p>Retention follows R(t)=e^{-t/S(m)} with κ=2.0.</p>"
+        in html
+    )
+
+
+def test_wechat_formula_formatter_does_not_wrap_plain_english() -> None:
+    source = _paper_source()
+    claim = Claim(
+        text="Solution: The system uses retrieval memory without a formula.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="The system uses retrieval memory without a formula.",
+            )
+        ],
+    )
+
+    html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
+
+    assert 'class="rr-formula"' not in html
+
+
+def test_wechat_formula_formatter_does_not_wrap_currency_prose() -> None:
+    source = _paper_source()
+    claim = Claim(
+        text="Cost: The service costs $5 for input and $10 for output.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="The service costs $5 for input and $10 for output.",
+            )
+        ],
+    )
+
+    html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
+
+    assert "costs $5 for input and $10 for output" in html
+    assert 'class="rr-formula"' not in html
+
+
+def test_chinese_figure_fallback_explanation_does_not_expose_english_boilerplate() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    html = render_wechat_html(
+        build_daily_draft(
+            "agent-memory",
+            [source],
+            [claim],
+            language="zh",
+            readings=[_paper_reading(source.title)],
+            deep_read_sources=[source],
+            figures_by_source_url={
+                source.url: [
+                    _paper_figure(
+                        source,
+                        "Solution: The system uses a retrieval memory pipeline.",
+                    )
+                ]
+            },
+        )
+    )
+
+    assert "这张图用于辅助理解；它的图注与一条已核验判断相关" in html
+    assert "This figure is included because" not in html
+    assert "Solution: The system uses a retrieval memory pipeline" not in html
+
+
+def test_long_form_wechat_renders_multiple_deep_reads_with_own_figures() -> None:
+    first = _paper_source()
+    second = SourceCandidate(
+        title="Second Memory Paper",
+        url="https://arxiv.org/abs/2605.00002",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        metadata={
+            "source_role": {"role": "benchmark_paper"},
+            "source_gist": {"text": "This paper evaluates memory benchmarks."},
+        },
+    )
+    first_claim = _supported_paper_claim(first)
+    second_claim = Claim(
+        text="Experiment: Second paper claim",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=second.url,
+                source_title=second.title,
+                quote="Second paper claim",
+            )
+        ],
+    )
+
+    html = render_wechat_html(
+        build_daily_draft(
+            "agent-memory",
+            [first, second],
+            [first_claim, second_claim],
+            readings=[_paper_reading(first.title), _paper_reading(second.title)],
+            deep_read_sources=[first, second],
+            figures_by_source_url={
+                first.url: [_paper_figure(first, first_claim.text, path="figures/first.png")],
+                second.url: [
+                    _paper_figure(second, second_claim.text, path="figures/second.png")
+                ],
+            },
+        )
+    )
+
+    assert html.count("Deep-read paper") == 2
+    assert "figures/first.png" in html
+    assert "figures/second.png" in html
+    assert html.index("Memory Paper") < html.index("figures/first.png")
+    assert html.index("Second Memory Paper") < html.index("figures/second.png")
 
 
 def _paper_source() -> SourceCandidate:
@@ -494,6 +794,34 @@ def _supported_paper_claim(source: SourceCandidate) -> Claim:
             )
         ],
     )
+
+
+def _paper_figure(
+    source: SourceCandidate,
+    matched_claim: str,
+    *,
+    path: str = "figures/2605.00001/images/01-architecture.png",
+) -> dict[str, object]:
+    return {
+        "title": "fig:architecture",
+        "source_url": source.url,
+        "source_title": source.title,
+        "asset_path": f"/tmp/{path}",
+        "relative_path": path,
+        "original_path": "figures/architecture",
+        "caption": "Architecture overview for the memory retrieval pipeline.",
+        "label": "fig:architecture",
+        "explanation": (
+            "This figure is included because its caption aligns with a verified observation: "
+            f"{matched_claim}"
+        ),
+        "matched_claim": matched_claim,
+        "license": "unknown",
+        "reuse_status": "needs_manual_review",
+        "attribution": f"{source.title}; {source.url}",
+        "renderable": True,
+        "score": 3.0,
+    }
 
 
 def _paper_reading(title: str) -> PaperReading:

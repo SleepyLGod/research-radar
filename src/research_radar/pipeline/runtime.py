@@ -8,6 +8,7 @@ SLOW_STAGE_THRESHOLDS = {
     "source_gist": 60.0,
     "reader": 300.0,
     "verifier": 300.0,
+    "localization": 60.0,
     "artifacts": 30.0,
 }
 TERMINAL_STATUSES = {"completed", "succeeded", "failed"}
@@ -64,6 +65,7 @@ def _stage_runtime_row(event: dict[str, Any]) -> dict[str, Any]:
         "cache_hit_count",
         "cache_miss_count",
         "error_type",
+        "status_detail",
     ):
         if key in event:
             row[key] = event[key]

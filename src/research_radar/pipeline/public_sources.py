@@ -43,6 +43,8 @@ def select_public_report_sources(
     ):
         group = source_group_for_candidate(source, _role(source))
         is_selected = source.url in selected_urls
+        if not is_selected and _is_duplicate_paper_family(source):
+            continue
         if not is_selected and _is_low_centrality_domain_source(source):
             continue
         if not is_selected and group_counts.get(group, 0) >= PUBLIC_SOURCE_CAPS[group]:
@@ -59,6 +61,10 @@ def _is_low_centrality_domain_source(source: SourceCandidate) -> bool:
     if not centrality.get("negative_signals"):
         return False
     return float(centrality.get("score", 0.0)) < RESEARCH_BRIEF_LOW_CENTRALITY_FLOOR
+
+
+def _is_duplicate_paper_family(source: SourceCandidate) -> bool:
+    return source.metadata.get("deep_selection_dedupe", {}).get("status") == "duplicate"
 
 
 def _role(source: SourceCandidate) -> str:

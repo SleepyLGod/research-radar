@@ -91,6 +91,21 @@ class ClaimUnit:
 
 
 @dataclass(frozen=True)
+class ReaderExplanation:
+    """Reader-facing explanation that must stay within verified paper evidence."""
+
+    opening_context: str = ""
+    core_thesis: str = ""
+    problem_walkthrough: str = ""
+    solution_walkthrough: str = ""
+    experiment_interpretation: str = ""
+    related_work_context: str = ""
+    limitations_discussion: str = ""
+    plain_language_story: str = ""
+    reader_takeaway: str = ""
+
+
+@dataclass(frozen=True)
 class PaperReading:
     """Structured researcher-grade reading of one paper."""
 
@@ -106,6 +121,7 @@ class PaperReading:
     experiment_evidence: list[EvidenceAnchor] = field(default_factory=list)
     unsupported_or_rejected_claims: list[str] = field(default_factory=list)
     claim_units: list[ClaimUnit] = field(default_factory=list)
+    reader_explanation: ReaderExplanation = field(default_factory=ReaderExplanation)
 
 
 @dataclass(frozen=True)
@@ -175,12 +191,32 @@ Return structured JSON with these fields:
   - plain_language_example: simple example grounded in the source
   - essence: one sentence describing what the source is really doing
   - claim_units: required list of atomic claims for verification and publication
+  - reader_explanation: opening_context, core_thesis, problem_walkthrough,
+    solution_walkthrough, experiment_interpretation, related_work_context,
+    limitations_discussion, plain_language_story, reader_takeaway
 - perspective_questions: follow-up questions from researcher, builder, evaluator, and skeptic views
 - evidence_index: anchors used for factual, novelty, limitation, and critique claims
 - unsupported_or_rejected_claims: claims you considered but rejected
 
 Rules:
 - Separate facts from interpretation and speculation.
+- reader_explanation is the reader-facing explanation layer. Write it as natural
+  research prose, not bullet fragments: each field should usually be 1-3 concise
+  paragraphs that walk a technical reader from motivation to mechanism to evidence.
+- reader_explanation must not introduce any new facts, URLs, rankings, critique, or
+  speculation beyond the anchored section fields and claim_units. If a point cannot
+  be grounded in the supplied packet, omit it or mark it unknown in unsupported_or_rejected_claims.
+- Use reader_explanation to make the paper understandable: explain why the problem
+  matters, how the mechanism works step by step, how to read the experiments, how
+  related work frames the contribution, what the limitations mean in practice, and
+  give one plain-language story that follows only verified technical claims.
+- opening_context should work as a short background primer for ordinary technical
+  readers: explain the broader area problem first, then why this specific paper is
+  worth reading.
+- solution_walkthrough must be the most detailed explanation field. Cover the main
+  components, data flow, why each step exists, how components interact, and how the
+  mechanism connects to reported experiments. Only include components supported by
+  anchored evidence.
 - Keep each claim_unit to exactly one verifiable assertion; split broad claims.
 - claim_units must not combine method, result, novelty, and critique in one sentence.
 - Setup facts must be separate claim_units: benchmark identity, metric definition,
@@ -397,6 +433,9 @@ def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
             reading_data.get("claim_units") or payload.get("claim_units", []),
             artifact,
         ),
+        reader_explanation=_parse_reader_explanation(
+            reading_data.get("reader_explanation", {}),
+        ),
     )
     _require_anchor(reading.problem_solution.evidence, "problem_solution")
     _require_anchor(reading.related_work.evidence, "related_work")
@@ -459,6 +498,7 @@ def render_deep_reading_report(
     allowed = _publishable_prefixes(claims)
     for reading in readings:
         lines.extend([f"## {reading.title}", ""])
+        lines.extend(_reader_explanation_lines(reading.reader_explanation, labels))
         if _can_render("Essence:", allowed):
             lines.extend([f"**{labels['essence']}:** {reading.essence}", ""])
         if _can_render("Problem:", allowed):
@@ -582,6 +622,29 @@ def _can_render(prefix: str, allowed: set[str] | None) -> bool:
     return allowed is None or prefix.casefold() in allowed
 
 
+def _reader_explanation_lines(
+    explanation: ReaderExplanation,
+    labels: dict[str, str],
+) -> list[str]:
+    sections = [
+        ("opening_context", labels["opening_context"]),
+        ("core_thesis", labels["core_thesis"]),
+        ("problem_walkthrough", labels["problem"]),
+        ("solution_walkthrough", labels["solution"]),
+        ("experiment_interpretation", labels["experiments"]),
+        ("related_work_context", labels["related_work"]),
+        ("limitations_discussion", labels["limitations"]),
+        ("plain_language_story", labels["plain_example"]),
+        ("reader_takeaway", labels["reader_takeaway"]),
+    ]
+    lines: list[str] = []
+    for key, label in sections:
+        text = str(getattr(explanation, key, "")).strip()
+        if text:
+            lines.extend([f"### {label}", text, ""])
+    return lines
+
+
 def _list_line(label: str, values: list[str], *, language: str = "en") -> str:
     if not values:
         empty = "未捕捉到" if language == "zh" else "none captured"
@@ -602,6 +665,9 @@ def _deep_reading_labels(language: str) -> dict[str, str]:
             "related_work": "相关工作",
             "limitations": "局限与未来工作",
             "critical": "中立批判",
+            "opening_context": "背景知识速读",
+            "core_thesis": "核心判断",
+            "reader_takeaway": "读者 takeaway",
             "core": "核心判断",
             "why_it_matters": "为什么重要",
             "hidden_assumptions": "隐藏假设",
@@ -628,6 +694,9 @@ def _deep_reading_labels(language: str) -> dict[str, str]:
         "related_work": "Related Work",
         "limitations": "Limitations and Future Work",
         "critical": "Critical Assessment",
+        "opening_context": "Opening Context",
+        "core_thesis": "Core Thesis",
+        "reader_takeaway": "Reader Takeaway",
         "core": "Core",
         "why_it_matters": "Why it matters",
         "hidden_assumptions": "Hidden assumptions",
@@ -1300,6 +1369,28 @@ def _parse_experiment_evidence(
     if isinstance(experiments, dict):
         return _section_evidence(experiments, artifact, fallback_evidence)
     return _parse_evidence(data.get("experiment_evidence", []), artifact, required=False)
+
+
+def _parse_reader_explanation(value: object) -> ReaderExplanation:
+    data = value if isinstance(value, dict) else {}
+    return ReaderExplanation(
+        opening_context=_optional_explanation(data, "opening_context"),
+        core_thesis=_optional_explanation(data, "core_thesis"),
+        problem_walkthrough=_optional_explanation(data, "problem_walkthrough"),
+        solution_walkthrough=_optional_explanation(data, "solution_walkthrough"),
+        experiment_interpretation=_optional_explanation(data, "experiment_interpretation"),
+        related_work_context=_optional_explanation(data, "related_work_context"),
+        limitations_discussion=_optional_explanation(data, "limitations_discussion"),
+        plain_language_story=_optional_explanation(data, "plain_language_story"),
+        reader_takeaway=_optional_explanation(data, "reader_takeaway"),
+    )
+
+
+def _optional_explanation(data: dict[object, object], key: str) -> str:
+    value = data.get(key)
+    if isinstance(value, list):
+        return "\n\n".join(str(item).strip() for item in value if str(item).strip())
+    return str(value or "").strip()
 
 
 def _parse_claim_units(value: object, artifact: Artifact) -> list[ClaimUnit]:

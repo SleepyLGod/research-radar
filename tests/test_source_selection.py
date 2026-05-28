@@ -6,6 +6,8 @@ from research_radar.discovery.source_role import classify_source_role
 from research_radar.discovery.source_selection import (
     IMPLEMENTATION_SCAN,
     RESEARCH_BRIEF,
+    annotate_deep_selection_dedupe,
+    deep_selection_family_key,
     select_deep_candidates,
 )
 from research_radar.discovery.wide_scan import build_source_selection_report
@@ -182,6 +184,82 @@ def test_source_selection_report_order_matches_actual_selection_order() -> None:
     ranked_titles = [row["title"] for row in report["ranked_sources"]]
     selected_titles = [candidate.title for candidate in selected]
     assert ranked_titles[: len(selected_titles)] == selected_titles
+
+
+def test_source_selection_report_marks_non_eligible_reportable_sources() -> None:
+    paper = _candidate(
+        "Grounded Agent Memory Benchmark",
+        SourceType.PAPER,
+        "A strongly matching paper about agent memory benchmark evaluation.",
+        relevance=0.86,
+        centrality=0.60,
+    )
+    repo = _candidate(
+        "agent-memory-benchmark",
+        SourceType.REPOSITORY,
+        "Benchmark implementation for agent memory.",
+        relevance=0.99,
+        centrality=1.0,
+    )
+
+    selected = select_deep_candidates([repo, paper], 1, source_intent=RESEARCH_BRIEF)
+    report = build_source_selection_report(
+        [repo, paper],
+        selected,
+        source_intent=RESEARCH_BRIEF,
+    )
+
+    assert report["ranked_sources"][0]["title"] == paper.title
+    repo_row = next(row for row in report["ranked_sources"] if row["title"] == repo.title)
+    assert repo_row["deep_selection_eligible"] is False
+    assert repo_row["selected_for_deep_reading"] is False
+
+
+def test_deep_selection_dedupes_arxiv_semantic_and_doi_family() -> None:
+    arxiv = _candidate(
+        "Memory in the LLM Era",
+        SourceType.PAPER,
+        "A paper about agent memory benchmark evaluation.",
+        relevance=0.9,
+        url="https://arxiv.org/abs/2604.01707v1",
+        canonical_id="2604.01707v1",
+    )
+    semantic = _candidate(
+        "Memory in the LLM Era",
+        SourceType.PAPER,
+        "A paper about agent memory benchmark evaluation.",
+        relevance=0.85,
+        url="https://www.semanticscholar.org/paper/example",
+        canonical_id="ArXiv:2604.01707",
+    )
+    doi = _candidate(
+        "Memory in the LLM Era",
+        SourceType.PAPER,
+        "A paper about agent memory benchmark evaluation.",
+        relevance=0.84,
+        url="https://doi.org/10.48550/arXiv.2604.01707",
+        canonical_id="DOI:10.48550/arXiv.2604.01707",
+    )
+
+    selected = select_deep_candidates(
+        [semantic, doi, arxiv],
+        3,
+        source_intent=RESEARCH_BRIEF,
+    )
+    annotated = annotate_deep_selection_dedupe(
+        [semantic, doi, arxiv],
+        source_intent=RESEARCH_BRIEF,
+    )
+
+    assert selected == [arxiv]
+    assert deep_selection_family_key(arxiv) == "arxiv:2604.01707"
+    dedupe_by_url = {
+        source.url: source.metadata["deep_selection_dedupe"] for source in annotated
+    }
+    assert dedupe_by_url[arxiv.url]["status"] == "primary"
+    assert dedupe_by_url[semantic.url]["status"] == "duplicate"
+    assert dedupe_by_url[semantic.url]["deduped_as_url"] == arxiv.url
+    assert dedupe_by_url[doi.url]["status"] == "duplicate"
 
 
 def test_research_brief_penalizes_language_specific_rag_benchmark() -> None:
@@ -372,11 +450,14 @@ def _candidate(
     *,
     relevance: float,
     centrality: float | None = None,
+    url: str | None = None,
+    canonical_id: str | None = None,
 ) -> SourceCandidate:
     candidate = classify_source_role(
         SourceCandidate(
             title=title,
-            url=f"https://example.com/{title.lower().replace(' ', '-')}",
+            url=url or f"https://example.com/{title.lower().replace(' ', '-')}",
+            canonical_id=canonical_id,
             source_type=source_type,
             source_name="arxiv" if source_type == SourceType.PAPER else "github",
             summary=summary,

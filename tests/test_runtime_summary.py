@@ -29,15 +29,29 @@ def test_runtime_summary_marks_slow_stages_and_counts_cache() -> None:
                 "cache_hit_count": 0,
                 "cache_miss_count": 1,
             },
+            {
+                "stage": "localization",
+                "status": "completed",
+                "elapsed_seconds": 344.0,
+                "duration_seconds": 14.0,
+                "provider": "deepseek",
+                "model": "deepseek-chat",
+                "status_detail": "failed",
+                "cache_hit_count": 1,
+                "cache_miss_count": 0,
+            },
         ]
     )
 
-    assert summary["total_elapsed_seconds"] == 330.0
+    assert summary["total_elapsed_seconds"] == 344.0
     assert summary["slow_stage_count"] == 1
-    assert summary["cache"] == {"hit_count": 1, "miss_count": 1}
+    assert summary["cache"] == {"hit_count": 2, "miss_count": 1}
     assert summary["stages"][0]["slow"] is True
     assert summary["stages"][0]["anchor_repair_target_count"] == 2
     assert summary["stages"][0]["anchor_repair_skipped_count"] == 1
     assert summary["stages"][1]["slow"] is False
     assert summary["stages"][1]["verifier_input_count"] == 7
     assert summary["stages"][1]["verifier_skipped_claim_count"] == 3
+    assert summary["stages"][2]["stage"] == "localization"
+    assert summary["stages"][2]["slow"] is False
+    assert summary["stages"][2]["status_detail"] == "failed"

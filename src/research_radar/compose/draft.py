@@ -20,6 +20,7 @@ def build_daily_draft(
     readings: list[Any] | None = None,
     deep_read_sources: list[SourceCandidate] | None = None,
     seen_sources: list[dict[str, Any]] | None = None,
+    figures_by_source_url: dict[str, list[dict[str, Any]]] | None = None,
 ) -> ArticleDraft:
     """Build a platform-neutral daily monitoring draft."""
 
@@ -33,6 +34,7 @@ def build_daily_draft(
             readings=readings or [],
             deep_read_sources=deep_read_sources or [],
             seen_sources=seen_sources or [],
+            figures_by_source_url=figures_by_source_url or {},
         )
 
     source_entries = [_source_entry(source, language=language) for source in sources]
@@ -82,6 +84,7 @@ def _build_long_form_daily_draft(
     readings: list[Any],
     deep_read_sources: list[SourceCandidate],
     seen_sources: list[dict[str, Any]],
+    figures_by_source_url: dict[str, list[dict[str, Any]]],
 ) -> ArticleDraft:
     labels = _long_form_labels(language)
     deep_urls = {source.url for source in deep_read_sources}
@@ -94,6 +97,7 @@ def _build_long_form_daily_draft(
         deep_read_sources,
         verified,
         language=language,
+        figures_by_source_url=figures_by_source_url,
     )
     other_source_entries = [entry for entry in source_entries if not entry.get("deep_read")]
     seen_entries = _seen_source_entries(seen_sources)
@@ -125,7 +129,11 @@ def _build_long_form_daily_draft(
             title=labels["evidence_notes"],
             body=_evidence_text(verified, language=language),
             claims=verified,
-            metadata={"kind": "evidence_notes"},
+            metadata={
+                "kind": "references",
+                "sources": source_entries,
+                "figures": _all_figure_entries(figures_by_source_url),
+            },
         ),
     ]
     return ArticleDraft(
@@ -138,6 +146,7 @@ def _build_long_form_daily_draft(
         metadata={
             "source_count": len(sources),
             "deep_read_count": len(deep_read_entries),
+            "figure_count": sum(len(value) for value in figures_by_source_url.values()),
             "seen_source_count": len(seen_entries),
             "draft_type": "daily_long_form",
             "language": language,
@@ -213,7 +222,7 @@ def _long_form_labels(language: str) -> dict[str, str]:
             "deep_reads": "今日精读",
             "other_sources": "其他新增 / 更新来源",
             "seen_before": "已读过的相关来源",
-            "evidence_notes": "证据说明",
+            "evidence_notes": "参考资料",
             "no_deep_reads": "今天没有新论文进入精读。",
             "no_other_sources": "没有其他新增或更新来源通过报告门槛。",
             "no_seen_sources": "没有可展示的历史来源。",
@@ -229,7 +238,7 @@ def _long_form_labels(language: str) -> dict[str, str]:
         "deep_reads": "Today's Deep Reads",
         "other_sources": "Other New / Updated Sources",
         "seen_before": "Seen Before",
-        "evidence_notes": "Evidence Notes",
+        "evidence_notes": "References",
         "no_deep_reads": "No new paper entered deep reading today.",
         "no_other_sources": "No other new or updated sources passed the report gate.",
         "no_seen_sources": "No historical sources are available for display.",
@@ -327,6 +336,7 @@ def _deep_read_entries(
     verified: list[Claim],
     *,
     language: str,
+    figures_by_source_url: dict[str, list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     entries = []
     for index, reading in enumerate(readings):
@@ -339,6 +349,7 @@ def _deep_read_entries(
                 if source
                 else None,
                 "essence": str(getattr(reading, "essence", "")),
+                "reader_explanation": _reader_explanation_entry(reading),
                 "problem": _problem_entry(reading),
                 "solution": _solution_entry(reading),
                 "experiments": _experiments_entry(reading),
@@ -348,10 +359,48 @@ def _deep_read_entries(
                 "plain_language_example": str(
                     getattr(reading, "plain_language_example", "")
                 ),
+                "figures": _figure_entries(source, figures_by_source_url),
                 "claims": [_claim_entry(claim, language=language) for claim in reading_claims],
             }
         )
     return entries
+
+
+def _reader_explanation_entry(reading: Any) -> dict[str, str]:
+    value = getattr(reading, "reader_explanation", None)
+    return {
+        "opening_context": str(getattr(value, "opening_context", "")),
+        "core_thesis": str(getattr(value, "core_thesis", "")),
+        "problem_walkthrough": str(getattr(value, "problem_walkthrough", "")),
+        "solution_walkthrough": str(getattr(value, "solution_walkthrough", "")),
+        "experiment_interpretation": str(
+            getattr(value, "experiment_interpretation", "")
+        ),
+        "related_work_context": str(getattr(value, "related_work_context", "")),
+        "limitations_discussion": str(getattr(value, "limitations_discussion", "")),
+        "plain_language_story": str(getattr(value, "plain_language_story", "")),
+        "reader_takeaway": str(getattr(value, "reader_takeaway", "")),
+    }
+
+
+def _figure_entries(
+    source: SourceCandidate | None,
+    figures_by_source_url: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    if source is None:
+        return []
+    return figures_by_source_url.get(source.url, [])
+
+
+def _all_figure_entries(
+    figures_by_source_url: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    return [
+        figure
+        for figures in figures_by_source_url.values()
+        for figure in figures
+        if isinstance(figure, dict)
+    ]
 
 
 def _claims_for_reading(

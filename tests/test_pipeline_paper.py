@@ -5,7 +5,7 @@ from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
-from research_radar.exceptions import AnalysisError
+from research_radar.exceptions import AnalysisError, ResearchRadarError
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 from research_radar.pipeline import paper
 from research_radar.pipeline.paper import build_direct_paper_source, run_paper
@@ -125,6 +125,32 @@ def test_single_paper_pipeline_writes_failed_run_artifacts(
     assert not (run_dir / "claims.jsonl").exists()
     assert not (run_dir / "readings.jsonl").exists()
     assert not (run_dir / "paper.md").exists()
+
+
+def test_single_paper_pipeline_requires_localizer_for_chinese_report(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    try:
+        run_paper(
+            tmp_path,
+            config,
+            "agent-memory",
+            "https://arxiv.org/pdf/2604.01707v1",
+            StaticProvider(_paper_reading_json()),
+            model="fake-reader",
+            language="zh",
+        )
+    except ResearchRadarError as exc:
+        assert "Chinese report localization requires" in str(exc)
+    else:
+        raise AssertionError("Expected ResearchRadarError")
+
+    assert not (tmp_path / "runs").exists()
 
 
 def test_single_paper_pipeline_uses_model_cache_on_second_run(
@@ -592,7 +618,19 @@ def test_single_paper_pipeline_supports_chinese_report_language(
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
         }
     )
-    provider = StaticProvider(_paper_reading_zh_json())
+    reader = CapturingProvider(_paper_reading_json())
+    verifier = StaticProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 2, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 3, "status": "supported", "risk": "low", "reason": "grounded"}
+          ]
+        }
+        """
+    )
+    localizer = CapturingProvider(_paper_localization_json())
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         return Artifact(
@@ -614,22 +652,44 @@ def test_single_paper_pipeline_supports_chinese_report_language(
         config,
         "agent-memory",
         "https://arxiv.org/pdf/2604.01707v1",
-        provider,
+        reader,
         model="fake-analyst",
+        verifier=verifier,
+        verifier_model="fake-reviewer",
+        localizer=localizer,
+        localization_model="fake-localizer",
         language="zh",
     )
 
     manifest = read_json(run_dir / "manifest.json")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    localized_readings = read_jsonl(run_dir / "localized_readings.jsonl")
+    attempts = read_jsonl(run_dir / "localization_attempts.jsonl")
     brief = (run_dir / "paper.md").read_text(encoding="utf-8")
     deep_report = (run_dir / "deep_reading.md").read_text(encoding="utf-8")
+    reader_prompt = reader.messages[0][1].content
+    localization_prompt = localizer.messages[0][1].content
 
+    assert manifest["metadata"]["analysis_language"] == "en"
     assert manifest["metadata"]["report_language"] == "zh"
+    assert manifest["metadata"]["localization"]["status"] == "succeeded"
+    assert "Simplified Chinese" not in reader_prompt
+    assert "Translate verified ResearchRadar display text into Simplified Chinese" in (
+        localization_prompt
+    )
+    assert "Keep technical terms" in localization_prompt
     assert "# ResearchRadar 论文简报" in brief
     assert "## 问题与动机" in brief
     assert "\nProblem:" not in brief
-    assert "\n问题：" in brief
+    assert "论文评估 LLM agent 中的 memory 方法。" in brief
+    assert "LOCOMO" in brief
+    assert "LONGMEMEVAL" in brief
+    assert "unified framework" in brief
+    assert claims[0]["text"].startswith("Problem: The paper evaluates")
+    assert localized_readings[0]["problem_solution"]["problem"].startswith("论文评估")
+    assert attempts[0]["status"] == "succeeded"
+    assert "深度阅读报告" in deep_report
     assert "# 深度阅读报告" in deep_report
-    assert "The paper evaluates memory in LLM agents." in brief
 
 
 def _paper_reading_json() -> str:
@@ -676,6 +736,63 @@ def _paper_reading_json() -> str:
         "essence": "The paper turns scattered LLM memory designs into a shared comparison frame.",
         "unsupported_or_rejected_claims": []
       }
+    }
+    """
+
+
+def _paper_localization_json() -> str:
+    return """
+    {
+      "readings": [
+        {
+          "index": 0,
+          "area_context": {
+            "background": "Agent memory 研究关注 LLM agent 的持久化与检索。",
+            "active_questions": ["如何比较不同 memory 架构？"],
+            "common_baselines": ["long-context prompting"]
+          },
+          "problem_solution": {
+            "problem": "论文评估 LLM agent 中的 memory 方法。",
+            "why_it_matters": "没有统一框架时，不同 memory 策略很难公平比较。",
+            "hidden_assumptions": ["benchmark 能覆盖关键 memory 行为。"],
+            "solution": "它把方法组织进一个 unified framework。",
+            "mechanism": "这个 framework 拆分 memory architecture choices 和 strategies。"
+          },
+          "related_work": {
+            "prior_work": ["long-context prompting"],
+            "novelty": "它把已有方法整理成统一比较框架。",
+            "repackaging_risk": "部分贡献是综合已有 memory strategies。"
+          },
+          "experiments": {
+            "summary": "论文使用 LOCOMO 和 LONGMEMEVAL 进行评估。"
+          },
+          "limitations": {
+            "explicit_limitations": ["论文没有报告 deployment evaluation。"],
+            "inferred_weaknesses": ["benchmark 覆盖可能不能代表开放式 agent。"],
+            "future_work": ["后续应验证长期部署场景。"]
+          },
+          "critical_assessment": {
+            "overclaiming_risk": "中等",
+            "weak_evaluations": ["没有 deployment evaluation"],
+            "missing_ablations": ["没有广泛 agent deployment ablation"],
+            "bottom_line": "它更像统一分析框架，而不是证明所有 memory systems 都有效。"
+          },
+          "plain_language_example": "像用同一张 checklist 比较不同 memory systems。",
+          "essence": "论文把分散的 LLM memory 设计整理成共同比较框架。"
+        }
+      ],
+      "claims": [
+        {"index": 0, "text": "Problem: 论文评估 LLM agent 中的 memory 方法。"},
+        {"index": 1, "text": "Solution: 它把方法组织进一个 unified framework。"},
+        {"index": 2, "text": "Experiment: 论文使用 LOCOMO 和 LONGMEMEVAL 进行评估。"}
+      ],
+      "sources": [
+        {
+          "url": "https://arxiv.org/pdf/2604.01707v1",
+          "gist": "这是一篇关于 LLM agent memory 的论文。"
+        }
+      ],
+      "figures": []
     }
     """
 

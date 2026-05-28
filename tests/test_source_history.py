@@ -50,6 +50,12 @@ def test_source_family_key_normalizes_doi() -> None:
     assert source_family_key(source) == "arxiv:2504.04062"
 
 
+def test_source_family_key_does_not_treat_plain_doi_suffix_as_arxiv() -> None:
+    source = _paper("https://doi.org/10.1234/2504.04062", "DOI:10.1234/2504.04062")
+
+    assert source_family_key(source) == "doi:10.1234/2504.04062"
+
+
 def _paper(url: str, canonical_id: str) -> SourceCandidate:
     return SourceCandidate(
         title="Memory in the LLM Era",

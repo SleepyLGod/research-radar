@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
+from research_radar.analysis.localization import localize_report_content
 from research_radar.analysis.model_cache import (
     merge_cache_deltas,
     provider_cache_delta,
@@ -36,6 +37,8 @@ from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.storage.files import ensure_dir, write_json, write_jsonl, write_text
 from research_radar.storage.runs import make_run_id
 
+ANALYSIS_LANGUAGE = "en"
+
 
 def run_paper(
     root: Path,
@@ -49,12 +52,18 @@ def run_paper(
     verifier_model: str | None = None,
     anchor_repair_provider: LLMProvider | None = None,
     anchor_repair_model: str | None = None,
+    localizer: LLMProvider | None = None,
+    localization_model: str | None = None,
     language: str | None = None,
 ) -> Path:
     """Run the single-paper pipeline and return the run directory."""
 
     topic = config.topic(topic_id)
     report_language = language or topic.report_language
+    if report_language == "zh" and (localizer is None or localization_model is None):
+        raise ResearchRadarError(
+            "Chinese report localization requires a localization provider and model."
+        )
     source = build_direct_paper_source(url)
     run_dir, manifest = _create_paper_run_dir(root, topic, source)
     progress = ProgressWriter(run_dir / "run_progress.jsonl")
@@ -82,6 +91,8 @@ def run_paper(
         source_url=source.url,
         provider=reader.name,
         model=model,
+        analysis_language=ANALYSIS_LANGUAGE,
+        report_language=report_language,
     )
     reader_cache_before = provider_cache_stats(reader)
     repair_cache_before = provider_cache_stats(anchor_repair_provider)
@@ -91,7 +102,7 @@ def run_paper(
             reader,
             model=model,
             area_context=_area_context(topic),
-            language=report_language,
+            language=ANALYSIS_LANGUAGE,
             packet=reading_packet,
             anchor_repair_provider=anchor_repair_provider,
             anchor_repair_model=anchor_repair_model,
@@ -120,6 +131,8 @@ def run_paper(
         source_url=source.url,
         provider=reader.name,
         model=model,
+        analysis_language=ANALYSIS_LANGUAGE,
+        report_language=report_language,
         claim_count=len(deep_result.claims),
         anchor_repair_target_count=_anchor_repair_target_count(deep_result.anchor_repairs),
         anchor_repair_skipped_count=_anchor_repair_skipped_count(deep_result.anchor_repairs),
@@ -187,6 +200,41 @@ def run_paper(
             verifier_skipped_claim_count=review_result.skipped_count,
             **provider_cache_delta(verifier_cache_before, review_provider),
         )
+    display_reading = reading
+    display_claims = claims
+    localization_attempts = []
+    if report_language == "zh":
+        progress.record(
+            "localization",
+            "started",
+            provider=localizer.name if localizer is not None else "local",
+            model=localization_model or "local",
+            reading_count=1,
+            claim_count=sum(1 for claim in claims if claim.is_publishable()),
+        )
+        localization_cache_before = provider_cache_stats(localizer)
+        localization = localize_report_content(
+            readings=[reading],
+            claims=claims,
+            sources=[source],
+            provider=localizer,
+            model=localization_model,
+            language=report_language,
+        )
+        display_reading = localization.readings[0] if localization.readings else reading
+        display_claims = localization.claims
+        localization_attempts = localization.attempts
+        findings.extend(localization.findings)
+        status = localization_attempts[-1].status if localization_attempts else "not_needed"
+        progress.record(
+            "localization",
+            "completed",
+            provider=localizer.name if localizer is not None else "local",
+            model=localization_model or "local",
+            status_detail=status,
+            **provider_cache_delta(localization_cache_before, localizer),
+        )
+
     manifest = RunManifest(
         run_id=manifest.run_id,
         topic_id=topic_id,
@@ -199,7 +247,16 @@ def run_paper(
             "paper_url": source.url,
             "canonical_id": source.canonical_id,
             "reading_count": 1,
+            "analysis_language": ANALYSIS_LANGUAGE,
             "report_language": report_language,
+            "localization": {
+                "attempt_count": len(localization_attempts),
+                "status": (
+                    localization_attempts[-1].status
+                    if localization_attempts
+                    else "not_needed"
+                ),
+            },
             "paper_reading_packet": {
                 "chunk_count": len(reading_packet.chunks),
                 "warnings": reading_packet.warnings,
@@ -222,6 +279,9 @@ def run_paper(
     write_text(run_dir / "paper_reading_input.md", render_reading_packet(reading_packet))
     write_jsonl(run_dir / "reader_attempts.jsonl", deep_result.reader_attempts)
     write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(reading)])
+    if report_language == "zh":
+        write_jsonl(run_dir / "localized_readings.jsonl", [reading_to_dict(display_reading)])
+        write_jsonl(run_dir / "localization_attempts.jsonl", localization_attempts)
     write_jsonl(run_dir / "anchor_resolution.jsonl", deep_result.anchor_resolutions)
     write_jsonl(run_dir / "anchor_repair.jsonl", deep_result.anchor_repairs)
     write_claims(run_dir / "claims.jsonl", claims)
@@ -230,9 +290,16 @@ def run_paper(
     write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
     write_text(
         run_dir / "deep_reading.md",
-        render_deep_reading_report([reading], claims, language=report_language),
+        render_deep_reading_report(
+            [display_reading],
+            display_claims,
+            language=report_language,
+        ),
     )
-    write_text(run_dir / "paper.md", render_paper_brief(reading, claims, language=report_language))
+    write_text(
+        run_dir / "paper.md",
+        render_paper_brief(display_reading, display_claims, language=report_language),
+    )
     write_text(
         run_dir / "review_report.md",
         render_review_report(

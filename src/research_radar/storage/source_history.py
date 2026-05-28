@@ -215,7 +215,8 @@ def _version_number(version: str) -> int | None:
 
 def _arxiv_id(value: str) -> str | None:
     match = re.search(
-        r"(?:arxiv[:./\s]|/(?:abs|pdf)/)?(\d{4}\.\d{4,5}(?:v\d+)?)",
+        r"(?:arxiv[:./\s]|10\.48550/arxiv\.|arxiv\.org/(?:abs|pdf|html)/)"
+        r"(\d{4}\.\d{4,5}(?:v\d+)?)",
         value,
         re.IGNORECASE,
     )

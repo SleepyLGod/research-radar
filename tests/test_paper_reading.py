@@ -4,11 +4,13 @@ from research_radar.analysis.paper_reading import (
     LimitationAssessment,
     PaperReading,
     ProblemSolution,
+    ReaderExplanation,
     RelatedWorkAssessment,
     heuristic_paper_reading,
     model_paper_reading_with_attempts,
     paper_reading_prompt,
     parse_paper_reading,
+    reading_to_claims,
     render_deep_reading_report,
     validate_paper_reading,
 )
@@ -250,6 +252,13 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "Experiments must separate setup" in deep
     assert "Author-reported superlatives" in deep
     assert "Broad essence statements must not bundle" in deep
+    assert "reader_explanation" in deep
+    assert "reader-facing explanation layer" in deep
+    assert "must not introduce any new facts" in deep
+    assert "broader area problem" in deep
+    assert "data flow" in deep
+    assert "how components interact" in deep
+    assert "reported experiments" in deep
     assert "Do not draft the final article here" in deep
     assert "synthesis_outline" in outline
     assert "researcher, builder, evaluator, and skeptic" in outline
@@ -466,6 +475,86 @@ def test_missing_essence_can_fall_back_without_publishable_claims() -> None:
 
     assert reading.essence == "unknown"
     assert not any(claim.text == "Essence: unknown" for claim in claims)
+
+
+def test_parse_reader_explanation_without_creating_claims() -> None:
+    artifact = _artifact()
+    raw = """
+    {
+      "deep_readings": {
+        "area_context": {
+          "background": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "problem_solution": {
+          "problem": "Memory benchmark fixture.",
+          "why_it_matters": "Memory benchmark fixture.",
+          "hidden_assumptions": [],
+          "solution": "Memory benchmark fixture.",
+          "mechanism": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "related_work": {
+          "prior_work": [],
+          "novelty": "Memory benchmark fixture.",
+          "repackaging_risk": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "limitations": {
+          "explicit_limitations": ["Memory benchmark fixture."],
+          "inferred_weaknesses": [],
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "critical_assessment": {
+          "overclaiming_risk": "Low",
+          "weak_evaluations": [],
+          "missing_ablations": [],
+          "bottom_line": "Memory benchmark fixture.",
+          "evidence": [{"quote": "Memory benchmark fixture."}]
+        },
+        "essence": "Memory benchmark fixture.",
+        "plain_language_example": "Memory benchmark fixture.",
+        "reader_explanation": {
+          "opening_context": "This paragraph explains the benchmark setting.",
+          "core_thesis": "This paragraph explains the paper's core thesis.",
+          "problem_walkthrough": "This paragraph walks through the problem.",
+          "solution_walkthrough": "This paragraph walks through the mechanism.",
+          "experiment_interpretation": "This paragraph explains how to read results.",
+          "related_work_context": "This paragraph compares named prior work.",
+          "limitations_discussion": "This paragraph explains caveats.",
+          "plain_language_story": "This paragraph gives a simple grounded story.",
+          "reader_takeaway": "This paragraph states the reader takeaway."
+        },
+        "claim_units": [
+          {
+            "section": "problem",
+            "claim_kind": "fact",
+            "text": "Memory benchmark fixture.",
+            "evidence": [{"quote": "Memory benchmark fixture."}],
+            "publishable_default": true
+          }
+        ]
+      }
+    }
+    """
+
+    reading = parse_paper_reading(raw, artifact)
+    claims = reading_to_claims(reading)
+
+    assert reading.reader_explanation.solution_walkthrough.startswith(
+        "This paragraph walks through"
+    )
+    matching_claims = [
+        claim for claim in claims if claim.text == "Problem: Memory benchmark fixture."
+    ]
+    assert len(matching_claims) == 1
+    assert not any("reader takeaway" in claim.text.lower() for claim in claims)
+
+
+def test_legacy_reader_json_uses_empty_reader_explanation() -> None:
+    reading = parse_paper_reading(_claim_units_fixture(["Memory benchmark fixture."]), _artifact())
+
+    assert reading.reader_explanation == ReaderExplanation()
 
 
 def test_claim_units_convert_to_atomic_evidence_backed_claims() -> None:

@@ -21,28 +21,39 @@ def render_paper_brief(
         f"# {labels['title']}: {reading.title}",
         "",
         f"## {labels['essence']}",
-        _claim_body(verified, "Essence:") or "No verified essence claim.",
+        _explanation_value(reading, "core_thesis") or _claim_body(verified, "Essence:")
+        or "No verified essence claim.",
         "",
         f"## {labels['background']}",
-        labels["no_background"],
+        _explanation_value(reading, "opening_context") or labels["no_background"],
         "",
         f"## {labels['problem']}",
-        _claim_body(verified, "Problem:") or labels["no_problem"],
+        _explanation_value(reading, "problem_walkthrough")
+        or _claim_body(verified, "Problem:")
+        or labels["no_problem"],
         "",
         f"## {labels['solution']}",
-        _claim_body(verified, "Solution:") or labels["no_solution"],
+        _explanation_value(reading, "solution_walkthrough")
+        or _claim_body(verified, "Solution:")
+        or labels["no_solution"],
         "",
         f"## {labels['experiment']}",
-        _claim_body(verified, "Experiment:") or "No verified experiment claim.",
+        _explanation_value(reading, "experiment_interpretation")
+        or _claim_body(verified, "Experiment:")
+        or "No verified experiment claim.",
         "",
         f"## {labels['plain_example']}",
-        labels["no_example"],
+        _explanation_value(reading, "plain_language_story") or labels["no_example"],
         "",
         f"## {labels['related_work']}",
-        _claim_body(verified, "Related work:") or labels["no_related_work"],
+        _explanation_value(reading, "related_work_context")
+        or _claim_body(verified, "Related work:")
+        or labels["no_related_work"],
         "",
         f"## {labels['limitations']}",
-        _claim_body(verified, "Limitations:") or labels["no_limitations"],
+        _explanation_value(reading, "limitations_discussion")
+        or _claim_body(verified, "Limitations:")
+        or labels["no_limitations"],
         "",
         f"## {labels['critique']}",
         _claim_body(verified, "Critical assessment:") or labels["no_critique"],
@@ -51,6 +62,11 @@ def render_paper_brief(
         _evidence_trail(verified, language=language),
     ]
     return "\n".join(lines).strip() + "\n"
+
+
+def _explanation_value(reading: PaperReading, key: str) -> str:
+    explanation = getattr(reading, "reader_explanation", None)
+    return str(getattr(explanation, key, "")).strip()
 
 
 def _claim_body(claims: list[Claim], prefix: str) -> str:

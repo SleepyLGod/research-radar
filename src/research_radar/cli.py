@@ -189,6 +189,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Model for quote-only anchor repair.",
     )
     daily.add_argument(
+        "--localization-provider",
+        default=None,
+        help="Provider instance for report localization.",
+    )
+    daily.add_argument(
+        "--localization-model",
+        default=None,
+        help="Model for report localization.",
+    )
+    daily.add_argument(
         "--secret-source",
         choices=["keychain", "env"],
         default="keychain",
@@ -252,6 +262,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-repair-model",
         default=None,
         help="Model for quote-only anchor repair.",
+    )
+    paper.add_argument(
+        "--localization-provider",
+        default=None,
+        help="Provider instance for report localization.",
+    )
+    paper.add_argument(
+        "--localization-model",
+        default=None,
+        help="Model for report localization.",
     )
     paper.add_argument(
         "--secret-source",
@@ -350,6 +370,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-repair-model",
         default=None,
         help="Model for quote-only anchor repair.",
+    )
+    eval_topics.add_argument(
+        "--localization-provider",
+        default=None,
+        help="Provider instance for report localization.",
+    )
+    eval_topics.add_argument(
+        "--localization-model",
+        default=None,
+        help="Model for report localization.",
     )
     eval_topics.add_argument(
         "--secret-source",
@@ -499,6 +529,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
     connectors = _daily_connectors(config, manager)
+    report_language = _report_language_for_topic(args, config)
     gist_route = resolve_task_route(
         config,
         manager,
@@ -511,6 +542,12 @@ def handle_run_daily(args: argparse.Namespace) -> None:
     )
     reader_route = _resolve_daily_reader_route(args, config, manager)
     anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
+    localization_route = _resolve_localization_route(
+        args,
+        config,
+        manager,
+        report_language=report_language,
+    )
     verifier_route = resolve_task_route(
         config,
         manager,
@@ -529,6 +566,12 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         "anchor_repair",
         args,
     )
+    localization_route = _maybe_cached_route(
+        localization_route,
+        args.root,
+        "report_localization",
+        args,
+    )
     verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
     run_dir = run_daily(
         args.root,
@@ -545,6 +588,8 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         deep_limit=args.deep_limit,
         anchor_repair_provider=anchor_repair_route.provider,
         anchor_repair_model=anchor_repair_route.model,
+        localizer=localization_route.provider,
+        localization_model=localization_route.model,
         language=getattr(args, "language", None),
     )
     print(f"Created run: {run_dir}")
@@ -564,6 +609,7 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         _load_env_file(args.env_file)
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
+    report_language = _report_language_for_topic(args, config)
     reader_route = resolve_task_route(
         config,
         manager,
@@ -576,12 +622,24 @@ def handle_run_paper(args: argparse.Namespace) -> None:
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
     anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
+    localization_route = _resolve_localization_route(
+        args,
+        config,
+        manager,
+        report_language=report_language,
+    )
     reader_route = _maybe_cached_route(reader_route, args.root, "deep_reading", args)
     verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
     anchor_repair_route = _maybe_cached_route(
         anchor_repair_route,
         args.root,
         "anchor_repair",
+        args,
+    )
+    localization_route = _maybe_cached_route(
+        localization_route,
+        args.root,
+        "report_localization",
         args,
     )
     if reader_route.provider is None or reader_route.model is None:
@@ -597,6 +655,8 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         verifier_model=verifier_route.model,
         anchor_repair_provider=anchor_repair_route.provider,
         anchor_repair_model=anchor_repair_route.model,
+        localizer=localization_route.provider,
+        localization_model=localization_route.model,
         language=getattr(args, "language", None),
     )
     print(f"Created paper run: {run_dir}")
@@ -631,6 +691,13 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
     anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
+    report_language = getattr(args, "language", None)
+    localization_route = _resolve_localization_route(
+        args,
+        config,
+        manager,
+        report_language=report_language,
+    )
     gist_route = _maybe_cached_route(gist_route, args.root, "source_gist", args)
     reader_route = _maybe_cached_route(reader_route, args.root, "deep_reading", args)
     verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
@@ -638,6 +705,12 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         anchor_repair_route,
         args.root,
         "anchor_repair",
+        args,
+    )
+    localization_route = _maybe_cached_route(
+        localization_route,
+        args.root,
+        "report_localization",
         args,
     )
     connectors = _daily_connectors(config, manager)
@@ -653,6 +726,8 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         verifier_model=verifier_route.model,
         anchor_repair_provider=anchor_repair_route.provider,
         anchor_repair_model=anchor_repair_route.model,
+        localizer=localization_route.provider,
+        localization_model=localization_route.model,
         specs=select_topic_specs(args.topics),
         limit=args.limit,
         deep_limit=args.deep_limit,
@@ -664,12 +739,17 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
 
 
 def handle_compose_wechat(args: argparse.Namespace) -> None:
-    """Compose WeChat HTML from claims."""
+    """Compose WeChat HTML from the run article draft when available."""
+
+    draft_path = args.run_dir / "article_draft.json"
+    if draft_path.exists():
+        write_text(args.run_dir / "wechat.html", render_wechat_html(load_article_draft(draft_path)))
+        print(f"Wrote {args.run_dir / 'wechat.html'}")
+        return
 
     claims = load_claims(args.run_dir / "claims.jsonl")
     topic_id = args.topic or args.run_dir.name
     from research_radar.compose.wechat import compose_wechat_html
-
     write_text(args.run_dir / "wechat.html", compose_wechat_html(topic_id, claims))
     print(f"Wrote {args.run_dir / 'wechat.html'}")
 
@@ -679,7 +759,7 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
 
     try:
         draft = load_article_draft(args.run_dir / "article_draft.json")
-        content = render_wechat_html(draft)
+        content = render_wechat_html(draft, publish_mode=True)
         write_text(args.run_dir / "wechat.html", content)
         article = WeChatArticle(
             title=args.title,
@@ -840,6 +920,39 @@ def _resolve_anchor_repair_route(
         if getattr(args, "anchor_repair_provider", None) or getattr(args, "provider", None):
             raise
         return TaskModelRoute(provider=None, model=None, provider_name="local")
+
+
+def _resolve_localization_route(
+    args: argparse.Namespace,
+    config: AppConfig,
+    manager: SecretManager,
+    *,
+    report_language: str | None,
+) -> TaskModelRoute:
+    if report_language != "zh":
+        return TaskModelRoute(provider=None, model=None, provider_name="local")
+    try:
+        return resolve_task_route(
+            config,
+            manager,
+            "report_localization",
+            provider_override=getattr(args, "localization_provider", None),
+            model_override=getattr(args, "localization_model", None),
+            global_provider=getattr(args, "provider", None),
+            global_model=getattr(args, "model", None),
+            default_local=True,
+        )
+    except ConfigError:
+        if getattr(args, "localization_provider", None) or getattr(args, "provider", None):
+            raise
+        return TaskModelRoute(provider=None, model=None, provider_name="local")
+
+
+def _report_language_for_topic(args: argparse.Namespace, config: AppConfig) -> str:
+    override = getattr(args, "language", None)
+    if override:
+        return override
+    return config.topic(args.topic).report_language
 
 
 def _maybe_cached_route(

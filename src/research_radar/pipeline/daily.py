@@ -7,6 +7,8 @@ from pathlib import Path
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
+from research_radar.analysis.figures import FigureExtractionError, extract_paper_figures
+from research_radar.analysis.localization import localize_report_content
 from research_radar.analysis.model_cache import (
     merge_cache_deltas,
     provider_cache_delta,
@@ -36,7 +38,8 @@ from research_radar.discovery.source_quality import (
 )
 from research_radar.discovery.source_role import classify_source_role
 from research_radar.discovery.source_selection import (
-    select_deep_candidates,
+    annotate_deep_selection_dedupe,
+    ranked_deep_candidates,
     source_selection_score,
 )
 from research_radar.discovery.wide_scan import (
@@ -65,6 +68,8 @@ from research_radar.storage.source_history import (
     is_reportable_source,
 )
 
+ANALYSIS_LANGUAGE = "en"
+
 
 def run_daily(
     root: Path,
@@ -82,12 +87,18 @@ def run_daily(
     deep_limit: int = 0,
     anchor_repair_provider: LLMProvider | None = None,
     anchor_repair_model: str | None = None,
+    localizer: LLMProvider | None = None,
+    localization_model: str | None = None,
     language: str | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
 
     topic = config.topic(topic_id)
     report_language = language or topic.report_language
+    if report_language == "zh" and (localizer is None or localization_model is None):
+        raise ResearchRadarError(
+            "Chinese report localization requires a localization provider and model."
+        )
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
     progress = ProgressWriter(run_dir / "run_progress.jsonl")
     progress.record("run", "created", topic_id=topic_id, mode="daily")
@@ -215,6 +226,16 @@ def run_daily(
         for candidate in relevant_candidates
         if is_reportable_source(candidate) and _passes_daily_report_gate(candidate)
     ]
+    reportable_candidates = annotate_deep_selection_dedupe(
+        reportable_candidates,
+        source_intent=topic.source_intent,
+    )
+    candidates = _replace_candidates(candidates, reportable_candidates)
+    relevant_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.metadata.get("relevance", {}).get("status") == "relevant"
+    ]
     findings.extend(relevance_findings)
     summary_artifacts = [
         Artifact(
@@ -240,9 +261,8 @@ def run_daily(
             reportable_count=len(reportable_candidates),
             deep_limit=deep_limit,
         )
-        deep_candidate_pool = select_deep_candidates(
+        deep_candidate_pool = ranked_deep_candidates(
             reportable_candidates,
-            len(reportable_candidates),
             source_intent=topic.source_intent,
         )
         progress.record(
@@ -250,9 +270,19 @@ def run_daily(
             "ranked",
             candidate_count=len(deep_candidate_pool),
         )
+        selected_family_keys: set[str] = set()
         for candidate in deep_candidate_pool:
             if len(selected_deep_candidates) >= deep_limit:
                 break
+            dedupe = candidate.metadata.get("deep_selection_dedupe", {})
+            family_keys = {
+                str(key)
+                for key in dedupe.get("family_keys", [])
+                if isinstance(key, str) and key
+            }
+            if family_keys and selected_family_keys.intersection(family_keys):
+                deep_reading_status_by_url[candidate.url] = "deduped_duplicate"
+                continue
             progress.record(
                 "ingestion",
                 "started",
@@ -295,6 +325,8 @@ def run_daily(
                 source_url=candidate.url,
                 provider=deep_reader.name,
                 model=deep_model or config.models.analyst,
+                analysis_language=ANALYSIS_LANGUAGE,
+                report_language=report_language,
             )
             reader_cache_before = provider_cache_stats(deep_reader)
             repair_cache_before = provider_cache_stats(anchor_repair_provider)
@@ -303,7 +335,7 @@ def run_daily(
                     artifact,
                     deep_reader,
                     model=deep_model or config.models.analyst,
-                    language=report_language,
+                    language=ANALYSIS_LANGUAGE,
                     anchor_repair_provider=anchor_repair_provider,
                     anchor_repair_model=anchor_repair_model,
                 )
@@ -339,6 +371,8 @@ def run_daily(
                 source_url=candidate.url,
                 provider=deep_reader.name,
                 model=deep_model or config.models.analyst,
+                analysis_language=ANALYSIS_LANGUAGE,
+                report_language=report_language,
                 claim_count=len(deep_result.claims),
                 anchor_repair_target_count=_anchor_repair_target_count(
                     deep_result.anchor_repairs
@@ -350,12 +384,18 @@ def run_daily(
             )
             selected_deep_candidates.append(candidate)
             deep_reading_status_by_url[candidate.url] = "succeeded"
+            selected_family_keys.update(family_keys)
             readings.append(deep_result.reading)
             deep_claims.extend(deep_result.claims)
             findings.extend(deep_result.findings)
             anchor_resolutions.extend(deep_result.anchor_resolutions)
             anchor_repairs.extend(deep_result.anchor_repairs)
             reader_attempts.extend(deep_result.reader_attempts)
+        _mark_successful_duplicate_statuses(
+            reportable_candidates,
+            selected_deep_candidates,
+            deep_reading_status_by_url,
+        )
         findings.extend(
             _deep_selection_findings(
                 reportable_candidates,
@@ -428,6 +468,12 @@ def run_daily(
             **provider_cache_delta(verifier_cache_before, verifier),
         )
 
+    figures_by_source_url, figure_findings = _extract_deep_read_figures(
+        deep_artifacts,
+        claims,
+        run_dir / "figures",
+    )
+    findings.extend(figure_findings)
     web_search_summary = _web_search_summary(
         candidates,
         selected_deep_candidates,
@@ -439,6 +485,51 @@ def run_daily(
         selected_deep_candidates,
         source_intent=topic.source_intent,
     )
+    display_readings = readings
+    display_claims = claims
+    display_sources = public_reportable_candidates
+    display_deep_sources = selected_deep_candidates
+    display_figures_by_source_url = figures_by_source_url
+    localization_attempts = []
+    if report_language == "zh":
+        progress.record(
+            "localization",
+            "started",
+            provider=localizer.name if localizer is not None else "local",
+            model=localization_model or "local",
+            reading_count=len(readings),
+            claim_count=sum(1 for claim in claims if claim.is_publishable()),
+        )
+        localization_cache_before = provider_cache_stats(localizer)
+        localization = localize_report_content(
+            readings=readings,
+            claims=claims,
+            sources=public_reportable_candidates,
+            figures_by_source_url=figures_by_source_url,
+            provider=localizer,
+            model=localization_model,
+            language=report_language,
+        )
+        display_readings = localization.readings
+        display_claims = localization.claims
+        display_sources = localization.sources
+        localized_source_by_url = {source.url: source for source in display_sources}
+        display_deep_sources = [
+            localized_source_by_url.get(source.url, source)
+            for source in selected_deep_candidates
+        ]
+        display_figures_by_source_url = localization.figures_by_source_url
+        localization_attempts = localization.attempts
+        findings.extend(localization.findings)
+        status = localization_attempts[-1].status if localization_attempts else "not_needed"
+        progress.record(
+            "localization",
+            "completed",
+            provider=localizer.name if localizer is not None else "local",
+            model=localization_model or "local",
+            status_detail=status,
+            **provider_cache_delta(localization_cache_before, localizer),
+        )
     manifest = replace(
         manifest,
         source_count=len(candidates),
@@ -484,7 +575,19 @@ def run_daily(
                     1 for repair in anchor_repairs if repair.status == "accepted"
                 ),
             },
+            "figures": {
+                "selected_count": sum(len(value) for value in figures_by_source_url.values()),
+            },
+            "analysis_language": ANALYSIS_LANGUAGE,
             "report_language": report_language,
+            "localization": {
+                "attempt_count": len(localization_attempts),
+                "status": (
+                    localization_attempts[-1].status
+                    if localization_attempts
+                    else "not_needed"
+                ),
+            },
         },
     )
     progress.record("artifacts", "started")
@@ -521,14 +624,29 @@ def run_daily(
         write_evidence(run_dir / "evidence.jsonl", claims)
         write_jsonl(run_dir / "review_findings.jsonl", findings)
         write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
+        write_jsonl(
+            run_dir / "figures.jsonl",
+            [
+                figure
+                for figures in figures_by_source_url.values()
+                for figure in figures
+            ],
+        )
+        if report_language == "zh":
+            write_jsonl(
+                run_dir / "localized_readings.jsonl",
+                [reading_to_dict(reading) for reading in display_readings],
+            )
+            write_jsonl(run_dir / "localization_attempts.jsonl", localization_attempts)
         draft = build_daily_draft(
             topic_id,
-            public_reportable_candidates,
-            claims,
+            display_sources,
+            display_claims,
             language=report_language,
-            readings=readings,
-            deep_read_sources=selected_deep_candidates,
+            readings=display_readings,
+            deep_read_sources=display_deep_sources,
             seen_sources=history_report["omitted_seen_sources"],
+            figures_by_source_url=display_figures_by_source_url,
         )
         write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
         write_text(
@@ -539,7 +657,11 @@ def run_daily(
         write_text(run_dir / "wechat.html", render_wechat_html(draft))
         write_text(
             run_dir / "deep_reading.md",
-            render_deep_reading_report(readings, claims, language=report_language),
+            render_deep_reading_report(
+                display_readings,
+                display_claims,
+                language=report_language,
+            ),
         )
         write_text(
             run_dir / "review_report.md",
@@ -736,6 +858,7 @@ def _deep_selection_findings(
     for candidate in candidates:
         source_role = candidate.metadata.get("source_role", {})
         centrality = candidate.metadata.get("source_centrality", {})
+        dedupe = candidate.metadata.get("deep_selection_dedupe", {})
         selected_text = "selected" if candidate.url in selected_urls else "not selected"
         deep_status = status_map.get(candidate.url, "not_attempted")
         severity = "info"
@@ -750,6 +873,7 @@ def _deep_selection_findings(
                     f"priority={source_role.get('deep_read_priority')}, "
                     f"score={source_selection_score(candidate, source_intent=source_intent):.3f}, "
                     f"centrality={centrality.get('score')}, "
+                    f"dedupe={dedupe.get('status')}, "
                     f"intent={source_intent}, "
                     f"deep_status={deep_status}, "
                     f"reason={source_role.get('reason')}; "
@@ -769,12 +893,46 @@ def _deep_selection_findings(
                         source_intent=source_intent,
                     ),
                     "source_intent": source_intent,
-                    "attempted_for_deep_reading": deep_status != "not_attempted",
+                    "attempted_for_deep_reading": deep_status
+                    not in {"not_attempted", "deduped_duplicate"},
                     "deep_reading_status": deep_status,
+                    "deep_selection_family_key": dedupe.get("family_key"),
+                    "deep_selection_family_keys": dedupe.get("family_keys", []),
+                    "deep_selection_dedupe_status": dedupe.get("status"),
+                    "deduped_as_url": dedupe.get("deduped_as_url"),
+                    "deduped_as_title": dedupe.get("deduped_as_title"),
+                    "skip_reason": dedupe.get("skip_reason"),
                 },
             )
         )
     return findings
+
+
+def _mark_successful_duplicate_statuses(
+    candidates: list[SourceCandidate],
+    selected: list[SourceCandidate],
+    statuses: dict[str, str],
+) -> None:
+    selected_family_keys: set[str] = set()
+    selected_urls = {candidate.url for candidate in selected}
+    for candidate in selected:
+        dedupe = candidate.metadata.get("deep_selection_dedupe", {})
+        selected_family_keys.update(
+            str(key)
+            for key in dedupe.get("family_keys", [])
+            if isinstance(key, str) and key
+        )
+    for candidate in candidates:
+        if candidate.url in selected_urls or candidate.url in statuses:
+            continue
+        dedupe = candidate.metadata.get("deep_selection_dedupe", {})
+        family_keys = {
+            str(key)
+            for key in dedupe.get("family_keys", [])
+            if isinstance(key, str) and key
+        }
+        if dedupe.get("status") == "duplicate" and family_keys.intersection(selected_family_keys):
+            statuses[candidate.url] = "deduped_duplicate"
 
 
 def _quality_gate_findings(paper_coverage: dict[str, object]) -> list[ReviewFinding]:
@@ -828,6 +986,38 @@ def _daily_claims(
             },
         )
     ]
+
+
+def _extract_deep_read_figures(
+    deep_artifacts: list[Artifact],
+    claims: list[Claim],
+    figure_dir: Path,
+) -> tuple[dict[str, list[dict[str, object]]], list[ReviewFinding]]:
+    figures_by_source_url: dict[str, list[dict[str, object]]] = {}
+    findings: list[ReviewFinding] = []
+    for artifact in deep_artifacts:
+        if not artifact.artifact_path:
+            continue
+        try:
+            figures = extract_paper_figures(artifact, figure_dir, claims)
+        except FigureExtractionError as exc:
+            findings.append(
+                ReviewFinding(
+                    severity="info",
+                    message=f"Figure extraction skipped: {exc}",
+                    claim_text=artifact.source.title,
+                    metadata={
+                        "kind": "figure_extraction_skipped",
+                        "source_url": artifact.source.url,
+                    },
+                )
+            )
+            continue
+        if figures:
+            figures_by_source_url[artifact.source.url] = [
+                figure.to_dict() for figure in figures
+            ]
+    return figures_by_source_url, findings
 
 
 def _merge_artifacts(

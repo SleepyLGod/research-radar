@@ -141,6 +141,9 @@ models:
     anchor_repair:
       provider: deepseek
       model: deepseek-v4-pro
+    report_localization:
+      provider: deepseek
+      model: deepseek-chat
     verifier:
       provider: von_claude
       model: sonnet

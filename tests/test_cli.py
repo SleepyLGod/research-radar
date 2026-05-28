@@ -416,6 +416,57 @@ def test_publish_wechat_draft_dry_run_uses_article_draft(
     assert "stale unverified html" not in html
 
 
+def test_publish_wechat_draft_dry_run_omits_local_figure_images(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path, with_local_figure=True)
+
+    cli.main(
+        [
+            "publish",
+            "wechat-draft",
+            "--run",
+            str(run_dir),
+            "--title",
+            "Daily title",
+            "--digest",
+            "Manual digest",
+            "--thumb-media-id",
+            "thumb123",
+            "--dry-run",
+        ]
+    )
+
+    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    assert '<img src="figures/' not in html
+    assert "Figure image requires WeChat media upload before publishing." in html
+
+
+def test_compose_wechat_prefers_article_draft_when_present(
+    capsys,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path)
+    write_json(
+        run_dir / "claims.jsonl",
+        [
+            {
+                "text": "Legacy claim-only output.",
+                "status": "supported",
+                "evidence": [{"source_url": "https://example.com", "quote": "legacy"}],
+            }
+        ],
+    )
+
+    cli.main(["compose", "wechat", "--run", str(run_dir)])
+
+    output = capsys.readouterr().out
+    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    assert "Wrote" in output
+    assert "Verified claim for WeChat draft." in html
+    assert "Legacy claim-only output." not in html
+
+
 def test_publish_wechat_draft_posts_rendered_article_draft(
     monkeypatch,
     tmp_path: Path,
@@ -609,7 +660,11 @@ def test_run_paper_can_use_deepseek_from_env(
     assert captured["model"] == "deepseek-v4-pro"
 
 
-def _write_publishable_article_draft(tmp_path: Path) -> Path:
+def _write_publishable_article_draft(
+    tmp_path: Path,
+    *,
+    with_local_figure: bool = False,
+) -> Path:
     run_dir = tmp_path / "runs" / "daily-run"
     claim = Claim(
         text="Verified claim for WeChat draft.",
@@ -629,5 +684,42 @@ def _write_publishable_article_draft(tmp_path: Path) -> Path:
         source_name="fixture",
         metadata={"source_role": {"role": "primary_paper"}},
     )
-    write_json(run_dir / "article_draft.json", build_daily_draft("agent-memory", [source], [claim]))
+    figures = {}
+    readings = []
+    deep_read_sources = []
+    if with_local_figure:
+        readings = [
+            {
+                "title": source.title,
+                "essence": "A verified paper.",
+            }
+        ]
+        deep_read_sources = [source]
+        figures = {
+            source.url: [
+                {
+                    "title": "fig:architecture",
+                    "relative_path": "figures/paper/architecture.png",
+                    "caption": "Architecture overview.",
+                    "explanation": (
+                        "This figure is included as source context; it does not add a new claim."
+                    ),
+                    "attribution": "Fixture Paper; https://example.com/paper",
+                    "license": "unknown",
+                    "reuse_status": "needs_manual_review",
+                    "renderable": True,
+                }
+            ]
+        }
+    write_json(
+        run_dir / "article_draft.json",
+        build_daily_draft(
+            "agent-memory",
+            [source],
+            [claim],
+            readings=readings,
+            deep_read_sources=deep_read_sources,
+            figures_by_source_url=figures,
+        ),
+    )
     return run_dir

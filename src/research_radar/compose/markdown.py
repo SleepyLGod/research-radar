@@ -34,7 +34,7 @@ def render_markdown(draft: ArticleDraft) -> str:
                 lines.append(section.body)
         elif _section_kind(section) == "evidence_trail":
             lines.append(section.body)
-        elif _section_kind(section) == "evidence_notes":
+        elif _section_kind(section) in {"evidence_notes", "references"}:
             lines.append(section.body)
         elif _section_kind(section) == "today_summary":
             lines.extend(section.body.splitlines())
@@ -100,29 +100,42 @@ def _deep_read_lines(raw_deep_reads: object, *, language: str) -> list[str]:
         source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
         url = str(source.get("url") or "") if isinstance(source, dict) else ""
         lines.extend([f"### [{title}](<{url}>)" if url else f"### {title}", ""])
-        _append_text(lines, labels["essence"], entry.get("essence"))
-        _append_nested(lines, labels["problem"], entry.get("problem"), ["core", "why_it_matters"])
-        _append_nested(lines, labels["solution"], entry.get("solution"), ["core", "mechanism"])
-        _append_nested(lines, labels["experiments"], entry.get("experiments"), ["summary"])
-        _append_nested(
+        has_explanation = _append_reader_explanation(
             lines,
-            labels["related_work"],
-            entry.get("related_work"),
-            ["novelty", "prior_work", "repackaging_risk"],
+            entry.get("reader_explanation"),
+            labels,
         )
-        _append_nested(
-            lines,
-            labels["limitations"],
-            entry.get("limitations"),
-            ["explicit_limitations", "inferred_weaknesses", "future_work"],
-        )
-        _append_nested(
-            lines,
-            labels["critical"],
-            entry.get("critical_assessment"),
-            ["bottom_line", "overclaiming_risk", "weak_evaluations", "missing_ablations"],
-        )
-        _append_text(lines, labels["plain_example"], entry.get("plain_language_example"))
+        if not has_explanation:
+            _append_text(lines, labels["essence"], entry.get("essence"))
+        _append_figures(lines, labels["figures"], entry.get("figures"))
+        if not has_explanation:
+            _append_nested(
+                lines,
+                labels["problem"],
+                entry.get("problem"),
+                ["core", "why_it_matters"],
+            )
+            _append_nested(lines, labels["solution"], entry.get("solution"), ["core", "mechanism"])
+            _append_nested(lines, labels["experiments"], entry.get("experiments"), ["summary"])
+            _append_nested(
+                lines,
+                labels["related_work"],
+                entry.get("related_work"),
+                ["novelty", "prior_work", "repackaging_risk"],
+            )
+            _append_nested(
+                lines,
+                labels["limitations"],
+                entry.get("limitations"),
+                ["explicit_limitations", "inferred_weaknesses", "future_work"],
+            )
+            _append_nested(
+                lines,
+                labels["critical"],
+                entry.get("critical_assessment"),
+                ["bottom_line", "overclaiming_risk", "weak_evaluations", "missing_ablations"],
+            )
+            _append_text(lines, labels["plain_example"], entry.get("plain_language_example"))
         claims = entry.get("claims")
         if isinstance(claims, list) and claims:
             lines.extend([f"#### {labels['key_evidence']}", ""])
@@ -131,6 +144,34 @@ def _deep_read_lines(raw_deep_reads: object, *, language: str) -> list[str]:
                     lines.append(f"- {claim['text']}")
             lines.append("")
     return lines
+
+
+def _append_reader_explanation(
+    lines: list[str],
+    value: object,
+    labels: dict[str, str],
+) -> bool:
+    if not isinstance(value, dict):
+        return False
+    sections = [
+        ("opening_context", labels["opening_context"]),
+        ("core_thesis", labels["core_thesis"]),
+        ("problem_walkthrough", labels["problem"]),
+        ("solution_walkthrough", labels["solution"]),
+        ("experiment_interpretation", labels["experiments"]),
+        ("related_work_context", labels["related_work"]),
+        ("limitations_discussion", labels["limitations"]),
+        ("plain_language_story", labels["plain_example"]),
+        ("reader_takeaway", labels["reader_takeaway"]),
+    ]
+    appended = False
+    for key, label in sections:
+        text = str(value.get(key) or "").strip()
+        if not text:
+            continue
+        _append_text(lines, label, text)
+        appended = True
+    return appended
 
 
 def _seen_source_lines(raw_sources: object) -> list[str]:
@@ -146,6 +187,24 @@ def _seen_source_lines(raw_sources: object) -> list[str]:
         suffix = f" ({version})" if version else ""
         lines.append(f"- [{title}](<{url}>){suffix}")
     return lines
+
+
+def _append_figures(lines: list[str], label: str, value: object) -> None:
+    if not isinstance(value, list) or not value:
+        return
+    lines.extend([f"#### {label}", ""])
+    for figure in value[:3]:
+        if not isinstance(figure, dict):
+            continue
+        title = str(figure.get("title") or "Paper figure")
+        caption = str(figure.get("caption") or "")
+        path = str(figure.get("relative_path") or figure.get("asset_path") or "")
+        reuse_status = str(figure.get("reuse_status") or "needs_manual_review")
+        lines.append(f"- {title}: {caption}")
+        if path:
+            lines.append(f"  - image: {path}")
+        lines.append(f"  - reuse_status: {reuse_status}")
+    lines.append("")
 
 
 def _append_text(lines: list[str], label: str, value: object) -> None:
@@ -180,7 +239,11 @@ def _deep_read_labels(language: str) -> dict[str, str]:
             "limitations": "局限与未来工作",
             "critical": "中立批判",
             "plain_example": "通俗例子",
+            "opening_context": "背景知识速读",
+            "core_thesis": "核心判断",
+            "reader_takeaway": "读者 takeaway",
             "key_evidence": "关键证据",
+            "figures": "论文关键图",
         }
     return {
         "untitled": "Untitled paper",
@@ -192,7 +255,11 @@ def _deep_read_labels(language: str) -> dict[str, str]:
         "limitations": "Limitations and Future Work",
         "critical": "Critical Assessment",
         "plain_example": "Plain-language Example",
+        "opening_context": "Opening Context",
+        "core_thesis": "Core Thesis",
+        "reader_takeaway": "Reader Takeaway",
         "key_evidence": "Key Evidence",
+        "figures": "Key Figures",
     }
 
 

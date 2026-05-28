@@ -85,6 +85,38 @@ def test_public_sources_pin_selected_deep_source_even_if_low_centrality() -> Non
     assert selected == [selected_source]
 
 
+def test_public_sources_omit_duplicate_paper_family_from_reader_facing_list() -> None:
+    primary = _candidate(
+        "Memory Paper",
+        SourceType.PAPER,
+        role="primary_paper",
+        centrality=0.8,
+    )
+    duplicate = replace(
+        _candidate(
+            "Memory Paper Semantic Scholar Page",
+            SourceType.PAPER,
+            role="primary_paper",
+            centrality=0.7,
+        ),
+        metadata={
+            **primary.metadata,
+            "deep_selection_dedupe": {
+                "status": "duplicate",
+                "deduped_as_url": primary.url,
+            },
+        },
+    )
+
+    selected = select_public_report_sources(
+        [duplicate, primary],
+        [primary],
+        source_intent=RESEARCH_BRIEF,
+    )
+
+    assert selected == [primary]
+
+
 def test_public_sources_cap_repos_and_web_context() -> None:
     repos = [
         _candidate(f"Repo {index}", SourceType.REPOSITORY, role="implementation_repo")

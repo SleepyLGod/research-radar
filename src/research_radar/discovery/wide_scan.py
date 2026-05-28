@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 
 from research_radar.discovery.source_selection import (
+    ranked_deep_candidates,
     source_selection_key,
     source_selection_score,
 )
@@ -40,16 +41,22 @@ def build_source_selection_report(
 
     selected_urls = {candidate.url for candidate in selected}
     status_map = deep_reading_status_by_url or {}
-    rows = []
-    for candidate in sorted(
-        candidates,
+    eligible = ranked_deep_candidates(candidates, source_intent=source_intent)
+    eligible_urls = {candidate.url for candidate in eligible}
+    ineligible = [candidate for candidate in candidates if candidate.url not in eligible_urls]
+    ordered = eligible + sorted(
+        ineligible,
         key=lambda item: source_selection_key(item, source_intent=source_intent),
         reverse=True,
-    ):
+    )
+    rows = []
+    for candidate in ordered:
         deep_status = status_map.get(candidate.url, "not_attempted")
+        attempted = deep_status not in {"not_attempted", "deduped_duplicate"}
         row = _source_row(candidate)
+        row["deep_selection_eligible"] = candidate.url in eligible_urls
         row["selected_for_deep_reading"] = candidate.url in selected_urls
-        row["attempted_for_deep_reading"] = deep_status != "not_attempted"
+        row["attempted_for_deep_reading"] = attempted
         row["deep_reading_status"] = deep_status
         row["selection_score"] = round(
             source_selection_score(candidate, source_intent=source_intent),
@@ -82,6 +89,7 @@ def _source_row(candidate: SourceCandidate) -> dict[str, object]:
     role = candidate.metadata.get("source_role", {})
     quality = candidate.metadata.get("source_quality", {})
     centrality = candidate.metadata.get("source_centrality", {})
+    dedupe = candidate.metadata.get("deep_selection_dedupe", {})
     return {
         "title": candidate.title,
         "url": candidate.url,
@@ -101,6 +109,12 @@ def _source_row(candidate: SourceCandidate) -> dict[str, object]:
         "centrality_reason": centrality.get("reason"),
         "centrality_positive_signals": centrality.get("positive_signals", []),
         "centrality_negative_signals": centrality.get("negative_signals", []),
+        "deep_selection_family_key": dedupe.get("family_key"),
+        "deep_selection_family_keys": dedupe.get("family_keys", []),
+        "deep_selection_dedupe_status": dedupe.get("status"),
+        "deduped_as_url": dedupe.get("deduped_as_url"),
+        "deduped_as_title": dedupe.get("deduped_as_title"),
+        "skip_reason": dedupe.get("skip_reason"),
     }
 
 
@@ -112,7 +126,8 @@ def _selection_reason(candidate: SourceCandidate, selected: bool) -> str:
     prefix = "selected" if selected else "not selected"
     return (
         f"{prefix}: role={role}, relevance={relevance.get('score')}, "
-        f"quality={quality.get('score')}, centrality={centrality.get('score')}"
+        f"quality={quality.get('score')}, centrality={centrality.get('score')}, "
+        f"dedupe={candidate.metadata.get('deep_selection_dedupe', {}).get('status')}"
     )
 
 

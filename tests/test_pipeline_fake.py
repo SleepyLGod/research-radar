@@ -3,7 +3,7 @@ from pathlib import Path
 from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
 from research_radar.config import parse_config
 from research_radar.discovery.base import DiscoveryContext
-from research_radar.exceptions import IngestionError
+from research_radar.exceptions import IngestionError, ResearchRadarError
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 from research_radar.pipeline import daily
 from research_radar.pipeline.daily import run_daily
@@ -45,10 +45,12 @@ class SequenceProvider:
 
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
+        self.messages: list[list[Message]] = []
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Return the next fixture response."""
 
+        self.messages.append(messages)
         if not self.responses:
             raise AssertionError("No more fixture responses")
         return ModelResponse(content=self.responses.pop(0), model=model)
@@ -113,6 +115,30 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     runtime = read_json(run_dir / "runtime_summary.json")
     assert "total_elapsed_seconds" in runtime
     assert runtime["cache"] == {"hit_count": 0, "miss_count": 0}
+
+
+def test_daily_pipeline_requires_localizer_for_chinese_report(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    try:
+        run_daily(
+            tmp_path,
+            config,
+            "agent-memory",
+            [FakeConnector()],
+            language="zh",
+        )
+    except ResearchRadarError as exc:
+        assert "Chinese report localization requires" in str(exc)
+    else:
+        raise AssertionError("Expected ResearchRadarError")
+
+    assert not (tmp_path / "runs").exists()
 
 
 def test_daily_pipeline_expands_queries_for_paper_connectors(tmp_path: Path) -> None:
@@ -1300,6 +1326,32 @@ class TwoPaperRetryConnector:
         ]
 
 
+class DuplicatePaperConnector:
+    name = "duplicate-paper"
+
+    def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+        return [
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url="https://arxiv.org/abs/2604.01707v1",
+                canonical_id="2604.01707v1",
+                source_type=SourceType.PAPER,
+                source_name="arxiv",
+                summary="A paper about agent memory benchmark evaluation.",
+                score=1.0,
+            ),
+            SourceCandidate(
+                title="Memory in the LLM Era",
+                url="https://www.semanticscholar.org/paper/example",
+                canonical_id="CorpusId:123",
+                source_type=SourceType.PAPER,
+                source_name="semantic_scholar",
+                summary="A paper about agent memory benchmark evaluation.",
+                score=0.9,
+            ),
+        ]
+
+
 class MixedRagPublicSourcesConnector:
     name = "mixed-rag-public"
 
@@ -1466,6 +1518,256 @@ def test_daily_public_sources_are_curated_without_changing_audit(
     assert "DRAGON" in synthesis_outline
 
 
+def test_daily_deep_selection_dedupes_same_paper_family(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[SourceCandidate] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source)
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [DuplicatePaperConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=2,
+    )
+
+    sources = read_jsonl(run_dir / "sources.jsonl")
+    source_selection = read_json(run_dir / "source_selection.json")
+    article_draft = read_json(run_dir / "article_draft.json")
+    rows = {row["url"]: row for row in source_selection["ranked_sources"]}
+
+    assert [source.url for source in ingested] == ["https://arxiv.org/abs/2604.01707v1"]
+    assert source_selection["selected_count"] == 1
+    assert {
+        source["metadata"]["deep_selection_dedupe"]["status"] for source in sources
+    } == {"primary", "duplicate"}
+    duplicate = rows["https://www.semanticscholar.org/paper/example"]
+    assert duplicate["deep_selection_dedupe_status"] == "duplicate"
+    assert duplicate["deep_reading_status"] == "deduped_duplicate"
+    assert duplicate["attempted_for_deep_reading"] is False
+    assert duplicate["deduped_as_url"] == "https://arxiv.org/abs/2604.01707v1"
+    public_sources = [
+        item
+        for section in article_draft["sections"]
+        if section["metadata"].get("kind") == "new_updated_sources"
+        for item in section["metadata"]["sources"]
+    ]
+    assert all(
+        item["url"] != "https://www.semanticscholar.org/paper/example"
+        for item in public_sources
+    )
+
+
+def test_daily_deep_selection_tries_duplicate_family_after_primary_ingestion_failure(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+    ingested: list[str] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source.url)
+        if source.url == "https://arxiv.org/abs/2604.01707v1":
+            raise IngestionError("fixture primary failed")
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [DuplicatePaperConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    source_selection = read_json(run_dir / "source_selection.json")
+    rows = {row["url"]: row for row in source_selection["ranked_sources"]}
+
+    assert ingested == [
+        "https://arxiv.org/abs/2604.01707v1",
+        "https://www.semanticscholar.org/paper/example",
+    ]
+    assert rows["https://arxiv.org/abs/2604.01707v1"]["deep_reading_status"] == "ingestion_failed"
+    semantic_row = rows["https://www.semanticscholar.org/paper/example"]
+    assert semantic_row["deep_reading_status"] == "succeeded"
+    assert semantic_row["selected_for_deep_reading"] is True
+
+
+def test_daily_pipeline_writes_selected_figure_metadata(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    provider = StaticProvider(_deep_reading_json())
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(
+            source=source,
+            text=DEEP_READING_FIXTURE_TEXT,
+            artifact_path=str(artifact_dir / "paper.pdf"),
+        )
+
+    class FakeFigure:
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "title": "fig:memory",
+                "source_url": "https://example.com/paper",
+                "source_title": "A careful paper",
+                "asset_path": str(tmp_path / "figures" / "memory.png"),
+                "relative_path": "figures/memory.png",
+                "original_path": "figures/memory",
+                "caption": "Architecture overview for memory retrieval.",
+                "label": "fig:memory",
+                "explanation": (
+                    "This figure is included because its caption aligns with a verified "
+                    "observation: Solution: Require cited memory evidence before crediting "
+                    "answers."
+                ),
+                "matched_claim": (
+                    "Solution: Require cited memory evidence before crediting answers."
+                ),
+                "license": "unknown",
+                "reuse_status": "needs_manual_review",
+                "attribution": "A careful paper; https://example.com/paper",
+                "renderable": True,
+                "score": 3.0,
+            }
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+    monkeypatch.setattr(
+        daily,
+        "extract_paper_figures",
+        lambda artifact, figure_dir, claims: [FakeFigure()],
+    )
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=provider,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    figures = read_jsonl(run_dir / "figures.jsonl")
+    article_draft = read_json(run_dir / "article_draft.json")
+    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    deep_reads = [
+        item
+        for section in article_draft["sections"]
+        if section["metadata"].get("kind") == "deep_reads"
+        for item in section["metadata"]["deep_reads"]
+    ]
+
+    assert figures[0]["title"] == "fig:memory"
+    assert deep_reads[0]["figures"][0]["caption"] == "Architecture overview for memory retrieval."
+    assert "figures/memory.png" in html
+    assert "Reuse status: needs_manual_review" in html
+
+
+def test_daily_pipeline_localizes_public_report_after_english_reading(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = SequenceProvider([_deep_reading_json()])
+    verifier = StaticProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 2, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 3, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 4, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 5, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 6, "status": "supported", "risk": "low", "reason": "grounded"}
+          ]
+        }
+        """
+    )
+    localizer = SequenceProvider([_daily_localization_json()])
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=reader,
+        deep_model="fake-analyst",
+        deep_limit=1,
+        verifier=verifier,
+        verifier_model="fake-reviewer",
+        localizer=localizer,
+        localization_model="fake-localizer",
+        language="zh",
+    )
+
+    manifest = read_json(run_dir / "manifest.json")
+    claims = read_jsonl(run_dir / "claims.jsonl")
+    attempts = read_jsonl(run_dir / "localization_attempts.jsonl")
+    daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
+    deep_report = (run_dir / "deep_reading.md").read_text(encoding="utf-8")
+    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    reader_prompt = reader.messages[0][1].content
+    localization_prompt = localizer.messages[0][1].content
+
+    assert manifest["metadata"]["analysis_language"] == "en"
+    assert manifest["metadata"]["report_language"] == "zh"
+    assert manifest["metadata"]["localization"]["status"] == "succeeded"
+    assert "Simplified Chinese" not in reader_prompt
+    assert "Translate verified ResearchRadar display text into Simplified Chinese" in (
+        localization_prompt
+    )
+    assert "请先确认答案是否有 cited memory evidence" in daily_text
+    assert "Memory benchmarks 会奖励 unsupported answers" in daily_text
+    assert "fixture benchmark" in daily_text
+    assert "请先确认答案是否有 cited memory evidence" in html
+    assert "没有 long-horizon deployment evaluation" in deep_report
+    assert claims[0]["text"] == "Problem: Memory benchmarks reward unsupported answers."
+    assert attempts[0]["status"] == "succeeded"
+
+
 def _deep_reading_json() -> str:
     return """
     {
@@ -1514,6 +1816,67 @@ def _deep_reading_json() -> str:
         "essence": "The source reframes memory quality as grounded recall.",
         "unsupported_or_rejected_claims": []
       }
+    }
+    """
+
+
+def _daily_localization_json() -> str:
+    return """
+    {
+      "readings": [
+        {
+          "index": 0,
+          "area_context": {
+            "background": "Agent memory systems 需要 grounded retrieval。",
+            "active_questions": ["memory evidence 应该如何计分？"],
+            "common_baselines": ["Answer-only scoring"]
+          },
+          "problem_solution": {
+            "problem": "Memory benchmarks 会奖励 unsupported answers。",
+            "why_it_matters": "分数可能掩盖 ungrounded guessing。",
+            "hidden_assumptions": ["存在 retrieved memory evidence。"],
+            "solution": "请先确认答案是否有 cited memory evidence，再给答案计分。",
+            "mechanism": "Evaluator 会把 answer 和 retrieved memory items 做核对。"
+          },
+          "related_work": {
+            "prior_work": ["Answer-only memory benchmarks"],
+            "novelty": "它评估 grounded answerability，而不只是 answer match。",
+            "repackaging_risk": "这更像 evaluation lens，不是新的 memory store。"
+          },
+          "experiments": {"summary": "实验运行在 fixture benchmark 上。"},
+          "limitations": {
+            "explicit_limitations": ["它只评估 benchmark-style tasks。"],
+            "inferred_weaknesses": ["Deployment behavior 仍未测试。"],
+            "future_work": []
+          },
+          "critical_assessment": {
+            "overclaiming_risk": "Medium",
+            "weak_evaluations": ["没有 long-horizon deployment evaluation"],
+            "missing_ablations": ["没有 retrieval-format ablation"],
+            "bottom_line": "主要贡献是 evaluation lens。"
+          },
+          "essence": "这篇论文把 memory quality 重新表述为 grounded recall。",
+          "plain_language_example": "没有 evidence 的正确答案不应该拿满分。"
+        }
+      ],
+      "claims": [
+        {"index": 0, "text": "Problem: Memory benchmarks 会奖励 unsupported answers。"},
+        {"index": 1, "text": "Solution: 请先确认答案是否有 cited memory evidence，再给答案计分。"},
+        {
+          "index": 2,
+          "text": "Related work: 它评估 grounded answerability，而不只是 answer match。"
+        },
+        {"index": 3, "text": "Experiment: 实验运行在 fixture benchmark 上。"},
+        {"index": 4, "text": "Limitations: 它只评估 benchmark-style tasks。"},
+        {"index": 5, "text": "Critical assessment: 主要贡献是 evaluation lens。"}
+      ],
+      "sources": [
+        {
+          "url": "https://example.com/paper",
+          "gist": "这篇论文讨论 agent memory benchmark，并保留 LOCOMO 这类 benchmark 名称。"
+        }
+      ],
+      "figures": []
     }
     """
 

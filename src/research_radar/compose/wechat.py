@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from html import escape
 
+from research_radar.analysis.figure_text import (
+    FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX,
+    FIGURE_EXPLANATION_SOURCE_CONTEXT,
+)
 from research_radar.compose.draft import build_weekly_draft
 from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, Claim
 
+FORMULA_STYLE = (
+    "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
+    "font-size:0.95em;background:#f8fafc;border:1px solid #e2e8f0;"
+    "border-radius:4px;padding:1px 4px;white-space:nowrap;"
+)
 
-def render_wechat_html(draft: ArticleDraft) -> str:
+
+def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> str:
     """Render a platform-neutral draft as WeChat-compatible HTML."""
 
     language = str(draft.metadata.get("language", "en"))
@@ -29,10 +40,14 @@ def render_wechat_html(draft: ArticleDraft) -> str:
         kind = _section_kind(section)
         if kind == "evidence_trail":
             content = "".join(_evidence_block(claim, language=language) for claim in section.claims)
-        elif kind == "evidence_notes":
-            content = _evidence_notes(section.claims, language=language)
+        elif kind in {"references", "evidence_notes"}:
+            content = _references(section.claims, section.metadata, language=language)
         elif kind == "deep_reads":
-            content = _deep_reads(section.metadata.get("deep_reads", []), language=language)
+            content = _deep_reads(
+                section.metadata.get("deep_reads", []),
+                language=language,
+                publish_mode=publish_mode,
+            )
             if not content:
                 content = f"<p>{escape(section.body)}</p>"
         elif kind in {"new_updated_sources", "other_sources"}:
@@ -72,21 +87,27 @@ def _html_shell(body: str) -> str:
     )
     return f"""{shell_start}
 <style>
-.rr-card{{border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;
-margin:14px 0;background:#ffffff;}}
+.rr-card{{border-left:3px solid #dbeafe;padding:10px 0 10px 14px;
+margin:12px 0;background:#ffffff;}}
 .rr-tag{{display:inline-block;color:#0f766e;background:#ccfbf1;padding:2px 8px;
 border-radius:999px;font-size:12px;}}
-.rr-quote{{border-left:4px solid #0f766e;padding:8px 12px;margin:10px 0;
-background:#f8fafc;color:#334155;}}
-.rr-toc{{border:1px solid #d1d5db;padding:14px 16px;margin:18px 0;background:#f9fafb;}}
+.rr-quote{{border-left:3px solid #94a3b8;padding:8px 12px;margin:10px 0;
+background:#f8fafc;color:#334155;font-size:14px;}}
+.rr-toc{{border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db;
+padding:14px 0;margin:20px 0;background:#ffffff;}}
 .rr-toc ol{{margin:8px 0 0 20px;padding:0;}}
-.rr-deep{{border-top:2px solid #111827;padding-top:18px;margin-top:18px;}}
+.rr-deep{{border-top:2px solid #111827;padding-top:22px;margin-top:22px;}}
 .rr-kicker{{font-size:13px;color:#64748b;margin:0 0 4px;}}
-.rr-diagram{{display:block;border:1px solid #dbeafe;background:#eff6ff;padding:12px;margin:12px 0;}}
+.rr-diagram{{display:block;border:1px solid #dbeafe;background:#f8fbff;padding:12px;margin:14px 0;}}
 .rr-step{{display:inline-block;vertical-align:top;width:22%;min-width:120px;margin:4px;
 padding:8px;background:#ffffff;border:1px solid #bfdbfe;}}
 .rr-step strong{{display:block;color:#1e40af;margin-bottom:4px;}}
-.rr-evidence-note{{font-size:14px;color:#475569;}}
+.rr-figure{{margin:18px 0;padding:12px 0;border-top:1px solid #e5e7eb;
+border-bottom:1px solid #e5e7eb;}}
+.rr-figure img{{max-width:100%;height:auto;display:block;margin:8px auto;}}
+.rr-caption{{font-size:14px;color:#475569;margin:8px 0;}}
+.rr-reference{{margin:12px 0;padding:10px 0;border-top:1px solid #e5e7eb;}}
+.rr-reference summary{{cursor:pointer;color:#0f766e;font-weight:600;}}
 .lede{{font-size:18px;font-weight:600;color:#111827;}}
 h1{{font-size:26px;line-height:1.25;margin:0 0 14px;}}
 h2{{font-size:20px;margin:24px 0 10px;}}
@@ -116,11 +137,13 @@ def _table_of_contents(draft: ArticleDraft, *, language: str) -> str:
 
 def _paragraphs(text: str) -> str:
     return "".join(
-        f"<p>{escape(line.strip())}</p>" for line in text.splitlines() if line.strip()
+        f"<p>{_format_display_text(line.strip())}</p>"
+        for line in text.splitlines()
+        if line.strip()
     )
 
 
-def _deep_reads(raw_deep_reads: object, *, language: str) -> str:
+def _deep_reads(raw_deep_reads: object, *, language: str, publish_mode: bool) -> str:
     if not isinstance(raw_deep_reads, list):
         return ""
     blocks = []
@@ -131,17 +154,27 @@ def _deep_reads(raw_deep_reads: object, *, language: str) -> str:
         title = escape(str(raw_entry.get("title") or labels["untitled"]))
         source = raw_entry.get("source") if isinstance(raw_entry.get("source"), dict) else {}
         source_link = _source_title_link(source, fallback=title)
-        sections = [
-            _deep_text_block(labels["essence"], raw_entry.get("essence")),
-            _problem_block(raw_entry.get("problem"), labels),
-            _solution_block(raw_entry.get("solution"), labels),
-            _experiments_block(raw_entry.get("experiments"), labels),
-            _related_work_block(raw_entry.get("related_work"), labels),
-            _limitations_block(raw_entry.get("limitations"), labels),
-            _critical_block(raw_entry.get("critical_assessment"), labels),
-            _deep_text_block(labels["plain_example"], raw_entry.get("plain_language_example")),
-            _key_evidence_block(raw_entry.get("claims"), labels),
-        ]
+        narrative = _reader_explanation_blocks(raw_entry.get("reader_explanation"), labels)
+        sections = [narrative or _deep_text_block(labels["essence"], raw_entry.get("essence"))]
+        sections.append(
+            _figure_gallery(raw_entry.get("figures"), labels, publish_mode=publish_mode)
+        )
+        if not narrative:
+            sections.extend(
+                [
+                    _problem_block(raw_entry.get("problem"), labels),
+                    _solution_block(raw_entry.get("solution"), labels),
+                    _experiments_block(raw_entry.get("experiments"), labels),
+                    _related_work_block(raw_entry.get("related_work"), labels),
+                    _limitations_block(raw_entry.get("limitations"), labels),
+                    _critical_block(raw_entry.get("critical_assessment"), labels),
+                    _deep_text_block(
+                        labels["plain_example"],
+                        raw_entry.get("plain_language_example"),
+                    ),
+                ]
+            )
+        sections.append(_key_evidence_block(raw_entry.get("claims"), labels))
         blocks.append(
             f"""<article class="rr-deep">
 <p class="rr-kicker">{labels["deep_read_label"]}</p>
@@ -189,7 +222,7 @@ def _explanatory_diagram(entry: dict[object, object], labels: dict[str, str]) ->
         if value:
             rendered.append(
                 '<span class="rr-step">'
-                f"<strong>{escape(title)}</strong>{escape(_shorten(value))}</span>"
+                f"<strong>{escape(title)}</strong>{_format_display_text(_shorten(value))}</span>"
             )
     if len(rendered) < 2:
         return ""
@@ -200,7 +233,7 @@ def _deep_text_block(title: str, value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    return f"<h4>{escape(title)}</h4><p>{escape(text)}</p>"
+    return f"<h4>{escape(title)}</h4><p>{_format_display_text(text)}</p>"
 
 
 def _problem_block(value: object, labels: dict[str, str]) -> str:
@@ -275,7 +308,7 @@ def _key_evidence_block(value: object, labels: dict[str, str]) -> str:
     for item in value[:8]:
         if not isinstance(item, dict):
             continue
-        text = escape(str(item.get("text") or ""))
+        text = _format_display_text(str(item.get("text") or ""))
         evidence = item.get("evidence")
         quote = ""
         if isinstance(evidence, list) and evidence and isinstance(evidence[0], dict):
@@ -288,16 +321,125 @@ def _key_evidence_block(value: object, labels: dict[str, str]) -> str:
         claims.append(f"<li>{text}{quote}</li>")
     if not claims:
         return ""
-    return f'<h4>{escape(labels["key_evidence"])}</h4><ol>{"".join(claims)}</ol>'
+    return (
+        '<details class="rr-reference">'
+        f'<summary>{escape(labels["key_evidence"])}</summary>'
+        f'<ol>{"".join(claims)}</ol></details>'
+    )
+
+
+def _figure_gallery(
+    value: object,
+    labels: dict[str, str],
+    *,
+    publish_mode: bool = False,
+) -> str:
+    if not isinstance(value, list) or not value:
+        return ""
+    blocks = []
+    for item in value[:3]:
+        if not isinstance(item, dict):
+            continue
+        original_caption = str(item.get("caption") or "")
+        localized_caption = str(item.get("localized_caption") or "")
+        caption = _format_display_text(localized_caption or original_caption)
+        original_caption_block = _original_caption_block(
+            original_caption,
+            localized_caption,
+            labels,
+        )
+        explanation = str(item.get("explanation") or "")
+        attribution = escape(str(item.get("attribution") or ""))
+        reuse_status = escape(str(item.get("reuse_status") or "needs_manual_review"))
+        license_value = escape(str(item.get("license") or "unknown"))
+        src = escape(str(item.get("relative_path") or item.get("asset_path") or ""))
+        title = escape(str(item.get("title") or labels["figure"]))
+        if not src:
+            continue
+        if publish_mode and _is_local_media_src(src):
+            media = (
+                '<p class="rr-caption">'
+                "Figure image requires WeChat media upload before publishing."
+                "</p>"
+            )
+        elif item.get("renderable") is False:
+            media = f'<p><a href="{src}">{title}</a></p>'
+        else:
+            media = f'<img src="{src}" alt="{title}" />'
+        blocks.append(
+            f"""<figure class="rr-figure">
+{media}
+<figcaption class="rr-caption"><strong>{title}</strong><br />{caption}</figcaption>
+<p>{_localized_figure_explanation(explanation, labels)}</p>
+{original_caption_block}
+<p class="rr-caption">{labels["attribution"]}: {attribution}<br />
+{labels["license"]}: {license_value}; {labels["reuse_status"]}: {reuse_status}</p>
+</figure>"""
+        )
+    if not blocks:
+        return ""
+    return f'<h4>{escape(labels["figures"])}</h4>{"".join(blocks)}'
+
+
+def _original_caption_block(
+    original_caption: str,
+    localized_caption: str,
+    labels: dict[str, str],
+) -> str:
+    original = original_caption.strip()
+    if not original:
+        return ""
+    localized = localized_caption.strip()
+    if localized and _clean_display_text(localized) != _clean_display_text(original):
+        return (
+            '<details class="rr-reference">'
+            f'<summary>{escape(labels["original_caption"])}</summary>'
+            f"<p>{_format_display_text(original)}</p></details>"
+        )
+    return ""
+
+
+def _is_local_media_src(src: str) -> bool:
+    lowered = src.casefold()
+    return not (
+        lowered.startswith("https://")
+        or lowered.startswith("http://")
+        or lowered.startswith("data:")
+    )
 
 
 def _list_block(title: str, value: object) -> str:
     if not isinstance(value, list) or not value:
         return ""
-    items = "".join(f"<li>{escape(str(item))}</li>" for item in value if str(item).strip())
+    items = "".join(
+        f"<li>{_format_display_text(str(item))}</li>" for item in value if str(item).strip()
+    )
     if not items:
         return ""
     return f"<h4>{escape(title)}</h4><ul>{items}</ul>"
+
+
+def _reader_explanation_blocks(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    sections = [
+        ("opening_context", labels["opening_context"]),
+        ("core_thesis", labels["core_thesis"]),
+        ("problem_walkthrough", labels["problem"]),
+        ("solution_walkthrough", labels["solution"]),
+        ("experiment_interpretation", labels["experiments"]),
+        ("related_work_context", labels["related_work"]),
+        ("limitations_discussion", labels["limitations"]),
+        ("plain_language_story", labels["plain_example"]),
+        ("reader_takeaway", labels["reader_takeaway"]),
+    ]
+    blocks = []
+    for key, title in sections:
+        text = str(value.get(key) or "").strip()
+        if not text:
+            continue
+        blocks.append(_deep_text_block(title, text))
+    return "".join(blocks)
 
 
 def _seen_source_list(raw_sources: object, *, language: str) -> str:
@@ -318,25 +460,75 @@ def _seen_source_list(raw_sources: object, *, language: str) -> str:
     return f"<p>{label}</p><ul>{''.join(items)}</ul>"
 
 
-def _evidence_notes(claims: list[Claim], *, language: str) -> str:
-    if not claims:
+def _references(
+    claims: list[Claim],
+    metadata: dict[object, object],
+    *,
+    language: str,
+) -> str:
+    sources = metadata.get("sources", []) if isinstance(metadata, dict) else []
+    figures = metadata.get("figures", []) if isinstance(metadata, dict) else []
+    if not claims and not sources and not figures:
         fallback = (
-            "今天没有可发布的已核验证据点。"
+            "今天没有可发布的参考证据。"
             if language == "zh"
-            else "No verified evidence-backed observations today."
+            else "No verified references today."
         )
         return f"<p>{fallback}</p>"
-    note = (
-        "以下证据只展示已通过核验的关键原文锚点；完整审计请看本地 review_report.md。"
-        if language == "zh"
-        else (
-            "Only verified source anchors are shown here; the full audit remains in "
-            "review_report.md."
+    label = "展开参考证据" if language == "zh" else "Open references"
+    body = "".join(
+        [
+            _reference_source_list(sources, language=language),
+            _reference_figure_list(figures, language=language),
+            "".join(_evidence_block(claim, language=language) for claim in claims[:12]),
+        ]
+    )
+    return (
+        '<details class="rr-reference">'
+        f"<summary>{label}</summary>"
+        f"{body}</details>"
+    )
+
+
+def _reference_source_list(raw_sources: object, *, language: str) -> str:
+    if not isinstance(raw_sources, list) or not raw_sources:
+        return ""
+    title = "来源链接" if language == "zh" else "Source links"
+    items = []
+    for source in raw_sources[:16]:
+        if not isinstance(source, dict):
+            continue
+        source_title = escape(str(source.get("title") or "Untitled source"))
+        url = escape(str(source.get("url") or ""))
+        if not url:
+            continue
+        arxiv_id = _arxiv_id_from_url(url)
+        suffix = f" ({arxiv_id})" if arxiv_id else ""
+        items.append(f'<li><a href="{url}">{source_title}</a>{escape(suffix)}</li>')
+    if not items:
+        return ""
+    return f"<h4>{title}</h4><ul>{''.join(items)}</ul>"
+
+
+def _reference_figure_list(raw_figures: object, *, language: str) -> str:
+    if not isinstance(raw_figures, list) or not raw_figures:
+        return ""
+    title = "图片许可与复用" if language == "zh" else "Figure license and reuse"
+    items = []
+    for figure in raw_figures[:8]:
+        if not isinstance(figure, dict):
+            continue
+        figure_title = escape(str(figure.get("title") or "Paper figure"))
+        license_value = escape(str(figure.get("license") or "unknown"))
+        reuse_status = escape(str(figure.get("reuse_status") or "needs_manual_review"))
+        attribution = escape(str(figure.get("attribution") or ""))
+        items.append(
+            f"<li><strong>{figure_title}</strong>: license={license_value}; "
+            f"reuse_status={reuse_status}; {attribution}</li>"
         )
-    )
-    return f'<p class="rr-evidence-note">{note}</p>' + "".join(
-        _evidence_block(claim, language=language) for claim in claims[:12]
-    )
+    if not items:
+        return ""
+    return f"<h4>{title}</h4><ul>{''.join(items)}</ul>"
 
 
 def _deep_read_labels(language: str) -> dict[str, str]:
@@ -354,6 +546,7 @@ def _deep_read_labels(language: str) -> dict[str, str]:
             "related_work": "相关工作",
             "prior_work": "代表性已有工作",
             "repackaging_risk": "重新包装风险",
+            "limitations": "局限与未来工作",
             "explicit_limitations": "作者明确局限",
             "inferred_weaknesses": "证据支持的推断弱点",
             "future_work": "未来工作",
@@ -362,7 +555,16 @@ def _deep_read_labels(language: str) -> dict[str, str]:
             "weak_evaluations": "薄弱评估",
             "missing_ablations": "缺失消融",
             "plain_example": "通俗例子",
+            "opening_context": "背景知识速读",
+            "core_thesis": "核心判断",
+            "reader_takeaway": "读者 takeaway",
             "key_evidence": "关键证据",
+            "figures": "论文关键图",
+            "figure": "论文图",
+            "original_caption": "原始图注",
+            "attribution": "来源",
+            "license": "许可",
+            "reuse_status": "复用状态",
             "problem_short": "问题",
             "method_short": "方法",
             "eval_short": "评估",
@@ -381,6 +583,7 @@ def _deep_read_labels(language: str) -> dict[str, str]:
         "related_work": "Related Work",
         "prior_work": "Representative prior work",
         "repackaging_risk": "Repackaging risk",
+        "limitations": "Limitations and Future Work",
         "explicit_limitations": "Explicit limitations",
         "inferred_weaknesses": "Evidence-backed inferred weaknesses",
         "future_work": "Future work",
@@ -389,12 +592,114 @@ def _deep_read_labels(language: str) -> dict[str, str]:
         "weak_evaluations": "Weak evaluations",
         "missing_ablations": "Missing ablations",
         "plain_example": "Plain-language Example",
+        "opening_context": "Opening Context",
+        "core_thesis": "Core Thesis",
+        "reader_takeaway": "Reader Takeaway",
         "key_evidence": "Key Evidence",
+        "figures": "Key Figures",
+        "figure": "Paper figure",
+        "original_caption": "Original caption",
+        "attribution": "Attribution",
+        "license": "License",
+        "reuse_status": "Reuse status",
         "problem_short": "Problem",
         "method_short": "Method",
         "eval_short": "Evaluation",
         "caveat_short": "Caveat",
     }
+
+
+def _localized_figure_explanation(explanation: str, labels: dict[str, str]) -> str:
+    if (
+        labels["figure"] == "论文图"
+        and explanation == FIGURE_EXPLANATION_SOURCE_CONTEXT
+    ):
+        return "这张图作为来源上下文展示，不新增研究判断。"
+    if labels["figure"] == "论文图" and explanation.startswith(
+        FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX
+    ):
+        return "这张图用于辅助理解；它的图注与一条已核验判断相关，具体证据见本节“关键证据”。"
+    if labels["figure"] == "论文图" and explanation:
+        return _format_display_text(explanation)
+    return _format_display_text(explanation)
+
+
+def _clean_display_text(value: str) -> str:
+    text = value.replace("~", " ")
+    text = re.sub(r"\\\((.*?)\\\)", r"\1", text)
+    text = re.sub(r"\$(.*?)\$", r"\1", text)
+    text = re.sub(r"\${2,}", "", text)
+    text = re.sub(r"\\([A-Za-z]+)\{([^{}]*)\}", r"\2", text)
+    text = re.sub(r"\\([A-Za-z]+)", r"\1", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _format_display_text(value: str) -> str:
+    text = _preclean_formula_text(value)
+    explicit_pattern = re.compile(r"\\\((.*?)\\\)|\$([^$\n]{1,120})\$")
+    formulas: list[str] = []
+
+    def replace_explicit(match: re.Match[str]) -> str:
+        formula = match.group(1) if match.group(1) is not None else match.group(2)
+        if match.group(2) is not None and not _looks_like_formula(formula or ""):
+            return match.group(0)
+        formulas.append(_formula_span(formula or ""))
+        return f"@@RR_FORMULA_{len(formulas) - 1}@@"
+
+    with_placeholders = explicit_pattern.sub(replace_explicit, text)
+    formatted = _format_implicit_formulas(escape(with_placeholders))
+    for index, formula in enumerate(formulas):
+        formatted = formatted.replace(f"@@RR_FORMULA_{index}@@", formula)
+    return formatted
+
+
+def _preclean_formula_text(value: str) -> str:
+    text = value.replace("~", " ")
+    text = re.sub(r"\${2,}", "", text)
+    text = text.replace("\\times", "×").replace("\\Delta", "∆")
+    text = re.sub(r"\\([A-Za-z]+)\{([^{}]*)\}", r"\2", text)
+    text = re.sub(r"\\([A-Za-z]+)", r"\1", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _looks_like_formula(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return False
+    if re.search(r"[=^_{}\\]|[κλθ∆×]", text):
+        return True
+    if re.fullmatch(r"[A-Za-z]\s+\d+(?:\.\d+)?", text):
+        return True
+    if re.search(r"[A-Za-z]\([A-Za-z0-9, _+\-]{0,30}\)", text):
+        return True
+    return False
+
+
+def _format_implicit_formulas(html: str) -> str:
+    formula_pattern = re.compile(
+        r"(?<![\w-])("
+        r"[A-Za-z]\([A-Za-z0-9, _+\-]{0,30}\)\s*=\s*[A-Za-z0-9κλθ+\-*/^{}().=]{1,70}"
+        r"|[A-Za-z]\([A-Za-z0-9, _+\-]{0,30}\)"
+        r"|[κλθ]\s*=\s*\d+(?:\.\d+)?"
+        r")(?![\w-])"
+    )
+    return formula_pattern.sub(lambda match: _formula_span(match.group(1)), html)
+
+
+def _formula_span(value: str) -> str:
+    formula = _preclean_formula_text(value)
+    if not formula:
+        return ""
+    return f'<span class="rr-formula" style="{FORMULA_STYLE}">{escape(formula)}</span>'
+
+
+def _arxiv_id_from_url(url: str) -> str:
+    match = re.search(r"arxiv\.org/(?:abs|pdf|html)/(?P<id>\d{4}\.\d{4,5}(?:v\d+)?)", url)
+    if not match:
+        return ""
+    return f"arXiv:{match.group('id')}"
 
 
 def _nested_value(value: object, key: str) -> str:
@@ -429,8 +734,8 @@ def _claim_card(claim: Claim, *, language: str) -> str:
     )
     return f"""<section class="rr-card">
 <span class="rr-tag">{tag}</span>
-<h3>{escape(_localized_claim_text(claim.text, language=language))}</h3>
-<p>{escape(claim.rationale or fallback)}</p>
+<h3>{_format_display_text(_localized_claim_text(claim.text, language=language))}</h3>
+<p>{_format_display_text(claim.rationale or fallback)}</p>
 </section>"""
 
 
@@ -445,7 +750,7 @@ def _source_list(raw_sources: object, *, language: str) -> str:
         for item in items:
             title = escape(str(item.get("title", "Untitled source")))
             url = escape(str(item.get("url", "")))
-            gist = escape(str(item.get("gist", "")))
+            gist = _format_display_text(str(item.get("gist", "")))
             descriptor = escape(_source_descriptor(item))
             gist_label = "摘要" if language == "zh" else "Gist"
             blocks.append(
@@ -497,7 +802,7 @@ def _evidence_block(claim: Claim, *, language: str) -> str:
 <p><a href="{escape(anchor.source_url)}">Original source</a></p>
 </section>"""
         )
-    claim_text = escape(_localized_claim_text(claim.text, language=language))
+    claim_text = _format_display_text(_localized_claim_text(claim.text, language=language))
     return f"<section><h3>{claim_text}</h3>{''.join(anchors)}</section>"
 
 
