@@ -550,13 +550,13 @@ def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
 def test_long_form_chinese_lede_does_not_append_first_claim() -> None:
     source = _paper_source()
     claim = Claim(
-        text="method: FRQAD is a new metric on the Gaussian statistical manifold.",
+        text="Problem: 这篇论文讨论长期记忆。",
         status=ClaimStatus.SUPPORTED,
         evidence=[
             EvidenceAnchor(
                 source_url=source.url,
                 source_title=source.title,
-                quote="FRQAD is a new metric",
+                quote="long-term memory evidence",
             )
         ],
     )
@@ -568,16 +568,31 @@ def test_long_form_chinese_lede_does_not_append_first_claim() -> None:
         readings=[_paper_reading(source.title)],
         deep_read_sources=[source],
     )
+    legacy_suffix = (
+        " method: FRQAD is a new metric on the Gaussian statistical manifold."
+    )
+    legacy_sections = [
+        replace(
+            draft.sections[0],
+            body=f"{draft.lede}{legacy_suffix}\n已核验证据点：1 条。",
+        ),
+        *draft.sections[1:],
+    ]
+    legacy_draft = replace(draft, lede=f"{draft.lede}{legacy_suffix}", sections=legacy_sections)
 
-    html = render_wechat_html(draft)
+    html = render_wechat_html(legacy_draft)
 
     assert draft.lede == "今天精读了 1 篇新论文，并保留其他新增来源供后续跟进。"
-    assert "method: FRQAD" not in draft.lede
+    assert "method: FRQAD" in legacy_draft.lede
     assert '<div class="rr-summary">' in html
-    assert "<p>今天精读了 1 篇新论文，并保留其他新增来源供后续跟进。</p>" in html
+    assert "<p>今日精读：1 篇论文。</p>" in html
     assert "<p>已核验证据点：1 条。</p>" in html
+    assert "<p>其他新增来源：0 个，见下方折叠列表。</p>" not in html
     lede_html = html.split('<p class="lede">', 1)[1].split("</p>", 1)[0]
     assert "method: FRQAD" not in lede_html
+    summary_html = html.split('<div class="rr-summary">', 1)[1].split("</div>", 1)[0]
+    assert "method: FRQAD" not in summary_html
+    assert "今天精读了 1 篇新论文，并保留其他新增来源供后续跟进。" not in summary_html
 
 
 def test_long_form_wechat_renders_paper_figures_without_new_claims() -> None:

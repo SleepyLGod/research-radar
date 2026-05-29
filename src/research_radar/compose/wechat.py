@@ -30,7 +30,7 @@ def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> st
             "section",
             f"""
             <h1>{escape(draft.title)}</h1>
-            <p class="lede">{escape(draft.lede)}</p>
+            <p class="lede">{escape(_display_lede(draft.lede))}</p>
             """,
             class_name="rr-hero",
         )
@@ -60,7 +60,7 @@ def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> st
             if not content:
                 content = f"<p>{escape(section.body)}</p>"
         elif kind == "today_summary":
-            content = f'<div class="rr-summary">{_paragraphs(section.body)}</div>'
+            content = _today_summary(draft, section.body, language=language)
         else:
             content = "".join(_claim_card(claim, language=language) for claim in section.claims)
             if not content:
@@ -160,6 +160,87 @@ def _paragraphs(text: str) -> str:
         for line in text.splitlines()
         if line.strip()
     )
+
+
+def _today_summary(draft: ArticleDraft, fallback_body: str, *, language: str) -> str:
+    lines = _today_summary_lines(draft, language=language)
+    if not lines:
+        lines = [
+            _display_lede(line.strip())
+            for line in fallback_body.splitlines()
+            if line.strip()
+        ]
+    if not lines:
+        return ""
+    return '<div class="rr-summary">' + "".join(
+        f"<p>{_format_display_text(line)}</p>" for line in lines
+    ) + "</div>"
+
+
+def _today_summary_lines(draft: ArticleDraft, *, language: str) -> list[str]:
+    if draft.metadata.get("draft_type") != "daily_long_form":
+        return []
+    metadata = draft.metadata
+    deep_read_count = _int_metadata(metadata.get("deep_read_count"))
+    source_count = _int_metadata(metadata.get("source_count"))
+    seen_count = _int_metadata(metadata.get("seen_source_count"))
+    verified_count = len(draft.publishable_claims())
+    other_count = max(source_count - deep_read_count, 0)
+    if language == "zh":
+        lines = [
+            f"今日精读：{deep_read_count} 篇论文。",
+            f"已核验证据点：{verified_count} 条。",
+        ]
+        if other_count:
+            lines.append(f"其他新增来源：{other_count} 个，见下方折叠列表。")
+        if seen_count:
+            lines.append(f"历史相关来源：{seen_count} 个。")
+        return lines
+    lines = [
+        f"Deep reads: {deep_read_count} paper(s).",
+        f"Verified observations: {verified_count}.",
+    ]
+    if other_count:
+        lines.append(f"Other new or updated sources: {other_count}; see folded list below.")
+    if seen_count:
+        lines.append(f"Seen-before sources: {seen_count}.")
+    return lines
+
+
+def _int_metadata(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return 0
+
+
+def _display_lede(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    return _strip_appended_claim(text)
+
+
+def _strip_appended_claim(value: str) -> str:
+    claim_prefixes = (
+        "method",
+        "problem",
+        "solution",
+        "experiment",
+        "related work",
+        "limitations",
+        "critical assessment",
+        "essence",
+    )
+    pattern = re.compile(
+        r"(?<=[。.!?])\s+(?:" + "|".join(re.escape(prefix) for prefix in claim_prefixes) + r")\s*:",
+        flags=re.IGNORECASE,
+    )
+    match = pattern.search(value)
+    if not match:
+        return value
+    return value[: match.start()].strip()
 
 
 def _deep_reads(raw_deep_reads: object, *, language: str, publish_mode: bool) -> str:
