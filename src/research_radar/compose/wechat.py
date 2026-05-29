@@ -32,6 +32,7 @@ def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> st
             <h1>{escape(draft.title)}</h1>
             <p class="lede">{escape(draft.lede)}</p>
             """,
+            class_name="rr-hero",
         )
     ]
     if long_form:
@@ -69,6 +70,7 @@ def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> st
                 "section",
                 f"<h2>{escape(section.title)}</h2>{content}",
                 section_id=f"rr-section-{index}" if long_form else None,
+                class_name="rr-section",
             )
         )
     return _html_shell("".join(body))
@@ -83,7 +85,8 @@ def compose_wechat_html(topic_id: str, claims: list[Claim]) -> str:
 def _html_shell(body: str) -> str:
     shell_start = (
         "<section style=\"font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',"
-        "Arial,sans-serif;color:#1f2933;line-height:1.75;font-size:16px;\">"
+        "Arial,sans-serif;color:#1f2933;line-height:1.75;font-size:16px;"
+        "max-width:760px;margin:0 auto;padding:28px 18px;\">"
     )
     return f"""{shell_start}
 <style>
@@ -93,38 +96,51 @@ margin:12px 0;background:#ffffff;}}
 border-radius:999px;font-size:12px;}}
 .rr-quote{{border-left:3px solid #94a3b8;padding:8px 12px;margin:10px 0;
 background:#f8fafc;color:#334155;font-size:14px;}}
-.rr-toc{{border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db;
-padding:14px 0;margin:20px 0;background:#ffffff;}}
+.rr-hero{{padding:0 0 20px;margin:0 0 18px;border-bottom:1px solid #e5e7eb;}}
+.rr-section{{margin:26px 0;}}
+.rr-toc{{border:1px solid #d1d5db;border-radius:8px;
+padding:14px 16px;margin:20px 0;background:#fbfdfc;}}
 .rr-toc ol{{margin:8px 0 0 20px;padding:0;}}
-.rr-deep{{border-top:2px solid #111827;padding-top:22px;margin-top:22px;}}
+.rr-toc li{{margin:4px 0;}}
+.rr-deep{{border-top:2px solid #111827;padding-top:24px;margin:30px 0 12px;}}
 .rr-kicker{{font-size:13px;color:#64748b;margin:0 0 4px;}}
-.rr-diagram{{display:block;border:1px solid #dbeafe;background:#f8fbff;padding:12px;margin:14px 0;}}
-.rr-step{{display:inline-block;vertical-align:top;width:22%;min-width:120px;margin:4px;
-padding:8px;background:#ffffff;border:1px solid #bfdbfe;}}
+.rr-diagram{{display:block;border-left:3px solid #60a5fa;background:#f8fbff;
+padding:12px 14px;margin:18px 0;}}
+.rr-step{{display:block;margin:8px 0;padding:10px 12px;background:#ffffff;
+border:1px solid #bfdbfe;border-radius:6px;}}
 .rr-step strong{{display:block;color:#1e40af;margin-bottom:4px;}}
-.rr-figure{{margin:18px 0;padding:12px 0;border-top:1px solid #e5e7eb;
-border-bottom:1px solid #e5e7eb;}}
-.rr-figure img{{max-width:100%;height:auto;display:block;margin:8px auto;}}
+.rr-figure{{margin:20px 0;padding:14px 12px;border-top:1px solid #e5e7eb;
+border-bottom:1px solid #e5e7eb;background:#fcfcfd;}}
+.rr-figure img{{max-width:100%;height:auto;display:block;margin:10px auto 12px;}}
 .rr-caption{{font-size:14px;color:#475569;margin:8px 0;}}
-.rr-reference{{margin:12px 0;padding:10px 0;border-top:1px solid #e5e7eb;}}
+.rr-reference{{margin:14px 0;padding:10px 12px;border-top:1px solid #e5e7eb;
+background:#fafafa;}}
 .rr-reference summary{{cursor:pointer;color:#0f766e;font-weight:600;}}
 .rr-summary{{border-left:3px solid #14b8a6;padding:8px 0 8px 14px;
 margin:10px 0 4px;background:#f8fffd;}}
 .rr-summary p{{margin:6px 0;}}
 .lede{{font-size:18px;font-weight:600;color:#111827;margin:6px 0 18px;}}
-h1{{font-size:26px;line-height:1.25;margin:0 0 14px;}}
-h2{{font-size:20px;margin:24px 0 10px;}}
-h3{{font-size:17px;margin:0 0 8px;}}
-h4{{font-size:16px;margin:16px 0 6px;}}
+p{{margin:10px 0;}}
+h1{{font-size:28px;line-height:1.25;margin:0 0 14px;color:#111827;}}
+h2{{font-size:21px;margin:26px 0 12px;padding-left:10px;border-left:4px solid #0f766e;}}
+h3{{font-size:18px;margin:0 0 10px;color:#111827;}}
+h4{{font-size:16px;margin:20px 0 8px;color:#0f172a;}}
 a{{color:#0f766e;text-decoration:none;}}
 </style>
 {body}
 </section>"""
 
 
-def _section(tag: str, content: str, *, section_id: str | None = None) -> str:
+def _section(
+    tag: str,
+    content: str,
+    *,
+    section_id: str | None = None,
+    class_name: str | None = None,
+) -> str:
     id_attr = f' id="{escape(section_id)}"' if section_id else ""
-    return f"<{tag}{id_attr}>{content}</{tag}>"
+    class_attr = f' class="{escape(class_name)}"' if class_name else ""
+    return f"<{tag}{id_attr}{class_attr}>{content}</{tag}>"
 
 
 def _table_of_contents(draft: ArticleDraft, *, language: str) -> str:

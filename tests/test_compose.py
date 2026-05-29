@@ -14,6 +14,7 @@ from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.markdown import render_markdown
 from research_radar.compose.source_groups import group_source_entries
 from research_radar.compose.wechat import compose_wechat_html, render_wechat_html
+from research_radar.compose.zhihu import render_zhihu_markdown
 from research_radar.exceptions import PublishError
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
 from research_radar.storage.files import write_json
@@ -343,6 +344,8 @@ def test_long_form_wechat_renders_toc_deep_reads_and_collapsed_references() -> N
     html = render_wechat_html(draft)
 
     assert "Contents" in html
+    assert 'class="rr-hero"' in html
+    assert 'class="rr-section"' in html
     assert "Deep Reads" in html
     assert "Other New / Updated Sources" in html
     assert "Evidence Notes" not in html
@@ -359,6 +362,28 @@ def test_long_form_wechat_renders_toc_deep_reads_and_collapsed_references() -> N
     assert "<summary>Key Evidence</summary>" in html
     assert "rr-diagram" in html
     assert "Supported paper claim" in html
+
+
+def test_wechat_visual_polish_does_not_change_markdown_or_zhihu_fallback() -> None:
+    source = _paper_source()
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [_supported_paper_claim(source)],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+    )
+
+    html = render_wechat_html(draft)
+    markdown = render_markdown(draft)
+    zhihu = render_zhihu_markdown(draft)
+
+    assert 'class="rr-summary"' in html
+    assert 'class="rr-deep"' in html
+    assert "Supported paper claim" in markdown
+    assert "Supported paper claim" in zhihu
+    assert "rr-summary" not in markdown
+    assert "rr-summary" not in zhihu
 
 
 def test_long_form_wechat_keeps_unsupported_claims_out() -> None:
