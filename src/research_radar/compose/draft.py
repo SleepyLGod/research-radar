@@ -266,11 +266,6 @@ def _long_form_lede(
     language: str,
 ) -> str:
     labels = _long_form_labels(language)
-    if deep_read_entries and verified:
-        return (
-            f"{labels['with_deep'].format(count=len(deep_read_entries))} "
-            f"{_localized_claim_text(verified[0].text, language=language)}"
-        )
     if deep_read_entries:
         return labels["with_deep"].format(count=len(deep_read_entries))
     if source_entries:

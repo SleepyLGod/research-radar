@@ -522,6 +522,39 @@ def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
     assert "long-term memory evidence" in html
 
 
+def test_long_form_chinese_lede_does_not_append_first_claim() -> None:
+    source = _paper_source()
+    claim = Claim(
+        text="method: FRQAD is a new metric on the Gaussian statistical manifold.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="FRQAD is a new metric",
+            )
+        ],
+    )
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        language="zh",
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+    )
+
+    html = render_wechat_html(draft)
+
+    assert draft.lede == "今天精读了 1 篇新论文，并保留其他新增来源供后续跟进。"
+    assert "method: FRQAD" not in draft.lede
+    assert '<div class="rr-summary">' in html
+    assert "<p>今天精读了 1 篇新论文，并保留其他新增来源供后续跟进。</p>" in html
+    assert "<p>已核验证据点：1 条。</p>" in html
+    lede_html = html.split('<p class="lede">', 1)[1].split("</p>", 1)[0]
+    assert "method: FRQAD" not in lede_html
+
+
 def test_long_form_wechat_renders_paper_figures_without_new_claims() -> None:
     source = _paper_source()
     claim = _supported_paper_claim(source)
@@ -631,13 +664,13 @@ def test_long_form_chinese_renders_figures_and_keeps_evidence_quote_english() ->
 def test_wechat_static_formula_formatting_keeps_raw_evidence_quote() -> None:
     source = _paper_source()
     claim = Claim(
-        text="Solution: Retention follows R(t)=e^{-t/S(m)} with κ=2.0.",
+        text="Solution: Retention follows R(t) = e^{-t/S(m)} with κ=2.0 and 32× speedup.",
         status=ClaimStatus.SUPPORTED,
         evidence=[
             EvidenceAnchor(
                 source_url=source.url,
                 source_title=source.title,
-                quote="Retention follows R(t)=e^{-t/S(m)} with κ=2.0.",
+                quote="Retention follows R(t) = e^{-t/S(m)} with κ=2.0 and 32× speedup.",
                 location="page 3",
             )
         ],
@@ -645,11 +678,13 @@ def test_wechat_static_formula_formatting_keeps_raw_evidence_quote() -> None:
 
     html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
 
-    assert html.count('class="rr-formula"') >= 2
-    assert "R(t)=e^{-t/S(m)}" in html
-    assert "κ=2.0" in html
+    assert html.count('class="rr-formula"') >= 3
+    assert ">R(t) = e^{-t/S(m)}</span>" in html
+    assert ">κ=2.0</span>" in html
+    assert ">32×</span>" in html
+    assert "R(t) = e^{-t/<span" not in html
     assert (
-        "<p>Retention follows R(t)=e^{-t/S(m)} with κ=2.0.</p>"
+        "<p>Retention follows R(t) = e^{-t/S(m)} with κ=2.0 and 32× speedup.</p>"
         in html
     )
 

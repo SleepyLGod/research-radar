@@ -59,7 +59,7 @@ def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> st
             if not content:
                 content = f"<p>{escape(section.body)}</p>"
         elif kind == "today_summary":
-            content = _paragraphs(section.body)
+            content = f'<div class="rr-summary">{_paragraphs(section.body)}</div>'
         else:
             content = "".join(_claim_card(claim, language=language) for claim in section.claims)
             if not content:
@@ -108,7 +108,10 @@ border-bottom:1px solid #e5e7eb;}}
 .rr-caption{{font-size:14px;color:#475569;margin:8px 0;}}
 .rr-reference{{margin:12px 0;padding:10px 0;border-top:1px solid #e5e7eb;}}
 .rr-reference summary{{cursor:pointer;color:#0f766e;font-weight:600;}}
-.lede{{font-size:18px;font-weight:600;color:#111827;}}
+.rr-summary{{border-left:3px solid #14b8a6;padding:8px 0 8px 14px;
+margin:10px 0 4px;background:#f8fffd;}}
+.rr-summary p{{margin:6px 0;}}
+.lede{{font-size:18px;font-weight:600;color:#111827;margin:6px 0 18px;}}
 h1{{font-size:26px;line-height:1.25;margin:0 0 14px;}}
 h2{{font-size:20px;margin:24px 0 10px;}}
 h3{{font-size:17px;margin:0 0 8px;}}
@@ -681,11 +684,13 @@ def _looks_like_formula(value: str) -> bool:
 
 def _format_implicit_formulas(html: str) -> str:
     formula_pattern = re.compile(
-        r"(?<![\w-])("
-        r"[A-Za-z]\([A-Za-z0-9, _+\-]{0,30}\)\s*=\s*[A-Za-z0-9κλθ+\-*/^{}().=]{1,70}"
+        r"(?<![A-Za-z0-9_-])("
+        r"[A-Za-z]\([A-Za-z0-9, _+\-]{0,30}\)\s*=\s*"
+        r"[A-Za-z0-9κλθ+\-*/^{}().]+"
         r"|[A-Za-z]\([A-Za-z0-9, _+\-]{0,30}\)"
+        r"|\d+(?:\.\d+)?×"
         r"|[κλθ]\s*=\s*\d+(?:\.\d+)?"
-        r")(?![\w-])"
+        r")(?![A-Za-z0-9_-])"
     )
     return formula_pattern.sub(lambda match: _formula_span(match.group(1)), html)
 
