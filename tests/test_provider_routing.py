@@ -84,6 +84,21 @@ def test_openai_and_deepseek_use_openai_compatible_provider() -> None:
     assert isinstance(build_provider(config, manager, "openai"), OpenAICompatibleProvider)
 
 
+def test_xiaomi_uses_openai_compatible_provider() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    manager = SecretManager(InMemorySecretBackend())
+
+    provider = build_provider(config, manager, "xiaomi")
+
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.name == "xiaomi"
+
+
 def test_openai_compatible_wraps_incomplete_http_reads(monkeypatch) -> None:
     manager = SecretManager(InMemorySecretBackend())
     manager.set_openai_api_key("fake-key")
@@ -436,6 +451,84 @@ def test_anchor_repair_route_defaults_to_deepseek_v4_pro() -> None:
     assert route.provider_name == "deepseek"
     assert route.model == "deepseek-v4-pro"
     assert isinstance(route.provider, OpenAICompatibleProvider)
+
+
+def test_deepseek_provider_replacement_uses_xiaomi_default_model() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_replacements={"deepseek": "xiaomi"},
+    )
+
+    assert route.provider_name == "xiaomi"
+    assert route.model == "mimo-v2.5-pro"
+    assert isinstance(route.provider, OpenAICompatibleProvider)
+
+
+def test_deepseek_provider_replacement_keeps_non_deepseek_verifier(tmp_path: Path) -> None:
+    command = _fake_codex_command(tmp_path)
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "codex": {"kind": "codex_cli", "command": str(command)},
+            },
+            "models": {
+                "task_routes": {
+                    "verifier": {"provider": "codex", "model": "gpt-5.4"},
+                }
+            },
+        }
+    )
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "verifier",
+        provider_replacements={"deepseek": "xiaomi"},
+    )
+
+    assert route.provider_name == "codex"
+    assert route.model == "gpt-5.4"
+    assert isinstance(route.provider, CodexCliProvider)
+
+
+def test_task_specific_provider_override_beats_deepseek_replacement() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "deep_reading",
+        provider_override="deepseek",
+        provider_replacements={"deepseek": "xiaomi"},
+    )
+
+    assert route.provider_name == "deepseek"
+    assert route.model == "deepseek-v4-pro"
+
+
+def test_global_provider_override_keeps_global_behavior() -> None:
+    config = _deepseek_route_config()
+    manager = SecretManager(InMemorySecretBackend())
+
+    route = resolve_task_route(
+        config,
+        manager,
+        "source_gist",
+        global_provider="xiaomi",
+        provider_replacements={"deepseek": "openai"},
+    )
+
+    assert route.provider_name == "xiaomi"
+    assert route.model == "mimo-v2.5-pro"
 
 
 def _deepseek_route_config() -> AppConfig:

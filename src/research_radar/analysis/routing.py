@@ -31,6 +31,7 @@ def resolve_task_route(
     model_override: str | None = None,
     global_provider: str | None = None,
     global_model: str | None = None,
+    provider_replacements: dict[str, str] | None = None,
     default_local: bool = False,
 ) -> TaskModelRoute:
     """Resolve the provider and model for one task."""
@@ -47,8 +48,8 @@ def resolve_task_route(
             or _task_model_for_provider(route, provider_name)
         )
     elif route:
-        provider_name = route.provider
-        model = model_override or route.model
+        provider_name = _replacement_provider(route.provider, provider_replacements)
+        model = model_override or _task_model_for_provider(route, provider_name)
     elif default_local:
         provider_name = "local"
         model = model_override or global_model or "local"
@@ -61,6 +62,15 @@ def resolve_task_route(
         raise ConfigError(f"No model configured for task {task_name} provider {provider_name}.")
     provider = build_provider(config, secrets, provider_name)
     return TaskModelRoute(provider=provider, model=model, provider_name=provider_name)
+
+
+def _replacement_provider(
+    provider_name: str,
+    replacements: dict[str, str] | None,
+) -> str:
+    if replacements is None:
+        return provider_name
+    return replacements.get(provider_name, provider_name)
 
 
 def _task_model_for_provider(
@@ -141,6 +151,7 @@ def _build_provider(
 def _default_model(provider_name: str) -> str | None:
     defaults = {
         "deepseek": "deepseek-chat",
+        "xiaomi": "mimo-v2.5-pro",
         "openai": "gpt-5.4",
         "anthropic": "claude-sonnet-4-5",
         "codex": "gpt-5.4",

@@ -301,6 +301,11 @@ def _default_model_providers() -> dict[str, ModelProviderConfig]:
             base_url="https://api.deepseek.com/chat/completions",
             api_key_secret="deepseek.api_key",
         ),
+        "xiaomi": ModelProviderConfig(
+            kind="openai_compatible",
+            base_url="https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
+            api_key_secret="xiaomi.api_key",
+        ),
         "openai": ModelProviderConfig(
             kind="openai_compatible",
             base_url="https://api.openai.com/v1/chat/completions",

@@ -77,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
         "name",
         choices=[
             "deepseek",
+            "xiaomi",
             "openai",
             "anthropic",
             "wechat",
@@ -107,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         default=None,
         help="Compatibility default model for the bootstrap task.",
+    )
+    topic_bootstrap.add_argument(
+        "--deepseek-provider",
+        default=None,
+        help="Provider instance to use for tasks configured on DeepSeek.",
     )
     topic_bootstrap.add_argument(
         "--bootstrap-provider",
@@ -159,6 +165,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         default=None,
         help="Compatibility default model for all model-backed daily tasks.",
+    )
+    daily.add_argument(
+        "--deepseek-provider",
+        default=None,
+        help="Provider instance to use for tasks configured on DeepSeek.",
     )
     daily.add_argument("--gist-provider", default=None, help="Provider instance for source gists.")
     daily.add_argument("--gist-model", default=None, help="Model for source gists.")
@@ -236,6 +247,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         default=None,
         help="Compatibility default model for paper reading and verification.",
+    )
+    paper.add_argument(
+        "--deepseek-provider",
+        default=None,
+        help="Provider instance to use for tasks configured on DeepSeek.",
     )
     paper.add_argument(
         "--reader-provider",
@@ -338,6 +354,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--model",
         default=None,
         help="Compatibility default model for all model-backed eval tasks.",
+    )
+    eval_topics.add_argument(
+        "--deepseek-provider",
+        default=None,
+        help="Provider instance to use for tasks configured on DeepSeek.",
     )
     eval_topics.add_argument(
         "--gist-provider",
@@ -461,6 +482,8 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
     manager = SecretManager(KeychainSecretBackend())
     if args.name == "deepseek":
         manager.set_deepseek_api_key(_prompt_secret("DeepSeek API key"))
+    elif args.name == "xiaomi":
+        manager.backend.set_secret("xiaomi.api_key", _prompt_secret("Xiaomi API key"))
     elif args.name == "openai":
         manager.set_openai_api_key(_prompt_secret("OpenAI API key"))
     elif args.name == "anthropic":
@@ -490,6 +513,7 @@ def handle_topic_bootstrap(args: argparse.Namespace) -> None:
         global_provider is None
         and getattr(args, "bootstrap_provider", None) is None
         and getattr(args, "bootstrap_model", None) is None
+        and getattr(args, "deepseek_provider", None) is None
         and getattr(args, "model", None) is None
     ):
         global_provider = "local"
@@ -501,6 +525,7 @@ def handle_topic_bootstrap(args: argparse.Namespace) -> None:
         model_override=getattr(args, "bootstrap_model", None),
         global_provider=global_provider,
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=True,
     )
     topic = bootstrap_topic_draft(
@@ -538,6 +563,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         model_override=getattr(args, "gist_model", None),
         global_provider=getattr(args, "provider", None),
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=True,
     )
     reader_route = _resolve_daily_reader_route(args, config, manager)
@@ -556,6 +582,7 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         model_override=getattr(args, "verifier_model", None),
         global_provider=getattr(args, "provider", None),
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=True,
     )
     gist_route = _maybe_cached_route(gist_route, args.root, "source_gist", args)
@@ -618,6 +645,7 @@ def handle_run_paper(args: argparse.Namespace) -> None:
         model_override=getattr(args, "reader_model", None),
         global_provider=getattr(args, "provider", None),
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=False,
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
@@ -677,6 +705,7 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         model_override=getattr(args, "gist_model", None),
         global_provider=getattr(args, "provider", None),
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=True,
     )
     reader_route = resolve_task_route(
@@ -687,6 +716,7 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         model_override=getattr(args, "reader_model", None),
         global_provider=getattr(args, "provider", None),
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=False,
     )
     verifier_route = _resolve_verifier_route(args, config, manager, fallback=reader_route)
@@ -891,6 +921,7 @@ def _resolve_daily_reader_route(
         model_override=getattr(args, "reader_model", None),
         global_provider=getattr(args, "provider", None),
         global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
         default_local=True,
     )
 
@@ -911,6 +942,7 @@ def _resolve_verifier_route(
             model_override=getattr(args, "verifier_model", None),
             global_provider=getattr(args, "provider", None),
             global_model=getattr(args, "model", None),
+            provider_replacements=_deepseek_provider_replacements(args),
             default_local=False,
         )
     except ConfigError:
@@ -933,6 +965,7 @@ def _resolve_anchor_repair_route(
             model_override=getattr(args, "anchor_repair_model", None),
             global_provider=getattr(args, "provider", None),
             global_model=getattr(args, "model", None),
+            provider_replacements=_deepseek_provider_replacements(args),
             default_local=True,
         )
     except ConfigError:
@@ -959,12 +992,20 @@ def _resolve_localization_route(
             model_override=getattr(args, "localization_model", None),
             global_provider=getattr(args, "provider", None),
             global_model=getattr(args, "model", None),
+            provider_replacements=_deepseek_provider_replacements(args),
             default_local=True,
         )
     except ConfigError:
         if getattr(args, "localization_provider", None) or getattr(args, "provider", None):
             raise
         return TaskModelRoute(provider=None, model=None, provider_name="local")
+
+
+def _deepseek_provider_replacements(args: argparse.Namespace) -> dict[str, str] | None:
+    replacement = getattr(args, "deepseek_provider", None)
+    if replacement is None:
+        return None
+    return {"deepseek": replacement}
 
 
 def _report_language_for_topic(args: argparse.Namespace, config: AppConfig) -> str:

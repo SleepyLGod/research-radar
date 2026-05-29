@@ -76,6 +76,7 @@ class EnvSecretBackend:
 
     _names = {
         "deepseek.api_key": "DEEPSEEK_API_KEY",
+        "xiaomi.api_key": "XIAOMI_API_KEY",
         "openai.api_key": "OPENAI_API_KEY",
         "anthropic.api_key": "ANTHROPIC_API_KEY",
         "wechat.app_id": "WECHAT_APP_ID",

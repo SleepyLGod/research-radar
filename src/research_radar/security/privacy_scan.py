@@ -117,6 +117,7 @@ def _is_allowed_example_line(line: str) -> bool:
         name in stripped
         for name in [
             "DEEPSEEK_API_KEY",
+            "XIAOMI_API_KEY",
             "OPENAI_API_KEY",
             "ANTHROPIC_API_KEY",
             "WECHAT_APP_SECRET",

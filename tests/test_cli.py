@@ -65,6 +65,14 @@ def test_topic_bootstrap_cli_supports_custom_output_and_language(
     assert "report_language: zh" in output
 
 
+def test_secrets_set_parser_accepts_xiaomi() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["secrets", "set", "xiaomi"])
+
+    assert args.name == "xiaomi"
+
+
 def test_run_daily_can_use_deepseek_verifier_from_env(
     monkeypatch,
     tmp_path: Path,
@@ -117,6 +125,150 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
     assert captured["deep_model"] == "deepseek-chat"
     assert captured["deep_limit"] == 1
     assert captured["language"] == "zh"
+
+
+def test_run_daily_deepseek_provider_replacement_uses_xiaomi(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "models": {
+                "task_routes": {
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-chat"},
+                    "deep_reading": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                    },
+                    "anchor_repair": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                    },
+                    "verifier": {"provider": "local", "model": "local"},
+                }
+            },
+        }
+    )
+    captured: dict[str, object] = {}
+    env_file = tmp_path / ".env"
+    env_file.write_text("XIAOMI_API_KEY='fake-xiaomi-key'\n", encoding="utf-8")
+
+    def fake_run_daily(*args, **kwargs):
+        captured.update(kwargs)
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.delenv("XIAOMI_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider=None,
+            model=None,
+            deepseek_provider="xiaomi",
+            gist_provider=None,
+            gist_model=None,
+            reader_provider=None,
+            reader_model=None,
+            verifier_provider=None,
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            localization_provider=None,
+            localization_model=None,
+            secret_source="env",
+            env_file=env_file,
+            limit=3,
+            deep_limit=1,
+            language=None,
+            model_cache=False,
+        )
+    )
+
+    assert isinstance(captured["gist_provider"], OpenAICompatibleProvider)
+    assert captured["gist_provider"].name == "xiaomi"
+    assert captured["gist_model"] == "mimo-v2.5-pro"
+    assert isinstance(captured["deep_reader"], OpenAICompatibleProvider)
+    assert captured["deep_reader"].name == "xiaomi"
+    assert captured["deep_model"] == "mimo-v2.5-pro"
+    assert isinstance(captured["anchor_repair_provider"], OpenAICompatibleProvider)
+    assert captured["anchor_repair_provider"].name == "xiaomi"
+    assert captured["anchor_repair_model"] == "mimo-v2.5-pro"
+    assert captured["verifier"] is None
+    assert captured["verifier_model"] is None
+
+
+def test_run_daily_task_specific_override_beats_deepseek_provider_replacement(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "models": {
+                "task_routes": {
+                    "deep_reading": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-pro",
+                    },
+                    "verifier": {"provider": "local", "model": "local"},
+                }
+            },
+        }
+    )
+    captured: dict[str, object] = {}
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "DEEPSEEK_API_KEY='fake-deepseek-key'\n"
+        "XIAOMI_API_KEY='fake-xiaomi-key'\n",
+        encoding="utf-8",
+    )
+
+    def fake_run_daily(*args, **kwargs):
+        captured.update(kwargs)
+        return tmp_path / "runs" / "fake-run"
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("XIAOMI_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", fake_run_daily)
+
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider=None,
+            model=None,
+            deepseek_provider="xiaomi",
+            gist_provider=None,
+            gist_model=None,
+            reader_provider="deepseek",
+            reader_model=None,
+            verifier_provider=None,
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            localization_provider=None,
+            localization_model=None,
+            secret_source="env",
+            env_file=env_file,
+            limit=3,
+            deep_limit=1,
+            language=None,
+            model_cache=False,
+        )
+    )
+
+    assert isinstance(captured["deep_reader"], OpenAICompatibleProvider)
+    assert captured["deep_reader"].name == "deepseek"
+    assert captured["deep_model"] == "deepseek-v4-pro"
 
 
 def test_run_daily_local_provider_does_not_configure_verifier(
