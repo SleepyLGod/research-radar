@@ -1,4 +1,6 @@
 from research_radar.analysis.localization import (
+    localization_body_failed,
+    localization_failed,
     localize_report_content,
     report_localization_prompt,
 )
@@ -27,6 +29,22 @@ class CapturingProvider:
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         self.messages.append(messages)
         return ModelResponse(content=self.content, model=model)
+
+
+class SequenceProvider:
+    """Provider fixture that returns localization responses in order."""
+
+    name = "sequence-localizer"
+
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = responses
+        self.messages: list[list[Message]] = []
+
+    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+        self.messages.append(messages)
+        if not self.responses:
+            raise AssertionError("No more localization responses")
+        return ModelResponse(content=self.responses.pop(0), model=model)
 
 
 def test_localization_prompt_preserves_terms_numbers_and_quotes() -> None:
@@ -173,7 +191,81 @@ def test_localization_changes_display_text_only() -> None:
         result.figures_by_source_url[source.url][0]["explanation"]
         == "这张图说明 Raw、Source、Canonical 的区别。"
     )
+    assert result.status == "succeeded"
     assert result.attempts[0].status == "succeeded"
+    assert [attempt.scope for attempt in result.attempts] == ["reading", "display"]
+    assert len(provider.messages) == 2
+
+
+def test_localization_failed_reading_chunk_is_marked_not_silent_fallback() -> None:
+    source = _source()
+    provider = CapturingProvider("not json")
+
+    result = localize_report_content(
+        readings=[_reading()],
+        claims=[_claim()],
+        sources=[source],
+        figures_by_source_url={},
+        provider=provider,
+        model="fake-localizer",
+        language="zh",
+    )
+
+    assert result.status == "failed"
+    assert localization_body_failed(result) is True
+    assert localization_failed(result) is True
+    assert result.readings[0].problem_solution.problem == (
+        "The paper evaluates LLM agent memory."
+    )
+    assert result.attempts[0].scope == "reading"
+    assert result.attempts[0].status == "failed"
+    assert result.attempts[0].response_excerpt == "not json"
+
+
+def test_localization_failed_display_chunk_is_marked_failed() -> None:
+    source = _source()
+    provider = SequenceProvider(
+        [
+            """
+            {
+              "readings": [
+                {
+                  "index": 0,
+                  "problem_solution": {"problem": "论文评估 LLM agent memory。"}
+                }
+              ],
+              "claims": [],
+              "sources": [],
+              "figures": []
+            }
+            """,
+            "not json",
+        ]
+    )
+
+    result = localize_report_content(
+        readings=[_reading()],
+        claims=[_claim()],
+        sources=[source],
+        figures_by_source_url={
+            source.url: [
+                {
+                    "title": "fig:overview",
+                    "caption": "Overview of Raw, Source, and Canonical targets.",
+                }
+            ]
+        },
+        provider=provider,
+        model="fake-localizer",
+        language="zh",
+    )
+
+    assert result.status == "partial_failed"
+    assert localization_body_failed(result) is False
+    assert localization_failed(result) is True
+    assert result.readings[0].problem_solution.problem == "论文评估 LLM agent memory。"
+    assert [attempt.scope for attempt in result.attempts] == ["reading", "display"]
+    assert result.attempts[1].status == "failed"
 
 
 def _source() -> SourceCandidate:

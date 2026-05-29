@@ -626,6 +626,7 @@ def _localized_figure_explanation(explanation: str, labels: dict[str, str]) -> s
 
 def _clean_display_text(value: str) -> str:
     text = value.replace("~", " ")
+    text = text.replace("\\%", "%")
     text = re.sub(r"\\\((.*?)\\\)", r"\1", text)
     text = re.sub(r"\$(.*?)\$", r"\1", text)
     text = re.sub(r"\${2,}", "", text)
@@ -656,6 +657,7 @@ def _format_display_text(value: str) -> str:
 
 def _preclean_formula_text(value: str) -> str:
     text = value.replace("~", " ")
+    text = text.replace("\\%", "%")
     text = re.sub(r"\${2,}", "", text)
     text = text.replace("\\times", "×").replace("\\Delta", "∆")
     text = re.sub(r"\\([A-Za-z]+)\{([^{}]*)\}", r"\2", text)

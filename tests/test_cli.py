@@ -406,20 +406,23 @@ def test_publish_wechat_draft_dry_run_uses_article_draft(
     output = capsys.readouterr().out
     result = read_json(run_dir / "publish_wechat_draft.json")
     request = read_json(run_dir / "publish_wechat_draft_request.json")
-    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    preview_html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    publish_html = (run_dir / "wechat_publish.html").read_text(encoding="utf-8")
     assert "Prepared WeChat draft dry run" in output
     assert result["status"] == "dry_run"
     assert result["draft_created"] is False
     assert request["draft_only"] is True
     assert request["auto_publish"] is False
-    assert "Verified claim for WeChat draft." in html
-    assert "stale unverified html" not in html
+    assert request["content_path"].endswith("wechat_publish.html")
+    assert preview_html == "stale unverified html"
+    assert "Verified claim for WeChat draft." in publish_html
 
 
 def test_publish_wechat_draft_dry_run_omits_local_figure_images(
     tmp_path: Path,
 ) -> None:
     run_dir = _write_publishable_article_draft(tmp_path, with_local_figure=True)
+    cli.main(["compose", "wechat", "--run", str(run_dir)])
 
     cli.main(
         [
@@ -437,9 +440,57 @@ def test_publish_wechat_draft_dry_run_omits_local_figure_images(
         ]
     )
 
-    html = (run_dir / "wechat.html").read_text(encoding="utf-8")
-    assert '<img src="figures/' not in html
-    assert "Figure image requires WeChat media upload before publishing." in html
+    preview_html = (run_dir / "wechat.html").read_text(encoding="utf-8")
+    publish_html = (run_dir / "wechat_publish.html").read_text(encoding="utf-8")
+    assert '<img src="figures/' in preview_html
+    assert '<img src="figures/' not in publish_html
+    assert "Figure image requires WeChat media upload before publishing." in publish_html
+
+
+def test_publish_wechat_draft_fails_non_dry_run_with_local_figure_images(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path, with_local_figure=True)
+    called = False
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_draft(self, article) -> dict[str, object]:
+            nonlocal called
+            called = True
+            return {"media_id": "draft-media"}
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+
+    try:
+        cli.main(
+            [
+                "publish",
+                "wechat-draft",
+                "--run",
+                str(run_dir),
+                "--title",
+                "Daily title",
+                "--digest",
+                "Manual digest",
+                "--thumb-media-id",
+                "thumb123",
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 1
+    else:
+        raise AssertionError("Expected publish failure")
+
+    error = read_json(run_dir / "publish_error.json")
+    request = read_json(run_dir / "publish_wechat_draft_request.json")
+    assert called is False
+    assert error["error_type"] == "PublishError"
+    assert "media upload" in error["message"]
+    assert request["content_path"].endswith("wechat_publish.html")
 
 
 def test_compose_wechat_prefers_article_draft_when_present(

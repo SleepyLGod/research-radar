@@ -688,6 +688,7 @@ def test_single_paper_pipeline_supports_chinese_report_language(
     assert claims[0]["text"].startswith("Problem: The paper evaluates")
     assert localized_readings[0]["problem_solution"]["problem"].startswith("论文评估")
     assert attempts[0]["status"] == "succeeded"
+    assert [attempt["scope"] for attempt in attempts] == ["reading", "display"]
     assert "深度阅读报告" in deep_report
     assert "# 深度阅读报告" in deep_report
 

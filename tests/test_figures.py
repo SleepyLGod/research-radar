@@ -302,3 +302,50 @@ def test_extract_latex_figures_marks_unconverted_svg_non_renderable(
     assert len(selected) == 1
     assert selected[0].renderable is False
     assert selected[0].asset_path.endswith(".svg")
+
+
+def test_extract_latex_figures_cleans_latex_caption_noise(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    image_dir = tmp_path / "figures" / "images"
+    (source_dir / "figures").mkdir(parents=True)
+    (source_dir / "figures" / "architecture.png").write_bytes(b"fake-png")
+    (source_dir / "main.tex").write_text(
+        r"""
+        \begin{figure}
+        \includegraphics{figures/architecture}
+        \caption{SLM~V3.3 architecture with 32$$ cold-start speedup,
+        100\% local storage, $R 0.35$ retention, and 2 \times faster lookup. % comment
+        }
+        \label{fig:architecture}
+        \end{figure}
+        """,
+        encoding="utf-8",
+    )
+    source = SourceCandidate(
+        title="Memory Paper",
+        url="https://arxiv.org/abs/2605.00001",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+    )
+    claim = Claim(
+        text="Solution: SLM V3.3 uses a local storage architecture with faster lookup.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                quote="local storage architecture with faster lookup",
+            )
+        ],
+    )
+
+    selected = extract_latex_figures(source_dir, image_dir, source, [claim])
+
+    assert len(selected) == 1
+    caption = selected[0].caption
+    assert "SLM V3.3 architecture" in caption
+    assert "32 cold-start speedup" in caption
+    assert "100% local storage" in caption
+    assert "R 0.35 retention" in caption
+    assert "2 × faster lookup" in caption
+    assert "$" not in caption
+    assert "comment" not in caption

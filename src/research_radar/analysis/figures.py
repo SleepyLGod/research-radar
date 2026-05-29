@@ -505,10 +505,38 @@ def _attribution(source: SourceCandidate) -> str:
 
 
 def _clean_latex_text(value: str) -> str:
-    cleaned = re.sub(r"%.*", "", value)
-    cleaned = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?", "", cleaned)
+    cleaned = _strip_latex_comments(value)
+    cleaned = cleaned.replace(r"\%", "%")
+    cleaned = cleaned.replace("~", " ")
+    cleaned = cleaned.replace(r"\times", "×").replace(r"\Delta", "∆")
+    cleaned = re.sub(r"\\\((.*?)\\\)", r"\1", cleaned)
+    cleaned = re.sub(r"\$([^$\n]{1,160})\$", r"\1", cleaned)
+    cleaned = cleaned.replace("$", "")
+    cleaned = re.sub(
+        r"\\(?:text|mathrm|emph|textbf|textit)\{([^{}]*)\}",
+        r"\1",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{([^{}]*)\})?",
+        lambda match: match.group(1) or "",
+        cleaned,
+    )
     cleaned = cleaned.replace("{", "").replace("}", "")
-    return " ".join(cleaned.split())
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
+
+
+def _strip_latex_comments(value: str) -> str:
+    lines = []
+    for line in value.splitlines():
+        cut_at = len(line)
+        for index, char in enumerate(line):
+            if char == "%" and (index == 0 or line[index - 1] != "\\"):
+                cut_at = index
+                break
+        lines.append(line[:cut_at])
+    return "\n".join(lines)
 
 
 def _tokens(value: str) -> set[str]:

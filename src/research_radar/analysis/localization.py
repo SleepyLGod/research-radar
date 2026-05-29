@@ -39,6 +39,8 @@ class LocalizationAttempt:
     model: str
     language: str
     status: str
+    scope: str = "report"
+    index: int | None = None
     error_message: str | None = None
     response_excerpt: str = ""
 
@@ -53,6 +55,22 @@ class ReportLocalizationResult:
     figures_by_source_url: dict[str, list[dict[str, object]]]
     attempts: list[LocalizationAttempt]
     findings: list[ReviewFinding]
+    status: str = "succeeded"
+
+
+def localization_body_failed(result: ReportLocalizationResult) -> bool:
+    """Return whether a deep-read body localization chunk failed."""
+
+    return any(
+        attempt.scope == "reading" and attempt.status == "failed"
+        for attempt in result.attempts
+    )
+
+
+def localization_failed(result: ReportLocalizationResult) -> bool:
+    """Return whether any localization chunk failed."""
+
+    return any(attempt.status == "failed" for attempt in result.attempts)
 
 
 def localize_report_content(
@@ -69,7 +87,15 @@ def localize_report_content(
 
     figures = figures_by_source_url or {}
     if language != "zh":
-        return ReportLocalizationResult(readings, claims, sources, figures, [], [])
+        return ReportLocalizationResult(
+            readings,
+            claims,
+            sources,
+            figures,
+            [],
+            [],
+            status="not_needed",
+        )
     if provider is None or model is None:
         return ReportLocalizationResult(
             readings,
@@ -92,73 +118,68 @@ def localize_report_content(
                     metadata={"kind": "report_localization_skipped", "language": language},
                 )
             ],
+            status="skipped",
         )
 
-    provider_name = getattr(provider, "name", provider.__class__.__name__)
-    prompt = report_localization_prompt(
-        readings=readings,
-        claims=publishable_claims(claims),
-        sources=sources,
-        figures_by_source_url=figures,
-    )
-    try:
-        response = provider.complete(
-            [
-                Message(
-                    role="system",
-                    content=(
-                        "You localize verified research report text for publication. "
-                        "Return strict JSON only."
-                    ),
-                ),
-                Message(role="user", content=prompt),
-            ],
-            model=model,
+    localized_readings = list(readings)
+    localized_claims = list(claims)
+    localized_sources = list(sources)
+    localized_figures = {
+        source_url: [dict(figure) for figure in source_figures]
+        for source_url, source_figures in figures.items()
+    }
+    attempts: list[LocalizationAttempt] = []
+    findings: list[ReviewFinding] = []
+
+    for index, reading in enumerate(readings):
+        payload, attempt = _localization_payload(
+            provider,
+            model,
+            language,
+            readings=[reading],
+            claims=[],
+            sources=[],
+            figures_by_source_url={},
+            scope="reading",
+            index=index,
         )
-        payload = _load_json_object(response.content)
-    except AnalysisError as exc:
-        return ReportLocalizationResult(
-            readings,
-            claims,
-            sources,
-            figures,
-            [
-                LocalizationAttempt(
-                    provider=provider_name,
-                    model=model,
-                    language=language,
-                    status="failed",
-                    error_message=str(exc),
-                )
-            ],
-            [
-                ReviewFinding(
-                    severity="warning",
-                    message=f"Report localization failed: {exc}",
-                    metadata={"kind": "report_localization_failed", "language": language},
-                )
-            ],
+        attempts.append(attempt)
+        if payload is None:
+            findings.append(_localization_failure_finding(attempt))
+            continue
+        localized_readings[index] = _localized_reading(
+            reading,
+            _entries_by_index(payload.get("readings")).get(0, {}),
         )
 
-    localized_readings = _localized_readings(readings, payload.get("readings"))
-    localized_claims = _localized_claims(claims, payload.get("claims"))
-    localized_sources = _localized_sources(sources, payload.get("sources"))
-    localized_figures = _localized_figures(figures, payload.get("figures"))
+    if claims or sources or figures:
+        payload, attempt = _localization_payload(
+            provider,
+            model,
+            language,
+            readings=[],
+            claims=publishable_claims(claims),
+            sources=sources,
+            figures_by_source_url=figures,
+            scope="display",
+            index=None,
+        )
+        attempts.append(attempt)
+        if payload is None:
+            findings.append(_localization_failure_finding(attempt))
+        else:
+            localized_claims = _localized_claims(claims, payload.get("claims"))
+            localized_sources = _localized_sources(sources, payload.get("sources"))
+            localized_figures = _localized_figures(figures, payload.get("figures"))
+
     return ReportLocalizationResult(
         localized_readings,
         localized_claims,
         localized_sources,
         localized_figures,
-        [
-            LocalizationAttempt(
-                provider=provider_name,
-                model=model,
-                language=language,
-                status="succeeded",
-                response_excerpt=_response_excerpt(response.content),
-            )
-        ],
-        [],
+        attempts,
+        findings,
+        status=localization_status_from_attempts(attempts),
     )
 
 
@@ -238,9 +259,104 @@ Return JSON only with this shape:
   ]
 }}
 
+Only return entries for the payload items you received. If the payload has no readings,
+return an empty "readings" array. Do not return patch/diff JSON.
+
 Verified display payload:
 {json.dumps(payload, ensure_ascii=False, indent=2)}
 """
+
+
+def _localization_payload(
+    provider: LLMProvider,
+    model: str,
+    language: str,
+    *,
+    readings: list[PaperReading],
+    claims: list[Claim],
+    sources: list[SourceCandidate],
+    figures_by_source_url: dict[str, list[dict[str, object]]],
+    scope: str,
+    index: int | None,
+) -> tuple[dict[str, object] | None, LocalizationAttempt]:
+    provider_name = getattr(provider, "name", provider.__class__.__name__)
+    prompt = report_localization_prompt(
+        readings=readings,
+        claims=claims,
+        sources=sources,
+        figures_by_source_url=figures_by_source_url,
+    )
+    response_content = ""
+    try:
+        response = provider.complete(
+            [
+                Message(
+                    role="system",
+                    content=(
+                        "You localize verified research report text for publication. "
+                        "Return strict JSON only."
+                    ),
+                ),
+                Message(role="user", content=prompt),
+            ],
+            model=model,
+        )
+        response_content = response.content
+        payload = _load_json_object(response.content)
+    except AnalysisError as exc:
+        return None, LocalizationAttempt(
+            provider=provider_name,
+            model=model,
+            language=language,
+            status="failed",
+            scope=scope,
+            index=index,
+            error_message=str(exc),
+            response_excerpt=_response_excerpt(response_content),
+        )
+    return payload, LocalizationAttempt(
+        provider=provider_name,
+        model=model,
+        language=language,
+        status="succeeded",
+        scope=scope,
+        index=index,
+        response_excerpt=_response_excerpt(response_content),
+    )
+
+
+def _localization_failure_finding(attempt: LocalizationAttempt) -> ReviewFinding:
+    suffix = f" ({attempt.scope}"
+    if attempt.index is not None:
+        suffix += f" #{attempt.index}"
+    suffix += ")"
+    return ReviewFinding(
+        severity="warning",
+        message=f"Report localization failed{suffix}: {attempt.error_message}",
+        metadata={
+            "kind": "report_localization_failed",
+            "language": attempt.language,
+            "scope": attempt.scope,
+            "index": attempt.index,
+        },
+    )
+
+
+def localization_status_from_attempts(attempts: list[object]) -> str:
+    """Summarize localization attempts for manifest/runtime metadata."""
+
+    if not attempts:
+        return "not_needed"
+    statuses = {getattr(attempt, "status", "") for attempt in attempts}
+    if statuses == {"succeeded"}:
+        return "succeeded"
+    if "succeeded" in statuses and "failed" in statuses:
+        return "partial_failed"
+    if "failed" in statuses:
+        return "failed"
+    if statuses == {"skipped"}:
+        return "skipped"
+    return "partial_failed"
 
 
 def _reading_payload(index: int, reading: PaperReading) -> dict[str, object]:

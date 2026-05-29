@@ -8,7 +8,11 @@ from pathlib import Path
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
 from research_radar.analysis.figures import FigureExtractionError, extract_paper_figures
-from research_radar.analysis.localization import localize_report_content
+from research_radar.analysis.localization import (
+    localization_failed,
+    localization_status_from_attempts,
+    localize_report_content,
+)
 from research_radar.analysis.model_cache import (
     merge_cache_deltas,
     provider_cache_delta,
@@ -53,6 +57,7 @@ from research_radar.models import (
     Artifact,
     Claim,
     ReviewFinding,
+    RunManifest,
     SourceCandidate,
     SourceType,
     dataclass_to_dict,
@@ -521,7 +526,19 @@ def run_daily(
         display_figures_by_source_url = localization.figures_by_source_url
         localization_attempts = localization.attempts
         findings.extend(localization.findings)
-        status = localization_attempts[-1].status if localization_attempts else "not_needed"
+        status = localization.status
+        if localization_failed(localization):
+            _write_localization_failed_daily(
+                run_dir,
+                manifest,
+                progress,
+                localization_attempts,
+                status=status,
+            )
+            raise AnalysisError(
+                "Chinese report localization failed for at least one display chunk; "
+                "no zh public article was generated."
+            )
         progress.record(
             "localization",
             "completed",
@@ -582,11 +599,7 @@ def run_daily(
             "report_language": report_language,
             "localization": {
                 "attempt_count": len(localization_attempts),
-                "status": (
-                    localization_attempts[-1].status
-                    if localization_attempts
-                    else "not_needed"
-                ),
+                "status": localization_status_from_attempts(localization_attempts),
             },
         },
     )
@@ -710,6 +723,50 @@ def _relevance_count(candidates: list[SourceCandidate], status: str) -> int:
         for candidate in candidates
         if candidate.metadata.get("relevance", {}).get("status") == status
     )
+
+
+def _write_localization_failed_daily(
+    run_dir: Path,
+    manifest: RunManifest,
+    progress: ProgressWriter,
+    attempts: list[object],
+    *,
+    status: str,
+) -> None:
+    message = (
+        "Chinese report localization failed for at least one display chunk; "
+        "public zh artifacts were not written."
+    )
+    progress.record(
+        "localization",
+        "failed",
+        status_detail=status,
+        error_type="AnalysisError",
+        error=message,
+    )
+    failure = {
+        "stage": "localization",
+        "error_type": "AnalysisError",
+        "message": message,
+        "status": status,
+    }
+    update_manifest(
+        run_dir,
+        replace(
+            manifest,
+            metadata={
+                **manifest.metadata,
+                "localization": {
+                    "attempt_count": len(attempts),
+                    "status": status,
+                },
+                "failure": failure,
+            },
+        ),
+    )
+    write_jsonl(run_dir / "localization_attempts.jsonl", attempts)
+    write_json(run_dir / "localization_error.json", failure)
+    write_json(run_dir / "runtime_summary.json", build_runtime_summary(progress.events))
 
 
 def _web_search_summary(

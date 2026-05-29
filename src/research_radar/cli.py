@@ -26,7 +26,7 @@ from research_radar.discovery.web_search import (
 )
 from research_radar.evaluation.topic_smoke import run_topic_smoke, select_topic_specs
 from research_radar.evidence.ledger import load_claims
-from research_radar.exceptions import ConfigError, ResearchRadarError, SecretError
+from research_radar.exceptions import ConfigError, PublishError, ResearchRadarError, SecretError
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
 from research_radar.pipeline.weekly import compose_weekly_from_run
@@ -760,15 +760,13 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
     try:
         draft = load_article_draft(args.run_dir / "article_draft.json")
         content = render_wechat_html(draft, publish_mode=True)
-        write_text(args.run_dir / "wechat.html", content)
-        article = WeChatArticle(
-            title=args.title,
-            author=args.author,
-            digest=args.digest,
-            content=content,
-            thumb_media_id=args.thumb_media_id,
+        publish_content_path = args.run_dir / "wechat_publish.html"
+        write_text(publish_content_path, content)
+        request = _wechat_publish_request(
+            args,
+            draft_topic=draft.topic_id,
+            content_path=publish_content_path,
         )
-        request = _wechat_publish_request(args, draft_topic=draft.topic_id)
         write_json(args.run_dir / "publish_wechat_draft_request.json", request)
         if args.dry_run:
             result = {
@@ -779,6 +777,18 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
             write_json(args.run_dir / "publish_wechat_draft.json", result)
             print(f"Prepared WeChat draft dry run: {args.run_dir / 'publish_wechat_draft.json'}")
             return
+        if _publish_content_requires_media_upload(content):
+            raise PublishError(
+                "WeChat draft contains local figure images that require media upload; "
+                "rerun in --dry-run mode or provide a media upload map first."
+            )
+        article = WeChatArticle(
+            title=args.title,
+            author=args.author,
+            digest=args.digest,
+            content=content,
+            thumb_media_id=args.thumb_media_id,
+        )
         manager = SecretManager(KeychainSecretBackend())
         encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
         token_store = EncryptedJsonStore(args.run_dir / "wechat_token.enc.json", encryptor)
@@ -804,7 +814,12 @@ def handle_privacy_scan(args: argparse.Namespace) -> None:
     print("Privacy scan passed.")
 
 
-def _wechat_publish_request(args: argparse.Namespace, *, draft_topic: str) -> dict[str, object]:
+def _wechat_publish_request(
+    args: argparse.Namespace,
+    *,
+    draft_topic: str,
+    content_path: Path,
+) -> dict[str, object]:
     return {
         "target": "wechat_draft",
         "draft_only": True,
@@ -815,8 +830,12 @@ def _wechat_publish_request(args: argparse.Namespace, *, draft_topic: str) -> di
         "digest": args.digest,
         "thumb_media_id": args.thumb_media_id,
         "article_draft_path": str(args.run_dir / "article_draft.json"),
-        "content_path": str(args.run_dir / "wechat.html"),
+        "content_path": str(content_path),
     }
+
+
+def _publish_content_requires_media_upload(content: str) -> bool:
+    return "Figure image requires WeChat media upload before publishing." in content
 
 
 def _write_publish_error(run_dir: Path, exc: ResearchRadarError) -> None:
