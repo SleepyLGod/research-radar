@@ -99,6 +99,18 @@ def test_xiaomi_uses_openai_compatible_provider() -> None:
     assert provider.name == "xiaomi"
 
 
+def test_xiaomi_default_timeout_is_longer_than_deepseek() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    assert config.model_providers["xiaomi"].timeout_seconds == 900
+    assert config.model_providers["deepseek"].timeout_seconds == 120
+
+
 def test_openai_compatible_wraps_incomplete_http_reads(monkeypatch) -> None:
     manager = SecretManager(InMemorySecretBackend())
     manager.set_openai_api_key("fake-key")

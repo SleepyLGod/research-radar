@@ -106,6 +106,7 @@ model_providers:
     kind: openai_compatible
     base_url: https://token-plan-cn.xiaomimimo.com/v1/chat/completions
     api_key_secret: xiaomi.api_key
+    timeout_seconds: 900
   openai:
     kind: openai_compatible
     base_url: https://api.openai.com/v1/chat/completions

@@ -1,3 +1,4 @@
+import json
 from argparse import Namespace
 from pathlib import Path
 
@@ -5,9 +6,10 @@ from research_radar import cli
 from research_radar.analysis.cli_providers import CodexCliProvider
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
+from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.compose.draft import build_daily_draft
 from research_radar.config import parse_config
-from research_radar.exceptions import PublishError
+from research_radar.exceptions import ProviderTransportError, PublishError
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
 from research_radar.storage.files import read_json, write_json
 
@@ -71,6 +73,233 @@ def test_secrets_set_parser_accepts_xiaomi() -> None:
     args = parser.parse_args(["secrets", "set", "xiaomi"])
 
     assert args.name == "xiaomi"
+
+
+def test_provider_probe_parser_defaults_to_small_probe() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["provider", "probe", "--provider", "xiaomi"])
+
+    assert args.provider == "xiaomi"
+    assert args.probe == "small"
+    assert args.config == Path("config.example.yaml")
+
+
+def test_provider_probe_outputs_success_diagnostics(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    captured: dict[str, object] = {}
+
+    class FakeProvider:
+        name = "xiaomi"
+
+        def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+            captured["model"] = model
+            captured["prompt"] = messages[0].content
+            return ModelResponse(
+                content="ResearchRadar provider probe ok.",
+                model=model,
+                metadata={"provider": self.name},
+            )
+
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+    monkeypatch.setattr(
+        cli,
+        "resolve_task_route",
+        lambda *args, **kwargs: cli.TaskModelRoute(
+            provider=FakeProvider(),
+            model="mimo-v2.5-pro",
+            provider_name="xiaomi",
+        ),
+    )
+
+    cli.handle_provider_probe(
+        Namespace(
+            provider="xiaomi",
+            model=None,
+            config=tmp_path / "config.yaml",
+            probe="small",
+            secret_source="env",
+            env_file=None,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "succeeded"
+    assert output["provider"] == "xiaomi"
+    assert output["model"] == "mimo-v2.5-pro"
+    assert output["timeout_seconds"] == 900
+    assert "provider probe ok" in output["response_excerpt"]
+    assert captured["model"] == "mimo-v2.5-pro"
+    assert "Reply with exactly" in str(captured["prompt"])
+
+
+def test_provider_probe_validates_json_response(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    class FakeProvider:
+        name = "xiaomi"
+
+        def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+            return ModelResponse(
+                content='```json\n{"status":"ok","provider_test":true}\n```',
+                model=model,
+                metadata={"provider": self.name},
+            )
+
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+    monkeypatch.setattr(
+        cli,
+        "resolve_task_route",
+        lambda *args, **kwargs: cli.TaskModelRoute(
+            provider=FakeProvider(),
+            model="mimo-v2.5-pro",
+            provider_name="xiaomi",
+        ),
+    )
+
+    cli.handle_provider_probe(
+        Namespace(
+            provider="xiaomi",
+            model=None,
+            config=tmp_path / "config.yaml",
+            probe="json",
+            secret_source="env",
+            env_file=None,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "succeeded"
+    assert output["json_valid"] is True
+
+
+def test_provider_probe_reports_response_char_count(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    captured: dict[str, object] = {}
+
+    class FakeProvider:
+        name = "xiaomi"
+
+        def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+            captured["prompt"] = messages[0].content
+            return ModelResponse(
+                content="Long response body.",
+                model=model,
+                metadata={"provider": self.name},
+            )
+
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+    monkeypatch.setattr(
+        cli,
+        "resolve_task_route",
+        lambda *args, **kwargs: cli.TaskModelRoute(
+            provider=FakeProvider(),
+            model="mimo-v2.5-pro",
+            provider_name="xiaomi",
+        ),
+    )
+
+    cli.handle_provider_probe(
+        Namespace(
+            provider="xiaomi",
+            model=None,
+            config=tmp_path / "config.yaml",
+            probe="long",
+            secret_source="env",
+            env_file=None,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "succeeded"
+    assert output["response_char_count"] == len("Long response body.")
+    assert "LLM API transport stress-test" in str(captured["prompt"])
+
+
+def test_provider_probe_outputs_redacted_failure_diagnostics(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    class FakeProvider:
+        name = "xiaomi"
+
+        def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+            raise ProviderTransportError(
+                "xiaomi request failed; access_token=fake-secret-token",
+                {
+                    "provider": "xiaomi",
+                    "model": model,
+                    "response_excerpt": "access_token=fake-secret-token",
+                },
+            )
+
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+    monkeypatch.setattr(
+        cli,
+        "resolve_task_route",
+        lambda *args, **kwargs: cli.TaskModelRoute(
+            provider=FakeProvider(),
+            model="mimo-v2.5-pro",
+            provider_name="xiaomi",
+        ),
+    )
+
+    try:
+        cli.handle_provider_probe(
+            Namespace(
+                provider="xiaomi",
+                model=None,
+                config=tmp_path / "config.yaml",
+                probe="small",
+                secret_source="env",
+                env_file=None,
+            )
+        )
+    except ProviderTransportError:
+        pass
+    else:
+        raise AssertionError("Expected ProviderTransportError")
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "failed"
+    assert output["provider"] == "xiaomi"
+    assert "fake-secret-token" not in json.dumps(output)
+    assert "access_token" in json.dumps(output)
 
 
 def test_run_daily_can_use_deepseek_verifier_from_env(

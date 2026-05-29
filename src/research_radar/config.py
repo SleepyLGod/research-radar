@@ -305,6 +305,7 @@ def _default_model_providers() -> dict[str, ModelProviderConfig]:
             kind="openai_compatible",
             base_url="https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
             api_key_secret="xiaomi.api_key",
+            timeout_seconds=900,
         ),
         "openai": ModelProviderConfig(
             kind="openai_compatible",

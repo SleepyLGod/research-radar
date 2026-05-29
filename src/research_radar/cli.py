@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 from research_radar.analysis.model_cache import CachedLLMProvider
+from research_radar.analysis.providers import Message
 from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.wechat import render_wechat_html
@@ -87,6 +91,35 @@ def build_parser() -> argparse.ArgumentParser:
         ],
     )
     secrets_set.set_defaults(handler=handle_secrets_set)
+
+    provider_parser = subparsers.add_parser("provider", help="Model provider utilities.")
+    provider_subparsers = provider_parser.add_subparsers(dest="provider_command", required=True)
+    provider_probe = provider_subparsers.add_parser(
+        "probe",
+        help="Run a provider-only API probe without creating research artifacts.",
+    )
+    provider_probe.add_argument("--provider", required=True)
+    provider_probe.add_argument("--model", default=None)
+    provider_probe.add_argument("--config", type=Path, default=Path("config.example.yaml"))
+    provider_probe.add_argument(
+        "--probe",
+        choices=["small", "json", "long"],
+        default="small",
+        help="Probe workload to run against the selected provider.",
+    )
+    provider_probe.add_argument(
+        "--secret-source",
+        choices=["keychain", "env"],
+        default="keychain",
+        help="Read provider secrets from Keychain or the current process environment.",
+    )
+    provider_probe.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Explicitly load local environment variables before reading env-backed secrets.",
+    )
+    provider_probe.set_defaults(handler=handle_provider_probe)
 
     topic_parser = subparsers.add_parser("topic", help="Topic profile utilities.")
     topic_subparsers = topic_parser.add_subparsers(dest="topic_command", required=True)
@@ -501,6 +534,80 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
     print(f"Stored {args.name} secrets in the configured secret backend.")
 
 
+def handle_provider_probe(args: argparse.Namespace) -> None:
+    """Run a provider-only diagnostic probe."""
+
+    if args.env_file is not None:
+        _load_env_file(args.env_file)
+    config = _load_routing_config(args.config)
+    manager = _secret_manager(args.secret_source)
+    route = resolve_task_route(
+        config,
+        manager,
+        "provider_probe",
+        provider_override=args.provider,
+        model_override=args.model,
+        default_local=False,
+    )
+    if route.provider is None or route.model is None:
+        raise ResearchRadarError("Provider probe requires a non-local model provider.")
+    provider_config = config.model_providers[route.provider_name]
+    started = time.perf_counter()
+    try:
+        response = route.provider.complete(
+            [Message(role="user", content=_provider_probe_prompt(args.probe))],
+            model=route.model,
+        )
+    except ResearchRadarError as exc:
+        duration = time.perf_counter() - started
+        _print_probe_result(
+            {
+                "status": "failed",
+                "probe": args.probe,
+                "provider": route.provider_name,
+                "model": route.model,
+                "host": _provider_host(provider_config.base_url),
+                "timeout_seconds": provider_config.timeout_seconds,
+                "duration_seconds": round(duration, 3),
+                "error_type": type(exc).__name__,
+                "message": redact_text(str(exc)),
+                "diagnostics": _probe_diagnostics(exc),
+            }
+        )
+        raise
+
+    duration = time.perf_counter() - started
+    result: dict[str, object] = {
+        "status": "succeeded",
+        "probe": args.probe,
+        "provider": route.provider_name,
+        "model": route.model,
+        "host": _provider_host(provider_config.base_url),
+        "timeout_seconds": provider_config.timeout_seconds,
+        "duration_seconds": round(duration, 3),
+        "response_char_count": len(response.content),
+        "response_excerpt": _probe_excerpt(response.content),
+    }
+    if args.probe == "json":
+        try:
+            _load_probe_json(response.content)
+        except json.JSONDecodeError as exc:
+            result.update(
+                {
+                    "status": "failed",
+                    "json_valid": False,
+                    "error_type": type(exc).__name__,
+                    "message": "Provider probe failed: JSON response was not parseable.",
+                }
+            )
+            _print_probe_result(result)
+            raise ResearchRadarError(
+                "Provider probe failed: JSON response was not parseable."
+            ) from exc
+        result["json_valid"] = True
+    _print_probe_result(result)
+
+
 def handle_topic_bootstrap(args: argparse.Namespace) -> None:
     """Create an editable topic profile draft."""
 
@@ -893,6 +1000,98 @@ def _secret_manager(secret_source: str) -> SecretManager:
     if secret_source == "keychain":
         return SecretManager(KeychainSecretBackend())
     raise ResearchRadarError(f"Unsupported secret source: {secret_source}")
+
+
+def _provider_probe_prompt(probe: str) -> str:
+    if probe == "small":
+        return "Reply with exactly this text: ResearchRadar provider probe ok."
+    if probe == "json":
+        return (
+            "Return only valid JSON, with no Markdown fences and no extra text. "
+            'Use exactly this shape: {"status":"ok","provider_test":true,'
+            '"items":["alpha","beta"],"count":2}.'
+        )
+    if probe == "long":
+        return (
+            "Write a structured LLM API transport stress-test response of about 1800 "
+            "English words. "
+            "Use short paragraphs, include numbered sections, and do not use Markdown tables."
+        )
+    raise ResearchRadarError(f"Unsupported provider probe: {probe}")
+
+
+def _provider_host(endpoint: str | None) -> str:
+    if endpoint is None:
+        return ""
+    return urlparse(endpoint).netloc or endpoint
+
+
+def _probe_excerpt(value: str, *, limit: int = 500) -> str:
+    text = redact_text(value).replace("\n", "\\n")
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def _probe_diagnostics(exc: ResearchRadarError) -> dict[str, object]:
+    diagnostics = getattr(exc, "diagnostics", {})
+    if not isinstance(diagnostics, dict):
+        return {}
+    safe: dict[str, object] = {}
+    for key, value in diagnostics.items():
+        if key == "response_excerpt" and isinstance(value, str):
+            safe[key] = _probe_excerpt(value)
+        elif isinstance(value, str):
+            safe[key] = redact_text(value)
+        else:
+            safe[key] = value
+    return safe
+
+
+def _load_probe_json(value: str) -> dict[str, object]:
+    text = value.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(line for line in lines if not line.strip().startswith("```")).strip()
+    payload = json.loads(_extract_json_object_text(text))
+    if not isinstance(payload, dict):
+        raise json.JSONDecodeError("JSON payload must be an object", text, 0)
+    return payload
+
+
+def _extract_json_object_text(text: str) -> str:
+    if text.startswith("{"):
+        return text
+    start = text.find("{")
+    if start < 0:
+        return text
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and in_string:
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return text
+
+
+def _print_probe_result(result: dict[str, object]) -> None:
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def _load_routing_config(path: Path) -> AppConfig:
