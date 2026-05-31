@@ -12,7 +12,7 @@ from research_radar.analysis.figure_text import (
 )
 from research_radar.compose.draft import build_weekly_draft
 from research_radar.compose.source_groups import group_source_entries, source_group_label
-from research_radar.models import ArticleDraft, Claim
+from research_radar.models import ArticleDraft, ArticleSection, Claim
 
 FORMULA_STYLE = (
     "font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
@@ -22,6 +22,7 @@ FORMULA_STYLE = (
 PUBLISH_ROOT_STYLE = (
     "font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;"
     "color:#1f2933;line-height:1.75;font-size:16px;margin:0 auto;padding:24px 14px;"
+    "text-align:left;"
 )
 PUBLISH_UNSUPPORTED_TAGS = {
     "a",
@@ -159,7 +160,12 @@ def render_wechat_publish_html(
             )
             if not content:
                 content = _publish_paragraph(str(section.body or ""))
-        parts.append(_publish_section(str(section.title), content))
+        parts.append(
+            _publish_section(
+                _publish_section_title(str(section.title), kind, language=language),
+                content,
+            )
+        )
     parts.append("</section>")
     return "".join(parts)
 
@@ -234,12 +240,10 @@ a{{color:#0f766e;text-decoration:none;}}
 
 
 def _publish_hero(draft: ArticleDraft) -> str:
-    title_style = "font-size:26px;line-height:1.28;margin:0 0 12px;color:#111827;"
     lede_style = "font-size:18px;font-weight:600;color:#111827;margin:8px 0 18px;"
     section_style = "padding:0 0 18px;margin:0 0 18px;border-bottom:1px solid #e5e7eb;"
     return (
         f'<section style="{section_style}">'
-        f'<h1 style="{title_style}">{escape(draft.title)}</h1>'
         f'<p style="{lede_style}">{escape(_display_lede(draft.lede))}</p>'
         "</section>"
     )
@@ -249,7 +253,7 @@ def _publish_toc(draft: ArticleDraft, *, language: str) -> str:
     title = "目录" if language == "zh" else "Contents"
     item_style = "margin:4px 0;color:#334155;"
     items = "".join(
-        f'<p style="{item_style}">{index}. {escape(section.title)}</p>'
+        _publish_toc_item(index, section, item_style, language=language)
         for index, section in enumerate(draft.sections, start=1)
     )
     return (
@@ -257,6 +261,17 @@ def _publish_toc(draft: ArticleDraft, *, language: str) -> str:
         'padding:14px 16px;margin:20px 0;background:#fbfdfc;">'
         f'<p style="margin:0 0 8px;"><strong>{title}</strong></p>{items}</section>'
     )
+
+
+def _publish_toc_item(
+    index: int,
+    section: ArticleSection,
+    item_style: str,
+    *,
+    language: str,
+) -> str:
+    title = _publish_section_title(str(section.title), _section_kind(section), language=language)
+    return f'<p style="{item_style}">{index}. {escape(title)}</p>'
 
 
 def _publish_section(title: str, content: str) -> str:
@@ -268,6 +283,26 @@ def _publish_section(title: str, content: str) -> str:
         f'border-left:4px solid #0f766e;color:#111827;">{escape(title)}</h2>'
         f"{content}</section>"
     )
+
+
+def _publish_section_title(title: str, kind: str, *, language: str) -> str:
+    if language == "zh":
+        replacements = {
+            "seen_before": "历史相关来源",
+            "new_updated_sources": "延伸阅读与线索",
+            "other_sources": "延伸阅读与线索",
+            "references": "参考资料",
+            "evidence_notes": "参考资料",
+        }
+    else:
+        replacements = {
+            "seen_before": "Previously Seen Related Sources",
+            "new_updated_sources": "Further Reading and Leads",
+            "other_sources": "Further Reading and Leads",
+            "references": "References",
+            "evidence_notes": "References",
+        }
+    return replacements.get(kind, title)
 
 
 def _publish_paragraph(text: str) -> str:
@@ -338,7 +373,7 @@ def _publish_deep_reads(
                 ]
             )
         sections.append(_publish_key_evidence(raw_entry.get("claims"), labels))
-        descriptor = _publish_paper_descriptor(source)
+        descriptor = _publish_paper_descriptor(source, language=language)
         blocks.append(
             '<section style="border-top:2px solid #111827;padding-top:24px;'
             'margin:30px 0 12px;">'
@@ -352,24 +387,19 @@ def _publish_deep_reads(
     return "".join(blocks)
 
 
-def _publish_paper_descriptor(source: object) -> str:
+def _publish_paper_descriptor(source: object, *, language: str) -> str:
     if not isinstance(source, dict):
         return ""
-    descriptor = _source_descriptor(source)
     gist = str(source.get("gist") or "")
     url = str(source.get("url") or "")
     parts = []
-    if descriptor:
-        parts.append(
-            '<p style="font-size:13px;color:#64748b;margin:0 0 8px;">'
-            f"{escape(descriptor)}</p>"
-        )
     if gist:
         parts.append(_publish_paragraph(gist))
     if url:
+        link_label = "论文链接" if language == "zh" else "Source"
         parts.append(
             '<p style="font-size:13px;color:#64748b;margin:6px 0;">'
-            f"Source: {escape(url)}</p>"
+            f"{link_label}: {escape(url)}</p>"
         )
     return "".join(parts)
 
@@ -408,7 +438,8 @@ def _publish_text_block(title: str, value: object) -> str:
     if not text:
         return ""
     return (
-        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f'<h3 style="font-size:18px;margin:24px 0 10px;color:#0f766e;'
+        f'font-weight:700;">'
         f"{escape(title)}</h3>{_publish_paragraph(text)}"
     )
 
@@ -510,7 +541,8 @@ def _publish_list_block(title: str, value: object) -> str:
         f'<p style="margin:8px 0;">• {_publish_format_text(line)}</p>' for line in lines
     )
     return (
-        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f'<h3 style="font-size:18px;margin:24px 0 10px;color:#0f766e;'
+        f'font-weight:700;">'
         f"{escape(title)}</h3>{body}"
     )
 
@@ -531,7 +563,7 @@ def _publish_figure_gallery(
         uploaded_src = media_url_map.get(raw_src) if media_url_map else None
         media = ""
         if uploaded_src and _is_wechat_image_src(uploaded_src):
-            title = escape(str(item.get("title") or labels["figure"]))
+            title = escape(_figure_alt_text(item, labels))
             media = (
                 f'<img src="{escape(uploaded_src)}" alt="{title}" '
                 'style="max-width:100%;height:auto;display:block;margin:10px auto 12px;" />'
@@ -544,21 +576,18 @@ def _publish_figure_gallery(
         caption = _publish_format_text(
             str(item.get("localized_caption") or item.get("caption") or "")
         )
-        explanation = _localized_figure_explanation(str(item.get("explanation") or ""), labels)
-        attribution = str(item.get("attribution") or "")
+        explanation = _publish_figure_explanation(str(item.get("explanation") or ""), labels)
         parts = [media]
         if caption:
             parts.append(
                 '<p style="font-size:14px;color:#475569;margin:8px 0;">'
-                f"<strong>{escape(str(item.get('title') or labels['figure']))}</strong><br />"
                 f"{caption}</p>"
             )
         if explanation:
-            parts.append(_publish_paragraph(explanation))
-        if attribution:
             parts.append(
-                '<p style="font-size:13px;color:#64748b;margin:8px 0;">'
-                f'{escape(labels["attribution"])}: {escape(attribution)}</p>'
+                '<p style="font-size:14px;color:#334155;margin:8px 0;">'
+                f"<strong>{'图解' if labels['figure'] == '论文图' else 'Figure note'}:</strong> "
+                f"{_publish_format_text(explanation)}</p>"
             )
         blocks.append(
             '<section style="margin:20px 0;padding:14px 12px;border-top:1px solid #e5e7eb;'
@@ -568,37 +597,34 @@ def _publish_figure_gallery(
     if not blocks:
         return ""
     return (
-        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f'<h3 style="font-size:18px;margin:24px 0 10px;color:#0f766e;'
+        f'font-weight:700;">'
         f'{escape(labels["figures"])}</h3>{"".join(blocks)}'
     )
 
 
+def _figure_alt_text(item: dict[object, object], labels: dict[str, str]) -> str:
+    title = str(item.get("title") or "")
+    if title.startswith("fig:"):
+        return labels["figure"]
+    return title or labels["figure"]
+
+
+def _publish_figure_explanation(explanation: str, labels: dict[str, str]) -> str:
+    if explanation in {
+        FIGURE_EXPLANATION_SOURCE_CONTEXT,
+    } or explanation.startswith(FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX):
+        return ""
+    if labels["figure"] == "论文图" and (
+        explanation.startswith("该图被包含")
+        or explanation.startswith("这张图用于辅助理解")
+    ):
+        return ""
+    return _localized_figure_explanation(explanation, labels)
+
+
 def _publish_key_evidence(value: object, labels: dict[str, str]) -> str:
-    if not isinstance(value, list) or not value:
-        return ""
-    rows = []
-    for index, item in enumerate(value[:4], start=1):
-        if not isinstance(item, dict):
-            continue
-        text = str(item.get("text") or "")
-        evidence = item.get("evidence")
-        quote = ""
-        if isinstance(evidence, list) and evidence and isinstance(evidence[0], dict):
-            raw_quote = str(evidence[0].get("quote") or "")
-            quote = _shorten(raw_quote, limit=220)
-        rows.append(
-            '<section style="border-left:3px solid #94a3b8;padding:8px 12px;'
-            'margin:10px 0;background:#f8fafc;color:#334155;font-size:14px;">'
-            f'<p style="margin:0 0 6px;"><strong>{index}. '
-            f'{_publish_format_text(text)}</strong></p>'
-            f'{f"<p style=\"margin:0;\">{escape(quote)}</p>" if quote else ""}</section>'
-        )
-    if not rows:
-        return ""
-    return (
-        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
-        f'{escape(labels["key_evidence"])}</h3>{"".join(rows)}'
-    )
+    return ""
 
 
 def _publish_source_list(raw_sources: object, *, language: str) -> str:
@@ -616,13 +642,7 @@ def _publish_source_list(raw_sources: object, *, language: str) -> str:
             title = str(item.get("title", "Untitled source"))
             url = str(item.get("url", ""))
             gist = str(item.get("gist", ""))
-            descriptor = _source_descriptor(item)
             gist_label = "摘要" if language == "zh" else "Gist"
-            descriptor_html = (
-                f'<p style="margin:6px 0;color:#64748b;">{escape(descriptor)}</p>'
-                if descriptor
-                else ""
-            )
             gist_html = (
                 f'<p style="margin:6px 0;"><strong>{gist_label}:</strong> '
                 f'{_publish_format_text(gist)}</p>'
@@ -640,7 +660,7 @@ def _publish_source_list(raw_sources: object, *, language: str) -> str:
                 'margin:12px 0;background:#ffffff;">'
                 f'<h3 style="font-size:17px;margin:0 0 8px;color:#111827;">'
                 f'{escape(title)}</h3>'
-                f'{descriptor_html}{gist_html}{url_html}'
+                f'{gist_html}{url_html}'
                 '</section>'
             )
     return "".join(blocks)
@@ -649,7 +669,6 @@ def _publish_source_list(raw_sources: object, *, language: str) -> str:
 def _publish_seen_source_list(raw_sources: object, *, language: str) -> str:
     if not isinstance(raw_sources, list):
         return ""
-    label = "已读过" if language == "zh" else "Seen"
     lines = []
     for source in raw_sources[:8]:
         if not isinstance(source, dict):
@@ -661,9 +680,10 @@ def _publish_seen_source_list(raw_sources: object, *, language: str) -> str:
         lines.append(f"{title}{suffix}" + (f" | {url}" if url else ""))
     if not lines:
         return ""
-    return (
-        f'<p style="margin:10px 0;"><strong>{label}</strong></p>'
-        + "".join(f'<p style="margin:8px 0;">• {escape(line)}</p>' for line in lines)
+    return "".join(
+        '<p style="margin:8px 0;padding-left:18px;text-indent:-18px;">'
+        f'{index}. {escape(line)}</p>'
+        for index, line in enumerate(lines, start=1)
     )
 
 
@@ -696,30 +716,46 @@ def _publish_reference_source_list(raw_sources: object, *, language: str) -> str
         arxiv_id = _arxiv_id_from_url(url)
         suffix = f" ({arxiv_id})" if arxiv_id else ""
         rows.append(f"{source_title}{suffix}" + (f" | {url}" if url else ""))
-    return (
-        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">{title}</h3>'
-        + "".join(f'<p style="margin:8px 0;">• {escape(row)}</p>' for row in rows)
-    )
+    return _publish_simple_list(title, rows)
 
 
 def _publish_reference_figure_list(raw_figures: object, *, language: str) -> str:
     if not isinstance(raw_figures, list) or not raw_figures:
         return ""
-    title = "图片许可与复用" if language == "zh" else "Figure license and reuse"
+    title = "图片来源与复用说明" if language == "zh" else "Figure source and reuse notes"
     rows = []
     for figure in raw_figures[:6]:
         if not isinstance(figure, dict):
             continue
-        figure_title = str(figure.get("title") or "Paper figure")
+        figure_title = _shorten(str(
+            figure.get("localized_caption") or figure.get("caption") or "Paper figure"
+        ), limit=160)
         license_value = str(figure.get("license") or "unknown")
         reuse_status = str(figure.get("reuse_status") or "needs_manual_review")
         attribution = str(figure.get("attribution") or "")
-        rows.append(
-            f"{figure_title}: license={license_value}; reuse_status={reuse_status}; {attribution}"
-        )
+        if language == "zh":
+            rows.append(
+                f"{figure_title}: 许可 {license_value}；复用状态 {reuse_status}；{attribution}"
+            )
+        else:
+            rows.append(
+                f"{figure_title}: license {license_value}; reuse status {reuse_status}; "
+                f"{attribution}"
+            )
+    return _publish_simple_list(title, rows)
+
+
+def _publish_simple_list(title: str, rows: list[str]) -> str:
+    if not rows:
+        return ""
+    body = "".join(
+        '<p style="margin:8px 0;padding-left:18px;text-indent:-18px;">'
+        f'{index}. {escape(row)}</p>'
+        for index, row in enumerate(rows, start=1)
+    )
     return (
-        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">{title}</h3>'
-        + "".join(f'<p style="margin:8px 0;">• {escape(row)}</p>' for row in rows)
+        f'<h3 style="font-size:17px;margin:22px 0 8px;color:#0f172a;">'
+        f"{escape(title)}</h3>{body}"
     )
 
 
@@ -729,13 +765,11 @@ def _publish_evidence_list(claims: list[Claim], *, language: str) -> str:
     title = "关键证据摘录" if language == "zh" else "Key evidence excerpts"
     rows = []
     for claim in claims[:6]:
-        claim_text = _localized_claim_text(claim.text, language=language)
         quote = claim.evidence[0].quote if claim.evidence else ""
         rows.append(
             '<section style="border-left:3px solid #94a3b8;padding:8px 12px;'
             'margin:10px 0;background:#f8fafc;color:#334155;font-size:14px;">'
-            f'<p style="margin:0 0 6px;"><strong>{_publish_format_text(claim_text)}</strong></p>'
-            f'<p style="margin:0;">{escape(_shorten(quote, limit=220))}</p></section>'
+            f'<p style="margin:0;">{escape(_shorten(quote, limit=260))}</p></section>'
         )
     return (
         f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">{title}</h3>'
@@ -830,7 +864,7 @@ def _today_summary_lines(draft: ArticleDraft, *, language: str) -> list[str]:
             f"已核验证据点：{verified_count} 条。",
         ]
         if other_count:
-            lines.append(f"其他新增来源：{other_count} 个，见下方折叠列表。")
+            lines.append(f"其他新增来源：{other_count} 个，见下方列表。")
         if seen_count:
             lines.append(f"历史相关来源：{seen_count} 个。")
         return lines
@@ -839,7 +873,7 @@ def _today_summary_lines(draft: ArticleDraft, *, language: str) -> list[str]:
         f"Verified observations: {verified_count}.",
     ]
     if other_count:
-        lines.append(f"Other new or updated sources: {other_count}; see folded list below.")
+        lines.append(f"Other new or updated sources: {other_count}; see list below.")
     if seen_count:
         lines.append(f"Seen-before sources: {seen_count}.")
     return lines

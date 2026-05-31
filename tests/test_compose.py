@@ -677,6 +677,12 @@ def test_wechat_publish_renderer_uses_conservative_html_with_uploaded_images() -
     assert "Architecture overview for the memory retrieval pipeline." in html
     assert "Supported paper claim" in html
     assert "Source: https://arxiv.org/abs/2605.00001" in html
+    assert "ResearchRadar" not in html
+    assert "role=" not in html
+    assert "status=" not in html
+    assert "score=" not in html
+    assert "<strong>fig:architecture</strong>" not in html
+    assert "This figure is included because" not in html
 
 
 def test_wechat_publish_renderer_keeps_preview_renderer_unchanged() -> None:
@@ -706,6 +712,49 @@ def test_wechat_publish_renderer_keeps_preview_renderer_unchanged() -> None:
     assert "figures/2605.00001/images/01-architecture.png" in preview_html
     assert "<details" not in publish_html
     assert "<figure" not in publish_html
+
+
+def test_wechat_publish_renderer_cleans_public_article_body() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        language="zh",
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        seen_sources=[
+            {
+                "title": "Seen Memory Paper",
+                "url": "https://arxiv.org/abs/2605.00000",
+                "version": "v1",
+            }
+        ],
+        figures_by_source_url={source.url: [_paper_figure(source, claim.text)]},
+    )
+
+    html = render_wechat_publish_html(
+        draft,
+        media_url_map={
+            "figures/2605.00001/images/01-architecture.png": (
+                "https://mmbiz.qpic.cn/fixture/architecture.png"
+            )
+        },
+    )
+
+    assert wechat_publish_html_issues(html) == []
+    assert "ResearchRadar 日报：agent-memory" not in html
+    assert "今日精读：1 篇论文。" in html
+    assert "role=" not in html
+    assert "status=" not in html
+    assert "score=" not in html
+    assert "论文链接: https://arxiv.org/abs/2605.00001" in html
+    assert "<strong>fig:architecture</strong>" not in html
+    assert "Architecture overview for the memory retrieval pipeline." in html
+    assert "This figure is included because" not in html
+    assert "历史相关来源" in html
+    assert "1. Seen Memory Paper (v1) | https://arxiv.org/abs/2605.00000" in html
 
 
 def test_wechat_publish_renderer_strips_legacy_formula_html_fragments() -> None:
