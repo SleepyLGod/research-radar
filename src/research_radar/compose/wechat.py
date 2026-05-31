@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from html import escape
+from collections.abc import Mapping
+from html import escape, unescape
 
 from research_radar.analysis.figure_text import (
     FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX,
@@ -18,9 +19,37 @@ FORMULA_STYLE = (
     "font-size:0.95em;background:#f8fafc;border:1px solid #e2e8f0;"
     "border-radius:4px;padding:1px 4px;white-space:nowrap;"
 )
+PUBLISH_ROOT_STYLE = (
+    "font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;"
+    "color:#1f2933;line-height:1.75;font-size:16px;margin:0 auto;padding:24px 14px;"
+)
+PUBLISH_UNSUPPORTED_TAGS = {
+    "a",
+    "article",
+    "blockquote",
+    "code",
+    "details",
+    "div",
+    "figcaption",
+    "figure",
+    "iframe",
+    "li",
+    "ol",
+    "script",
+    "style",
+    "summary",
+    "table",
+    "ul",
+    "video",
+}
 
 
-def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> str:
+def render_wechat_html(
+    draft: ArticleDraft,
+    *,
+    publish_mode: bool = False,
+    media_url_map: Mapping[str, str] | None = None,
+) -> str:
     """Render a platform-neutral draft as WeChat-compatible HTML."""
 
     language = str(draft.metadata.get("language", "en"))
@@ -48,6 +77,7 @@ def render_wechat_html(draft: ArticleDraft, *, publish_mode: bool = False) -> st
                 section.metadata.get("deep_reads", []),
                 language=language,
                 publish_mode=publish_mode,
+                media_url_map=media_url_map,
             )
             if not content:
                 content = f"<p>{escape(section.body)}</p>"
@@ -80,6 +110,78 @@ def compose_wechat_html(topic_id: str, claims: list[Claim]) -> str:
     """Compose a WeChat-compatible article body."""
 
     return render_wechat_html(build_weekly_draft(topic_id, claims))
+
+
+def render_wechat_publish_html(
+    draft: ArticleDraft,
+    *,
+    media_url_map: Mapping[str, str] | None = None,
+) -> str:
+    """Render a WeChat API-safe draft body using a conservative HTML subset."""
+
+    language = str(draft.metadata.get("language", "en"))
+    parts = [
+        f'<section style="{PUBLISH_ROOT_STYLE}">',
+        _publish_hero(draft),
+    ]
+    if draft.metadata.get("draft_type") == "daily_long_form":
+        parts.append(_publish_toc(draft, language=language))
+    for section in draft.sections:
+        kind = _section_kind(section)
+        if kind == "today_summary":
+            content = _publish_today_summary(draft, section.body, language=language)
+        elif kind == "deep_reads":
+            content = _publish_deep_reads(
+                section.metadata.get("deep_reads", []),
+                language=language,
+                media_url_map=media_url_map,
+            )
+            if not content:
+                content = _publish_paragraph(str(section.body or ""))
+        elif kind in {"new_updated_sources", "other_sources"}:
+            content = _publish_source_list(section.metadata.get("sources", []), language=language)
+            if not content:
+                content = _publish_paragraph(str(section.body or ""))
+        elif kind == "seen_before":
+            content = _publish_seen_source_list(
+                section.metadata.get("sources", []),
+                language=language,
+            )
+            if not content:
+                content = _publish_paragraph(str(section.body or ""))
+        elif kind in {"references", "evidence_notes"}:
+            content = _publish_references(section.claims, section.metadata, language=language)
+        elif kind == "evidence_trail":
+            content = _publish_evidence_list(section.claims, language=language)
+        else:
+            content = "".join(
+                _publish_claim_card(claim, language=language) for claim in section.claims
+            )
+            if not content:
+                content = _publish_paragraph(str(section.body or ""))
+        parts.append(_publish_section(str(section.title), content))
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def wechat_publish_html_issues(html: str) -> list[str]:
+    """Return reasons why generated HTML is unsafe for WeChat draft publishing."""
+
+    issues: list[str] = []
+    tag_pattern = re.compile(r"</?\s*([a-zA-Z][a-zA-Z0-9]*)\b")
+    present_tags = {match.group(1).casefold() for match in tag_pattern.finditer(html)}
+    unsupported = sorted(present_tags & PUBLISH_UNSUPPORTED_TAGS)
+    if unsupported:
+        issues.append(f"unsupported tags: {', '.join(unsupported)}")
+    if "figures/" in html or "Figure image requires WeChat media upload" in html:
+        issues.append("local figure image remains in publish HTML")
+    image_pattern = re.compile(r'<img\b[^>]*\bsrc="([^"]+)"', flags=re.IGNORECASE)
+    for match in image_pattern.finditer(html):
+        src = match.group(1)
+        if not _is_wechat_image_src(src):
+            issues.append(f"non-WeChat image src: {_shorten(src, limit=80)}")
+            break
+    return issues
 
 
 def _html_shell(body: str) -> str:
@@ -129,6 +231,542 @@ a{{color:#0f766e;text-decoration:none;}}
 </style>
 {body}
 </section>"""
+
+
+def _publish_hero(draft: ArticleDraft) -> str:
+    title_style = "font-size:26px;line-height:1.28;margin:0 0 12px;color:#111827;"
+    lede_style = "font-size:18px;font-weight:600;color:#111827;margin:8px 0 18px;"
+    section_style = "padding:0 0 18px;margin:0 0 18px;border-bottom:1px solid #e5e7eb;"
+    return (
+        f'<section style="{section_style}">'
+        f'<h1 style="{title_style}">{escape(draft.title)}</h1>'
+        f'<p style="{lede_style}">{escape(_display_lede(draft.lede))}</p>'
+        "</section>"
+    )
+
+
+def _publish_toc(draft: ArticleDraft, *, language: str) -> str:
+    title = "目录" if language == "zh" else "Contents"
+    item_style = "margin:4px 0;color:#334155;"
+    items = "".join(
+        f'<p style="{item_style}">{index}. {escape(section.title)}</p>'
+        for index, section in enumerate(draft.sections, start=1)
+    )
+    return (
+        '<section style="border:1px solid #d1d5db;border-radius:8px;'
+        'padding:14px 16px;margin:20px 0;background:#fbfdfc;">'
+        f'<p style="margin:0 0 8px;"><strong>{title}</strong></p>{items}</section>'
+    )
+
+
+def _publish_section(title: str, content: str) -> str:
+    if not content:
+        return ""
+    return (
+        '<section style="margin:28px 0;">'
+        f'<h2 style="font-size:21px;margin:24px 0 12px;padding-left:10px;'
+        f'border-left:4px solid #0f766e;color:#111827;">{escape(title)}</h2>'
+        f"{content}</section>"
+    )
+
+
+def _publish_paragraph(text: str) -> str:
+    if not text.strip():
+        return ""
+    return "".join(
+        f'<p style="margin:10px 0;">{_publish_format_text(line.strip())}</p>'
+        for line in text.splitlines()
+        if line.strip()
+    )
+
+
+def _publish_today_summary(draft: ArticleDraft, fallback_body: str, *, language: str) -> str:
+    lines = _today_summary_lines(draft, language=language)
+    if not lines:
+        lines = [
+            _display_lede(line.strip())
+            for line in fallback_body.splitlines()
+            if line.strip()
+        ]
+    if not lines:
+        return ""
+    return (
+        '<section style="border-left:3px solid #14b8a6;padding:8px 0 8px 14px;'
+        'margin:10px 0 4px;background:#f8fffd;">'
+        + "".join(f'<p style="margin:6px 0;">{_publish_format_text(line)}</p>' for line in lines)
+        + "</section>"
+    )
+
+
+def _publish_deep_reads(
+    raw_deep_reads: object,
+    *,
+    language: str,
+    media_url_map: Mapping[str, str] | None = None,
+) -> str:
+    if not isinstance(raw_deep_reads, list):
+        return ""
+    labels = _deep_read_labels(language)
+    blocks = []
+    for raw_entry in raw_deep_reads:
+        if not isinstance(raw_entry, dict):
+            continue
+        title = str(raw_entry.get("title") or labels["untitled"])
+        source = raw_entry.get("source") if isinstance(raw_entry.get("source"), dict) else {}
+        narrative = _publish_reader_explanation(raw_entry.get("reader_explanation"), labels)
+        sections = [narrative or _publish_text_block(labels["essence"], raw_entry.get("essence"))]
+        sections.append(
+            _publish_figure_gallery(
+                raw_entry.get("figures"),
+                labels,
+                media_url_map=media_url_map,
+            )
+        )
+        if not narrative:
+            sections.extend(
+                [
+                    _publish_problem_block(raw_entry.get("problem"), labels),
+                    _publish_solution_block(raw_entry.get("solution"), labels),
+                    _publish_experiments_block(raw_entry.get("experiments"), labels),
+                    _publish_related_work_block(raw_entry.get("related_work"), labels),
+                    _publish_limitations_block(raw_entry.get("limitations"), labels),
+                    _publish_critical_block(raw_entry.get("critical_assessment"), labels),
+                    _publish_text_block(
+                        labels["plain_example"],
+                        raw_entry.get("plain_language_example"),
+                    ),
+                ]
+            )
+        sections.append(_publish_key_evidence(raw_entry.get("claims"), labels))
+        descriptor = _publish_paper_descriptor(source)
+        blocks.append(
+            '<section style="border-top:2px solid #111827;padding-top:24px;'
+            'margin:30px 0 12px;">'
+            f'<p style="font-size:13px;color:#64748b;margin:0 0 4px;">'
+            f'{escape(labels["deep_read_label"])}</p>'
+            f'<h3 style="font-size:18px;margin:0 0 10px;color:#111827;">'
+            f'{escape(title)}</h3>{descriptor}'
+            f'{_publish_explanatory_diagram(raw_entry, labels)}'
+            f'{"".join(section for section in sections if section)}</section>'
+        )
+    return "".join(blocks)
+
+
+def _publish_paper_descriptor(source: object) -> str:
+    if not isinstance(source, dict):
+        return ""
+    descriptor = _source_descriptor(source)
+    gist = str(source.get("gist") or "")
+    url = str(source.get("url") or "")
+    parts = []
+    if descriptor:
+        parts.append(
+            '<p style="font-size:13px;color:#64748b;margin:0 0 8px;">'
+            f"{escape(descriptor)}</p>"
+        )
+    if gist:
+        parts.append(_publish_paragraph(gist))
+    if url:
+        parts.append(
+            '<p style="font-size:13px;color:#64748b;margin:6px 0;">'
+            f"Source: {escape(url)}</p>"
+        )
+    return "".join(parts)
+
+
+def _publish_explanatory_diagram(
+    entry: dict[object, object],
+    labels: dict[str, str],
+) -> str:
+    steps = [
+        (labels["problem_short"], _nested_value(entry.get("problem"), "core")),
+        (labels["method_short"], _nested_value(entry.get("solution"), "core")),
+        (labels["eval_short"], _nested_value(entry.get("experiments"), "summary")),
+        (labels["caveat_short"], _first_nested_list(entry.get("limitations"))),
+    ]
+    rendered = []
+    for title, value in steps:
+        if value:
+            rendered.append(
+                '<section style="display:block;margin:8px 0;padding:10px 12px;'
+                'background:#ffffff;border:1px solid #bfdbfe;border-radius:6px;">'
+                f'<p style="margin:0;color:#1e40af;"><strong>{escape(title)}</strong></p>'
+                f'<p style="margin:4px 0 0;">{_publish_format_text(_shorten(value))}</p>'
+                '</section>'
+            )
+    if len(rendered) < 2:
+        return ""
+    return (
+        '<section style="display:block;border-left:3px solid #60a5fa;'
+        'background:#f8fbff;padding:12px 14px;margin:18px 0;">'
+        f'{"".join(rendered)}</section>'
+    )
+
+
+def _publish_text_block(title: str, value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f"{escape(title)}</h3>{_publish_paragraph(text)}"
+    )
+
+
+def _publish_problem_block(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return "".join(
+        [
+            _publish_text_block(labels["problem"], value.get("core")),
+            _publish_text_block(labels["why_it_matters"], value.get("why_it_matters")),
+            _publish_list_block(labels["hidden_assumptions"], value.get("hidden_assumptions")),
+        ]
+    )
+
+
+def _publish_solution_block(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return "".join(
+        [
+            _publish_text_block(labels["solution"], value.get("core")),
+            _publish_text_block(labels["mechanism"], value.get("mechanism")),
+        ]
+    )
+
+
+def _publish_experiments_block(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return _publish_text_block(labels["experiments"], value.get("summary"))
+
+
+def _publish_related_work_block(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return "".join(
+        [
+            _publish_text_block(labels["related_work"], value.get("novelty")),
+            _publish_list_block(labels["prior_work"], value.get("prior_work")),
+            _publish_text_block(labels["repackaging_risk"], value.get("repackaging_risk")),
+        ]
+    )
+
+
+def _publish_limitations_block(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return "".join(
+        [
+            _publish_list_block(labels["explicit_limitations"], value.get("explicit_limitations")),
+            _publish_list_block(labels["inferred_weaknesses"], value.get("inferred_weaknesses")),
+            _publish_list_block(labels["future_work"], value.get("future_work")),
+        ]
+    )
+
+
+def _publish_critical_block(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return "".join(
+        [
+            _publish_text_block(labels["critical"], value.get("bottom_line")),
+            _publish_text_block(labels["overclaiming_risk"], value.get("overclaiming_risk")),
+            _publish_list_block(labels["weak_evaluations"], value.get("weak_evaluations")),
+            _publish_list_block(labels["missing_ablations"], value.get("missing_ablations")),
+        ]
+    )
+
+
+def _publish_reader_explanation(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, dict):
+        return ""
+    sections = [
+        ("opening_context", labels["opening_context"]),
+        ("core_thesis", labels["core_thesis"]),
+        ("problem_walkthrough", labels["problem"]),
+        ("solution_walkthrough", labels["solution"]),
+        ("experiment_interpretation", labels["experiments"]),
+        ("related_work_context", labels["related_work"]),
+        ("limitations_discussion", labels["limitations"]),
+        ("plain_language_story", labels["plain_example"]),
+        ("reader_takeaway", labels["reader_takeaway"]),
+    ]
+    return "".join(
+        _publish_text_block(title, value.get(key))
+        for key, title in sections
+        if str(value.get(key) or "").strip()
+    )
+
+
+def _publish_list_block(title: str, value: object) -> str:
+    if not isinstance(value, list) or not value:
+        return ""
+    lines = [str(item).strip() for item in value if str(item).strip()]
+    if not lines:
+        return ""
+    body = "".join(
+        f'<p style="margin:8px 0;">• {_publish_format_text(line)}</p>' for line in lines
+    )
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f"{escape(title)}</h3>{body}"
+    )
+
+
+def _publish_figure_gallery(
+    value: object,
+    labels: dict[str, str],
+    *,
+    media_url_map: Mapping[str, str] | None = None,
+) -> str:
+    if not isinstance(value, list) or not value:
+        return ""
+    blocks = []
+    for item in value[:3]:
+        if not isinstance(item, dict):
+            continue
+        raw_src = str(item.get("relative_path") or item.get("asset_path") or "")
+        uploaded_src = media_url_map.get(raw_src) if media_url_map else None
+        media = ""
+        if uploaded_src and _is_wechat_image_src(uploaded_src):
+            title = escape(str(item.get("title") or labels["figure"]))
+            media = (
+                f'<img src="{escape(uploaded_src)}" alt="{title}" '
+                'style="max-width:100%;height:auto;display:block;margin:10px auto 12px;" />'
+            )
+        elif raw_src and _is_local_media_src(raw_src):
+            media = (
+                '<p style="font-size:14px;color:#475569;margin:8px 0;">'
+                "Figure image requires WeChat media upload before publishing.</p>"
+            )
+        caption = _publish_format_text(
+            str(item.get("localized_caption") or item.get("caption") or "")
+        )
+        explanation = _localized_figure_explanation(str(item.get("explanation") or ""), labels)
+        attribution = str(item.get("attribution") or "")
+        parts = [media]
+        if caption:
+            parts.append(
+                '<p style="font-size:14px;color:#475569;margin:8px 0;">'
+                f"<strong>{escape(str(item.get('title') or labels['figure']))}</strong><br />"
+                f"{caption}</p>"
+            )
+        if explanation:
+            parts.append(_publish_paragraph(explanation))
+        if attribution:
+            parts.append(
+                '<p style="font-size:13px;color:#64748b;margin:8px 0;">'
+                f'{escape(labels["attribution"])}: {escape(attribution)}</p>'
+            )
+        blocks.append(
+            '<section style="margin:20px 0;padding:14px 12px;border-top:1px solid #e5e7eb;'
+            'border-bottom:1px solid #e5e7eb;background:#fcfcfd;">'
+            f'{"".join(part for part in parts if part)}</section>'
+        )
+    if not blocks:
+        return ""
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f'{escape(labels["figures"])}</h3>{"".join(blocks)}'
+    )
+
+
+def _publish_key_evidence(value: object, labels: dict[str, str]) -> str:
+    if not isinstance(value, list) or not value:
+        return ""
+    rows = []
+    for index, item in enumerate(value[:4], start=1):
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "")
+        evidence = item.get("evidence")
+        quote = ""
+        if isinstance(evidence, list) and evidence and isinstance(evidence[0], dict):
+            raw_quote = str(evidence[0].get("quote") or "")
+            quote = _shorten(raw_quote, limit=220)
+        rows.append(
+            '<section style="border-left:3px solid #94a3b8;padding:8px 12px;'
+            'margin:10px 0;background:#f8fafc;color:#334155;font-size:14px;">'
+            f'<p style="margin:0 0 6px;"><strong>{index}. '
+            f'{_publish_format_text(text)}</strong></p>'
+            f'{f"<p style=\"margin:0;\">{escape(quote)}</p>" if quote else ""}</section>'
+        )
+    if not rows:
+        return ""
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+        f'{escape(labels["key_evidence"])}</h3>{"".join(rows)}'
+    )
+
+
+def _publish_source_list(raw_sources: object, *, language: str) -> str:
+    if not isinstance(raw_sources, list):
+        return ""
+    blocks = []
+    for group, items in group_source_entries(raw_sources):
+        if not items:
+            continue
+        blocks.append(
+            f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">'
+            f"{escape(source_group_label(group, language=language))}</h3>"
+        )
+        for item in items:
+            title = str(item.get("title", "Untitled source"))
+            url = str(item.get("url", ""))
+            gist = str(item.get("gist", ""))
+            descriptor = _source_descriptor(item)
+            gist_label = "摘要" if language == "zh" else "Gist"
+            descriptor_html = (
+                f'<p style="margin:6px 0;color:#64748b;">{escape(descriptor)}</p>'
+                if descriptor
+                else ""
+            )
+            gist_html = (
+                f'<p style="margin:6px 0;"><strong>{gist_label}:</strong> '
+                f'{_publish_format_text(gist)}</p>'
+                if gist
+                else ""
+            )
+            url_html = (
+                f'<p style="margin:6px 0;color:#64748b;font-size:13px;">'
+                f'URL: {escape(url)}</p>'
+                if url
+                else ""
+            )
+            blocks.append(
+                '<section style="border-left:3px solid #dbeafe;padding:10px 0 10px 14px;'
+                'margin:12px 0;background:#ffffff;">'
+                f'<h3 style="font-size:17px;margin:0 0 8px;color:#111827;">'
+                f'{escape(title)}</h3>'
+                f'{descriptor_html}{gist_html}{url_html}'
+                '</section>'
+            )
+    return "".join(blocks)
+
+
+def _publish_seen_source_list(raw_sources: object, *, language: str) -> str:
+    if not isinstance(raw_sources, list):
+        return ""
+    label = "已读过" if language == "zh" else "Seen"
+    lines = []
+    for source in raw_sources[:8]:
+        if not isinstance(source, dict):
+            continue
+        title = str(source.get("title") or "Untitled source")
+        url = str(source.get("url") or "")
+        version = str(source.get("version") or "")
+        suffix = f" ({version})" if version else ""
+        lines.append(f"{title}{suffix}" + (f" | {url}" if url else ""))
+    if not lines:
+        return ""
+    return (
+        f'<p style="margin:10px 0;"><strong>{label}</strong></p>'
+        + "".join(f'<p style="margin:8px 0;">• {escape(line)}</p>' for line in lines)
+    )
+
+
+def _publish_references(
+    claims: list[Claim],
+    metadata: dict[object, object],
+    *,
+    language: str,
+) -> str:
+    sources = metadata.get("sources", []) if isinstance(metadata, dict) else []
+    figures = metadata.get("figures", []) if isinstance(metadata, dict) else []
+    pieces = [
+        _publish_reference_source_list(sources, language=language),
+        _publish_reference_figure_list(figures, language=language),
+        _publish_evidence_list(claims[:6], language=language),
+    ]
+    return "".join(piece for piece in pieces if piece)
+
+
+def _publish_reference_source_list(raw_sources: object, *, language: str) -> str:
+    if not isinstance(raw_sources, list) or not raw_sources:
+        return ""
+    title = "来源链接" if language == "zh" else "Source links"
+    rows = []
+    for source in raw_sources[:10]:
+        if not isinstance(source, dict):
+            continue
+        source_title = str(source.get("title") or "Untitled source")
+        url = str(source.get("url") or "")
+        arxiv_id = _arxiv_id_from_url(url)
+        suffix = f" ({arxiv_id})" if arxiv_id else ""
+        rows.append(f"{source_title}{suffix}" + (f" | {url}" if url else ""))
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">{title}</h3>'
+        + "".join(f'<p style="margin:8px 0;">• {escape(row)}</p>' for row in rows)
+    )
+
+
+def _publish_reference_figure_list(raw_figures: object, *, language: str) -> str:
+    if not isinstance(raw_figures, list) or not raw_figures:
+        return ""
+    title = "图片许可与复用" if language == "zh" else "Figure license and reuse"
+    rows = []
+    for figure in raw_figures[:6]:
+        if not isinstance(figure, dict):
+            continue
+        figure_title = str(figure.get("title") or "Paper figure")
+        license_value = str(figure.get("license") or "unknown")
+        reuse_status = str(figure.get("reuse_status") or "needs_manual_review")
+        attribution = str(figure.get("attribution") or "")
+        rows.append(
+            f"{figure_title}: license={license_value}; reuse_status={reuse_status}; {attribution}"
+        )
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">{title}</h3>'
+        + "".join(f'<p style="margin:8px 0;">• {escape(row)}</p>' for row in rows)
+    )
+
+
+def _publish_evidence_list(claims: list[Claim], *, language: str) -> str:
+    if not claims:
+        return ""
+    title = "关键证据摘录" if language == "zh" else "Key evidence excerpts"
+    rows = []
+    for claim in claims[:6]:
+        claim_text = _localized_claim_text(claim.text, language=language)
+        quote = claim.evidence[0].quote if claim.evidence else ""
+        rows.append(
+            '<section style="border-left:3px solid #94a3b8;padding:8px 12px;'
+            'margin:10px 0;background:#f8fafc;color:#334155;font-size:14px;">'
+            f'<p style="margin:0 0 6px;"><strong>{_publish_format_text(claim_text)}</strong></p>'
+            f'<p style="margin:0;">{escape(_shorten(quote, limit=220))}</p></section>'
+        )
+    return (
+        f'<h3 style="font-size:16px;margin:20px 0 8px;color:#0f172a;">{title}</h3>'
+        f'{"".join(rows)}'
+    )
+
+
+def _publish_claim_card(claim: Claim, *, language: str) -> str:
+    tag = "已核验" if language == "zh" else "Verified"
+    text = _localized_claim_text(claim.text, language=language)
+    return (
+        '<section style="border-left:3px solid #dbeafe;padding:10px 0 10px 14px;'
+        'margin:12px 0;background:#ffffff;">'
+        f'<p style="margin:0 0 6px;color:#0f766e;font-size:13px;"><strong>{tag}</strong></p>'
+        f'<h3 style="font-size:17px;margin:0 0 8px;color:#111827;">'
+        f'{_publish_format_text(text)}</h3></section>'
+    )
+
+
+def _publish_format_text(value: str) -> str:
+    text = unescape(value)
+    text = re.sub(r"<span\b[^>]*>(.*?)</span>", r"\1", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"</?[^>]+>", "", text)
+    return _format_display_text(text).replace('<span class="rr-formula" ', "<span ")
+
+
+def _is_wechat_image_src(src: str) -> bool:
+    lowered = src.casefold()
+    return lowered.startswith("http://mmbiz.qpic.cn/") or lowered.startswith(
+        "https://mmbiz.qpic.cn/"
+    )
 
 
 def _section(
@@ -243,7 +881,13 @@ def _strip_appended_claim(value: str) -> str:
     return value[: match.start()].strip()
 
 
-def _deep_reads(raw_deep_reads: object, *, language: str, publish_mode: bool) -> str:
+def _deep_reads(
+    raw_deep_reads: object,
+    *,
+    language: str,
+    publish_mode: bool,
+    media_url_map: Mapping[str, str] | None = None,
+) -> str:
     if not isinstance(raw_deep_reads, list):
         return ""
     blocks = []
@@ -257,7 +901,12 @@ def _deep_reads(raw_deep_reads: object, *, language: str, publish_mode: bool) ->
         narrative = _reader_explanation_blocks(raw_entry.get("reader_explanation"), labels)
         sections = [narrative or _deep_text_block(labels["essence"], raw_entry.get("essence"))]
         sections.append(
-            _figure_gallery(raw_entry.get("figures"), labels, publish_mode=publish_mode)
+            _figure_gallery(
+                raw_entry.get("figures"),
+                labels,
+                publish_mode=publish_mode,
+                media_url_map=media_url_map,
+            )
         )
         if not narrative:
             sections.extend(
@@ -433,6 +1082,7 @@ def _figure_gallery(
     labels: dict[str, str],
     *,
     publish_mode: bool = False,
+    media_url_map: Mapping[str, str] | None = None,
 ) -> str:
     if not isinstance(value, list) or not value:
         return ""
@@ -452,11 +1102,15 @@ def _figure_gallery(
         attribution = escape(str(item.get("attribution") or ""))
         reuse_status = escape(str(item.get("reuse_status") or "needs_manual_review"))
         license_value = escape(str(item.get("license") or "unknown"))
-        src = escape(str(item.get("relative_path") or item.get("asset_path") or ""))
+        raw_src = str(item.get("relative_path") or item.get("asset_path") or "")
+        src = escape(raw_src)
         title = escape(str(item.get("title") or labels["figure"]))
         if not src:
             continue
-        if publish_mode and _is_local_media_src(src):
+        uploaded_src = media_url_map.get(raw_src) if media_url_map else None
+        if publish_mode and uploaded_src:
+            media = f'<img src="{escape(uploaded_src)}" alt="{title}" />'
+        elif publish_mode and _is_local_media_src(src):
             media = (
                 '<p class="rr-caption">'
                 "Figure image requires WeChat media upload before publishing."

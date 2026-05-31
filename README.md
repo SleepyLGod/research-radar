@@ -133,7 +133,15 @@ and evidence notes only include verified source anchors. Original paper figures 
 automatically; use self-drawn explanatory diagrams unless figure license and attribution have been
 checked.
 
-Create a WeChat draft after manual review:
+Upload a cover image once to get the `thumb_media_id` required by WeChat drafts:
+
+```bash
+uv run research-radar publish wechat-upload-thumb \
+  --image /path/to/cover.png \
+  --output /private/tmp/research-radar-thumb.json
+```
+
+Create a WeChat draft for review in the WeChat editor:
 
 ```bash
 uv run research-radar publish wechat-draft \
@@ -144,8 +152,9 @@ uv run research-radar publish wechat-draft \
 ```
 
 For local E2E validation without calling the WeChat API, add `--dry-run`. The publisher renders
-content from `article_draft.json`, writes `wechat.html` and publish audit artifacts, and creates a
-draft only. It does not auto-publish or mass-send.
+content from `article_draft.json` into `wechat_publish.html` and writes publish audit artifacts.
+Without `--dry-run`, local article images are uploaded to WeChat image URLs before the draft is
+created. The command creates a draft only; it does not auto-publish or mass-send.
 
 ## Research Reading Standard
 

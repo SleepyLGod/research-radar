@@ -828,23 +828,82 @@ def test_publish_wechat_draft_dry_run_omits_local_figure_images(
     assert "Figure image requires WeChat media upload before publishing." in publish_html
 
 
-def test_publish_wechat_draft_fails_non_dry_run_with_local_figure_images(
+def test_publish_wechat_draft_uploads_local_figure_images(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path, with_local_figure=True)
+    captured: dict[str, object] = {}
+    uploaded_paths: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def upload_article_image(self, image_path: Path) -> str:
+            uploaded_paths.append(str(image_path))
+            return "https://mmbiz.qpic.cn/fixture/architecture.png"
+
+        def add_draft(self, article) -> dict[str, object]:
+            captured["article"] = article
+            return {"media_id": "draft-media"}
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+
+    cli.main(
+        [
+            "publish",
+            "wechat-draft",
+            "--run",
+            str(run_dir),
+            "--title",
+            "Daily title",
+            "--digest",
+            "Manual digest",
+            "--thumb-media-id",
+            "thumb123",
+        ]
+    )
+
+    result = read_json(run_dir / "publish_wechat_draft.json")
+    request = read_json(run_dir / "publish_wechat_draft_request.json")
+    publish_html = (run_dir / "wechat_publish.html").read_text(encoding="utf-8")
+    article = captured["article"]
+    assert result["status"] == "created"
+    assert result["draft_created"] is True
+    assert uploaded_paths == [str(run_dir / "figures/paper/architecture.png")]
+    assert "figures/paper/architecture.png" not in publish_html
+    assert "https://mmbiz.qpic.cn/fixture/architecture.png" in publish_html
+    assert "https://mmbiz.qpic.cn/fixture/architecture.png" in article.content
+    assert request["media_uploads"] == [
+        {
+            "local_src": "figures/paper/architecture.png",
+            "uploaded_url": "https://mmbiz.qpic.cn/fixture/architecture.png",
+        }
+    ]
+    assert request["content_path"].endswith("wechat_publish.html")
+
+
+def test_publish_wechat_draft_fails_when_figure_upload_fails(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     run_dir = _write_publishable_article_draft(tmp_path, with_local_figure=True)
     called = False
 
-    class FakeClient:
+    class FailingClient:
         def __init__(self, *args, **kwargs) -> None:
             pass
+
+        def upload_article_image(self, image_path: Path) -> str:
+            raise PublishError("WeChat image upload failed: token=secret-value")
 
         def add_draft(self, article) -> dict[str, object]:
             nonlocal called
             called = True
             return {"media_id": "draft-media"}
 
-    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+    monkeypatch.setattr(cli, "WeChatDraftClient", FailingClient)
 
     try:
         cli.main(
@@ -867,11 +926,10 @@ def test_publish_wechat_draft_fails_non_dry_run_with_local_figure_images(
         raise AssertionError("Expected publish failure")
 
     error = read_json(run_dir / "publish_error.json")
-    request = read_json(run_dir / "publish_wechat_draft_request.json")
     assert called is False
     assert error["error_type"] == "PublishError"
-    assert "media upload" in error["message"]
-    assert request["content_path"].endswith("wechat_publish.html")
+    assert "secret-value" not in error["message"]
+    assert "WeChat image upload failed" in error["message"]
 
 
 def test_compose_wechat_prefers_article_draft_when_present(
@@ -990,6 +1048,124 @@ def test_publish_wechat_parser_requires_manual_metadata() -> None:
         assert exc.code == 2
     else:
         raise AssertionError("Expected parser failure")
+
+
+def test_publish_wechat_upload_thumb_parser_accepts_image() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(
+        [
+            "publish",
+            "wechat-upload-thumb",
+            "--image",
+            "/tmp/cover.png",
+        ]
+    )
+
+    assert args.image == Path("/tmp/cover.png")
+
+
+def test_publish_wechat_upload_thumb_prints_media_id_and_writes_output(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "cover.png"
+    image_path.write_bytes(b"fake-png")
+    output_path = tmp_path / "thumb.json"
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def upload_permanent_image_material(self, image_path: Path) -> dict[str, str]:
+            captured["image_path"] = image_path
+            return {
+                "media_id": "thumb-media-id",
+                "url": "https://mmbiz.qpic.cn/thumb.png",
+            }
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+
+    cli.main(
+        [
+            "publish",
+            "wechat-upload-thumb",
+            "--image",
+            str(image_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    output = capsys.readouterr().out
+    result = read_json(output_path)
+    assert captured["image_path"] == image_path
+    assert "thumb_media_id: thumb-media-id" in output
+    assert "url: https://mmbiz.qpic.cn/thumb.png" in output
+    assert result == {
+        "thumb_media_id": "thumb-media-id",
+        "url": "https://mmbiz.qpic.cn/thumb.png",
+        "image_path": str(image_path),
+    }
+
+
+def test_publish_wechat_upload_thumb_missing_image_fails(capsys, tmp_path: Path) -> None:
+    missing_image = tmp_path / "missing.png"
+
+    try:
+        cli.main(
+            [
+                "publish",
+                "wechat-upload-thumb",
+                "--image",
+                str(missing_image),
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 1
+    else:
+        raise AssertionError("Expected upload failure")
+
+    error = capsys.readouterr().err
+    assert "WeChat thumbnail image not found" in error
+
+
+def test_publish_wechat_upload_thumb_redacts_failure(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "cover.png"
+    image_path.write_bytes(b"fake-png")
+
+    class FailingClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def upload_permanent_image_material(self, image_path: Path) -> dict[str, str]:
+            raise PublishError("WeChat thumbnail upload failed: token=secret-value")
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FailingClient)
+
+    try:
+        cli.main(
+            [
+                "publish",
+                "wechat-upload-thumb",
+                "--image",
+                str(image_path),
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 1
+    else:
+        raise AssertionError("Expected upload failure")
+
+    error = capsys.readouterr().err
+    assert "WeChat thumbnail upload failed" in error
+    assert "secret-value" not in error
 
 
 def test_run_daily_skips_web_search_when_configured_secret_is_missing(
@@ -1120,6 +1296,9 @@ def _write_publishable_article_draft(
     readings = []
     deep_read_sources = []
     if with_local_figure:
+        figure_path = run_dir / "figures/paper/architecture.png"
+        figure_path.parent.mkdir(parents=True, exist_ok=True)
+        figure_path.write_bytes(b"fake-png")
         readings = [
             {
                 "title": source.title,

@@ -10,13 +10,18 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.providers import Message
 from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
 from research_radar.compose.draft_io import load_article_draft
-from research_radar.compose.wechat import render_wechat_html
+from research_radar.compose.wechat import (
+    render_wechat_html,
+    render_wechat_publish_html,
+    wechat_publish_html_issues,
+)
 from research_radar.config import AppConfig, load_config, parse_config
 from research_radar.discovery.arxiv import ArxivConnector
 from research_radar.discovery.base import DiscoveryConnector
@@ -481,6 +486,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prepare the draft request artifact without calling the WeChat API.",
     )
     publish_wechat.set_defaults(handler=handle_publish_wechat)
+    upload_thumb = publish_subparsers.add_parser(
+        "wechat-upload-thumb",
+        help="Upload a WeChat draft thumbnail image and print its media id.",
+    )
+    upload_thumb.add_argument("--image", type=Path, required=True)
+    upload_thumb.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional JSON file for the returned thumb media id and URL.",
+    )
+    upload_thumb.set_defaults(handler=handle_publish_wechat_thumb)
 
     privacy_parser = subparsers.add_parser("privacy", help="Privacy utilities.")
     privacy_subparsers = privacy_parser.add_subparsers(dest="privacy_command", required=True)
@@ -896,16 +913,17 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
 
     try:
         draft = load_article_draft(args.run_dir / "article_draft.json")
-        content = render_wechat_html(draft, publish_mode=True)
         publish_content_path = args.run_dir / "wechat_publish.html"
-        write_text(publish_content_path, content)
-        request = _wechat_publish_request(
-            args,
-            draft_topic=draft.topic_id,
-            content_path=publish_content_path,
-        )
-        write_json(args.run_dir / "publish_wechat_draft_request.json", request)
         if args.dry_run:
+            content = render_wechat_publish_html(draft)
+            write_text(publish_content_path, content)
+            _assert_wechat_publish_html_safe(content, allow_missing_media=True)
+            request = _wechat_publish_request(
+                args,
+                draft_topic=draft.topic_id,
+                content_path=publish_content_path,
+            )
+            write_json(args.run_dir / "publish_wechat_draft_request.json", request)
             result = {
                 "status": "dry_run",
                 "draft_created": False,
@@ -914,10 +932,27 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
             write_json(args.run_dir / "publish_wechat_draft.json", result)
             print(f"Prepared WeChat draft dry run: {args.run_dir / 'publish_wechat_draft.json'}")
             return
+        manager = SecretManager(KeychainSecretBackend())
+        encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
+        token_store = EncryptedJsonStore(args.run_dir / "wechat_token.enc.json", encryptor)
+        client = WeChatDraftClient(manager, token_store)
+        media_url_map, media_uploads = _upload_local_wechat_media(args.run_dir, draft, client)
+        content = render_wechat_publish_html(
+            draft,
+            media_url_map=media_url_map,
+        )
+        write_text(publish_content_path, content)
+        _assert_wechat_publish_html_safe(content, allow_missing_media=False)
+        request = _wechat_publish_request(
+            args,
+            draft_topic=draft.topic_id,
+            content_path=publish_content_path,
+            media_uploads=media_uploads,
+        )
+        write_json(args.run_dir / "publish_wechat_draft_request.json", request)
         if _publish_content_requires_media_upload(content):
             raise PublishError(
-                "WeChat draft contains local figure images that require media upload; "
-                "rerun in --dry-run mode or provide a media upload map first."
+                "WeChat draft contains local figure images that were not uploaded."
             )
         article = WeChatArticle(
             title=args.title,
@@ -926,22 +961,41 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
             content=content,
             thumb_media_id=args.thumb_media_id,
         )
-        manager = SecretManager(KeychainSecretBackend())
-        encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
-        token_store = EncryptedJsonStore(args.run_dir / "wechat_token.enc.json", encryptor)
-        client = WeChatDraftClient(manager, token_store)
         response = client.add_draft(article)
         result = {
             "status": "created",
             "draft_created": True,
             "request": request,
             "response": response,
+            "media_uploads": media_uploads,
         }
         write_json(args.run_dir / "publish_wechat_draft.json", result)
         print(f"Created WeChat draft: {response}")
     except ResearchRadarError as exc:
         _write_publish_error(args.run_dir, exc)
         raise
+
+
+def handle_publish_wechat_thumb(args: argparse.Namespace) -> None:
+    """Upload a WeChat draft thumbnail image and print its media id."""
+
+    if not args.image.exists():
+        raise PublishError(f"WeChat thumbnail image not found: {args.image}")
+    manager = SecretManager(KeychainSecretBackend())
+    encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
+    token_store = EncryptedJsonStore(Path("cache") / "wechat_token.enc.json", encryptor)
+    client = WeChatDraftClient(manager, token_store)
+    result = client.upload_permanent_image_material(args.image)
+    payload = {
+        "thumb_media_id": result["media_id"],
+        "url": result.get("url", ""),
+        "image_path": str(args.image),
+    }
+    if args.output is not None:
+        write_json(args.output, payload)
+    print(f"thumb_media_id: {payload['thumb_media_id']}")
+    if payload["url"]:
+        print(f"url: {payload['url']}")
 
 
 def handle_privacy_scan(args: argparse.Namespace) -> None:
@@ -956,6 +1010,7 @@ def _wechat_publish_request(
     *,
     draft_topic: str,
     content_path: Path,
+    media_uploads: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     return {
         "target": "wechat_draft",
@@ -968,11 +1023,83 @@ def _wechat_publish_request(
         "thumb_media_id": args.thumb_media_id,
         "article_draft_path": str(args.run_dir / "article_draft.json"),
         "content_path": str(content_path),
+        "media_uploads": media_uploads or [],
     }
 
 
 def _publish_content_requires_media_upload(content: str) -> bool:
     return "Figure image requires WeChat media upload before publishing." in content
+
+
+def _assert_wechat_publish_html_safe(content: str, *, allow_missing_media: bool) -> None:
+    issues = wechat_publish_html_issues(content)
+    if allow_missing_media:
+        issues = [
+            issue for issue in issues if issue != "local figure image remains in publish HTML"
+        ]
+    if issues:
+        raise PublishError("WeChat publish HTML failed safety check: " + "; ".join(issues[:3]))
+
+
+def _upload_local_wechat_media(
+    run_dir: Path,
+    draft: object,
+    client: WeChatDraftClient,
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    local_media = _local_wechat_media_paths(run_dir, draft)
+    media_url_map: dict[str, str] = {}
+    uploads: list[dict[str, str]] = []
+    for src, path in local_media.items():
+        uploaded_url = client.upload_article_image(path)
+        media_url_map[src] = uploaded_url
+        uploads.append({"local_src": src, "uploaded_url": uploaded_url})
+    return media_url_map, uploads
+
+
+def _local_wechat_media_paths(run_dir: Path, draft: object) -> dict[str, Path]:
+    media: dict[str, Path] = {}
+    for figure in _draft_figures(draft):
+        if figure.get("renderable") is False:
+            continue
+        src = str(figure.get("relative_path") or figure.get("asset_path") or "")
+        if not src or not _is_local_media_src(src):
+            continue
+        path = Path(src)
+        if not path.is_absolute():
+            path = run_dir / src
+        if not path.exists():
+            raise PublishError(f"WeChat image upload file not found: {path}")
+        media[src] = path
+    return media
+
+
+def _draft_figures(draft: object) -> list[dict[str, Any]]:
+    figures: list[dict[str, Any]] = []
+    sections = getattr(draft, "sections", [])
+    for section in sections:
+        metadata = getattr(section, "metadata", {})
+        if not isinstance(metadata, dict) or metadata.get("kind") != "deep_reads":
+            continue
+        raw_deep_reads = metadata.get("deep_reads", [])
+        if not isinstance(raw_deep_reads, list):
+            continue
+        for deep_read in raw_deep_reads:
+            if not isinstance(deep_read, dict):
+                continue
+            raw_figures = deep_read.get("figures", [])
+            if not isinstance(raw_figures, list):
+                continue
+            figures.extend(figure for figure in raw_figures if isinstance(figure, dict))
+    return figures
+
+
+def _is_local_media_src(src: str) -> bool:
+    lowered = src.casefold()
+    return not (
+        lowered.startswith("https://")
+        or lowered.startswith("http://")
+        or lowered.startswith("data:")
+    )
 
 
 def _write_publish_error(run_dir: Path, exc: ResearchRadarError) -> None:

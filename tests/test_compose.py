@@ -13,7 +13,12 @@ from research_radar.compose.draft import build_daily_draft, build_weekly_draft
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.markdown import render_markdown
 from research_radar.compose.source_groups import group_source_entries
-from research_radar.compose.wechat import compose_wechat_html, render_wechat_html
+from research_radar.compose.wechat import (
+    compose_wechat_html,
+    render_wechat_html,
+    render_wechat_publish_html,
+    wechat_publish_html_issues,
+)
 from research_radar.compose.zhihu import render_zhihu_markdown
 from research_radar.exceptions import PublishError
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
@@ -636,6 +641,103 @@ def test_wechat_publish_mode_does_not_emit_local_figure_image_src() -> None:
     assert '<img src="figures/' not in html
     assert "Figure image requires WeChat media upload before publishing." in html
     assert "Architecture overview for the memory retrieval pipeline." in html
+
+
+def test_wechat_publish_renderer_uses_conservative_html_with_uploaded_images() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        figures_by_source_url={source.url: [_paper_figure(source, claim.text)]},
+    )
+
+    html = render_wechat_publish_html(
+        draft,
+        media_url_map={
+            "figures/2605.00001/images/01-architecture.png": (
+                "https://mmbiz.qpic.cn/fixture/architecture.png"
+            )
+        },
+    )
+
+    assert wechat_publish_html_issues(html) == []
+    assert "<style" not in html
+    assert "<details" not in html
+    assert "<summary" not in html
+    assert "<figure" not in html
+    assert "<figcaption" not in html
+    assert "<blockquote" not in html
+    assert "<a " not in html
+    assert "figures/2605.00001" not in html
+    assert "https://mmbiz.qpic.cn/fixture/architecture.png" in html
+    assert "Architecture overview for the memory retrieval pipeline." in html
+    assert "Supported paper claim" in html
+    assert "Source: https://arxiv.org/abs/2605.00001" in html
+
+
+def test_wechat_publish_renderer_keeps_preview_renderer_unchanged() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        figures_by_source_url={source.url: [_paper_figure(source, claim.text)]},
+    )
+
+    preview_html = render_wechat_html(draft)
+    publish_html = render_wechat_publish_html(
+        draft,
+        media_url_map={
+            "figures/2605.00001/images/01-architecture.png": (
+                "https://mmbiz.qpic.cn/fixture/architecture.png"
+            )
+        },
+    )
+
+    assert "<details" in preview_html
+    assert "<figure" in preview_html
+    assert "figures/2605.00001/images/01-architecture.png" in preview_html
+    assert "<details" not in publish_html
+    assert "<figure" not in publish_html
+
+
+def test_wechat_publish_renderer_strips_legacy_formula_html_fragments() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    figure = {
+        **_paper_figure(source, claim.text),
+        "explanation": (
+            'The figure explains <span class="rr-formula" style="x">R(t)=e^{-t/S(m)}</span>.'
+        ),
+    }
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        figures_by_source_url={source.url: [figure]},
+    )
+
+    html = render_wechat_publish_html(
+        draft,
+        media_url_map={
+            "figures/2605.00001/images/01-architecture.png": (
+                "https://mmbiz.qpic.cn/fixture/architecture.png"
+            )
+        },
+    )
+
+    assert "&lt;span" not in html
+    assert "class=&quot;rr-formula" not in html
+    assert "R(t)=e^{-t/S(m)}" in html
 
 
 def test_long_form_chinese_renders_figures_and_keeps_evidence_quote_english() -> None:
