@@ -156,6 +156,60 @@ content from `article_draft.json` into `wechat_publish.html` and writes publish 
 Without `--dry-run`, local article images are uploaded to WeChat image URLs before the draft is
 created. The command creates a draft only; it does not auto-publish or mass-send.
 
+## Local Daily Draft Scheduler
+
+After a topic is reviewed in `config.yaml`, you can generate a local macOS launchd job that runs
+the daily pipeline and creates a WeChat draft for review. The scheduler reads secrets from
+Keychain; API keys and WeChat credentials are not written into the plist.
+
+Check required secrets first:
+
+```bash
+uv run research-radar secrets status
+```
+
+```bash
+uv run research-radar schedule daily-draft \
+  --topic agent-memory \
+  --time 09:00 \
+  --config config.yaml \
+  --root research-radar-data \
+  --thumb-media-id "<wechat-thumb-media-id>" \
+  --language zh \
+  --model-cache
+```
+
+The generated runner explicitly uses the default high-quality verifier route:
+`--verifier-provider codex --verifier-model gpt-5.5`. If Codex is unavailable in your local
+scheduler environment, use a DeepSeek verifier fallback explicitly:
+
+```bash
+uv run research-radar schedule daily-draft \
+  --topic agent-memory \
+  --time 09:00 \
+  --config config.yaml \
+  --root research-radar-data \
+  --thumb-media-id "<wechat-thumb-media-id>" \
+  --language zh \
+  --model-cache \
+  --verifier-provider deepseek \
+  --verifier-model deepseek-v4-pro
+```
+
+The command writes a runner script and a launchd plist under
+`<root>/schedules/daily-draft-<topic>/`. It does not install the job automatically. Review the
+generated files, then install manually:
+
+```bash
+cp <root>/schedules/daily-draft-agent-memory/ai.research-radar.daily-draft.agent-memory.plist \
+  ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/ai.research-radar.daily-draft.agent-memory.plist
+```
+
+The scheduled runner stops if `run daily` fails, so a broken research run does not create a WeChat
+draft. It records the latest successful run directory in `last_run_dir.txt` next to the runner
+script, creates a draft only, and never auto-publishes or mass-sends.
+
 ## Research Reading Standard
 
 ResearchRadar is designed to read papers as a researcher, not as a generic summarizer. The

@@ -2,6 +2,8 @@ import json
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
+
 from research_radar import cli
 from research_radar.analysis.cli_providers import CodexCliProvider
 from research_radar.analysis.model_cache import CachedLLMProvider
@@ -9,7 +11,7 @@ from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.compose.draft import build_daily_draft
 from research_radar.config import parse_config
-from research_radar.exceptions import ProviderTransportError, PublishError
+from research_radar.exceptions import ProviderTransportError, PublishError, SecretError
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
 from research_radar.storage.files import read_json, write_json
 
@@ -75,6 +77,23 @@ def test_secrets_set_parser_accepts_xiaomi() -> None:
     assert args.name == "xiaomi"
 
 
+def test_secrets_status_prints_presence_without_values(monkeypatch, capsys) -> None:
+    class FakeManager:
+        def get_named_secret(self, name: str) -> str:
+            if name == "deepseek.api_key":
+                return "secret-value-that-must-not-print"
+            raise SecretError(f"Secret not found: {name}")
+
+    monkeypatch.setattr(cli, "_secret_manager", lambda source: FakeManager())
+
+    cli.handle_secrets_status(Namespace(secret_source="keychain", env_file=None))
+
+    output = capsys.readouterr().out
+    assert "deepseek.api_key: present" in output
+    assert "web_search.api_key: missing" in output
+    assert "secret-value-that-must-not-print" not in output
+
+
 def test_provider_probe_parser_defaults_to_small_probe() -> None:
     parser = cli.build_parser()
 
@@ -83,6 +102,250 @@ def test_provider_probe_parser_defaults_to_small_probe() -> None:
     assert args.provider == "xiaomi"
     assert args.probe == "small"
     assert args.config == Path("config.example.yaml")
+
+
+def test_schedule_daily_draft_parser_defaults_to_codex_verifier() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(
+        [
+            "schedule",
+            "daily-draft",
+            "--topic",
+            "agent-memory",
+            "--time",
+            "09:30",
+            "--config",
+            "config.example.yaml",
+            "--root",
+            "research-radar-data",
+            "--thumb-media-id",
+            "thumb-media-id",
+        ]
+    )
+
+    assert args.verifier_provider == "codex"
+    assert args.verifier_model is None
+
+
+def test_schedule_daily_draft_parser_requires_core_arguments() -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(
+            [
+                "schedule",
+                "daily-draft",
+                "--topic",
+                "agent-memory",
+                "--time",
+                "09:30",
+                "--config",
+                "config.example.yaml",
+                "--root",
+                "/tmp/research-radar",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+
+
+def test_schedule_daily_draft_writes_runner_and_plist(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    output_dir = tmp_path / "schedule"
+    uv_path = tmp_path / "bin" / "uv"
+
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "_resolve_uv_executable", lambda: uv_path)
+    cli.handle_schedule_daily_draft(
+        Namespace(
+            topic="agent-memory",
+            time="09:30",
+            config=tmp_path / "config.yaml",
+            root=tmp_path / "runs-root",
+            thumb_media_id="thumb-media-id",
+            title=None,
+            digest=None,
+            output_dir=output_dir,
+            limit=5,
+            deep_limit=1,
+            language="zh",
+            model_cache=True,
+            publish_dry_run=True,
+            deepseek_provider="xiaomi",
+            gist_provider=None,
+            gist_model=None,
+            reader_provider=None,
+            reader_model=None,
+            verifier_provider="codex",
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            localization_provider=None,
+            localization_model=None,
+        )
+    )
+
+    output = capsys.readouterr().out
+    runner_path = output_dir / "ai.research-radar.daily-draft.agent-memory.sh"
+    plist_path = output_dir / "ai.research-radar.daily-draft.agent-memory.plist"
+    runner = runner_path.read_text(encoding="utf-8")
+    plist = plist_path.read_text(encoding="utf-8")
+
+    assert "Generated local daily draft schedule artifacts" in output
+    assert runner_path.exists()
+    assert plist_path.exists()
+    assert str(uv_path.resolve()) in runner
+    assert "RUN_OUTPUT=\"$(uv run " not in runner
+    assert "research-radar run daily" in runner
+    assert "research-radar publish wechat-draft" in runner
+    assert "--secret-source keychain" in runner
+    assert "--deepseek-provider xiaomi" in runner
+    assert "--verifier-provider codex" in runner
+    assert "--verifier-model gpt-5.5" in runner
+    assert "--dry-run" in runner
+    assert "API_KEY" not in plist
+    assert "appsecret" not in plist.casefold()
+    assert "access_token" not in plist.casefold()
+
+
+def test_schedule_daily_draft_non_codex_verifier_does_not_inherit_codex_model(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    output_dir = tmp_path / "schedule"
+
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "_resolve_uv_executable", lambda: tmp_path / "bin" / "uv")
+    cli.handle_schedule_daily_draft(
+        Namespace(
+            topic="agent-memory",
+            time="09:30",
+            config=tmp_path / "config.yaml",
+            root=tmp_path / "runs-root",
+            thumb_media_id="thumb-media-id",
+            title=None,
+            digest=None,
+            output_dir=output_dir,
+            limit=5,
+            deep_limit=1,
+            language=None,
+            model_cache=False,
+            publish_dry_run=True,
+            deepseek_provider=None,
+            gist_provider=None,
+            gist_model=None,
+            reader_provider=None,
+            reader_model=None,
+            verifier_provider="deepseek",
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            localization_provider=None,
+            localization_model=None,
+        )
+    )
+
+    runner = (
+        output_dir / "ai.research-radar.daily-draft.agent-memory.sh"
+    ).read_text(encoding="utf-8")
+    assert "--verifier-provider deepseek" in runner
+    assert "--verifier-model gpt-5.5" not in runner
+
+
+def test_schedule_daily_draft_fails_when_uv_is_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
+
+    with pytest.raises(cli.ConfigError, match="Could not find `uv`"):
+        cli.handle_schedule_daily_draft(
+            Namespace(
+                topic="agent-memory",
+                time="09:30",
+                config=tmp_path / "config.yaml",
+                root=tmp_path / "runs-root",
+                thumb_media_id="thumb-media-id",
+                title=None,
+                digest=None,
+                output_dir=tmp_path / "schedule",
+                limit=5,
+                deep_limit=1,
+                language="zh",
+                model_cache=True,
+                publish_dry_run=True,
+                deepseek_provider=None,
+                gist_provider=None,
+                gist_model=None,
+                reader_provider=None,
+                reader_model=None,
+                verifier_provider="codex",
+                verifier_model=None,
+                anchor_repair_provider=None,
+                anchor_repair_model=None,
+                localization_provider=None,
+                localization_model=None,
+            )
+        )
+
+
+def test_run_daily_can_write_run_dir_output(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    run_dir = tmp_path / "runs" / "daily-run"
+    output_path = tmp_path / "last_run_dir.txt"
+
+    monkeypatch.setattr(cli, "load_config", lambda path: config)
+    monkeypatch.setattr(cli, "run_daily", lambda *args, **kwargs: run_dir)
+    cli.handle_run_daily(
+        Namespace(
+            config=Path("config.yaml"),
+            root=tmp_path,
+            topic="agent-memory",
+            provider="local",
+            model=None,
+            secret_source="env",
+            env_file=None,
+            limit=5,
+            deep_limit=0,
+            language=None,
+            model_cache=False,
+            run_dir_output=output_path,
+        )
+    )
+
+    assert output_path.read_text(encoding="utf-8").strip() == str(run_dir)
 
 
 def test_provider_probe_outputs_success_diagnostics(

@@ -61,6 +61,19 @@ def test_readme_wechat_publish_command_includes_required_flags() -> None:
     assert "--thumb-media-id" in command_block
 
 
+def test_example_config_enables_tavily_web_search() -> None:
+    config = Path("config.example.yaml").read_text(encoding="utf-8")
+
+    assert "provider: tavily" in config
+    assert "header_secret_name: web_search.api_key" in config
+
+
+def test_example_config_uses_codex_gpt_55_verifier() -> None:
+    config = Path("config.example.yaml").read_text(encoding="utf-8")
+
+    assert "verifier:\n      provider: codex\n      model: gpt-5.5" in config
+
+
 def test_architecture_contains_canonical_e2e_flow() -> None:
     architecture = Path("docs/architecture.md").read_text(encoding="utf-8")
 

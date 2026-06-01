@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from research_radar.discovery.dedupe import canonicalize_url
-from research_radar.models import SourceCandidate
+from research_radar.models import SourceCandidate, SourceType
 from research_radar.storage.files import ensure_dir, read_jsonl
 
 REPORTABLE_HISTORY_STATUSES = {"new", "version_update", "not_tracked"}
@@ -34,7 +34,6 @@ def annotate_source_history(
         annotated.append(annotated_candidate)
         if row is not None:
             append_rows.append(row)
-            records[row["family_key"]] = row
     if append_rows:
         _append_jsonl(path, append_rows)
     report = _history_report(path, annotated, append_rows)
@@ -50,6 +49,31 @@ def is_reportable_source(source: SourceCandidate) -> bool:
 
 def source_family_key(source: SourceCandidate) -> str | None:
     """Return a stable source family key for history dedupe."""
+
+    return _primary_source_family_key(source)
+
+
+def source_family_keys(source: SourceCandidate) -> list[str]:
+    """Return stable source-family aliases for history dedupe."""
+
+    key = _primary_source_family_key(source)
+    if source.source_type != SourceType.PAPER:
+        return [key] if key else []
+
+    title_key = _title_family_key(source.title)
+    title_family = f"title:{title_key}" if title_key else None
+    keys: list[str] = []
+    if key and not _weak_paper_family_key(key):
+        keys.append(key)
+    if title_family:
+        keys.append(title_family)
+    if key and _weak_paper_family_key(key):
+        keys.append(key)
+    return keys
+
+
+def _primary_source_family_key(source: SourceCandidate) -> str | None:
+    """Return the strongest single source-family key for compatibility."""
 
     canonical_id = source.canonical_id or ""
     arxiv_id = _arxiv_id(canonical_id) or _arxiv_id(source.url)
@@ -83,17 +107,17 @@ def _annotate_candidate(
     records: dict[str, dict[str, Any]],
     run_id: str,
 ) -> tuple[SourceCandidate, dict[str, Any] | None]:
+    family_keys = source_family_keys(candidate)
+    family_key = family_keys[0] if family_keys else None
+    version = source_version(candidate)
     if candidate.metadata.get("relevance", {}).get("status") != "relevant":
-        version = source_version(candidate)
         return (
-            _with_history(candidate, "not_reported", source_family_key(candidate), version, None),
+            _with_history(candidate, "not_reported", family_key, family_keys, version, None),
             None,
         )
-    family_key = source_family_key(candidate)
-    version = source_version(candidate)
     if family_key is None:
-        return _with_history(candidate, "not_tracked", None, version, None), None
-    previous = records.get(family_key)
+        return _with_history(candidate, "not_tracked", None, [], version, None), None
+    previous = _previous_record(records, family_keys)
     previous_version = (
         str(previous.get("latest_version")) if previous and previous.get("latest_version") else None
     )
@@ -105,14 +129,44 @@ def _annotate_candidate(
         status = "seen"
     row = None
     if status in {"new", "version_update"}:
-        row = _history_row(candidate, family_key, version, previous_version, status, run_id)
-    return _with_history(candidate, status, family_key, version, previous_version), row
+        row = _history_row(
+            candidate,
+            family_key,
+            family_keys,
+            version,
+            previous_version,
+            status,
+            run_id,
+        )
+    elif previous is not None and _should_refresh_alias_row(previous, family_keys, version):
+        row = _history_row(
+            candidate,
+            family_key,
+            _merged_family_keys(previous, family_keys),
+            version or previous_version,
+            previous_version,
+            "alias_refresh",
+            run_id,
+        )
+    return _with_history(candidate, status, family_key, family_keys, version, previous_version), row
+
+
+def _previous_record(
+    records: dict[str, dict[str, Any]],
+    family_keys: list[str],
+) -> dict[str, Any] | None:
+    for key in family_keys:
+        previous = records.get(key)
+        if previous is not None:
+            return previous
+    return None
 
 
 def _with_history(
     candidate: SourceCandidate,
     status: str,
     family_key: str | None,
+    family_keys: list[str],
     version: str | None,
     previous_version: str | None,
 ) -> SourceCandidate:
@@ -123,6 +177,7 @@ def _with_history(
             "source_history": {
                 "status": status,
                 "family_key": family_key,
+                "family_keys": family_keys,
                 "version": version,
                 "previous_version": previous_version,
             },
@@ -133,6 +188,7 @@ def _with_history(
 def _history_row(
     candidate: SourceCandidate,
     family_key: str,
+    family_keys: list[str],
     version: str | None,
     previous_version: str | None,
     status: str,
@@ -141,6 +197,7 @@ def _history_row(
     return {
         "event": status,
         "family_key": family_key,
+        "family_keys": family_keys,
         "latest_version": version,
         "previous_version": previous_version,
         "title": candidate.title,
@@ -157,10 +214,35 @@ def _history_row(
 def _latest_records(path: Path) -> dict[str, dict[str, Any]]:
     records: dict[str, dict[str, Any]] = {}
     for row in read_jsonl(path):
-        family_key = row.get("family_key")
-        if isinstance(family_key, str) and family_key:
+        for family_key in _row_family_keys(row):
             records[family_key] = row
     return records
+
+
+def _row_family_keys(row: dict[str, Any]) -> list[str]:
+    keys: list[str] = []
+    row_keys = row.get("family_keys")
+    if isinstance(row_keys, list):
+        keys.extend(str(key) for key in row_keys if isinstance(key, str) and key)
+    family_key = row.get("family_key")
+    if isinstance(family_key, str) and family_key:
+        keys.append(family_key)
+    return list(dict.fromkeys(keys))
+
+
+def _should_refresh_alias_row(
+    previous: dict[str, Any],
+    family_keys: list[str],
+    version: str | None,
+) -> bool:
+    previous_keys = set(_row_family_keys(previous))
+    if version is not None and not previous.get("latest_version"):
+        return True
+    return any(key not in previous_keys and not _weak_paper_family_key(key) for key in family_keys)
+
+
+def _merged_family_keys(previous: dict[str, Any], family_keys: list[str]) -> list[str]:
+    return list(dict.fromkeys([*family_keys, *_row_family_keys(previous)]))
 
 
 def _history_report(
@@ -180,6 +262,7 @@ def _history_report(
                     "title": candidate.title,
                     "url": candidate.url,
                     "family_key": history.get("family_key"),
+                    "family_keys": history.get("family_keys", []),
                     "version": history.get("version"),
                 }
             )
@@ -211,6 +294,14 @@ def _is_newer_version(version: str | None, previous_version: str | None) -> bool
 def _version_number(version: str) -> int | None:
     match = re.fullmatch(r"v(\d+)", version, re.IGNORECASE)
     return int(match.group(1)) if match else None
+
+
+def _weak_paper_family_key(key: str) -> bool:
+    return key.startswith(("url:", "corpusid:", "openalex:"))
+
+
+def _title_family_key(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", title.casefold()).strip("-")
 
 
 def _arxiv_id(value: str) -> str | None:

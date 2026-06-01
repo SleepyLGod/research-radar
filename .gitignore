@@ -25,6 +25,7 @@ cache/
 secrets/
 logs/
 tmp/
+schedules/
 *.log
 *.sqlite
 *.sqlite3

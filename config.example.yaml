@@ -85,10 +85,9 @@ discovery:
     - openreview.net
     - aclanthology.org
   web_search:
-    # Set provider: tavily and WEB_SEARCH_API_KEY to enable strong web search.
-    provider:
+    provider: tavily
     endpoint:
-    header_secret_name:
+    header_secret_name: web_search.api_key
     max_results: 5
     search_depth: basic
     timeout_seconds: 30
@@ -150,8 +149,8 @@ models:
       provider: deepseek
       model: deepseek-chat
     verifier:
-      provider: von_claude
-      model: sonnet
+      provider: codex
+      model: gpt-5.5
 
 publishing:
   channel: wechat_draft

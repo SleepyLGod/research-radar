@@ -43,6 +43,11 @@ from research_radar.publishers.wechat.client import (
     WeChatArticle,
     WeChatDraftClient,
 )
+from research_radar.scheduler.local import (
+    DailyDraftScheduleSpec,
+    parse_daily_time,
+    write_daily_draft_schedule,
+)
 from research_radar.security.crypto import EnvelopeEncryptor, SecretMasterKeyProvider
 from research_radar.security.privacy_scan import assert_clean
 from research_radar.security.redaction import redact_text
@@ -96,6 +101,23 @@ def build_parser() -> argparse.ArgumentParser:
         ],
     )
     secrets_set.set_defaults(handler=handle_secrets_set)
+    secrets_status = secrets_subparsers.add_parser(
+        "status",
+        help="Show whether known secrets are present without printing values.",
+    )
+    secrets_status.add_argument(
+        "--secret-source",
+        choices=["keychain", "env"],
+        default="keychain",
+        help="Check secrets in Keychain or the current process environment.",
+    )
+    secrets_status.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Explicitly load local environment variables before checking env-backed secrets.",
+    )
+    secrets_status.set_defaults(handler=handle_secrets_status)
 
     provider_parser = subparsers.add_parser("provider", help="Model provider utilities.")
     provider_subparsers = provider_parser.add_subparsers(dest="provider_command", required=True)
@@ -270,6 +292,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Cache model responses under <root>/cache/model_calls for repeat local runs.",
     )
+    daily.add_argument("--run-dir-output", type=Path, default=None, help=argparse.SUPPRESS)
     daily.set_defaults(handler=handle_run_daily)
     paper = run_subparsers.add_parser("paper", help="Run a single-paper deep reading.")
     paper.add_argument("--topic", required=True)
@@ -499,6 +522,110 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upload_thumb.set_defaults(handler=handle_publish_wechat_thumb)
 
+    schedule_parser = subparsers.add_parser("schedule", help="Create local schedules.")
+    schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_target", required=True)
+    daily_draft = schedule_subparsers.add_parser(
+        "daily-draft",
+        help="Generate a local launchd job for daily WeChat draft creation.",
+    )
+    daily_draft.add_argument("--topic", required=True)
+    daily_draft.add_argument("--time", required=True, help="Daily wall-clock time in HH:MM.")
+    daily_draft.add_argument("--config", type=Path, required=True)
+    daily_draft.add_argument("--root", type=Path, required=True)
+    daily_draft.add_argument("--thumb-media-id", required=True)
+    daily_draft.add_argument(
+        "--title",
+        default=None,
+        help="WeChat draft title. Defaults to a ResearchRadar daily title for the topic.",
+    )
+    daily_draft.add_argument(
+        "--digest",
+        default=None,
+        help="WeChat draft digest. Defaults to a short topic digest.",
+    )
+    daily_draft.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory for the generated plist and runner script.",
+    )
+    daily_draft.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum candidates requested per connector query.",
+    )
+    daily_draft.add_argument(
+        "--deep-limit",
+        type=int,
+        default=1,
+        help="Maximum sources to deep-read in the scheduled daily run.",
+    )
+    daily_draft.add_argument(
+        "--language",
+        choices=["en", "zh"],
+        default=None,
+        help="Optional scheduled report language override.",
+    )
+    daily_draft.add_argument(
+        "--model-cache",
+        action="store_true",
+        help="Use the local model-call cache for repeated scheduled runs.",
+    )
+    daily_draft.add_argument(
+        "--deepseek-provider",
+        default=None,
+        help="Provider instance to use for tasks configured on DeepSeek.",
+    )
+    daily_draft.add_argument(
+        "--gist-provider",
+        default=None,
+        help="Provider instance for source gists.",
+    )
+    daily_draft.add_argument("--gist-model", default=None, help="Model for source gists.")
+    daily_draft.add_argument(
+        "--reader-provider",
+        default=None,
+        help="Provider instance for deep reading.",
+    )
+    daily_draft.add_argument("--reader-model", default=None, help="Model for deep reading.")
+    daily_draft.add_argument(
+        "--verifier-provider",
+        default="codex",
+        help="Provider instance for verification.",
+    )
+    daily_draft.add_argument(
+        "--verifier-model",
+        default=None,
+        help="Model for claim verification.",
+    )
+    daily_draft.add_argument(
+        "--anchor-repair-provider",
+        default=None,
+        help="Provider instance for quote-only anchor repair.",
+    )
+    daily_draft.add_argument(
+        "--anchor-repair-model",
+        default=None,
+        help="Model for quote-only anchor repair.",
+    )
+    daily_draft.add_argument(
+        "--localization-provider",
+        default=None,
+        help="Provider instance for report localization.",
+    )
+    daily_draft.add_argument(
+        "--localization-model",
+        default=None,
+        help="Model for report localization.",
+    )
+    daily_draft.add_argument(
+        "--publish-dry-run",
+        action="store_true",
+        help="Generated runner prepares draft artifacts without calling WeChat.",
+    )
+    daily_draft.set_defaults(handler=handle_schedule_daily_draft)
+
     privacy_parser = subparsers.add_parser("privacy", help="Privacy utilities.")
     privacy_subparsers = privacy_parser.add_subparsers(dest="privacy_command", required=True)
     privacy_scan = privacy_subparsers.add_parser(
@@ -549,6 +676,22 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
     elif args.name == "web-search":
         manager.backend.set_secret("web_search.api_key", _prompt_secret("Web search API key"))
     print(f"Stored {args.name} secrets in the configured secret backend.")
+
+
+def handle_secrets_status(args: argparse.Namespace) -> None:
+    """Print present/missing status for known secrets without printing values."""
+
+    if args.env_file is not None:
+        _load_env_file(args.env_file)
+    manager = _secret_manager(args.secret_source)
+    for name in _known_secret_names():
+        try:
+            manager.get_named_secret(name)
+        except SecretError:
+            status = "missing"
+        else:
+            status = "present"
+        print(f"{name}: {status}")
 
 
 def handle_provider_probe(args: argparse.Namespace) -> None:
@@ -743,6 +886,8 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         localization_model=localization_route.model,
         language=getattr(args, "language", None),
     )
+    if getattr(args, "run_dir_output", None) is not None:
+        write_text(args.run_dir_output, str(run_dir))
     print(f"Created run: {run_dir}")
 
 
@@ -998,6 +1143,82 @@ def handle_publish_wechat_thumb(args: argparse.Namespace) -> None:
         print(f"url: {payload['url']}")
 
 
+def handle_schedule_daily_draft(args: argparse.Namespace) -> None:
+    """Generate local launchd artifacts for a daily WeChat draft job."""
+
+    if args.limit < 1:
+        raise ResearchRadarError("--limit must be at least 1.")
+    if args.deep_limit < 0:
+        raise ResearchRadarError("--deep-limit cannot be negative.")
+    hour, minute = parse_daily_time(args.time)
+    config = load_config(args.config)
+    config.topic(args.topic)
+    output_dir = args.output_dir or args.root / "schedules" / f"daily-draft-{args.topic}"
+    title = args.title or f"ResearchRadar 日报：{args.topic}"
+    digest = args.digest or f"今日精选 {args.topic} 相关论文精读。"
+    artifacts = write_daily_draft_schedule(
+        DailyDraftScheduleSpec(
+            topic_id=args.topic,
+            hour=hour,
+            minute=minute,
+            config_path=args.config,
+            root=args.root,
+            thumb_media_id=args.thumb_media_id,
+            title=title,
+            digest=digest,
+            project_dir=Path.cwd(),
+            output_dir=output_dir,
+            uv_path=_resolve_uv_executable(),
+            limit=args.limit,
+            deep_limit=args.deep_limit,
+            language=args.language,
+            model_cache=bool(args.model_cache),
+            publish_dry_run=bool(args.publish_dry_run),
+            deepseek_provider=getattr(args, "deepseek_provider", None),
+            gist_provider=getattr(args, "gist_provider", None),
+            gist_model=getattr(args, "gist_model", None),
+            reader_provider=getattr(args, "reader_provider", None),
+            reader_model=getattr(args, "reader_model", None),
+            verifier_provider=getattr(args, "verifier_provider", None) or "codex",
+            verifier_model=_scheduled_verifier_model(
+                getattr(args, "verifier_provider", None) or "codex",
+                getattr(args, "verifier_model", None),
+            ),
+            anchor_repair_provider=getattr(args, "anchor_repair_provider", None),
+            anchor_repair_model=getattr(args, "anchor_repair_model", None),
+            localization_provider=getattr(args, "localization_provider", None),
+            localization_model=getattr(args, "localization_model", None),
+        )
+    )
+    print("Generated local daily draft schedule artifacts:")
+    print(f"  label: {artifacts.label}")
+    print(f"  runner: {artifacts.runner_path}")
+    print(f"  plist: {artifacts.plist_path}")
+    print(f"  logs: {artifacts.log_dir}")
+    print()
+    print("Install manually with:")
+    print(f"  cp {artifacts.plist_path} ~/Library/LaunchAgents/")
+    print(f"  launchctl load ~/Library/LaunchAgents/{artifacts.plist_path.name}")
+
+
+def _resolve_uv_executable() -> Path:
+    uv_path = shutil.which("uv")
+    if uv_path is None:
+        raise ConfigError(
+            "Could not find `uv` on PATH. Run schedule generation from an environment "
+            "where `uv` is available."
+        )
+    return Path(uv_path).resolve()
+
+
+def _scheduled_verifier_model(provider_name: str, model_name: str | None) -> str | None:
+    if model_name is not None:
+        return model_name
+    if provider_name == "codex":
+        return "gpt-5.5"
+    return None
+
+
 def handle_privacy_scan(args: argparse.Namespace) -> None:
     """Run the privacy scanner."""
 
@@ -1127,6 +1348,20 @@ def _secret_manager(secret_source: str) -> SecretManager:
     if secret_source == "keychain":
         return SecretManager(KeychainSecretBackend())
     raise ResearchRadarError(f"Unsupported secret source: {secret_source}")
+
+
+def _known_secret_names() -> list[str]:
+    return [
+        "deepseek.api_key",
+        "xiaomi.api_key",
+        "openai.api_key",
+        "anthropic.api_key",
+        "wechat.app_id",
+        "wechat.app_secret",
+        "github.token",
+        "semantic_scholar.api_key",
+        "web_search.api_key",
+    ]
 
 
 def _provider_probe_prompt(probe: str) -> str:

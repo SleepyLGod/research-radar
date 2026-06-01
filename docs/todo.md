@@ -21,9 +21,10 @@ drive the research model.
 - Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
   model work.
 - Failed-run diagnostics for provider and transport failures.
-- WeChat draft-only artifacts for manual review; no auto-publish or mass-send.
+- WeChat draft-only creation for manual review in the WeChat editor; no auto-publish or mass-send.
 - Long-form daily article rendering with a top contents list, deep-read paper sections, other-source
   links, seen-before fallback, and concise evidence notes.
+- Local launchd scheduler artifact generation for daily WeChat draft jobs.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
 ## Non-Negotiable Quality Rules
@@ -62,46 +63,43 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Validate long-form WeChat daily article output with real draft-only smoke.
-   - Run daily research, generate an evidence-gated long-form `ArticleDraft`, render WeChat HTML,
-     and create a manual-review draft.
-   - Do not auto-publish or mass-send.
-   - Inspect readability, contents links, deep-read sections, other-source links, and evidence notes.
-
-2. Add scheduler and local automation for confirmed topics.
+1. Validate local scheduler and WeChat draft automation for confirmed topics.
    - Start with local scheduled runs for reviewed topic configs.
+   - Run daily research, generate an evidence-gated long-form `ArticleDraft`, and create a
+     manual-review WeChat draft.
+   - Do not auto-publish or mass-send.
    - Keep source history append-only so daily reports focus on new papers and new versions.
    - Keep secrets out of prompts, logs, generated reports, and committed files.
 
-3. Add multi-topic recall and precision evaluation as a recurring quality gate.
+2. Add multi-topic recall and precision evaluation as a recurring quality gate.
    - Evaluate `agent-memory`, `llm-reasoning-eval`, `rag-systems`, and user-provided topics.
    - Track source counts, primary-paper counts, selected deep sources, publishable claims, filtered
      noise, and reviewer downgrades.
    - Use the results to tune topic profiles before adding more publishing features.
 
-4. Evaluate DeepSeek topic bootstrap quality.
+3. Evaluate DeepSeek topic bootstrap quality.
    - Generate editable topic YAML drafts.
    - Check whether queries, concept groups, negative phrases, and priority sources are too broad or
      too narrow.
    - Keep manual review for new topic onboarding until quality is proven.
 
-5. Stabilize Codex reader for weekly deep dives.
+4. Stabilize Codex reader for weekly deep dives.
    - Keep DeepSeek v4 Pro as the default daily reader until Codex reader schema stability improves.
    - Use Codex reader for high-value weekly runs only after timeout and schema-retry behavior is
      reliable.
 
-6. Expand diagrams and figure handling.
+5. Expand diagrams and figure handling.
    - Improve self-drawn explanatory diagrams using only verified structured readings.
    - Reuse original paper figures only with license and attribution audit.
 
-7. Continue cost and first-run runtime optimization.
+6. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
    - Consider reader/verifier budget strategies only after the daily E2E path is stable.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
 ## Near-Term Execution Order
 
-1. Run one real `agent-memory` daily under `/private/tmp` and inspect the long-form WeChat draft.
-2. Validate WeChat draft-only creation from that run.
-3. Add local scheduler only after long-form draft-only publishing is readable and auditable.
-4. Re-run multi-topic evaluation before expanding providers beyond the current Tavily-based recall.
+1. Generate a local scheduler for a reviewed topic and inspect the plist plus runner script.
+2. Install one low-frequency test launchd job and verify it creates a WeChat draft without
+   publishing.
+3. Re-run multi-topic evaluation before expanding providers beyond the current Tavily-based recall.
