@@ -39,14 +39,37 @@ def test_version_metadata_is_foundation() -> None:
     assert __version__ == "0.0.0"
 
 
-def test_readme_describes_foundation_not_current_v1() -> None:
+def test_readme_is_concise_project_entrypoint() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "## Current v0.0.0 Foundation" in readme
-    assert "## Target E2E Flow" in readme
+    assert "![ResearchRadar](docs/assets/research-radar.png)" in readme
+    assert "[简体中文](README.zh-CN.md)" in readme
+    assert "[Detailed usage](docs/usage.md)" in readme
+    assert "DeepSeek v4 Pro" in readme
+    assert "Codex `gpt-5.5`" in readme
+    assert "`Evidence-gated`" in readme
+    assert "## Target E2E Flow" not in readme
     assert "## What v1 Does" not in readme
-    assert "not yet the full v1" in readme
-    assert "product" in readme
+    assert len(readme.splitlines()) < 120
+
+
+def test_readme_cover_image_exists() -> None:
+    image = Path("docs/assets/research-radar.png")
+
+    assert image.exists()
+    assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_chinese_readme_and_usage_doc_exist() -> None:
+    chinese = Path("README.zh-CN.md").read_text(encoding="utf-8")
+    usage = Path("docs/usage.md").read_text(encoding="utf-8")
+
+    assert "ResearchRadar 是一个本地优先的研究情报系统" in chinese
+    assert "[English README](README.md)" in chinese
+    assert "# ResearchRadar Usage Guide" in usage
+    assert "Deep reading: `deepseek/deepseek-v4-pro`" in usage
+    assert "Verification: `codex/gpt-5.5`" in usage
+    assert "--deepseek-provider xiaomi" in usage
 
 
 def test_readme_wechat_publish_command_includes_required_flags() -> None:
