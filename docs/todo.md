@@ -72,7 +72,7 @@ drive the research model.
    - Keep secrets out of prompts, logs, generated reports, and committed files.
 
 2. Add multi-topic recall and precision evaluation as a recurring quality gate.
-   - Evaluate `agent-memory`, `llm-reasoning-eval`, `rag-systems`, and user-provided topics.
+   - Evaluate reviewed research topics and user-provided topic configs.
    - Track source counts, primary-paper counts, selected deep sources, publishable claims, filtered
      noise, and reviewer downgrades.
    - Use the results to tune topic profiles before adding more publishing features.

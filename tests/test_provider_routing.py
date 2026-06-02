@@ -388,7 +388,7 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
         "verifier",
         provider_override="codex",
         global_provider="deepseek",
-        global_model="deepseek-chat",
+        global_model="deepseek-v4-flash",
         default_local=False,
     )
 
@@ -451,7 +451,7 @@ def test_source_gist_route_stays_on_lightweight_deepseek_model() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-chat"
+    assert route.model == "deepseek-v4-flash"
 
 
 def test_anchor_repair_route_defaults_to_deepseek_v4_pro() -> None:
@@ -550,7 +550,7 @@ def _deepseek_route_config() -> AppConfig:
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-chat"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
                     "deep_reading": {
                         "provider": "deepseek",
                         "model": "deepseek-v4-pro",

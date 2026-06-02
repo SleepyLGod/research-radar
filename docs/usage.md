@@ -12,8 +12,9 @@ uv sync --extra dev
 uv run research-radar init
 ```
 
-`config.yaml`, `.env`, `runs/`, `data/`, `cache/`, and scheduler outputs are local-only runtime
-state. Do not commit them.
+`config.example.yaml` is a small public template. Put reviewed topics and daily preferences in
+local `config.yaml`. `config.yaml`, `.env`, `runs/`, `data/`, `cache/`, and scheduler outputs are
+local-only runtime state. Do not commit them.
 
 Check the repository privacy boundary before committing:
 
@@ -63,9 +64,9 @@ Task-specific overrides still win. For example, Xiaomi reader only:
 
 ```bash
 uv run research-radar run paper \
-  --topic agent-memory \
+  --topic <topic-id> \
   --url https://arxiv.org/pdf/2604.01707v1 \
-  --config config.example.yaml \
+  --config config.yaml \
   --root /private/tmp/research-radar-xiaomi-paper \
   --reader-provider xiaomi \
   --secret-source keychain \
@@ -78,8 +79,8 @@ Run a daily topic report:
 
 ```bash
 uv run research-radar run daily \
-  --topic agent-memory \
-  --config config.example.yaml \
+  --topic <topic-id> \
+  --config config.yaml \
   --root research-radar-data \
   --limit 5 \
   --deep-limit 1 \
@@ -106,9 +107,9 @@ Use this when you want to inspect one paper without running discovery:
 
 ```bash
 uv run research-radar run paper \
-  --topic agent-memory \
+  --topic <topic-id> \
   --url https://arxiv.org/pdf/2604.01707v1 \
-  --config config.example.yaml \
+  --config config.yaml \
   --root /private/tmp/research-radar-paper-smoke \
   --reader-provider deepseek \
   --verifier-provider codex \
@@ -159,9 +160,9 @@ Generate a macOS launchd job for a reviewed topic:
 
 ```bash
 uv run research-radar schedule daily-draft \
-  --topic agent-memory \
+  --topic <topic-id> \
   --time 09:00 \
-  --config config.example.yaml \
+  --config config.yaml \
   --root research-radar-data \
   --thumb-media-id "<wechat-thumb-media-id>" \
   --language zh \
@@ -177,26 +178,26 @@ The scheduler writes a runner script and plist under:
 Install manually:
 
 ```bash
-cp <root>/schedules/daily-draft-agent-memory/ai.research-radar.daily-draft.agent-memory.plist \
+cp <root>/schedules/daily-draft-<topic-id>/ai.research-radar.daily-draft.<topic-id>.plist \
   ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/ai.research-radar.daily-draft.agent-memory.plist
+launchctl load ~/Library/LaunchAgents/ai.research-radar.daily-draft.<topic-id>.plist
 ```
 
 Check or test the job:
 
 ```bash
-LABEL="ai.research-radar.daily-draft.agent-memory"
+LABEL="ai.research-radar.daily-draft.<topic-id>"
 launchctl print "gui/$(id -u)/$LABEL"
 launchctl kickstart -k "gui/$(id -u)/$LABEL"
-tail -F <root>/schedules/daily-draft-agent-memory/logs/stdout.log \
-        <root>/schedules/daily-draft-agent-memory/logs/stderr.log
+tail -F <root>/schedules/daily-draft-<topic-id>/logs/stdout.log \
+        <root>/schedules/daily-draft-<topic-id>/logs/stderr.log
 ```
 
 Uninstall a temporary job:
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/ai.research-radar.daily-draft.agent-memory.plist
-rm ~/Library/LaunchAgents/ai.research-radar.daily-draft.agent-memory.plist
+launchctl unload ~/Library/LaunchAgents/ai.research-radar.daily-draft.<topic-id>.plist
+rm ~/Library/LaunchAgents/ai.research-radar.daily-draft.<topic-id>.plist
 ```
 
 Use a stable root such as `research-radar-data` for long-running schedules. Avoid using

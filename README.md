@@ -34,6 +34,9 @@ uv sync --extra dev
 uv run research-radar init
 ```
 
+`config.example.yaml` is a public template. Put your real reviewed topics in local
+`config.yaml`; it is gitignored and should not be committed.
+
 Store local secrets in Keychain, then confirm readiness:
 
 ```bash
@@ -47,8 +50,8 @@ Run a daily research brief:
 
 ```bash
 uv run research-radar run daily \
-  --topic agent-memory \
-  --config config.example.yaml \
+  --topic <topic-id> \
+  --config config.yaml \
   --root research-radar-data \
   --language zh \
   --model-cache
@@ -68,9 +71,9 @@ Schedule a daily WeChat draft job:
 
 ```bash
 uv run research-radar schedule daily-draft \
-  --topic agent-memory \
+  --topic <topic-id> \
   --time 09:00 \
-  --config config.example.yaml \
+  --config config.yaml \
   --root research-radar-data \
   --thumb-media-id "<wechat-thumb-media-id>" \
   --language zh \

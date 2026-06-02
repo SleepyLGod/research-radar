@@ -35,7 +35,7 @@ def test_runtime_summary_marks_slow_stages_and_counts_cache() -> None:
                 "elapsed_seconds": 344.0,
                 "duration_seconds": 14.0,
                 "provider": "deepseek",
-                "model": "deepseek-chat",
+                "model": "deepseek-v4-flash",
                 "status_detail": "failed",
                 "cache_hit_count": 1,
                 "cache_miss_count": 0,

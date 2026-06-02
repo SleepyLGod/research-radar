@@ -2,79 +2,20 @@ project:
   name: ResearchRadar
 
 topics:
-  - id: agent-memory
+  - id: example-topic
     source_intent: research_brief
     report_language: en
     queries:
-      - "agent memory systems"
-      - "LLM memory benchmark"
+      - "your research topic"
+      - "your topic benchmark"
     paper_queries:
-      - "Memory in the LLM Era"
-      - "LLM agent memory benchmark"
-      - "LOCOMO LongMemEval agent memory"
-      - "long term memory LLM agents"
+      - "your topic survey"
+      - "your topic benchmark paper"
     web_queries:
-      - "agent memory systems paper"
-      - "LLM agent memory benchmark blog"
-      - "LOCOMO LongMemEval official"
-    exclusion_terms:
-      - "translation memory"
-      - "cache-only inference"
-    required_phrases:
-      - "agent memory"
-      - "LLM agent memory"
-      - "LLM memory"
-      - "agentic memory"
-      - "conversational memory"
-      - "episodic memory"
-      - "long-term memory for agents"
-      - "persistent recall"
-      - "LOCOMO"
-      - "LongMemEval"
-    negative_phrases:
-      - "prefill serving"
-      - "kv cache"
-      - "retrieval adapter"
-      - "planning problems"
-      - "activation quantization"
-      - "moe serving"
-    concept_groups:
-      agent_context:
-        - "agent memory"
-        - "LLM agent memory"
-        - "agentic memory"
-        - "autonomous LLM agents"
-        - "conversational agents"
-        - "AI agents"
-      memory_mechanism:
-        - "memory retrieval"
-        - "agent recall"
-        - "persistent recall"
-        - "long-term memory"
-        - "episodic memory"
-        - "conversational memory"
-        - "memory management"
-        - "memory systems"
-      evaluation_signal:
-        - "LOCOMO"
-        - "LongMemEval"
-        - "agent memory benchmark"
-        - "memory evaluation"
-        - "conversational memory benchmark"
-      negative_compute_or_training:
-        - "prefill serving"
-        - "kv cache"
-        - "retrieval adapter"
-        - "planning problems"
-        - "activation quantization"
-        - "moe serving"
-        - "fine-tuning"
-        - "QLoRA"
+      - "your topic paper"
+      - "your topic technical report"
     priority_sources:
       - arxiv.org
-      - semanticscholar.org
-      - openalex.org
-      - github.com
       - openreview.net
 
 discovery:
@@ -101,29 +42,9 @@ model_providers:
     kind: openai_compatible
     base_url: https://api.deepseek.com/chat/completions
     api_key_secret: deepseek.api_key
-  xiaomi:
-    kind: openai_compatible
-    base_url: https://token-plan-cn.xiaomimimo.com/v1/chat/completions
-    api_key_secret: xiaomi.api_key
-    timeout_seconds: 900
-  openai:
-    kind: openai_compatible
-    base_url: https://api.openai.com/v1/chat/completions
-    api_key_secret: openai.api_key
-  anthropic:
-    kind: anthropic_messages
-    api_key_secret: anthropic.api_key
   codex:
     kind: codex_cli
     command: /Applications/Codex.app/Contents/Resources/codex
-    timeout_seconds: 900
-  claude:
-    kind: claude_code_cli
-    command: claude
-    timeout_seconds: 900
-  von_claude:
-    kind: claude_code_cli
-    command: von-claude
     timeout_seconds: 900
   local:
     kind: local
@@ -135,10 +56,10 @@ models:
   task_routes:
     topic_bootstrap:
       provider: deepseek
-      model: deepseek-chat
+      model: deepseek-v4-flash
     source_gist:
       provider: deepseek
-      model: deepseek-chat
+      model: deepseek-v4-flash
     deep_reading:
       provider: deepseek
       model: deepseek-v4-pro
@@ -147,7 +68,7 @@ models:
       model: deepseek-v4-pro
     report_localization:
       provider: deepseek
-      model: deepseek-chat
+      model: deepseek-v4-flash
     verifier:
       provider: codex
       model: gpt-5.5
