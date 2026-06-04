@@ -1,6 +1,6 @@
 # ResearchRadar
 
-![ResearchRadar](docs/assets/research-radar.png)
+![ResearchRadar](docs/assets/research-radar-plus.png)
 
 ResearchRadar 是一个本地优先的研究情报系统：每天发现新的论文和技术来源，精读关键论文，
 核验证据，再生成可在微信公众号草稿箱审阅的长文日报。

@@ -1,6 +1,6 @@
 # ResearchRadar
 
-![ResearchRadar](docs/assets/research-radar.png)
+![ResearchRadar](docs/assets/research-radar-plus.png)
 
 ResearchRadar is a local-first research intelligence system for turning new papers and technical
 sources into evidence-gated daily research briefs.

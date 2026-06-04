@@ -21,10 +21,11 @@ drive the research model.
 - Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
   model work.
 - Failed-run diagnostics for provider and transport failures.
-- WeChat draft-only creation for manual review in the WeChat editor; no auto-publish or mass-send.
+- WeChat draft-only creation for manual review in the WeChat editor, validated with real drafts;
+  no auto-publish or mass-send.
 - Long-form daily article rendering with a top contents list, deep-read paper sections, other-source
   links, seen-before fallback, and concise evidence notes.
-- Local launchd scheduler artifact generation for daily WeChat draft jobs.
+- Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
 ## Non-Negotiable Quality Rules
@@ -63,43 +64,38 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Validate local scheduler and WeChat draft automation for confirmed topics.
-   - Start with local scheduled runs for reviewed topic configs.
-   - Run daily research, generate an evidence-gated long-form `ArticleDraft`, and create a
-     manual-review WeChat draft.
-   - Do not auto-publish or mass-send.
-   - Keep source history append-only so daily reports focus on new papers and new versions.
-   - Keep secrets out of prompts, logs, generated reports, and committed files.
-
-2. Add multi-topic recall and precision evaluation as a recurring quality gate.
+1. Add multi-topic recall and precision evaluation as a recurring quality gate.
    - Evaluate reviewed research topics and user-provided topic configs.
    - Track source counts, primary-paper counts, selected deep sources, publishable claims, filtered
      noise, and reviewer downgrades.
    - Use the results to tune topic profiles before adding more publishing features.
 
-3. Evaluate DeepSeek topic bootstrap quality.
+2. Evaluate DeepSeek topic bootstrap quality.
    - Generate editable topic YAML drafts.
    - Check whether queries, concept groups, negative phrases, and priority sources are too broad or
      too narrow.
    - Keep manual review for new topic onboarding until quality is proven.
 
-4. Stabilize Codex reader for weekly deep dives.
+3. Stabilize Codex reader for weekly deep dives.
    - Keep DeepSeek v4 Pro as the default daily reader until Codex reader schema stability improves.
    - Use Codex reader for high-value weekly runs only after timeout and schema-retry behavior is
      reliable.
 
-5. Expand diagrams and figure handling.
+4. Expand diagrams and figure handling.
    - Improve self-drawn explanatory diagrams using only verified structured readings.
    - Reuse original paper figures only with license and attribution audit.
 
-6. Continue cost and first-run runtime optimization.
+5. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
    - Consider reader/verifier budget strategies only after the daily E2E path is stable.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
+6. Add future publishing channels such as Zhihu.
+   - Keep channel renderers downstream of the verified `ArticleDraft`.
+   - Do not let channel formatting requirements change the core research and evidence model.
+
 ## Near-Term Execution Order
 
-1. Generate a local scheduler for a reviewed topic and inspect the plist plus runner script.
-2. Install one low-frequency test launchd job and verify it creates a WeChat draft without
-   publishing.
-3. Re-run multi-topic evaluation before expanding providers beyond the current Tavily-based recall.
+1. Re-run multi-topic evaluation before expanding providers beyond the current Tavily-based recall.
+2. Tune topic profiles from recall/precision failures before adding more publishing features.
+3. Expand diagram and figure handling after the evaluation loop is stable.
