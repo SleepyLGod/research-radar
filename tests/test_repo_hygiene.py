@@ -65,7 +65,8 @@ def test_chinese_readme_and_usage_doc_exist() -> None:
     chinese = Path("README.zh-CN.md").read_text(encoding="utf-8")
     usage = Path("docs/usage.md").read_text(encoding="utf-8")
 
-    assert "ResearchRadar 是一个本地优先的研究情报系统" in chinese
+    assert "微信公众号草稿" in chinese
+    assert "证据核验" in chinese
     assert "[English README](README.md)" in chinese
     assert "--config config.yaml" in chinese
     assert "--config config.example.yaml" not in chinese
