@@ -217,6 +217,9 @@ Rules:
   components, data flow, why each step exists, how components interact, and how the
   mechanism connects to reported experiments. Only include components supported by
   anchored evidence.
+- For systems papers, solution_walkthrough should also cover the request lifecycle,
+  scheduling or routing policy, memory/KV-cache behavior, implementation substrate,
+  workload setup, and metric linkage when those details appear in the packet.
 - Keep each claim_unit to exactly one verifiable assertion; split broad claims.
 - claim_units must not combine method, result, novelty, and critique in one sentence.
 - Setup facts must be separate claim_units: benchmark identity, metric definition,

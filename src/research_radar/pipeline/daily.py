@@ -52,6 +52,7 @@ from research_radar.discovery.wide_scan import (
 )
 from research_radar.evidence.ledger import write_claims, write_evidence
 from research_radar.exceptions import AnalysisError, IngestionError, ResearchRadarError
+from research_radar.ingestion.paper_quality import paper_text_quality
 from research_radar.ingestion.router import ingest_source
 from research_radar.models import (
     Artifact,
@@ -322,6 +323,47 @@ def run_daily(
                 source_title=candidate.title,
                 source_url=candidate.url,
                 content_type=artifact.content_type,
+            )
+            text_quality = paper_text_quality(artifact)
+            if (
+                topic.source_intent == "research_brief"
+                and text_quality.get("status") != "pass"
+            ):
+                deep_reading_status_by_url[candidate.url] = "insufficient_full_text"
+                progress.record(
+                    "paper_text_quality",
+                    "failed",
+                    source_title=candidate.title,
+                    source_url=candidate.url,
+                    reason=str(text_quality.get("reason")),
+                    text_chars=text_quality.get("text_chars"),
+                    page_count=text_quality.get("page_count"),
+                    acquisition_kind=text_quality.get("acquisition_kind"),
+                )
+                findings.append(
+                    ReviewFinding(
+                        severity="warning",
+                        message=(
+                            "Deep reading skipped because the ingested artifact was not "
+                            f"full-paper complete: {text_quality.get('reason')}"
+                        ),
+                        claim_text=candidate.title,
+                        metadata={
+                            "kind": "paper_text_quality_failed",
+                            "source_url": candidate.url,
+                            "paper_text_quality": text_quality,
+                        },
+                    )
+                )
+                continue
+            progress.record(
+                "paper_text_quality",
+                "passed",
+                source_title=candidate.title,
+                source_url=candidate.url,
+                text_chars=text_quality.get("text_chars"),
+                page_count=text_quality.get("page_count"),
+                acquisition_kind=text_quality.get("acquisition_kind"),
             )
             progress.record(
                 "reader",

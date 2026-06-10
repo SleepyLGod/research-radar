@@ -32,6 +32,31 @@ def test_pdf_url_uses_arxiv_external_id_from_semantic_scholar() -> None:
     assert has_pdf_signal(source) is True
 
 
+def test_pdf_url_uses_openreview_canonical_id() -> None:
+    source = SourceCandidate(
+        title="MARS",
+        url="https://openreview.net/forum?id=uNqTxj5brQ",
+        canonical_id="OpenReview:uNqTxj5brQ",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+
+    assert _pdf_url(source) == "https://openreview.net/pdf?id=uNqTxj5brQ"
+    assert has_pdf_signal(source) is True
+
+
+def test_pdf_url_uses_openreview_pdf_url() -> None:
+    source = SourceCandidate(
+        title="MARS",
+        url="https://openreview.net/pdf?id=uNqTxj5brQ",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+
+    assert _pdf_url(source) == "https://openreview.net/pdf?id=uNqTxj5brQ"
+    assert has_pdf_signal(source) is True
+
+
 def test_router_sends_semantic_scholar_pdf_metadata_to_pdf_ingestion(monkeypatch) -> None:
     source = SourceCandidate(
         title="Paper",

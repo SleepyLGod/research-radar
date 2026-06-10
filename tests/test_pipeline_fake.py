@@ -22,6 +22,29 @@ The fixture result shows grounded answers score higher.
 """.strip()
 
 
+def _complete_paper_fixture_text() -> str:
+    return "\n".join(
+        [
+            "[page 1]",
+            "Abstract\nAgent memory systems require grounded retrieval.",
+            "[page 2]",
+            "Introduction\nMemory benchmarks reward unsupported answers.",
+            "[page 3]",
+            "Method\nRequire cited memory evidence before crediting answers.",
+            "The paper studies grounded answerability rather than answer match alone.",
+            "[page 4]",
+            "Evaluation\nThe evaluation runs on a fixture benchmark.",
+            "Accuracy is the main fixture metric.",
+            "The fixture result shows grounded answers score higher.",
+            "[page 5]",
+            "Limitations\nThe system only evaluates benchmark-style tasks.",
+            "[page 6]",
+            "Conclusion\nThe useful contribution is the evaluation lens.",
+            "Additional full paper context.\n" * 500,
+        ]
+    )
+
+
 class FakeConnector:
     name = "fake"
 
@@ -1195,6 +1218,91 @@ def test_daily_deep_reading_suppresses_resource_list_for_research_brief(
     )
     assert any(
         finding["metadata"].get("kind") == "deep_reading_required_but_missing"
+        for finding in findings
+    )
+
+
+def test_daily_deep_reading_skips_abstract_only_paper_and_tries_next(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class TwoPaperConnector:
+        name = "two-paper"
+
+        def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
+            return [
+                SourceCandidate(
+                    title="Abstract Only Agent Memory Paper",
+                    url="https://openreview.net/forum?id=abstract",
+                    canonical_id="OpenReview:abstract",
+                    source_type=SourceType.PAPER,
+                    source_name=self.name,
+                    summary=(
+                        "An agent memory benchmark method evaluation paper covering "
+                        "retrieval and memory systems."
+                    ),
+                    score=1.0,
+                ),
+                SourceCandidate(
+                    title="Complete Agent Memory Paper",
+                    url="https://openreview.net/forum?id=complete",
+                    canonical_id="OpenReview:complete",
+                    source_type=SourceType.PAPER,
+                    source_name=self.name,
+                    summary="An agent memory paper.",
+                    score=0.9,
+                ),
+            ]
+
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = SequenceProvider([_deep_reading_claim_units_json()])
+    ingested: list[str] = []
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        ingested.append(source.title)
+        if "Abstract Only" in source.title:
+            return Artifact(
+                source=source,
+                text="Abstract\nThis OpenReview page only has an abstract about agent memory.",
+                content_type="text/html",
+            )
+        return Artifact(
+            source=source,
+            text=_complete_paper_fixture_text(),
+            content_type="application/pdf",
+            metadata={"page_count": 6},
+        )
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [TwoPaperConnector()],
+        deep_reader=reader,
+        deep_model="fake-analyst",
+        deep_limit=1,
+    )
+
+    source_selection = read_json(run_dir / "source_selection.json")
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+    rows = {row["title"]: row for row in source_selection["ranked_sources"]}
+
+    assert ingested == ["Abstract Only Agent Memory Paper", "Complete Agent Memory Paper"]
+    assert len(reader.messages) == 1
+    assert source_selection["selected_sources"][0]["title"] == "Complete Agent Memory Paper"
+    assert rows["Abstract Only Agent Memory Paper"]["deep_reading_status"] == (
+        "insufficient_full_text"
+    )
+    assert rows["Complete Agent Memory Paper"]["deep_reading_status"] == "succeeded"
+    assert any(
+        finding["metadata"].get("kind") == "paper_text_quality_failed"
         for finding in findings
     )
 

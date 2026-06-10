@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from research_radar.exceptions import IngestionError
@@ -49,7 +50,7 @@ def extract_pdf(source: SourceCandidate, path: Path) -> Artifact:
         text="\n\n".join(page_text),
         artifact_path=str(path),
         content_type="application/pdf",
-        metadata={"page_count": len(page_text)},
+        metadata={"page_count": len(page_text), "acquisition_kind": "pdf"},
     )
 
 
@@ -63,6 +64,9 @@ def _pdf_url(source: SourceCandidate) -> str:
     url = source.url
     if "arxiv.org/abs/" in url:
         return url.replace("/abs/", "/pdf/") + ".pdf"
+    openreview_id = _openreview_pdf_id(source)
+    if openreview_id is not None:
+        return f"https://openreview.net/pdf?id={openreview_id}"
     return url
 
 
@@ -73,6 +77,8 @@ def has_pdf_signal(source: SourceCandidate) -> bool:
     if isinstance(pdf_url, str) and pdf_url:
         return True
     if _external_arxiv_id(source) is not None:
+        return True
+    if _openreview_pdf_id(source) is not None:
         return True
     url = source.url.lower()
     return url.endswith(".pdf") or "arxiv.org/pdf/" in url or "arxiv.org/abs/" in url
@@ -91,3 +97,17 @@ def _external_arxiv_id(source: SourceCandidate) -> str | None:
     if canonical_id.startswith(doi_prefix):
         return canonical_id.removeprefix(doi_prefix)
     return None
+
+
+def _openreview_pdf_id(source: SourceCandidate) -> str | None:
+    canonical_id = source.canonical_id or ""
+    if canonical_id.startswith("OpenReview:"):
+        return canonical_id.removeprefix("OpenReview:")
+    parsed = urlparse(source.url)
+    host = parsed.netloc.casefold()
+    if host != "openreview.net" and not host.endswith(".openreview.net"):
+        return None
+    if parsed.path.strip("/") not in {"forum", "pdf"}:
+        return None
+    paper_id = parse_qs(parsed.query).get("id", [""])[0]
+    return paper_id or None

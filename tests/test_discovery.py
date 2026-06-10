@@ -344,11 +344,46 @@ def test_tavily_web_search_canonicalizes_research_source_urls(monkeypatch) -> No
     assert candidates[1].canonical_id == "ACL:2025.findings-acl.989"
     assert candidates[2].source_type == SourceType.PAPER
     assert candidates[2].canonical_id == "OpenReview:LLtUtzSOL5"
+    assert candidates[2].metadata["pdf_url"] == "https://openreview.net/pdf?id=LLtUtzSOL5"
     assert candidates[3].source_type == SourceType.REPOSITORY
     assert candidates[3].url == "https://github.com/TeleAI-UAGI/Awesome-Agent-Memory"
     assert candidates[3].canonical_id == "github:teleai-uagi/awesome-agent-memory"
     assert candidates[4].source_type == SourceType.WEB
     assert candidates[4].metadata["web_canonicalization"]["rule"] == "none"
+
+
+def test_tavily_web_search_canonicalizes_openreview_pdf_urls(monkeypatch) -> None:
+    def fake_urlopen(request, timeout: int):
+        return FakeResponse(
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "title": "OpenReview PDF",
+                            "url": "https://openreview.net/pdf?id=uNqTxj5brQ",
+                            "content": "A PDF result.",
+                            "score": 0.9,
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+        )
+
+    monkeypatch.setattr(web_search_module, "urlopen", fake_urlopen)
+    connector = web_search_module.TavilyWebSearchConnector(api_key="tvly-test")
+
+    candidates = connector.discover(
+        DiscoveryContext(
+            topic=TopicConfig(id="llm-inference", queries=["llm serving"]),
+            limit=1,
+        )
+    )
+
+    assert candidates[0].source_type == SourceType.PAPER
+    assert candidates[0].url == "https://openreview.net/forum?id=uNqTxj5brQ"
+    assert candidates[0].canonical_id == "OpenReview:uNqTxj5brQ"
+    assert candidates[0].metadata["pdf_url"] == "https://openreview.net/pdf?id=uNqTxj5brQ"
+    assert candidates[0].metadata["web_canonicalization"]["rule"] == "openreview_pdf"
 
 
 def test_tavily_web_search_failure_becomes_discovery_error(monkeypatch) -> None:

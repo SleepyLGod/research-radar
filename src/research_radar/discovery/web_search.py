@@ -251,6 +251,11 @@ def _web_result_candidate(
         score=score,
         metadata={
             **metadata,
+            **(
+                {"pdf_url": str(canonical["pdf_url"])}
+                if canonical.get("pdf_url") is not None
+                else {}
+            ),
             "web_canonicalization": {
                 "source_type": source_type.value,
                 "rule": str(canonical["rule"]),
@@ -283,14 +288,16 @@ def _canonical_web_source(url: str) -> dict[str, object]:
             "rule": "acl_anthology",
         }
 
-    if _host_matches(host, "openreview.net") and path == "forum":
+    if _host_matches(host, "openreview.net") and path in {"forum", "pdf"}:
         paper_id = parse_qs(parsed.query).get("id", [""])[0]
         if paper_id:
+            forum_url = f"https://openreview.net/forum?id={paper_id}"
             return {
                 "source_type": SourceType.PAPER,
-                "url": url,
+                "url": forum_url,
                 "canonical_id": f"OpenReview:{paper_id}",
-                "rule": "openreview_forum",
+                "pdf_url": f"https://openreview.net/pdf?id={paper_id}",
+                "rule": f"openreview_{path}",
             }
 
     github_repo = _github_repo(host, path)
