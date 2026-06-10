@@ -22,6 +22,14 @@ class TaskModelRoute:
     provider_name: str
 
 
+@dataclass(frozen=True)
+class TaskRoutePreview:
+    """Resolved provider and model names without building the provider."""
+
+    provider_name: str
+    model: str | None
+
+
 def resolve_task_route(
     config: AppConfig,
     secrets: SecretManager,
@@ -35,6 +43,43 @@ def resolve_task_route(
     default_local: bool = False,
 ) -> TaskModelRoute:
     """Resolve the provider and model for one task."""
+
+    preview = resolve_task_route_preview(
+        config,
+        task_name,
+        provider_override=provider_override,
+        model_override=model_override,
+        global_provider=global_provider,
+        global_model=global_model,
+        provider_replacements=provider_replacements,
+        default_local=default_local,
+    )
+    if preview.provider_name == "local":
+        return TaskModelRoute(provider=None, model=None, provider_name=preview.provider_name)
+    if preview.model is None:
+        raise ConfigError(
+            f"No model configured for task {task_name} provider {preview.provider_name}."
+        )
+    provider = build_provider(config, secrets, preview.provider_name)
+    return TaskModelRoute(
+        provider=provider,
+        model=preview.model,
+        provider_name=preview.provider_name,
+    )
+
+
+def resolve_task_route_preview(
+    config: AppConfig,
+    task_name: str,
+    *,
+    provider_override: str | None = None,
+    model_override: str | None = None,
+    global_provider: str | None = None,
+    global_model: str | None = None,
+    provider_replacements: dict[str, str] | None = None,
+    default_local: bool = False,
+) -> TaskRoutePreview:
+    """Resolve provider and model names without instantiating the provider."""
 
     route = config.models.task_routes.get(task_name)
     if provider_override:
@@ -57,11 +102,12 @@ def resolve_task_route(
         raise ConfigError(f"No model route configured for task: {task_name}")
 
     if provider_name == "local":
-        return TaskModelRoute(provider=None, model=None, provider_name=provider_name)
+        return TaskRoutePreview(provider_name=provider_name, model=None)
+    if provider_name not in config.model_providers:
+        raise ConfigError(f"Unknown model provider: {provider_name}")
     if model is None:
         raise ConfigError(f"No model configured for task {task_name} provider {provider_name}.")
-    provider = build_provider(config, secrets, provider_name)
-    return TaskModelRoute(provider=provider, model=model, provider_name=provider_name)
+    return TaskRoutePreview(provider_name=provider_name, model=model)
 
 
 def _replacement_provider(

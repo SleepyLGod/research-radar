@@ -1,7 +1,8 @@
 # ResearchRadar Usage Guide
 
 This guide keeps the longer operational notes out of the README. It covers local setup, model
-routes, daily runs, WeChat drafts, scheduler installation, and privacy checks.
+routes, daily runs, WeChat drafts, scheduler installation, and privacy checks. For custom model
+vendors and local servers, see [Provider Configuration](providers.md).
 
 ## Setup
 
@@ -44,6 +45,13 @@ For temporary local experiments, commands also support:
 --secret-source env --env-file .env
 ```
 
+For custom provider instances, store an arbitrary named secret:
+
+```bash
+uv run research-radar secrets set-named kimi.api_key
+uv run research-radar secrets status --name kimi.api_key
+```
+
 ## Model Routes
 
 The default quality path is:
@@ -53,12 +61,23 @@ The default quality path is:
 - Verification: `codex/gpt-5.5`
 - Web search: Tavily when the web-search secret is present
 
+Daily users usually do not need route flags. Use the defaults first, then inspect or override
+providers only when you are testing another model:
+
+```bash
+uv run research-radar provider list --config config.yaml
+uv run research-radar provider routes --config config.yaml --mode daily
+```
+
 Xiaomi is configured as an optional DeepSeek-equivalent OpenAI-compatible provider. It does not
 change defaults. To let Xiaomi handle routes that are normally DeepSeek-backed, pass:
 
 ```bash
 --deepseek-provider xiaomi
 ```
+
+Kimi, Qwen, Minimax, OpenAI-compatible local servers, Anthropic API, Codex CLI, and Claude Code
+CLI use the same provider-instance pattern documented in [Provider Configuration](providers.md).
 
 Task-specific overrides still win. For example, Xiaomi reader only:
 
@@ -127,8 +146,14 @@ Upload a cover image once and store the returned media id somewhere local:
 
 ```bash
 uv run research-radar publish wechat-upload-thumb \
-  --image /path/to/cover.png \
+  --image docs/assets/research-radar-plus.png \
   --output /private/tmp/research-radar-thumb.json
+```
+
+Load the stored id for later draft commands:
+
+```bash
+THUMB_MEDIA_ID="$(python3 -c 'import json; print(json.load(open("/private/tmp/research-radar-thumb.json"))["thumb_media_id"])')"
 ```
 
 Create a draft from a completed run:
@@ -138,7 +163,7 @@ uv run research-radar publish wechat-draft \
   --run runs/<date-topic> \
   --title "ResearchRadar 日报：<topic>" \
   --digest "今日精选 <topic> 相关论文精读。" \
-  --thumb-media-id "<wechat-thumb-media-id>"
+  --thumb-media-id "$THUMB_MEDIA_ID"
 ```
 
 For local validation without calling WeChat:
@@ -148,7 +173,7 @@ uv run research-radar publish wechat-draft \
   --run runs/<date-topic> \
   --title "ResearchRadar 日报：<topic>" \
   --digest "今日精选 <topic> 相关论文精读。" \
-  --thumb-media-id "<wechat-thumb-media-id>" \
+  --thumb-media-id "$THUMB_MEDIA_ID" \
   --dry-run
 ```
 

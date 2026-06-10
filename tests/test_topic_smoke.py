@@ -8,8 +8,10 @@ from research_radar.evaluation.topic_smoke import (
     TopicSmokeSpec,
     render_topic_smoke_markdown,
     run_topic_smoke,
+    select_topic_specs,
     summarize_topic_run,
 )
+from research_radar.exceptions import ResearchRadarError
 from research_radar.storage.files import read_json, write_json, write_jsonl, write_text
 
 
@@ -413,7 +415,7 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
         }
     )
-    specs = DEFAULT_TOPIC_SMOKE_SPECS[:2]
+    specs = DEFAULT_TOPIC_SMOKE_SPECS
 
     def fake_runner(root: Path, config, topic_id: str, connectors, **kwargs) -> Path:
         topic_ids = {topic.id for topic in config.topics}
@@ -438,13 +440,55 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
     assert report.passed
     assert Path(report.markdown_path).exists()
     assert [item["topic_id"] for item in summary["results"]] == [
-        "agent-memory",
-        "llm-reasoning-eval",
+        spec.id for spec in DEFAULT_TOPIC_SMOKE_SPECS
     ]
     assert "best_skipped_paper" in summary["results"][0]
     assert "paper_candidate_count" in summary["results"][0]
     assert "rejected_paper_candidates" in summary["results"][0]
     assert (tmp_path / "topic_smoke_progress.jsonl").exists()
+
+
+def test_select_topic_specs_can_select_llm_inference() -> None:
+    specs = select_topic_specs(["llm-inference"])
+
+    assert [spec.id for spec in specs] == ["llm-inference"]
+    assert "LLM serving optimization" in specs[0].queries
+
+
+def test_topic_smoke_failure_summary_omits_model_prompt(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    error = (
+        "codex command failed: Reading additional input from stdin...\n"
+        "SYSTEM:\n"
+        "You are a strict factuality reviewer.\n"
+        "USER:\n"
+        "Review these claims.\n"
+        "ERROR: You've hit your usage limit."
+    )
+
+    def fake_runner(*args, **kwargs) -> Path:
+        raise ResearchRadarError(error)
+
+    report = run_topic_smoke(
+        tmp_path,
+        config,
+        [],
+        StaticProvider("{}"),
+        model="fake-model",
+        specs=[DEFAULT_TOPIC_SMOKE_SPECS[0]],
+        runner=fake_runner,
+    )
+
+    summary = read_json(Path(report.summary_path))
+    failure = summary["results"][0]["failures"][0]
+    assert "usage limit" in failure
+    assert "strict factuality reviewer" not in failure
+    assert "Review these claims" not in failure
 
 
 def _write_run(

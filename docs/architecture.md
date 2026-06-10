@@ -1,15 +1,15 @@
 # ResearchRadar Architecture
 
 ResearchRadar is split into narrow subsystems so each risky boundary is explicit. The current
-repo is the v0.0.0 foundation: a local-first skeleton with testable dry-run flows, privacy
-guardrails, typed models, and a research workflow contract. The full high-quality,
-model-backed research loop is a later milestone.
+repo is the v0.0.0 foundation: a local-first system with testable research runs, privacy
+guardrails, typed models, evidence-gated deep reading, and draft-only publishing.
 
 ## Subsystems
 
 - `scheduler`: local and Codex automation entrypoints.
 - `discovery`: source connectors for papers, repositories, RSS/blogs, and web search adapters.
-- `ingestion`: PDF, HTML, and repository extraction with provenance.
+- `ingestion`: source-aware PDF, HTML, and repository extraction with provenance and full-paper
+  completeness checks.
 - `analysis`: task-level model routes plus concrete OpenAI-compatible, Anthropic, Codex CLI,
   Claude Code CLI, and local/static provider instances.
 - `evidence`: claim ledger and unsupported-claim policy.
@@ -29,7 +29,8 @@ model; platform-neutral evidence and article drafts come first.
 3. Discovery produces normalized `SourceCandidate` records from papers, repositories, RSS/blogs,
    and later open web sources.
 4. Wide scan clusters and ranks candidates, then selects sources for deep reading.
-5. Ingestion stores PDFs, HTML pages, and repository metadata as artifacts with provenance.
+5. Ingestion stores PDFs, HTML pages, and repository metadata as artifacts with provenance; research
+   briefs reject abstract-only HTML as successful deep reads.
 6. Deep research reading applies the ResearchRadar skill to area context, problem/solution,
    related work, limitations, critique, examples, and essence.
 7. Evidence ledger converts claims into source-anchored records and rejects unsupported claims.
@@ -64,3 +65,8 @@ arXiv source files can include TeX/LaTeX and figures, and arXiv OAI metadata can
 information. This does not mean every arXiv figure is automatically safe for public reuse: the
 default arXiv license gives arXiv distribution rights, while third-party reuse depends on the
 paper's selected license and attribution requirements.
+
+For PDF-only papers, figure extraction is conservative. ResearchRadar may crop a figure region only
+when it can bind a caption to the same paper and compute a credible crop; it must not publish a full
+PDF page as if it were a figure. If a safe crop is unavailable, the public draft simply omits the
+figure section and keeps diagnostics in audit artifacts.

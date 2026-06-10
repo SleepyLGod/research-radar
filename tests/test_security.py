@@ -24,6 +24,13 @@ def test_env_secret_backend_reads_xiaomi_key(monkeypatch) -> None:
     assert manager.backend.get_secret("xiaomi.api_key") == "fake-xiaomi-key"
 
 
+def test_env_secret_backend_reads_generic_named_secret(monkeypatch) -> None:
+    monkeypatch.setenv("RESEARCH_RADAR_SECRET_KIMI_API_KEY", "fake-kimi-key")
+    manager = SecretManager(EnvSecretBackend())
+
+    assert manager.backend.get_secret("kimi.api_key") == "fake-kimi-key"
+
+
 def test_envelope_encryption_round_trip() -> None:
     encryptor = EnvelopeEncryptor(InMemoryMasterKeyProvider(b"0" * 32))
     payload = encryptor.encrypt_json({"access_token": "fake-token"}, aad=b"test")

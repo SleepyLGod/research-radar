@@ -10,7 +10,9 @@ drive the research model.
 - Paper-first source selection for research briefs.
 - Topic concept gates for precision-sensitive discovery.
 - Source history so daily reports focus on new papers and new versions.
-- Full-paper reading packets from PDF extraction.
+- Source-aware paper acquisition for arXiv and OpenReview, including OpenReview PDF ingestion.
+- Full-paper reading packets from extracted PDFs, with a completeness gate that rejects
+  abstract-only HTML for research briefs.
 - Atomic claim units, claim linting, anchor completeness checks, and quote-only anchor repair.
 - Table-aware evidence windows for experiment and result claims.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
@@ -25,6 +27,8 @@ drive the research model.
   no auto-publish or mass-send.
 - Long-form daily article rendering with a top contents list, deep-read paper sections, other-source
   links, seen-before fallback, and concise evidence notes.
+- Paper figure support from arXiv source assets and conservative PDF-only figure crops; full-page
+  PDF screenshots are not allowed as public figures.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
@@ -59,8 +63,9 @@ drive the research model.
   - Include a top contents list instead of relying on unsupported fixed sidebar behavior.
   - Put selected papers in a dedicated deep-read section.
   - Keep non-deep-read papers, repos, and web context as links plus conservative gists.
-  - Prefer self-drawn explanatory diagrams; original paper figures require license and attribution
-    audit before reuse.
+  - Prefer self-drawn explanatory diagrams when they are grounded in verified readings.
+  - Original paper figures require same-paper attribution, license metadata when available, and a
+    real source asset or conservative crop; full PDF pages must not be used as figures.
 
 ## Prioritized TODO
 
@@ -83,6 +88,8 @@ drive the research model.
 
 4. Expand diagrams and figure handling.
    - Improve self-drawn explanatory diagrams using only verified structured readings.
+   - Improve TeX-source figure/caption extraction and license metadata coverage.
+   - Improve PDF figure cropping for multi-column, caption-above, and unusual layouts.
    - Reuse original paper figures only with license and attribution audit.
 
 5. Continue cost and first-run runtime optimization.

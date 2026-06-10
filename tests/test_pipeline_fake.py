@@ -772,8 +772,8 @@ def test_daily_pipeline_reports_new_arxiv_version(tmp_path: Path) -> None:
     daily_text = (run_dir / "daily.md").read_text(encoding="utf-8")
 
     assert history_report["counts"]["version_update"] == 1
-    assert "status=version_update" in daily_text
-    assert "version=v2" in daily_text
+    assert "version update" in daily_text
+    assert "v2" in daily_text
     assert "Memory in the LLM Era" in daily_text
 
 

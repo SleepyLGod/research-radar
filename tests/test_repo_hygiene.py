@@ -42,9 +42,10 @@ def test_version_metadata_is_foundation() -> None:
 def test_readme_is_concise_project_entrypoint() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "![ResearchRadar](docs/assets/research-radar.png)" in readme
+    assert "![ResearchRadar](docs/assets/research-radar-plus.png)" in readme
     assert "[简体中文](README.zh-CN.md)" in readme
     assert "[Detailed usage](docs/usage.md)" in readme
+    assert "[Provider configuration](docs/providers.md)" in readme
     assert "DeepSeek v4 Pro" in readme
     assert "Codex `gpt-5.5`" in readme
     assert "`Evidence-gated`" in readme
@@ -54,7 +55,7 @@ def test_readme_is_concise_project_entrypoint() -> None:
 
 
 def test_readme_cover_image_exists() -> None:
-    image = Path("docs/assets/research-radar.png")
+    image = Path("docs/assets/research-radar-plus.png")
 
     assert image.exists()
     assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
@@ -66,10 +67,34 @@ def test_chinese_readme_and_usage_doc_exist() -> None:
 
     assert "ResearchRadar 是一个本地优先的研究情报系统" in chinese
     assert "[English README](README.md)" in chinese
+    assert "--config config.yaml" in chinese
+    assert "--config config.example.yaml" not in chinese
     assert "# ResearchRadar Usage Guide" in usage
     assert "Deep reading: `deepseek/deepseek-v4-pro`" in usage
     assert "Verification: `codex/gpt-5.5`" in usage
     assert "--deepseek-provider xiaomi" in usage
+    assert "[Provider Configuration](providers.md)" in usage
+
+
+def test_provider_docs_explain_interfaces_without_expanding_public_config() -> None:
+    providers = Path("docs/providers.md").read_text(encoding="utf-8")
+    config = Path("config.example.yaml").read_text(encoding="utf-8")
+
+    for phrase in [
+        "openai_compatible",
+        "anthropic_messages",
+        "codex_cli",
+        "claude_code_cli",
+        "local",
+        "secrets set-named kimi.api_key",
+        "RESEARCH_RADAR_SECRET_KIMI_API_KEY",
+        "provider probe",
+        "provider list",
+        "provider routes",
+    ]:
+        assert phrase in providers
+    assert "model_providers:\n  kimi:" not in config
+    assert "model_providers:\n  qwen:" not in config
 
 
 def test_readme_wechat_publish_command_includes_required_flags() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from research_radar.compose.draft import build_daily_draft, build_weekly_draft
+from research_radar.compose.source_display import source_descriptor
 from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, Claim, SourceCandidate
 
@@ -74,7 +75,7 @@ def _source_lines(raw_sources: object, *, language: str) -> list[str]:
         for item in items:
             title = _escape_markdown_text(str(item.get("title", "Untitled source")))
             url = str(item.get("url", ""))
-            descriptor = _source_descriptor(item)
+            descriptor = source_descriptor(item, language=language)
             gist = str(item.get("gist") or "").strip()
             lines.append(f"- [{title}](<{url}>)")
             if descriptor:
@@ -273,23 +274,6 @@ def _section_kind(section: object) -> str:
     if title.startswith("evidence"):
         return "evidence_trail"
     return ""
-
-
-def _source_descriptor(item: dict[object, object]) -> str:
-    parts = []
-    role = item.get("role")
-    history_status = item.get("history_status")
-    published_at = item.get("published_at")
-    version = item.get("version")
-    if role:
-        parts.append(f"role={role}")
-    if history_status:
-        parts.append(f"status={history_status}")
-    if published_at:
-        parts.append(f"published={published_at}")
-    if version:
-        parts.append(f"version={version}")
-    return ", ".join(str(part) for part in parts)
 
 
 def _escape_markdown_text(value: str) -> str:

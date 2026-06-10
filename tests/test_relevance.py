@@ -513,3 +513,59 @@ def test_rag_concept_profile_keeps_system_evaluation_paper() -> None:
 
     assert scored.metadata["relevance"]["status"] == "relevant"
     assert scored.metadata["relevance"]["concept_gate"]["passed"] is True
+
+
+def test_llm_inference_concept_profile_accepts_serving_paper() -> None:
+    source = SourceCandidate(
+        title="Paged Scheduling for LLM Inference Serving",
+        url="https://arxiv.org/abs/2605.01023",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary=(
+            "This paper studies large language model inference with KV cache "
+            "management, prefill and decode scheduling, batching, throughput, "
+            "latency, TTFT, and TPOT benchmarks."
+        ),
+    )
+
+    scored = score_source(source, _smoke_topic("llm-inference"))
+
+    assert scored.metadata["relevance"]["status"] == "relevant"
+    concept_gate = scored.metadata["relevance"]["concept_gate"]
+    assert concept_gate["passed"] is True
+    assert "large language model inference" in concept_gate["matched_aliases"][
+        "agent_context"
+    ]
+    assert "KV cache" in concept_gate["matched_aliases"]["memory_mechanism"]
+
+
+def test_llm_inference_concept_profile_rejects_adjacent_noise() -> None:
+    sources = [
+        SourceCandidate(
+            title="RAG Benchmark for Enterprise Search",
+            url="https://arxiv.org/abs/2605.01024",
+            source_type=SourceType.PAPER,
+            source_name="arxiv",
+            summary="A RAG benchmark for retrieval augmented generation quality.",
+        ),
+        SourceCandidate(
+            title="Agent Memory Benchmark",
+            url="https://arxiv.org/abs/2605.01025",
+            source_type=SourceType.PAPER,
+            source_name="arxiv",
+            summary="An agent memory benchmark for persistent recall.",
+        ),
+        SourceCandidate(
+            title="Reasoning Benchmark for LLMs",
+            url="https://arxiv.org/abs/2605.01026",
+            source_type=SourceType.PAPER,
+            source_name="arxiv",
+            summary="A reasoning benchmark for mathematical problem solving.",
+        ),
+    ]
+
+    topic = _smoke_topic("llm-inference")
+
+    for source in sources:
+        scored = score_source(source, topic)
+        assert scored.metadata["relevance"]["status"] != "relevant"

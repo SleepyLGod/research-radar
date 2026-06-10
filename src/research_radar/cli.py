@@ -15,7 +15,12 @@ from urllib.parse import urlparse
 
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.providers import Message
-from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
+from research_radar.analysis.routing import (
+    TaskModelRoute,
+    TaskRoutePreview,
+    resolve_task_route,
+    resolve_task_route_preview,
+)
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.wechat import (
     render_wechat_html,
@@ -101,9 +106,20 @@ def build_parser() -> argparse.ArgumentParser:
         ],
     )
     secrets_set.set_defaults(handler=handle_secrets_set)
+    secrets_set_named = secrets_subparsers.add_parser(
+        "set-named",
+        help="Set one named secret such as kimi.api_key.",
+    )
+    secrets_set_named.add_argument("name", help="Secret storage name.")
+    secrets_set_named.set_defaults(handler=handle_secrets_set_named)
     secrets_status = secrets_subparsers.add_parser(
         "status",
         help="Show whether known secrets are present without printing values.",
+    )
+    secrets_status.add_argument(
+        "--name",
+        default=None,
+        help="Check one named secret instead of all known secrets.",
     )
     secrets_status.add_argument(
         "--secret-source",
@@ -121,13 +137,48 @@ def build_parser() -> argparse.ArgumentParser:
 
     provider_parser = subparsers.add_parser("provider", help="Model provider utilities.")
     provider_subparsers = provider_parser.add_subparsers(dest="provider_command", required=True)
+    provider_list = provider_subparsers.add_parser(
+        "list",
+        help="List configured provider instances without printing secrets.",
+    )
+    provider_list.add_argument("--config", type=Path, default=Path("config.yaml"))
+    provider_list.add_argument(
+        "--secret-source",
+        choices=["keychain", "env"],
+        default="keychain",
+        help="Check provider secrets in Keychain or the current process environment.",
+    )
+    provider_list.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Explicitly load local environment variables before checking env-backed secrets.",
+    )
+    provider_list.set_defaults(handler=handle_provider_list)
+    provider_routes = provider_subparsers.add_parser(
+        "routes",
+        help="Show resolved task routes without calling model providers.",
+    )
+    provider_routes.add_argument("--config", type=Path, default=Path("config.yaml"))
+    provider_routes.add_argument(
+        "--mode",
+        choices=["daily", "paper", "eval", "topic-bootstrap"],
+        default="daily",
+        help="Route set to inspect.",
+    )
+    _add_provider_route_override_arguments(provider_routes)
+    provider_routes.set_defaults(handler=handle_provider_routes)
     provider_probe = provider_subparsers.add_parser(
         "probe",
         help="Run a provider-only API probe without creating research artifacts.",
     )
-    provider_probe.add_argument("--provider", required=True)
-    provider_probe.add_argument("--model", default=None)
-    provider_probe.add_argument("--config", type=Path, default=Path("config.example.yaml"))
+    provider_probe.add_argument(
+        "--provider",
+        required=True,
+        help="Provider instance from config.yaml, such as deepseek or kimi.",
+    )
+    provider_probe.add_argument("--model", default=None, help="Model id to probe.")
+    provider_probe.add_argument("--config", type=Path, default=Path("config.yaml"))
     provider_probe.add_argument(
         "--probe",
         choices=["small", "json", "long"],
@@ -386,7 +437,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--topics",
         nargs="*",
         default=None,
-        help="Topic ids to run. Defaults to the built-in three-topic smoke suite.",
+        help="Topic ids to run. Defaults to the built-in topic smoke suite.",
     )
     eval_topics.add_argument("--config", type=Path, default=Path("config.yaml"))
     eval_topics.add_argument(
@@ -638,6 +689,50 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_provider_route_override_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add route override flags shared by provider route inspection."""
+
+    parser.add_argument("--provider", default=None, help="Compatibility default provider.")
+    parser.add_argument("--model", default=None, help="Compatibility default model.")
+    parser.add_argument(
+        "--deepseek-provider",
+        default=None,
+        help="Provider instance to use for tasks configured on DeepSeek.",
+    )
+    parser.add_argument("--gist-provider", default=None, help="Provider instance for source gists.")
+    parser.add_argument("--gist-model", default=None, help="Model for source gists.")
+    parser.add_argument("--reader-provider", default=None, help="Provider instance for reading.")
+    parser.add_argument("--reader-model", default=None, help="Model for reading.")
+    parser.add_argument(
+        "--verifier-provider",
+        default=None,
+        help="Provider instance for verification.",
+    )
+    parser.add_argument("--verifier-model", default=None, help="Model for verification.")
+    parser.add_argument(
+        "--anchor-repair-provider",
+        default=None,
+        help="Provider instance for quote-only anchor repair.",
+    )
+    parser.add_argument(
+        "--anchor-repair-model",
+        default=None,
+        help="Model for quote-only anchor repair.",
+    )
+    parser.add_argument(
+        "--localization-provider",
+        default=None,
+        help="Provider instance for report localization.",
+    )
+    parser.add_argument("--localization-model", default=None, help="Model for localization.")
+    parser.add_argument(
+        "--bootstrap-provider",
+        default=None,
+        help="Provider instance for topic bootstrap.",
+    )
+    parser.add_argument("--bootstrap-model", default=None, help="Model for topic bootstrap.")
+
+
 def handle_init(args: argparse.Namespace) -> None:
     """Create local configuration if it does not exist."""
 
@@ -678,13 +773,23 @@ def handle_secrets_set(args: argparse.Namespace) -> None:
     print(f"Stored {args.name} secrets in the configured secret backend.")
 
 
+def handle_secrets_set_named(args: argparse.Namespace) -> None:
+    """Set one named secret in Keychain."""
+
+    manager = SecretManager(KeychainSecretBackend())
+    manager.backend.set_secret(args.name, _prompt_secret(f"Secret value for {args.name}"))
+    print(f"Stored {args.name} in the configured secret backend.")
+
+
 def handle_secrets_status(args: argparse.Namespace) -> None:
     """Print present/missing status for known secrets without printing values."""
 
     if args.env_file is not None:
         _load_env_file(args.env_file)
     manager = _secret_manager(args.secret_source)
-    for name in _known_secret_names():
+    requested_name = getattr(args, "name", None)
+    names = [requested_name] if requested_name else _known_secret_names()
+    for name in names:
         try:
             manager.get_named_secret(name)
         except SecretError:
@@ -692,6 +797,48 @@ def handle_secrets_status(args: argparse.Namespace) -> None:
         else:
             status = "present"
         print(f"{name}: {status}")
+
+
+def handle_provider_list(args: argparse.Namespace) -> None:
+    """List configured providers without printing secret values."""
+
+    if args.env_file is not None:
+        _load_env_file(args.env_file)
+    config = _load_routing_config(args.config)
+    manager = _secret_manager(args.secret_source)
+    providers = []
+    for name in sorted(config.model_providers):
+        provider_config = config.model_providers[name]
+        providers.append(
+            {
+                "name": name,
+                "kind": provider_config.kind,
+                "host": _provider_host(provider_config.base_url),
+                "command": provider_config.command or "",
+                "timeout_seconds": provider_config.timeout_seconds,
+                "secret": _provider_secret_status(provider_config.api_key_secret, manager),
+            }
+        )
+    print(json.dumps({"providers": providers}, ensure_ascii=False, indent=2))
+
+
+def handle_provider_routes(args: argparse.Namespace) -> None:
+    """Print resolved task routes without calling providers."""
+
+    config = _load_routing_config(args.config)
+    routes = []
+    for task_name in _provider_route_tasks(args.mode):
+        preview = _resolve_route_preview_for_task(args, config, task_name)
+        provider_config = config.model_providers.get(preview.provider_name)
+        routes.append(
+            {
+                "task": task_name,
+                "provider": preview.provider_name,
+                "model": preview.model or "",
+                "kind": provider_config.kind if provider_config else "local",
+            }
+        )
+    print(json.dumps({"mode": args.mode, "routes": routes}, ensure_ascii=False, indent=2))
 
 
 def handle_provider_probe(args: argparse.Namespace) -> None:
@@ -1386,6 +1533,109 @@ def _provider_host(endpoint: str | None) -> str:
     if endpoint is None:
         return ""
     return urlparse(endpoint).netloc or endpoint
+
+
+def _provider_secret_status(
+    secret_name: str | None,
+    manager: SecretManager,
+) -> str:
+    if secret_name is None:
+        return "not_required"
+    try:
+        manager.get_named_secret(secret_name)
+    except SecretError:
+        return "missing"
+    return "present"
+
+
+def _provider_route_tasks(mode: str) -> list[str]:
+    if mode == "daily":
+        return [
+            "source_gist",
+            "deep_reading",
+            "anchor_repair",
+            "verifier",
+            "report_localization",
+        ]
+    if mode == "paper":
+        return ["deep_reading", "anchor_repair", "verifier", "report_localization"]
+    if mode == "eval":
+        return [
+            "source_gist",
+            "deep_reading",
+            "anchor_repair",
+            "verifier",
+            "report_localization",
+        ]
+    if mode == "topic-bootstrap":
+        return ["topic_bootstrap"]
+    raise ResearchRadarError(f"Unsupported provider route mode: {mode}")
+
+
+def _resolve_route_preview_for_task(
+    args: argparse.Namespace,
+    config: AppConfig,
+    task_name: str,
+) -> TaskRoutePreview:
+    if task_name == "verifier" and args.mode == "paper":
+        reader_preview = _resolve_route_preview_for_task(args, config, "deep_reading")
+        try:
+            return _resolve_route_preview(args, config, task_name, default_local=False)
+        except ConfigError:
+            if getattr(args, "verifier_provider", None) or getattr(args, "provider", None):
+                raise
+            return reader_preview
+    return _resolve_route_preview(
+        args,
+        config,
+        task_name,
+        default_local=args.mode != "paper" or task_name != "deep_reading",
+    )
+
+
+def _resolve_route_preview(
+    args: argparse.Namespace,
+    config: AppConfig,
+    task_name: str,
+    *,
+    default_local: bool,
+) -> TaskRoutePreview:
+    provider_attr, model_attr = _route_override_attrs(task_name)
+    global_provider = getattr(args, "provider", None)
+    if (
+        task_name == "topic_bootstrap"
+        and global_provider is None
+        and getattr(args, provider_attr, None) is None
+        and getattr(args, model_attr, None) is None
+        and getattr(args, "deepseek_provider", None) is None
+        and getattr(args, "model", None) is None
+    ):
+        global_provider = "local"
+    return resolve_task_route_preview(
+        config,
+        task_name,
+        provider_override=getattr(args, provider_attr, None),
+        model_override=getattr(args, model_attr, None),
+        global_provider=global_provider,
+        global_model=getattr(args, "model", None),
+        provider_replacements=_deepseek_provider_replacements(args),
+        default_local=default_local,
+    )
+
+
+def _route_override_attrs(task_name: str) -> tuple[str, str]:
+    attrs = {
+        "source_gist": ("gist_provider", "gist_model"),
+        "deep_reading": ("reader_provider", "reader_model"),
+        "anchor_repair": ("anchor_repair_provider", "anchor_repair_model"),
+        "verifier": ("verifier_provider", "verifier_model"),
+        "report_localization": ("localization_provider", "localization_model"),
+        "topic_bootstrap": ("bootstrap_provider", "bootstrap_model"),
+    }
+    try:
+        return attrs[task_name]
+    except KeyError as exc:
+        raise ResearchRadarError(f"Unsupported routed task: {task_name}") from exc
 
 
 def _probe_excerpt(value: str, *, limit: int = 500) -> str:

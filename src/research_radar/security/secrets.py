@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -104,10 +105,12 @@ class EnvSecretBackend:
         return value
 
     def _env_name(self, name: str) -> str:
-        try:
+        if name in self._names:
             return self._names[name]
-        except KeyError as exc:
-            raise SecretError(f"Unknown environment-backed secret: {name}") from exc
+        normalized = re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_").upper()
+        if not normalized:
+            raise SecretError("Secret name cannot be empty.")
+        return f"RESEARCH_RADAR_SECRET_{normalized}"
 
 
 @dataclass(frozen=True)

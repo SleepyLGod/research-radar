@@ -11,7 +11,12 @@ from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.compose.draft import build_daily_draft
 from research_radar.config import parse_config
-from research_radar.exceptions import ProviderTransportError, PublishError, SecretError
+from research_radar.exceptions import (
+    ProviderTransportError,
+    PublishError,
+    ResearchRadarError,
+    SecretError,
+)
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
 from research_radar.storage.files import read_json, write_json
 
@@ -77,6 +82,35 @@ def test_secrets_set_parser_accepts_xiaomi() -> None:
     assert args.name == "xiaomi"
 
 
+def test_secrets_set_named_parser_accepts_arbitrary_secret_name() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["secrets", "set-named", "kimi.api_key"])
+
+    assert args.name == "kimi.api_key"
+
+
+def test_secrets_set_named_stores_without_printing_value(monkeypatch, capsys) -> None:
+    stored: dict[str, str] = {}
+
+    class FakeBackend:
+        def set_secret(self, name: str, value: str) -> None:
+            stored[name] = value
+
+        def get_secret(self, name: str) -> str:
+            return stored[name]
+
+    monkeypatch.setattr(cli, "KeychainSecretBackend", lambda: FakeBackend())
+    monkeypatch.setattr(cli, "_prompt_secret", lambda label: "secret-value-that-must-not-print")
+
+    cli.handle_secrets_set_named(Namespace(name="kimi.api_key"))
+
+    output = capsys.readouterr().out
+    assert stored["kimi.api_key"] == "secret-value-that-must-not-print"
+    assert "kimi.api_key" in output
+    assert "secret-value-that-must-not-print" not in output
+
+
 def test_secrets_status_prints_presence_without_values(monkeypatch, capsys) -> None:
     class FakeManager:
         def get_named_secret(self, name: str) -> str:
@@ -94,6 +128,25 @@ def test_secrets_status_prints_presence_without_values(monkeypatch, capsys) -> N
     assert "secret-value-that-must-not-print" not in output
 
 
+def test_secrets_status_can_check_one_named_secret(monkeypatch, capsys) -> None:
+    class FakeManager:
+        def get_named_secret(self, name: str) -> str:
+            if name == "kimi.api_key":
+                return "secret-value-that-must-not-print"
+            raise SecretError(f"Secret not found: {name}")
+
+    monkeypatch.setattr(cli, "_secret_manager", lambda source: FakeManager())
+
+    cli.handle_secrets_status(
+        Namespace(secret_source="keychain", env_file=None, name="kimi.api_key")
+    )
+
+    output = capsys.readouterr().out
+    assert "kimi.api_key: present" in output
+    assert "deepseek.api_key" not in output
+    assert "secret-value-that-must-not-print" not in output
+
+
 def test_provider_probe_parser_defaults_to_small_probe() -> None:
     parser = cli.build_parser()
 
@@ -101,7 +154,208 @@ def test_provider_probe_parser_defaults_to_small_probe() -> None:
 
     assert args.provider == "xiaomi"
     assert args.probe == "small"
-    assert args.config == Path("config.example.yaml")
+    assert args.config == Path("config.yaml")
+
+
+def test_provider_routes_parser_defaults_to_daily_mode() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["provider", "routes"])
+
+    assert args.mode == "daily"
+    assert args.config == Path("config.yaml")
+
+
+def test_provider_list_outputs_configured_providers_without_secret_values(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "kimi": {
+                    "kind": "openai_compatible",
+                    "base_url": "https://api.example.test/v1/chat/completions",
+                    "api_key_secret": "kimi.api_key",
+                    "timeout_seconds": 333,
+                }
+            },
+        }
+    )
+
+    class FakeManager:
+        def get_named_secret(self, name: str) -> str:
+            if name == "kimi.api_key":
+                return "secret-value-that-must-not-print"
+            raise SecretError(f"Secret not found: {name}")
+
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+    monkeypatch.setattr(cli, "_secret_manager", lambda source: FakeManager())
+
+    cli.handle_provider_list(
+        Namespace(config=tmp_path / "config.yaml", secret_source="keychain", env_file=None)
+    )
+
+    output_text = capsys.readouterr().out
+    output = json.loads(output_text)
+    kimi = next(item for item in output["providers"] if item["name"] == "kimi")
+    codex = next(item for item in output["providers"] if item["name"] == "codex")
+    assert kimi["kind"] == "openai_compatible"
+    assert kimi["host"] == "api.example.test"
+    assert kimi["timeout_seconds"] == 333
+    assert kimi["secret"] == "present"
+    assert codex["secret"] == "not_required"
+    assert "secret-value-that-must-not-print" not in output_text
+
+
+def test_provider_routes_show_daily_defaults_and_deepseek_replacement(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "codex": {"kind": "codex_cli", "command": "/missing/research-radar-codex"}
+            },
+            "models": {
+                "task_routes": {
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "deep_reading": {"provider": "deepseek", "model": "deepseek-v4-pro"},
+                    "anchor_repair": {"provider": "deepseek", "model": "deepseek-v4-pro"},
+                    "report_localization": {
+                        "provider": "deepseek",
+                        "model": "deepseek-v4-flash",
+                    },
+                    "verifier": {"provider": "codex", "model": "gpt-5.5"},
+                }
+            },
+        }
+    )
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+
+    cli.handle_provider_routes(
+        Namespace(
+            config=tmp_path / "config.yaml",
+            mode="daily",
+            provider=None,
+            model=None,
+            deepseek_provider="xiaomi",
+            gist_provider=None,
+            gist_model=None,
+            reader_provider=None,
+            reader_model=None,
+            verifier_provider=None,
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            localization_provider=None,
+            localization_model=None,
+            bootstrap_provider=None,
+            bootstrap_model=None,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    routes = {item["task"]: item for item in output["routes"]}
+    assert routes["source_gist"]["provider"] == "xiaomi"
+    assert routes["source_gist"]["model"] == "mimo-v2.5-pro"
+    assert routes["deep_reading"]["provider"] == "xiaomi"
+    assert routes["deep_reading"]["model"] == "mimo-v2.5-pro"
+    assert routes["verifier"]["provider"] == "codex"
+    assert routes["verifier"]["model"] == "gpt-5.5"
+
+
+def test_provider_routes_show_task_specific_override_precedence(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "models": {
+                "task_routes": {
+                    "deep_reading": {"provider": "deepseek", "model": "deepseek-v4-pro"},
+                    "verifier": {"provider": "codex", "model": "gpt-5.5"},
+                }
+            },
+        }
+    )
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+
+    cli.handle_provider_routes(
+        Namespace(
+            config=tmp_path / "config.yaml",
+            mode="paper",
+            provider=None,
+            model=None,
+            deepseek_provider="xiaomi",
+            gist_provider=None,
+            gist_model=None,
+            reader_provider="deepseek",
+            reader_model=None,
+            verifier_provider="xiaomi",
+            verifier_model=None,
+            anchor_repair_provider=None,
+            anchor_repair_model=None,
+            localization_provider=None,
+            localization_model=None,
+            bootstrap_provider=None,
+            bootstrap_model=None,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    routes = {item["task"]: item for item in output["routes"]}
+    assert routes["deep_reading"]["provider"] == "deepseek"
+    assert routes["deep_reading"]["model"] == "deepseek-v4-pro"
+    assert routes["verifier"]["provider"] == "xiaomi"
+    assert routes["verifier"]["model"] == "mimo-v2.5-pro"
+
+
+def test_provider_routes_unknown_provider_fails_clearly(monkeypatch, tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "models": {
+                "task_routes": {
+                    "deep_reading": {"provider": "deepseek", "model": "deepseek-v4-pro"},
+                }
+            },
+        }
+    )
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+
+    with pytest.raises(ResearchRadarError, match="Unknown model provider: missing"):
+        cli.handle_provider_routes(
+            Namespace(
+                config=tmp_path / "config.yaml",
+                mode="paper",
+                provider=None,
+                model=None,
+                deepseek_provider=None,
+                gist_provider=None,
+                gist_model=None,
+                reader_provider="missing",
+                reader_model=None,
+                verifier_provider=None,
+                verifier_model=None,
+                anchor_repair_provider=None,
+                anchor_repair_model=None,
+                localization_provider=None,
+                localization_model=None,
+                bootstrap_provider=None,
+                bootstrap_model=None,
+            )
+        )
 
 
 def test_schedule_daily_draft_parser_defaults_to_codex_verifier() -> None:
@@ -403,6 +657,65 @@ def test_provider_probe_outputs_success_diagnostics(
     assert "provider probe ok" in output["response_excerpt"]
     assert captured["model"] == "mimo-v2.5-pro"
     assert "Reply with exactly" in str(captured["prompt"])
+
+
+def test_provider_probe_accepts_custom_named_provider(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "kimi": {
+                    "kind": "openai_compatible",
+                    "base_url": "https://api.example.test/v1/chat/completions",
+                    "api_key_secret": "kimi.api_key",
+                    "timeout_seconds": 222,
+                }
+            },
+        }
+    )
+
+    class FakeProvider:
+        name = "kimi"
+
+        def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
+            return ModelResponse(
+                content="ResearchRadar provider probe ok.",
+                model=model,
+                metadata={"provider": self.name},
+            )
+
+    monkeypatch.setattr(cli, "_load_routing_config", lambda path: config)
+    monkeypatch.setattr(
+        cli,
+        "resolve_task_route",
+        lambda *args, **kwargs: cli.TaskModelRoute(
+            provider=FakeProvider(),
+            model="moonshot-model",
+            provider_name="kimi",
+        ),
+    )
+
+    cli.handle_provider_probe(
+        Namespace(
+            provider="kimi",
+            model="moonshot-model",
+            config=tmp_path / "config.yaml",
+            probe="small",
+            secret_source="env",
+            env_file=None,
+        )
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "succeeded"
+    assert output["provider"] == "kimi"
+    assert output["model"] == "moonshot-model"
+    assert output["timeout_seconds"] == 222
 
 
 def test_provider_probe_validates_json_response(

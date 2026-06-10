@@ -2,19 +2,22 @@
 
 ![ResearchRadar](docs/assets/research-radar-plus.png)
 
-ResearchRadar 是一个本地优先的研究情报系统：每天发现新的论文和技术来源，精读关键论文，
-核验证据，再生成可在微信公众号草稿箱审阅的长文日报。
+ResearchRadar 会把一个已经审核过的研究 topic 变成每天一篇可审阅的微信公众号草稿：发现新论文，
+精读最核心的论文，用原文证据核验 claim，然后把最终长文放进公众号草稿箱。
 
 `本地优先` · `证据门控` · `论文精读` · `微信公众号草稿` · `定时任务` · `Tavily 搜索` ·
 `DeepSeek` · `Codex verifier`
 
-[English README](README.md) · [详细使用说明](docs/usage.md) · [架构](docs/architecture.md) ·
-[安全说明](docs/security.md)
+[English README](README.md) · [详细使用说明](docs/usage.md) ·
+[Provider 配置](docs/providers.md) · [架构](docs/architecture.md) · [安全说明](docs/security.md)
 
 ## 它解决什么问题
 
 ResearchRadar 的目标不是简单摘要网页，而是把“发现新研究 -> 精读论文 -> 检查事实 -> 生成可读文章”
 串成一条可审计的工作流。它会保留完整运行产物，但公众号正文只使用已经通过证据核验的内容。
+
+多数 research bot 会总结它搜到的内容；ResearchRadar 更保守：web search 负责补召回，但公开正文里的
+事实必须来自已经 ingest 的论文或可信 source artifact，并且要有完整 evidence anchor。
 
 默认日报链路是：
 
@@ -24,6 +27,15 @@ ResearchRadar 的目标不是简单摘要网页，而是把“发现新研究 ->
 4. 渲染成可读的中文长文；
 5. 创建微信公众号草稿，只进草稿箱，不自动发布。
 
+## 每次运行会得到什么
+
+一次成功的日报会生成：
+
+- 一篇可以直接在微信公众号后台审阅的长文草稿；
+- 一个带安全论文图的本地 HTML 预览；
+- 一组带原文证据锚点的 verified claims；
+- 一套记录 rejected / weak / unsupported claim 的审计 artifacts。
+
 ## 快速开始
 
 安装依赖并初始化本地配置：
@@ -32,6 +44,9 @@ ResearchRadar 的目标不是简单摘要网页，而是把“发现新研究 ->
 uv sync --extra dev
 uv run research-radar init
 ```
+
+`config.example.yaml` 是公开模板。正式 topic 和日常偏好放在本地 `config.yaml`；
+`config.yaml` 已被 gitignore 覆盖，不应提交。
 
 把本地密钥存进 Keychain，并检查状态：
 
@@ -46,8 +61,8 @@ uv run research-radar secrets status
 
 ```bash
 uv run research-radar run daily \
-  --topic agent-memory \
-  --config config.example.yaml \
+  --topic <topic-id> \
+  --config config.yaml \
   --root research-radar-data \
   --language zh \
   --model-cache
@@ -67,9 +82,9 @@ uv run research-radar publish wechat-draft \
 
 ```bash
 uv run research-radar schedule daily-draft \
-  --topic agent-memory \
+  --topic <topic-id> \
   --time 09:00 \
-  --config config.example.yaml \
+  --config config.yaml \
   --root research-radar-data \
   --thumb-media-id "<wechat-thumb-media-id>" \
   --language zh \
@@ -87,6 +102,7 @@ Xiaomi `mimo-v2.5-pro` 已作为可选 OpenAI-compatible provider 接入，可�
 ## 更多文档
 
 - [详细使用说明](docs/usage.md)：安装、密钥、日报、单篇论文、微信草稿、scheduler、隐私检查。
+- [Provider 配置](docs/providers.md)：如何接入 Kimi、Qwen、Minimax、本地 OpenAI-compatible 服务或 CLI agent。
 - [架构](docs/architecture.md)：从 source discovery 到 article draft 的数据流。
 - [安全说明](docs/security.md)：本地 secret、隐私扫描和发布边界。
 - [路线图](docs/todo.md)：产品和工程 TODO。

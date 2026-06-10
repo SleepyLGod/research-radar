@@ -17,9 +17,11 @@ from research_radar.discovery.source_selection import (
 from research_radar.exceptions import ResearchRadarError
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.progress import ProgressWriter
+from research_radar.security.redaction import redact_text
 from research_radar.storage.files import ensure_dir, read_json, read_jsonl, write_json, write_text
 
 QUALITY_ROLES = {"primary_paper", "benchmark_paper", "implementation_repo"}
+MAX_FAILURE_REASON_CHARS = 500
 
 
 @dataclass(frozen=True)
@@ -219,6 +221,61 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
                 "optical retail",
                 "project assessment",
                 "generic project assessment",
+            ),
+        },
+    ),
+    TopicSmokeSpec(
+        id="llm-inference",
+        queries=("LLM inference systems", "LLM serving optimization"),
+        topic_signals=(
+            "llm inference",
+            "llm serving",
+            "prefill",
+            "decode",
+            "kv cache",
+            "batching",
+            "speculative decoding",
+            "throughput",
+            "latency",
+        ),
+        paper_queries=(
+            "LLM inference serving benchmark",
+            "KV cache prefill decoding LLM serving",
+            "speculative decoding LLM inference",
+        ),
+        concept_groups={
+            "agent_context": (
+                "large language model inference",
+                "LLM inference",
+                "LLM serving",
+                "inference engine",
+                "serving system",
+            ),
+            "memory_mechanism": (
+                "KV cache",
+                "prefill",
+                "decode",
+                "batching",
+                "scheduling",
+                "speculative decoding",
+                "paged attention",
+            ),
+            "evaluation_signal": (
+                "throughput",
+                "latency",
+                "TTFT",
+                "TPOT",
+                "tokens per second",
+                "benchmark",
+                "serving benchmark",
+            ),
+            "negative_compute_or_training": (
+                "fine-tuning",
+                "post-training",
+                "reasoning benchmark",
+                "RAG",
+                "agent memory",
+                "prompt engineering",
             ),
         },
     ),
@@ -457,11 +514,12 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
 
 
 def _failed_topic_result(topic_id: str, reason: str) -> TopicSmokeResult:
+    safe_reason = _safe_failure_reason(reason)
     return TopicSmokeResult(
         topic_id=topic_id,
         run_dir=None,
         passed=False,
-        failures=[f"topic run failed: {reason}"],
+        failures=[f"topic run failed: {safe_reason}"],
         selected_source=None,
         best_skipped_paper=None,
         paper_candidate_count=0,
@@ -474,6 +532,19 @@ def _failed_topic_result(topic_id: str, reason: str) -> TopicSmokeResult:
         semantic_scholar_warning_count=0,
         obvious_noise=True,
     )
+
+
+def _safe_failure_reason(reason: str) -> str:
+    redacted = redact_text(reason).strip()
+    if "You've hit your usage limit" in redacted:
+        return "codex command failed: You've hit your usage limit."
+    for marker in ("\nSYSTEM:\n", "\nUSER:\n", "\nuser\nSYSTEM:"):
+        if marker in redacted:
+            redacted = redacted.split(marker, 1)[0].rstrip() + "\n...[omitted model prompt]"
+            break
+    if len(redacted) <= MAX_FAILURE_REASON_CHARS:
+        return redacted
+    return f"{redacted[:MAX_FAILURE_REASON_CHARS].rstrip()}...[truncated]"
 
 
 def _report_to_dict(report: TopicSmokeReport) -> dict[str, Any]:

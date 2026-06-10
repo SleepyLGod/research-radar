@@ -162,7 +162,9 @@ def test_daily_markdown_renders_source_links_with_colon_titles() -> None:
         "- [Storage Is Not Memory: A Retrieval-Centered Architecture]"
         "(<https://arxiv.org/abs/2605.04897>)"
     ) in markdown
-    assert "role=primary_paper, status=new, published=2026-05-01, version=v1" in markdown
+    assert "Research paper · new source · 2026-05-01 · v1" in markdown
+    assert "role=primary_paper" not in markdown
+    assert "status=new" not in markdown
     assert "raw abstract dump" in markdown
 
 
@@ -258,6 +260,34 @@ def test_wechat_html_groups_daily_sources() -> None:
     assert "<h3>Implementation / Repos</h3>" in html
     assert html.index("<h3>Research Papers</h3>") < html.index("Memory Paper")
     assert html.index("<h3>Implementation / Repos</h3>") < html.index("Memory Repo")
+    assert "role=" not in html
+    assert "status=" not in html
+
+
+def test_wechat_preview_deep_read_source_metadata_is_human_readable() -> None:
+    source = replace(
+        _paper_source(),
+        metadata={
+            "source_role": {"role": "primary_paper"},
+            "source_history": {"status": "new"},
+            "source_gist": {"text": "This paper proposes a memory system for agents."},
+        },
+    )
+    claim = _supported_paper_claim(source)
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        language="zh",
+    )
+
+    html = render_wechat_html(draft)
+
+    assert "研究论文 · 新来源" in html
+    assert "role=" not in html
+    assert "status=" not in html
 
 
 def test_unknown_source_group_falls_back_to_other() -> None:

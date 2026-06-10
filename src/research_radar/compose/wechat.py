@@ -11,6 +11,7 @@ from research_radar.analysis.figure_text import (
     FIGURE_EXPLANATION_SOURCE_CONTEXT,
 )
 from research_radar.compose.draft import build_weekly_draft
+from research_radar.compose.source_display import source_descriptor
 from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, ArticleSection, Claim
 
@@ -962,7 +963,7 @@ def _deep_reads(
             f"""<article class="rr-deep">
 <p class="rr-kicker">{labels["deep_read_label"]}</p>
 <h3>{source_link}</h3>
-{_paper_descriptor(source)}
+{_paper_descriptor(source, language=language)}
 {_explanatory_diagram(raw_entry, labels)}
 {''.join(section for section in sections if section)}
 </article>"""
@@ -980,10 +981,10 @@ def _source_title_link(source: object, *, fallback: str) -> str:
     return f'<a href="{url}">{title}</a>'
 
 
-def _paper_descriptor(source: object) -> str:
+def _paper_descriptor(source: object, *, language: str) -> str:
     if not isinstance(source, dict):
         return ""
-    descriptor = escape(_source_descriptor(source))
+    descriptor = escape(source_descriptor(source, language=language))
     gist = escape(str(source.get("gist") or ""))
     lines = []
     if descriptor:
@@ -1543,7 +1544,7 @@ def _source_list(raw_sources: object, *, language: str) -> str:
             title = escape(str(item.get("title", "Untitled source")))
             url = escape(str(item.get("url", "")))
             gist = _format_display_text(str(item.get("gist", "")))
-            descriptor = escape(_source_descriptor(item))
+            descriptor = escape(source_descriptor(item, language=language))
             gist_label = "摘要" if language == "zh" else "Gist"
             blocks.append(
                 f"""<section class="rr-card">
@@ -1565,20 +1566,6 @@ def _section_kind(section: object) -> str:
     if title.startswith("evidence"):
         return "evidence_trail"
     return ""
-
-
-def _source_descriptor(item: dict[object, object]) -> str:
-    parts = []
-    for key, label in [
-        ("role", "role"),
-        ("history_status", "status"),
-        ("published_at", "published"),
-        ("version", "version"),
-    ]:
-        value = item.get(key)
-        if value:
-            parts.append(f"{label}={value}")
-    return ", ".join(str(part) for part in parts)
 
 
 def _evidence_block(claim: Claim, *, language: str) -> str:

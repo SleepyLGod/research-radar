@@ -99,6 +99,28 @@ def test_xiaomi_uses_openai_compatible_provider() -> None:
     assert provider.name == "xiaomi"
 
 
+def test_custom_named_openai_compatible_provider_builds_without_vendor_code() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "kimi": {
+                    "kind": "openai_compatible",
+                    "base_url": "https://api.example.test/v1/chat/completions",
+                    "api_key_secret": "kimi.api_key",
+                }
+            },
+        }
+    )
+    manager = SecretManager(InMemorySecretBackend())
+
+    provider = build_provider(config, manager, "kimi")
+
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.name == "kimi"
+
+
 def test_xiaomi_default_timeout_is_longer_than_deepseek() -> None:
     config = parse_config(
         {

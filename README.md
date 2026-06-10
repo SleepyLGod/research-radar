@@ -2,20 +2,26 @@
 
 ![ResearchRadar](docs/assets/research-radar-plus.png)
 
-ResearchRadar is a local-first research intelligence system for turning new papers and technical
-sources into evidence-gated daily research briefs.
+ResearchRadar turns a reviewed research topic into a daily, evidence-checked WeChat draft: it
+finds new papers, deep-reads the central ones, verifies claims against source anchors, and leaves
+the final article in your draft box.
 
 `Local-first` · `Evidence-gated` · `Paper deep reading` · `WeChat draft` · `Scheduler` ·
 `Tavily search` · `DeepSeek` · `Codex verifier`
 
-[简体中文](README.zh-CN.md) · [Detailed usage](docs/usage.md) · [Architecture](docs/architecture.md)
-· [Security](docs/security.md)
+[简体中文](README.zh-CN.md) · [Detailed usage](docs/usage.md) ·
+[Provider configuration](docs/providers.md) · [Architecture](docs/architecture.md) ·
+[Security](docs/security.md)
 
 ## What It Does
 
 ResearchRadar monitors papers, repositories, blogs, and web search results for a reviewed topic.
 It selects central research sources, performs full-paper deep reading, verifies publishable claims
 against source anchors, and creates a WeChat draft for human review.
+
+Most research bots summarize whatever they find. ResearchRadar is stricter: web search improves
+recall, but public claims must come from ingested papers or trusted source artifacts with complete
+evidence anchors.
 
 The default daily path is:
 
@@ -24,6 +30,15 @@ The default daily path is:
 3. verify claims with Codex `gpt-5.5`;
 4. render a readable long-form article;
 5. create a WeChat draft, never an automatic publish.
+
+## Output
+
+Each successful daily run creates:
+
+- a WeChat draft-ready long-form article for review in the Official Account editor;
+- a local HTML preview with safe paper figures when available;
+- verified claims with exact source anchors;
+- audit artifacts for rejected, weak, or unsupported claims.
 
 ## Quick Start
 
@@ -93,6 +108,8 @@ same: discover broadly, read deeply, verify conservatively, and keep every run a
 
 - [Detailed usage](docs/usage.md) covers setup, providers, single-paper runs, WeChat drafts,
   scheduler installation, and privacy checks.
+- [Provider configuration](docs/providers.md) shows how to add OpenAI-compatible APIs, local
+  servers, or CLI agent providers without changing public examples.
 - [Architecture](docs/architecture.md) describes the source-to-draft pipeline.
 - [Security](docs/security.md) documents secret handling and privacy boundaries.
 - [Roadmap](docs/todo.md) tracks product and engineering priorities.
