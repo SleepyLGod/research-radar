@@ -1,8 +1,15 @@
 from pathlib import Path
 
 from research_radar.analysis import figures as figures_module
-from research_radar.analysis.figures import extract_latex_figures
-from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
+from research_radar.analysis.figures import extract_latex_figures, extract_pdf_cropped_figures
+from research_radar.models import (
+    Artifact,
+    Claim,
+    ClaimStatus,
+    EvidenceAnchor,
+    SourceCandidate,
+    SourceType,
+)
 
 
 def test_extract_latex_figures_parses_caption_label_and_claim_link(tmp_path: Path) -> None:
@@ -210,6 +217,238 @@ def test_extract_latex_figures_does_not_match_claim_from_other_paper(
     assert figures == []
 
 
+def test_extract_pdf_page_figures_renders_matched_openreview_figure(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    image_dir = tmp_path / "figures" / "images"
+    source = SourceCandidate(
+        title="MARS Paper",
+        url="https://openreview.net/forum?id=uNqTxj5brQ",
+        canonical_id="OpenReview:uNqTxj5brQ",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+    artifact = Artifact(
+        source=source,
+        text=(
+            "[page 3]\n"
+            "Figure 2: MARS architecture. MARS predicts API duration and schedules "
+            "requests with memory-aware handling.\n"
+        ),
+        artifact_path=str(pdf_path),
+        content_type="application/pdf",
+    )
+    claim = Claim(
+        text="Solution: MARS predicts API duration for memory-aware scheduling.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url="https://openreview.net/forum?id=uNqTxj5brQ",
+                quote="MARS predicts API duration",
+            )
+        ],
+    )
+
+    def fake_which(name: str) -> str | None:
+        if name in {"pdftoppm", "pdftotext"}:
+            return f"/usr/bin/{name}"
+        return None
+
+    monkeypatch.setattr(figures_module.shutil, "which", fake_which)
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> object:
+        calls.append(args)
+        if args[0].endswith("pdftotext"):
+            return figures_module.subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=_pdf_bbox_xml(
+                    words=[
+                        ("MARS", 45, 60, 82, 74),
+                        ("uses", 86, 60, 115, 74),
+                        ("scheduling", 120, 60, 188, 74),
+                        ("Figure", 45, 410, 91, 425),
+                        ("2:", 96, 410, 112, 425),
+                        ("MARS", 116, 410, 153, 425),
+                        ("architecture.", 158, 410, 240, 425),
+                    ]
+                ),
+            )
+        Path(args[-1]).with_suffix(".png").write_bytes(b"fake-crop")
+        return figures_module.subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(figures_module.subprocess, "run", fake_run)
+
+    selected = extract_pdf_cropped_figures(artifact, image_dir, [claim])
+
+    assert len(selected) == 1
+    assert selected[0].title == "Figure 2"
+    assert selected[0].original_path == "page 3, Figure 2 crop"
+    assert selected[0].relative_path.startswith("figures/")
+    assert "figure-2-page-3" in selected[0].asset_path
+    assert Path(selected[0].asset_path).exists()
+    render_call = next(call for call in calls if call[0].endswith("pdftoppm"))
+    assert "-x" in render_call
+    assert "-y" in render_call
+    assert "-W" in render_call
+    assert "-H" in render_call
+
+
+def test_extract_pdf_page_figures_does_not_match_other_openreview_paper(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    source = SourceCandidate(
+        title="MARS Paper",
+        url="https://openreview.net/forum?id=uNqTxj5brQ",
+        canonical_id="OpenReview:uNqTxj5brQ",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+    artifact = Artifact(
+        source=source,
+        text=(
+            "[page 3]\n"
+            "Figure 2: MARS architecture. MARS predicts API duration and schedules "
+            "requests with memory-aware handling.\n"
+        ),
+        artifact_path=str(pdf_path),
+        content_type="application/pdf",
+    )
+    claim = Claim(
+        text="Solution: MARS predicts API duration for memory-aware scheduling.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url="https://openreview.net/forum?id=different",
+                quote="MARS predicts API duration",
+            )
+        ],
+    )
+
+    monkeypatch.setattr(figures_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    selected = extract_pdf_cropped_figures(artifact, tmp_path / "figures", [claim])
+
+    assert selected == []
+
+
+def test_extract_pdf_page_figures_skips_when_caption_bbox_is_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    source = SourceCandidate(
+        title="MARS Paper",
+        url="https://openreview.net/forum?id=uNqTxj5brQ",
+        canonical_id="OpenReview:uNqTxj5brQ",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+    artifact = Artifact(
+        source=source,
+        text="[page 3]\nFigure 2: MARS architecture for memory-aware scheduling.\n",
+        artifact_path=str(pdf_path),
+        content_type="application/pdf",
+    )
+    claim = Claim(
+        text="Solution: MARS uses memory-aware scheduling.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url="https://openreview.net/forum?id=uNqTxj5brQ",
+                quote="memory-aware scheduling",
+            )
+        ],
+    )
+
+    monkeypatch.setattr(figures_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    def fake_run(args: list[str], **kwargs: object) -> object:
+        return figures_module.subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout=_pdf_bbox_xml(words=[("Not", 45, 60, 72, 74), ("caption", 80, 60, 132, 74)]),
+        )
+
+    monkeypatch.setattr(figures_module.subprocess, "run", fake_run)
+
+    selected = extract_pdf_cropped_figures(artifact, tmp_path / "figures", [claim])
+
+    assert selected == []
+
+
+def test_extract_pdf_page_figures_skips_when_crop_is_too_small(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    source = SourceCandidate(
+        title="MARS Paper",
+        url="https://openreview.net/forum?id=uNqTxj5brQ",
+        canonical_id="OpenReview:uNqTxj5brQ",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+    artifact = Artifact(
+        source=source,
+        text="[page 3]\nFigure 2: MARS architecture for memory-aware scheduling.\n",
+        artifact_path=str(pdf_path),
+        content_type="application/pdf",
+    )
+    claim = Claim(
+        text="Solution: MARS uses memory-aware scheduling.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url="https://openreview.net/forum?id=uNqTxj5brQ",
+                quote="memory-aware scheduling",
+            )
+        ],
+    )
+
+    monkeypatch.setattr(figures_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    def fake_run(args: list[str], **kwargs: object) -> object:
+        return figures_module.subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout=_pdf_bbox_xml(
+                words=[
+                    ("MARS", 45, 100, 82, 114),
+                    ("Figure", 45, 150, 91, 165),
+                    ("2:", 96, 150, 112, 165),
+                    ("MARS", 116, 150, 153, 165),
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(figures_module.subprocess, "run", fake_run)
+
+    selected = extract_pdf_cropped_figures(artifact, tmp_path / "figures", [claim])
+
+    assert selected == []
+
+
+def test_parse_pdf_bbox_output_ignores_poppler_abort_preamble() -> None:
+    page = figures_module._parse_pdf_bbox_output(
+        "libc++abi: terminating due to uncaught exception\n"
+        + _pdf_bbox_xml(words=[("Figure", 45, 410, 91, 425), ("2:", 96, 410, 112, 425)])
+    )
+
+    assert page is not None
+    assert page.width == 1000
+    assert page.words[0].text == "Figure"
+
+
 def test_extract_latex_figures_rasterizes_svg_before_rendering(
     monkeypatch,
     tmp_path: Path,
@@ -349,3 +588,29 @@ def test_extract_latex_figures_cleans_latex_caption_noise(tmp_path: Path) -> Non
     assert "2 × faster lookup" in caption
     assert "$" not in caption
     assert "comment" not in caption
+
+
+def _pdf_bbox_xml(
+    *,
+    words: list[tuple[str, int, int, int, int]],
+    width: int = 1000,
+    height: int = 1200,
+) -> str:
+    word_xml = "\n".join(
+        (
+            f'<word xMin="{x_min}" yMin="{y_min}" xMax="{x_max}" yMax="{y_max}">'
+            f"{text}</word>"
+        )
+        for text, x_min, y_min, x_max, y_max in words
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <doc>
+      <page width="{width}" height="{height}">
+        {word_xml}
+      </page>
+    </doc>
+  </body>
+</html>
+"""

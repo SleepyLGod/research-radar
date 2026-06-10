@@ -560,6 +560,8 @@ def _publish_figure_gallery(
     for item in value[:3]:
         if not isinstance(item, dict):
             continue
+        if _is_pdf_page_fallback_figure(item):
+            continue
         raw_src = str(item.get("relative_path") or item.get("asset_path") or "")
         uploaded_src = media_url_map.get(raw_src) if media_url_map else None
         media = ""
@@ -723,26 +725,18 @@ def _publish_reference_source_list(raw_sources: object, *, language: str) -> str
 def _publish_reference_figure_list(raw_figures: object, *, language: str) -> str:
     if not isinstance(raw_figures, list) or not raw_figures:
         return ""
-    title = "图片来源与复用说明" if language == "zh" else "Figure source and reuse notes"
+    title = "论文图来源" if language == "zh" else "Figure sources"
     rows = []
     for figure in raw_figures[:6]:
         if not isinstance(figure, dict):
             continue
+        if _is_pdf_page_fallback_figure(figure):
+            continue
         figure_title = _shorten(str(
             figure.get("localized_caption") or figure.get("caption") or "Paper figure"
         ), limit=160)
-        license_value = str(figure.get("license") or "unknown")
-        reuse_status = str(figure.get("reuse_status") or "needs_manual_review")
         attribution = str(figure.get("attribution") or "")
-        if language == "zh":
-            rows.append(
-                f"{figure_title}: 许可 {license_value}；复用状态 {reuse_status}；{attribution}"
-            )
-        else:
-            rows.append(
-                f"{figure_title}: license {license_value}; reuse status {reuse_status}; "
-                f"{attribution}"
-            )
+        rows.append(f"{figure_title}: {attribution}" if attribution else figure_title)
     return _publish_simple_list(title, rows)
 
 
@@ -1125,6 +1119,8 @@ def _figure_gallery(
     for item in value[:3]:
         if not isinstance(item, dict):
             continue
+        if _is_pdf_page_fallback_figure(item):
+            continue
         original_caption = str(item.get("caption") or "")
         localized_caption = str(item.get("localized_caption") or "")
         caption = _format_display_text(localized_caption or original_caption)
@@ -1168,6 +1164,16 @@ def _figure_gallery(
     if not blocks:
         return ""
     return f'<h4>{escape(labels["figures"])}</h4>{"".join(blocks)}'
+
+
+def _is_pdf_page_fallback_figure(item: Mapping[str, object]) -> bool:
+    """Return true for legacy PDF page screenshots masquerading as figures."""
+
+    original_path = str(item.get("original_path") or "").strip()
+    if re.fullmatch(r"page\s+\d+", original_path, flags=re.IGNORECASE):
+        return True
+    source_path = str(item.get("relative_path") or item.get("asset_path") or "")
+    return bool(re.search(r"(?:^|/)\d{2}-page-\d+\.png$", source_path))
 
 
 def _original_caption_block(

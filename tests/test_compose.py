@@ -707,12 +707,46 @@ def test_wechat_publish_renderer_uses_conservative_html_with_uploaded_images() -
     assert "Architecture overview for the memory retrieval pipeline." in html
     assert "Supported paper claim" in html
     assert "Source: https://arxiv.org/abs/2605.00001" in html
+    assert "reuse_status" not in html
+    assert "reuse status" not in html
     assert "ResearchRadar" not in html
     assert "role=" not in html
     assert "status=" not in html
     assert "score=" not in html
     assert "<strong>fig:architecture</strong>" not in html
     assert "This figure is included because" not in html
+
+
+def test_wechat_publish_renderer_does_not_emit_legacy_pdf_page_fallback() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    figure = _paper_figure(
+        source,
+        claim.text,
+        path="figures/OpenReview-uNqTxj5brQ/01-page-3.png",
+    )
+    figure["original_path"] = "page 3"
+    draft = build_daily_draft(
+        "llm-inference",
+        [source],
+        [claim],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+        figures_by_source_url={source.url: [figure]},
+    )
+
+    html = render_wechat_publish_html(
+        draft,
+        media_url_map={
+            "figures/OpenReview-uNqTxj5brQ/01-page-3.png": (
+                "https://mmbiz.qpic.cn/fixture/page-3.png"
+            )
+        },
+    )
+
+    assert "https://mmbiz.qpic.cn/fixture/page-3.png" not in html
+    assert "Architecture overview for the memory retrieval pipeline." not in html
+    assert wechat_publish_html_issues(html) == []
 
 
 def test_wechat_publish_renderer_keeps_preview_renderer_unchanged() -> None:

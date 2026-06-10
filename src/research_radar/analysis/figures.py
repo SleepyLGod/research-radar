@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -37,6 +38,11 @@ FIGURE_KEYWORDS = (
     "performance",
     "table",
 )
+PDF_FIGURE_CROP_DPI = 160
+PDF_MIN_CROP_WIDTH = 180
+PDF_MIN_CROP_HEIGHT = 120
+PDF_MAX_CROP_HEIGHT_RATIO = 0.62
+PDF_COLUMN_GAP_RATIO = 0.04
 
 
 class FigureExtractionError(Exception):
@@ -96,6 +102,47 @@ class FigureCandidate:
     score: float
 
 
+@dataclass(frozen=True)
+class PdfFigureCandidate:
+    """A figure caption located in extracted PDF text."""
+
+    page_number: int
+    figure_number: str
+    caption: str
+    label: str | None
+    score: float
+
+
+@dataclass(frozen=True)
+class PdfTextWord:
+    """A positioned word from Poppler bbox output."""
+
+    text: str
+    x_min: float
+    y_min: float
+    x_max: float
+    y_max: float
+
+
+@dataclass(frozen=True)
+class PdfPageBbox:
+    """Positioned text for one PDF page."""
+
+    width: float
+    height: float
+    words: list[PdfTextWord]
+
+
+@dataclass(frozen=True)
+class PdfCropBox:
+    """Pixel crop box passed to pdftoppm."""
+
+    x: int
+    y: int
+    width: int
+    height: int
+
+
 def extract_paper_figures(
     artifact: Artifact,
     output_dir: Path,
@@ -107,18 +154,100 @@ def extract_paper_figures(
 
     arxiv_id = _arxiv_id(artifact.source)
     if not arxiv_id:
-        return []
+        figure_root = output_dir / _safe_name(
+            artifact.source.canonical_id or artifact.source.title
+        )
+        return extract_pdf_cropped_figures(
+            artifact,
+            ensure_dir(figure_root),
+            claims,
+            max_figures=max_figures,
+        )
     work_dir = ensure_dir(output_dir / _safe_name(arxiv_id))
     source_dir = ensure_dir(work_dir / "source")
     image_dir = ensure_dir(work_dir / "images")
-    _download_arxiv_source(arxiv_id, source_dir)
-    return extract_latex_figures(
-        source_dir,
-        image_dir,
-        artifact.source,
-        claims,
-        max_figures=max_figures,
+    try:
+        _download_arxiv_source(arxiv_id, source_dir)
+        return extract_latex_figures(
+            source_dir,
+            image_dir,
+            artifact.source,
+            claims,
+            max_figures=max_figures,
+        )
+    except FigureExtractionError:
+        return extract_pdf_cropped_figures(
+            artifact,
+            image_dir,
+            claims,
+            max_figures=max_figures,
+        )
+
+
+def extract_pdf_cropped_figures(
+    artifact: Artifact,
+    image_dir: Path,
+    claims: list[Claim],
+    *,
+    max_figures: int = 3,
+) -> list[PaperFigure]:
+    """Crop selected PDF figure regions when source figures are unavailable."""
+
+    if artifact.content_type != "application/pdf" or not artifact.artifact_path:
+        return []
+    pdf_path = Path(artifact.artifact_path)
+    if not pdf_path.is_file():
+        return []
+    ensure_dir(image_dir)
+    candidates = sorted(
+        _parse_pdf_figure_candidates(artifact.text),
+        key=lambda item: item.score,
+        reverse=True,
     )
+    figures: list[PaperFigure] = []
+    used_pages: set[int] = set()
+    for candidate in candidates:
+        if len(figures) >= max_figures:
+            break
+        if candidate.page_number in used_pages:
+            continue
+        matched_claim = _best_matching_claim(candidate.caption, claims, source=artifact.source)
+        if matched_claim is None:
+            continue
+        crop_box = _pdf_caption_crop_box(pdf_path, candidate)
+        if crop_box is None:
+            continue
+        destination = (
+            image_dir
+            / f"{len(figures) + 1:02d}-figure-{candidate.figure_number}-page-"
+            f"{candidate.page_number}.png"
+        )
+        if not _render_pdf_crop(pdf_path, candidate.page_number, crop_box, destination):
+            continue
+        used_pages.add(candidate.page_number)
+        figures.append(
+            PaperFigure(
+                title=candidate.label or _pdf_figure_title(candidate.caption),
+                source_url=artifact.source.url,
+                source_title=artifact.source.title,
+                asset_path=str(destination),
+                relative_path=_relative_figure_path(destination),
+                original_path=(
+                    f"page {candidate.page_number}, Figure "
+                    f"{candidate.figure_number} crop"
+                ),
+                caption=candidate.caption,
+                label=candidate.label,
+                explanation=_figure_explanation(candidate.caption, matched_claim),
+                matched_claim=matched_claim.text,
+                license=_source_license(artifact.source),
+                reuse_status=_reuse_status(artifact.source),
+                attribution=_attribution(artifact.source),
+                renderable=True,
+                score=round(candidate.score, 3),
+            )
+        )
+    return figures
 
 
 def extract_latex_figures(
@@ -378,6 +507,394 @@ def _is_under(path: Path, root: Path) -> bool:
     return resolved == resolved_root or resolved_root in resolved.parents
 
 
+def _parse_pdf_figure_candidates(text: str) -> list[PdfFigureCandidate]:
+    candidates: list[PdfFigureCandidate] = []
+    for page_number, page_text in _pdf_pages(text):
+        lines = page_text.splitlines()
+        for index, line in enumerate(lines):
+            match = re.match(r"(?i)^\s*Figure\s+(?P<number>\d+)\s*[:.]\s*.+", line)
+            if not match:
+                continue
+            caption = _clean_latex_text(_pdf_caption_from_lines(lines, index))
+            if not caption:
+                continue
+            label = f"Figure {match.group('number')}"
+            candidates.append(
+                PdfFigureCandidate(
+                    page_number=page_number,
+                    figure_number=match.group("number"),
+                    caption=caption,
+                    label=label,
+                    score=_figure_score(label, caption, label),
+                )
+            )
+    return candidates
+
+
+def _pdf_caption_from_lines(lines: list[str], start_index: int) -> str:
+    caption_lines = [lines[start_index].strip()]
+    for line in lines[start_index + 1 : start_index + 8]:
+        stripped = line.strip()
+        if not stripped:
+            break
+        if re.match(r"(?i)^(Figure|Table)\s+\d+\s*[:.]", stripped):
+            break
+        if re.match(r"^\d+(?:\.\d+)*\s+[A-Z][A-Za-z]", stripped):
+            break
+        caption_text = " ".join(caption_lines).strip()
+        if caption_text.endswith(".") and len(caption_text) >= 80:
+            break
+        caption_lines.append(stripped)
+        caption_text = " ".join(caption_lines).strip()
+        if caption_text.endswith(".") and len(caption_text) >= 120:
+            break
+    return " ".join(caption_lines)
+
+
+def _pdf_pages(text: str) -> list[tuple[int, str]]:
+    pattern = re.compile(r"(?m)^\[page (?P<page>\d+)\]\s*$")
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return [(1, text)]
+    pages: list[tuple[int, str]] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        pages.append((int(match.group("page")), text[start:end]))
+    return pages
+
+
+def _pdf_caption_crop_box(
+    pdf_path: Path,
+    candidate: PdfFigureCandidate,
+) -> PdfCropBox | None:
+    page = _pdf_page_bbox(pdf_path, candidate.page_number)
+    if page is None:
+        return _pypdf_caption_crop_box(pdf_path, candidate)
+    return _pdf_caption_crop_box_from_bbox(page, candidate)
+
+
+def _pdf_caption_crop_box_from_bbox(
+    page: PdfPageBbox,
+    candidate: PdfFigureCandidate,
+) -> PdfCropBox | None:
+    if page is None:
+        return None
+    caption_line = _caption_line_words(page.words, candidate.figure_number)
+    if not caption_line:
+        return None
+
+    caption_top = min(word.y_min for word in caption_line)
+    caption_left = min(word.x_min for word in caption_line)
+    caption_right = max(word.x_max for word in caption_line)
+    if caption_top <= page.height * 0.12:
+        return None
+
+    x, width = _pdf_caption_column(page, caption_left, caption_right)
+    horizontal_padding = max(8, int(page.width * 0.015))
+    x = max(0, x + horizontal_padding)
+    width = min(page.width - x, width - (horizontal_padding * 2))
+
+    top = _pdf_crop_top_from_text_gap(page, x, x + width, caption_top)
+    if top is None:
+        return None
+    bottom = max(top, caption_top - 8)
+    height = bottom - top
+    max_height = page.height * PDF_MAX_CROP_HEIGHT_RATIO
+    if (
+        width < PDF_MIN_CROP_WIDTH
+        or height < PDF_MIN_CROP_HEIGHT
+        or height > max_height
+    ):
+        return None
+    return PdfCropBox(
+        x=max(0, int(round(x))),
+        y=max(0, int(round(top))),
+        width=max(1, int(round(width))),
+        height=max(1, int(round(height))),
+    )
+
+
+def _pypdf_caption_crop_box(
+    pdf_path: Path,
+    candidate: PdfFigureCandidate,
+) -> PdfCropBox | None:
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return None
+    try:
+        reader = PdfReader(str(pdf_path))
+        page = reader.pages[candidate.page_number - 1]
+        page_width = float(page.mediabox.width)
+        page_height = float(page.mediabox.height)
+    except (IndexError, OSError, ValueError):
+        return None
+
+    target = f"figure{candidate.figure_number}"
+    marks: list[tuple[float, float, float]] = []
+
+    def visitor(
+        text: str,
+        cm: object,
+        tm: object,
+        font_dict: object,
+        font_size: object,
+    ) -> None:
+        if not _pdf_word_key(text).startswith(target):
+            return
+        if not isinstance(tm, list | tuple) or len(tm) < 6:
+            return
+        try:
+            marks.append((float(tm[4]), float(tm[5]), float(font_size or 10.0)))
+        except (TypeError, ValueError):
+            return
+
+    try:
+        page.extract_text(visitor_text=visitor)
+    except Exception:
+        return None
+    if not marks:
+        return None
+
+    caption_x, caption_y, caption_font_size = max(marks, key=lambda item: item[1])
+    scale = PDF_FIGURE_CROP_DPI / 72.0
+    page_width_px = page_width * scale
+    page_height_px = page_height * scale
+    caption_top_px = (page_height - (caption_y + caption_font_size)) * scale
+    if caption_top_px <= page_height_px * 0.08 or caption_top_px >= page_height_px * 0.55:
+        return None
+
+    horizontal_margin = max(24.0, page_width_px * 0.09)
+    top_margin = max(24.0, page_height_px * 0.045)
+    bottom = caption_top_px - max(12.0, caption_font_size * scale)
+    width = page_width_px - (horizontal_margin * 2)
+    height = bottom - top_margin
+    if width < PDF_MIN_CROP_WIDTH or height < PDF_MIN_CROP_HEIGHT:
+        return None
+    if height > page_height_px * PDF_MAX_CROP_HEIGHT_RATIO:
+        return None
+    return PdfCropBox(
+        x=max(0, int(round(horizontal_margin))),
+        y=max(0, int(round(top_margin))),
+        width=max(1, int(round(width))),
+        height=max(1, int(round(height))),
+    )
+
+
+def _pdf_page_bbox(pdf_path: Path, page_number: int) -> PdfPageBbox | None:
+    pdftotext = shutil.which("pdftotext")
+    if not pdftotext:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                pdftotext,
+                "-bbox-layout",
+                "-r",
+                str(PDF_FIGURE_CROP_DPI),
+                "-f",
+                str(page_number),
+                "-l",
+                str(page_number),
+                str(pdf_path),
+                "-",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return _parse_pdf_bbox_output(result.stdout)
+
+
+def _parse_pdf_bbox_output(output: str) -> PdfPageBbox | None:
+    html_start = output.find("<html")
+    if html_start > 0:
+        output = output[html_start:]
+    try:
+        root = ET.fromstring(output)
+    except ET.ParseError:
+        return None
+    page_element = next((node for node in root.iter() if _xml_name(node.tag) == "page"), None)
+    if page_element is None:
+        return None
+    try:
+        page_width = float(page_element.attrib["width"])
+        page_height = float(page_element.attrib["height"])
+    except (KeyError, ValueError):
+        return None
+    words: list[PdfTextWord] = []
+    for node in page_element.iter():
+        if _xml_name(node.tag) != "word":
+            continue
+        text = "".join(node.itertext()).strip()
+        if not text:
+            continue
+        try:
+            words.append(
+                PdfTextWord(
+                    text=text,
+                    x_min=float(node.attrib["xMin"]),
+                    y_min=float(node.attrib["yMin"]),
+                    x_max=float(node.attrib["xMax"]),
+                    y_max=float(node.attrib["yMax"]),
+                )
+            )
+        except (KeyError, ValueError):
+            continue
+    if not words:
+        return None
+    return PdfPageBbox(width=page_width, height=page_height, words=words)
+
+
+def _caption_line_words(words: list[PdfTextWord], figure_number: str) -> list[PdfTextWord]:
+    for index, word in enumerate(words[:-1]):
+        if _pdf_word_key(word.text) != "figure":
+            continue
+        next_word = _pdf_word_key(words[index + 1].text)
+        if next_word != figure_number:
+            continue
+        line_y = (word.y_min + word.y_max + words[index + 1].y_min + words[index + 1].y_max) / 4
+        tolerance = max(5.0, (word.y_max - word.y_min) * 0.9)
+        return [
+            item
+            for item in words
+            if abs(((item.y_min + item.y_max) / 2) - line_y) <= tolerance
+        ]
+    return []
+
+
+def _pdf_caption_column(
+    page: PdfPageBbox,
+    caption_left: float,
+    caption_right: float,
+) -> tuple[float, float]:
+    caption_width = caption_right - caption_left
+    if caption_width >= page.width * 0.45:
+        return 0.0, page.width
+    gap = page.width * PDF_COLUMN_GAP_RATIO
+    midpoint = page.width / 2
+    if ((caption_left + caption_right) / 2) < midpoint:
+        return 0.0, midpoint - (gap / 2)
+    return midpoint + (gap / 2), midpoint - (gap / 2)
+
+
+def _pdf_crop_top_from_text_gap(
+    page: PdfPageBbox,
+    crop_left: float,
+    crop_right: float,
+    caption_top: float,
+) -> float | None:
+    lines = _pdf_text_lines(
+        [
+            word
+            for word in page.words
+            if word.x_max >= crop_left
+            and word.x_min <= crop_right
+            and word.y_max < caption_top - 4
+        ]
+    )
+    if not lines:
+        return max(0.0, caption_top - min(page.height * 0.36, 360.0))
+
+    previous_bottom = None
+    best_gap = 0.0
+    best_top: float | None = None
+    for line_top, line_bottom in lines:
+        if previous_bottom is not None:
+            gap = line_top - previous_bottom
+            if gap > best_gap:
+                best_gap = gap
+                best_top = previous_bottom
+        previous_bottom = max(previous_bottom or 0.0, line_bottom)
+    if previous_bottom is not None:
+        gap = caption_top - previous_bottom
+        if gap > best_gap:
+            best_gap = gap
+            best_top = previous_bottom
+
+    min_gap = max(20.0, page.height * 0.025)
+    if best_top is None or best_gap < min_gap:
+        return None
+    return min(page.height, max(0.0, best_top + 4))
+
+
+def _pdf_text_lines(words: list[PdfTextWord]) -> list[tuple[float, float]]:
+    lines: list[tuple[float, float]] = []
+    for word in sorted(words, key=lambda item: (item.y_min, item.x_min)):
+        center = (word.y_min + word.y_max) / 2
+        matched_index = None
+        for index, (line_top, line_bottom) in enumerate(lines):
+            if line_top - 4 <= center <= line_bottom + 4:
+                matched_index = index
+                break
+        if matched_index is None:
+            lines.append((word.y_min, word.y_max))
+        else:
+            line_top, line_bottom = lines[matched_index]
+            lines[matched_index] = (min(line_top, word.y_min), max(line_bottom, word.y_max))
+    return sorted(lines)
+
+
+def _render_pdf_crop(
+    pdf_path: Path,
+    page_number: int,
+    crop_box: PdfCropBox,
+    destination: Path,
+) -> bool:
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm:
+        return False
+    output_prefix = destination.with_suffix("")
+    try:
+        subprocess.run(
+            [
+                pdftoppm,
+                "-png",
+                "-singlefile",
+                "-r",
+                str(PDF_FIGURE_CROP_DPI),
+                "-f",
+                str(page_number),
+                "-l",
+                str(page_number),
+                "-x",
+                str(crop_box.x),
+                "-y",
+                str(crop_box.y),
+                "-W",
+                str(crop_box.width),
+                "-H",
+                str(crop_box.height),
+                str(pdf_path),
+                str(output_prefix),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return destination.is_file()
+
+
+def _xml_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _pdf_word_key(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "", value).casefold()
+
+
+def _pdf_figure_title(caption: str) -> str:
+    match = re.match(r"(?i)\s*(figure\s+\d+)", caption)
+    return match.group(1).title() if match else caption[:80]
+
+
 def _figure_score(raw_image: str, caption: str, label: str) -> float:
     text = f"{raw_image} {caption} {label}".casefold()
     score = 0.0
@@ -416,7 +933,13 @@ def _best_matching_claim(
 def _claim_matches_source(claim: Claim, source: SourceCandidate) -> bool:
     source_url = canonicalize_url(source.url)
     source_arxiv = _arxiv_id(source)
+    source_openreview = _openreview_id(source)
     for anchor in claim.evidence:
+        anchor_openreview = _openreview_id_from_text(anchor.source_url)
+        if source_openreview or anchor_openreview:
+            if source_openreview and anchor_openreview:
+                return source_openreview == anchor_openreview
+            continue
         anchor_url = canonicalize_url(anchor.source_url)
         if source_url and anchor_url == source_url:
             return True
@@ -463,6 +986,17 @@ def _arxiv_id(source: SourceCandidate) -> str | None:
         if re.match(r"^\d{4}\.\d{4,5}(v\d+)?$", canonical):
             return canonical
     return _arxiv_id_from_text(source.url)
+
+
+def _openreview_id(source: SourceCandidate) -> str | None:
+    if source.canonical_id and source.canonical_id.startswith("OpenReview:"):
+        return source.canonical_id.removeprefix("OpenReview:")
+    return _openreview_id_from_text(source.url)
+
+
+def _openreview_id_from_text(value: str) -> str | None:
+    match = re.search(r"openreview\.net/(?:forum|pdf)\?id=([^&#\s]+)", value)
+    return match.group(1) if match else None
 
 
 def _arxiv_id_from_text(value: str) -> str | None:
