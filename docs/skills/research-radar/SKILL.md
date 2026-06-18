@@ -103,7 +103,10 @@ For WeChat, Zhihu, or other public writing:
 
 - lead with the core signal,
 - preserve nuance,
-- avoid hype,
+- avoid hype, template conclusions, promotional tone, and generic "future outlook" endings,
 - make examples understandable,
+- write concrete mechanisms and limitations when the evidence supports them,
+- preserve technical terms, numbers, formulas, benchmark names, source URLs, and exact evidence
+  quotes,
 - keep evidence trail available,
 - clearly label speculation and limitations.

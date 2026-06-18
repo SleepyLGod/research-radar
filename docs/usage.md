@@ -115,7 +115,12 @@ Useful outputs under the run directory:
 - `article_draft.json`: platform-neutral draft source
 - `source_selection.json`: selected and skipped source audit
 - `review_report.md`: verifier and evidence-gate audit
+- `review_findings.jsonl`: structured verifier, evidence, and public writing style findings
 - `runtime_summary.json`: stage timing and cache summary
+
+`public_writing_style` findings are non-blocking warnings. They flag template-like public prose or
+machine metadata that should not appear in reader-facing text. They do not change claims, evidence
+anchors, source links, or publication status.
 
 For repeat smoke runs, `--model-cache` keeps expensive reader/verifier/localization calls local to
 the run root.
@@ -139,6 +144,8 @@ uv run research-radar run paper \
 
 The paper run writes `paper.md`, `deep_reading.md`, `claims.jsonl`, `review_report.md`, and
 evidence artifacts. Public content still comes only from supported claims with complete anchors.
+Public writing style warnings may appear in `review_report.md` or `review_findings.jsonl`; they are
+audit notes, not an automatic rewrite pass.
 
 ## WeChat Drafts
 

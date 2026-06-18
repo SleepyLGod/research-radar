@@ -27,6 +27,8 @@ drive the research model.
   no auto-publish or mass-send.
 - Long-form daily article rendering with a top contents list, deep-read paper sections, other-source
   links, seen-before fallback, and concise evidence notes.
+- Public writing style contract for reader explanations and localization, plus non-blocking style
+  warnings for template-like public text.
 - Paper figure support from arXiv source assets and conservative PDF-only figure crops; full-page
   PDF screenshots are not allowed as public figures.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
@@ -57,6 +59,11 @@ drive the research model.
   - Use plain-language examples only after the technical claim is evidence-backed.
   - Separate author-reported claims from system-level conclusions.
   - Avoid vague abstract-style prose when concrete verified claims are available.
+  - Chinese reports should be natural and concrete, without template summaries or promotional
+    phrasing. English reports should avoid hype, generic conclusions, vague attribution, and
+    promotional tone.
+  - Readability edits must preserve numbers, formulas, technical terms, benchmark names, metrics,
+    source URLs, and exact evidence quotes.
 - `deep_reading.md` can remain a researcher audit note; `paper.md` should be suitable for careful
   human reading.
 - WeChat HTML should read like a long article rather than a raw audit page:
