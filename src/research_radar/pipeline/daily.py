@@ -23,6 +23,7 @@ from research_radar.analysis.paper_reading import (
     render_deep_reading_report,
 )
 from research_radar.analysis.providers import LLMProvider
+from research_radar.analysis.public_style import audit_public_writing_text
 from research_radar.analysis.research_plan import build_research_plan, research_plan_to_dict
 from research_radar.analysis.review import model_review_publishable_claims, rule_based_review
 from research_radar.analysis.source_gist import attach_source_gists
@@ -708,8 +709,33 @@ def run_daily(
             run_dir / "synthesis_outline.md",
             render_synthesis_outline(topic_id, reportable_candidates, claims, readings),
         )
-        write_text(run_dir / "daily.md", render_markdown(draft))
-        write_text(run_dir / "wechat.html", render_wechat_html(draft))
+        daily_markdown = render_markdown(draft)
+        wechat_html = render_wechat_html(draft)
+        style_findings = [
+            *audit_public_writing_text(
+                daily_markdown,
+                target="daily.md",
+                language=report_language,
+            ),
+            *audit_public_writing_text(
+                wechat_html,
+                target="wechat.html",
+                language=report_language,
+            ),
+        ]
+        if style_findings:
+            findings.extend(style_findings)
+            write_jsonl(run_dir / "review_findings.jsonl", findings)
+            progress.record(
+                "public_style",
+                "warning",
+                warning_count=len(style_findings),
+                language=report_language,
+            )
+        else:
+            progress.record("public_style", "passed", language=report_language)
+        write_text(run_dir / "daily.md", daily_markdown)
+        write_text(run_dir / "wechat.html", wechat_html)
         write_text(
             run_dir / "deep_reading.md",
             render_deep_reading_report(

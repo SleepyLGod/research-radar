@@ -15,6 +15,7 @@ from research_radar.analysis.paper_reading import (
     RelatedWorkAssessment,
 )
 from research_radar.analysis.providers import LLMProvider, Message
+from research_radar.analysis.public_style import LOCALIZATION_PUBLIC_WRITING_STYLE_CONTRACT
 from research_radar.evidence.policy import publishable_claims
 from research_radar.exceptions import AnalysisError
 from research_radar.models import Claim, ReviewFinding, SourceCandidate
@@ -222,6 +223,8 @@ Rules:
   quote-like exact source text appears, copy it unchanged.
 - Use natural Chinese where possible, but accuracy is more important than fluency.
 - If a sentence says "the authors report" or "the paper claims", keep that attribution.
+- Follow this public writing style contract for display text:
+{LOCALIZATION_PUBLIC_WRITING_STYLE_CONTRACT}
 
 Return JSON only with this shape:
 {{

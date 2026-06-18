@@ -1877,6 +1877,72 @@ def test_daily_pipeline_localizes_public_report_after_english_reading(
     assert [attempt["scope"] for attempt in attempts] == ["reading", "display"]
 
 
+def test_daily_pipeline_records_public_style_warning_without_blocking(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    reader = SequenceProvider([_deep_reading_json()])
+    verifier = StaticProvider(
+        """
+        {
+          "decisions": [
+            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 2, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 3, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 4, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 5, "status": "supported", "risk": "low", "reason": "grounded"},
+            {"claim_index": 6, "status": "supported", "risk": "low", "reason": "grounded"}
+          ]
+        }
+        """
+    )
+    styley_body = _daily_localization_json().replace(
+        "请先确认答案是否有 cited memory evidence，再给答案计分。",
+        "综上所述，请先确认答案是否有 cited memory evidence，再给答案计分。",
+    )
+    localizer = SequenceProvider([styley_body, _daily_localization_json()])
+
+    def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
+        return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)
+
+    monkeypatch.setattr(daily, "ingest_source", fake_ingest_source)
+
+    run_dir = run_daily(
+        tmp_path,
+        config,
+        "agent-memory",
+        [FakeConnector()],
+        deep_reader=reader,
+        deep_model="fake-analyst",
+        deep_limit=1,
+        verifier=verifier,
+        verifier_model="fake-reviewer",
+        localizer=localizer,
+        localization_model="fake-localizer",
+        language="zh",
+    )
+
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+    progress = read_jsonl(run_dir / "run_progress.jsonl")
+
+    assert (run_dir / "daily.md").exists()
+    assert (run_dir / "wechat.html").exists()
+    assert any(
+        finding.get("metadata", {}).get("kind") == "public_writing_style"
+        for finding in findings
+    )
+    assert any(
+        event["stage"] == "public_style" and event["status"] == "warning"
+        for event in progress
+    )
+
+
 def test_daily_pipeline_fails_closed_when_zh_body_localization_fails(
     monkeypatch,
     tmp_path: Path,

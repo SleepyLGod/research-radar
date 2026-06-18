@@ -28,6 +28,7 @@ from research_radar.analysis.paper_sections import (
     render_reading_packet,
 )
 from research_radar.analysis.providers import LLMProvider
+from research_radar.analysis.public_style import audit_public_writing_text
 from research_radar.analysis.review import model_review_publishable_claims, rule_based_review
 from research_radar.compose.paper import render_paper_brief
 from research_radar.config import AppConfig, TopicConfig
@@ -300,18 +301,41 @@ def run_paper(
     write_evidence(run_dir / "evidence.jsonl", claims)
     write_jsonl(run_dir / "review_findings.jsonl", findings)
     write_jsonl(run_dir / "verification_actions.jsonl", verification_actions)
-    write_text(
-        run_dir / "deep_reading.md",
-        render_deep_reading_report(
-            [display_reading],
-            display_claims,
+    deep_reading_report = render_deep_reading_report(
+        [display_reading],
+        display_claims,
+        language=report_language,
+    )
+    paper_brief = render_paper_brief(
+        display_reading,
+        display_claims,
+        language=report_language,
+    )
+    style_findings = [
+        *audit_public_writing_text(
+            paper_brief,
+            target="paper.md",
             language=report_language,
         ),
-    )
-    write_text(
-        run_dir / "paper.md",
-        render_paper_brief(display_reading, display_claims, language=report_language),
-    )
+        *audit_public_writing_text(
+            deep_reading_report,
+            target="deep_reading.md",
+            language=report_language,
+        ),
+    ]
+    if style_findings:
+        findings.extend(style_findings)
+        write_jsonl(run_dir / "review_findings.jsonl", findings)
+        progress.record(
+            "public_style",
+            "warning",
+            warning_count=len(style_findings),
+            language=report_language,
+        )
+    else:
+        progress.record("public_style", "passed", language=report_language)
+    write_text(run_dir / "deep_reading.md", deep_reading_report)
+    write_text(run_dir / "paper.md", paper_brief)
     write_text(
         run_dir / "review_report.md",
         render_review_report(

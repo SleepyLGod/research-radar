@@ -255,6 +255,10 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "reader_explanation" in deep
     assert "reader-facing explanation layer" in deep
     assert "must not introduce any new facts" in deep
+    assert "Public writing style for reader_explanation" in deep
+    assert "template summary or marketing copy" in deep
+    assert "Preserve numbers, percentages, formulas" in deep
+    assert "Accuracy is more important than fluency" in deep
     assert "broader area problem" in deep
     assert "data flow" in deep
     assert "how components interact" in deep

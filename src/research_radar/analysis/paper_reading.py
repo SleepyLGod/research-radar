@@ -13,6 +13,7 @@ from research_radar.analysis.paper_sections import (
 )
 from research_radar.analysis.prompts import RESEARCH_RADAR_RUNTIME_CONTRACT
 from research_radar.analysis.providers import LLMProvider, Message
+from research_radar.analysis.public_style import READER_PUBLIC_WRITING_STYLE_CONTRACT
 from research_radar.evidence.policy import enforce_evidence_policy
 from research_radar.exceptions import AnalysisError
 from research_radar.models import (
@@ -220,6 +221,8 @@ Rules:
 - For systems papers, solution_walkthrough should also cover the request lifecycle,
   scheduling or routing policy, memory/KV-cache behavior, implementation substrate,
   workload setup, and metric linkage when those details appear in the packet.
+- Follow this public writing style contract for reader_explanation only:
+{READER_PUBLIC_WRITING_STYLE_CONTRACT}
 - Keep each claim_unit to exactly one verifiable assertion; split broad claims.
 - claim_units must not combine method, result, novelty, and critique in one sentence.
 - Setup facts must be separate claim_units: benchmark identity, metric definition,

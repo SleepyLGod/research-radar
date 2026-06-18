@@ -74,6 +74,12 @@ def test_localization_prompt_preserves_terms_numbers_and_quotes() -> None:
     assert "localized_caption" in prompt
     assert "translate explanation into" in prompt
     assert "Overview of Raw, Source, and Canonical targets." in prompt
+    assert "Chinese public writing style" in prompt
+    assert "natural Simplified Chinese" in prompt
+    assert "Do not add claims, URLs, critique, rankings" in prompt
+    assert "综上所述" in prompt
+    assert "不仅仅是...更是..." in prompt
+    assert "Preserve numbers, percentages, formulas" in prompt
 
 
 def test_localization_changes_display_text_only() -> None:
