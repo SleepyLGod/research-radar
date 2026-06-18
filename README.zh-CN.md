@@ -2,22 +2,36 @@
 
 ![ResearchRadar](docs/assets/research-radar-plus.png)
 
-ResearchRadar 会把一个已经审核过的研究 topic 变成每天一篇可审阅的微信公众号草稿：发现新论文，
-精读最核心的论文，用原文证据核验 claim，然后把最终长文放进公众号草稿箱。
+ResearchRadar 面向想自托管研究日报的人：给它一个审核过的研究 topic，它每天发现新论文，
+精读最值得看的几篇，用原文证据核验公开事实点，然后把一篇中文长文放进公众号草稿箱。
+你只需要去草稿箱审稿，而不是每天重新搜论文、读 PDF、整理证据。
 
-`本地优先` · `证据门控` · `论文精读` · `微信公众号草稿` · `定时任务` · `Tavily 搜索` ·
-`DeepSeek` · `Codex verifier`
+`本地优先` · `证据门控` · `整篇论文精读` · `微信公众号草稿` · `定时任务`
+
+`DeepSeek reader` · `Codex verifier` · `Tavily 召回` · `OpenAI-compatible providers`
 
 [English README](README.md) · [详细使用说明](docs/usage.md) ·
 [Provider 配置](docs/providers.md) · [架构](docs/architecture.md) · [安全说明](docs/security.md)
 
 ## 它解决什么问题
 
-ResearchRadar 的目标不是简单摘要网页，而是把“发现新研究 -> 精读论文 -> 检查事实 -> 生成可读文章”
-串成一条可审计的工作流。它会保留完整运行产物，但公众号正文只使用已经通过证据核验的内容。
+多数 research bot 会总结它搜到的内容；ResearchRadar 更保守。搜索只负责补召回，公开正文里的事实
+必须来自已经读取的论文或可信来源，并且要有完整的 evidence anchor。
 
-多数 research bot 会总结它搜到的内容；ResearchRadar 更保守：web search 负责补召回，但公开正文里的
-事实必须来自已经 ingest 的论文或可信 source artifact，并且要有完整 evidence anchor。
+### 一篇日报是怎么生成的
+
+```mermaid
+flowchart LR
+    A["审核过的 topic"] --> B["发现新论文和来源"]
+    B --> C["选择最核心的论文"]
+    C --> D["整篇论文精读"]
+    D --> E["拆分事实点并绑定证据"]
+    E --> F["Codex verifier"]
+    F --> G["可读的长文草稿"]
+    G --> H["公众号草稿箱"]
+    E --> I["审计记录"]
+    F --> I
+```
 
 默认日报链路是：
 
@@ -37,6 +51,8 @@ ResearchRadar 的目标不是简单摘要网页，而是把“发现新研究 ->
 - 一套记录 rejected / weak / unsupported claim 的审计 artifacts。
 
 ## 快速开始
+
+日常使用分两步：第一次配好 topic、密钥和 scheduler；之后每天去微信公众号草稿箱审稿。
 
 安装依赖并初始化本地配置：
 

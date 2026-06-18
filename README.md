@@ -2,12 +2,14 @@
 
 ![ResearchRadar](docs/assets/research-radar-plus.png)
 
-ResearchRadar turns a reviewed research topic into a daily, evidence-checked WeChat draft: it
-finds new papers, deep-reads the central ones, verifies claims against source anchors, and leaves
-the final article in your draft box.
+Daily research briefs for people who want the paper, the evidence, and the draft, not another loose
+summary. Give ResearchRadar a reviewed topic; it finds new papers, deep-reads the central ones,
+checks each public claim against source anchors, and leaves a long-form WeChat draft for you to
+review.
 
-`Local-first` · `Evidence-gated` · `Paper deep reading` · `WeChat draft` · `Scheduler` ·
-`Tavily search` · `DeepSeek` · `Codex verifier`
+`Local-first` · `Evidence-gated` · `Full-paper reading` · `WeChat draft` · `Scheduler`
+
+`DeepSeek reader` · `Codex verifier` · `Tavily recall` · `OpenAI-compatible providers`
 
 [简体中文](README.zh-CN.md) · [Detailed usage](docs/usage.md) ·
 [Provider configuration](docs/providers.md) · [Architecture](docs/architecture.md) ·
@@ -15,13 +17,24 @@ the final article in your draft box.
 
 ## What It Does
 
-ResearchRadar monitors papers, repositories, blogs, and web search results for a reviewed topic.
-It selects central research sources, performs full-paper deep reading, verifies publishable claims
-against source anchors, and creates a WeChat draft for human review.
+Most research bots summarize whatever they find. ResearchRadar is stricter. Search improves recall,
+but public claims must come from ingested papers or trusted source artifacts with complete evidence
+anchors.
 
-Most research bots summarize whatever they find. ResearchRadar is stricter: web search improves
-recall, but public claims must come from ingested papers or trusted source artifacts with complete
-evidence anchors.
+### How a daily brief is made
+
+```mermaid
+flowchart LR
+    A["Reviewed topic"] --> B["Discover new papers and sources"]
+    B --> C["Select central papers"]
+    C --> D["Full-paper deep reading"]
+    D --> E["Claim splitting and evidence anchors"]
+    E --> F["Codex verifier"]
+    F --> G["Readable article draft"]
+    G --> H["WeChat draft box"]
+    E --> I["Audit artifacts"]
+    F --> I
+```
 
 The default daily path is:
 
@@ -41,6 +54,9 @@ Each successful daily run creates:
 - audit artifacts for rejected, weak, or unsupported claims.
 
 ## Quick Start
+
+Daily use is intentionally simple: configure reviewed topics and secrets once, then check the
+WeChat draft box when the scheduled job runs.
 
 Install dependencies and initialize local config:
 
