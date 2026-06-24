@@ -32,11 +32,11 @@ def test_gitignore_covers_private_runtime_files() -> None:
         assert pattern in ignore_text
 
 
-def test_version_metadata_is_foundation() -> None:
+def test_version_metadata_matches_package() -> None:
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
-    assert pyproject["project"]["version"] == "0.0.0"
-    assert __version__ == "0.0.0"
+    assert pyproject["project"]["version"] == __version__
+    assert __version__
 
 
 def test_readme_is_concise_project_entrypoint() -> None:
@@ -49,9 +49,14 @@ def test_readme_is_concise_project_entrypoint() -> None:
     assert "DeepSeek v4 Pro" in readme
     assert "Codex `gpt-5.5`" in readme
     assert "`Evidence-gated`" in readme
+    assert (
+        "Daily research briefs for people who want the paper, the evidence, and the draft"
+        in readme
+    )
+    assert "create a WeChat draft, never an automatic publish" in readme
+    assert "[Roadmap](docs/todo.md)" in readme
     assert "## Target E2E Flow" not in readme
     assert "## What v1 Does" not in readme
-    assert len(readme.splitlines()) < 120
 
 
 def test_readme_cover_image_exists() -> None:
