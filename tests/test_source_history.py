@@ -5,6 +5,8 @@ from research_radar.models import SourceCandidate, SourceType
 from research_radar.storage.files import read_jsonl
 from research_radar.storage.source_history import (
     annotate_source_history,
+    append_source_history_outcome_records,
+    append_source_history_outcomes,
     is_reportable_source,
     source_family_key,
     source_family_keys,
@@ -189,6 +191,100 @@ def test_source_family_keys_include_paper_title_alias() -> None:
         "title:memory-in-the-llm-era",
         "corpusid:abc",
     ]
+
+
+def test_source_history_daily_outcome_is_available_on_seen_source(
+    tmp_path: Path,
+) -> None:
+    source = _paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    annotate_source_history(tmp_path, "agent-memory", [source], run_id="run-1")
+    outcome = append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [source],
+        run_id="run-1",
+        event="daily_outcome",
+        outcome_by_url={
+            source.url: {
+                "daily_included": True,
+                "deep_reading_status": "succeeded",
+                "publishable_claim_count": 3,
+            }
+        },
+    )
+
+    annotated_seen, report = annotate_source_history(
+        tmp_path,
+        "agent-memory",
+        [_paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")],
+        run_id="run-2",
+    )
+
+    previous_outcome = annotated_seen[0].metadata["source_history"]["previous_outcome"]
+    assert outcome["appended_count"] == 1
+    assert previous_outcome["daily_included"] is True
+    assert previous_outcome["deep_reading_status"] == "succeeded"
+    assert previous_outcome["publishable_claim_count"] == 3
+    assert report["omitted_seen_sources"][0]["previous_outcome"] == previous_outcome
+
+
+def test_source_history_wechat_draft_outcome_records_serialized_source(
+    tmp_path: Path,
+) -> None:
+    append_source_history_outcome_records(
+        tmp_path,
+        "agent-memory",
+        [
+            {
+                "title": "Fixture Paper",
+                "url": "https://example.com/paper",
+                "source_type": "paper",
+                "source_name": "fixture",
+                "metadata": {
+                    "source_history": {
+                        "family_key": "title:fixture-paper",
+                        "family_keys": ["title:fixture-paper"],
+                    }
+                },
+            }
+        ],
+        run_id="run-1",
+        event="wechat_draft",
+        outcome_by_url={
+            "https://example.com/paper": {
+                "wechat_draft_status": "created",
+                "wechat_title": "Daily title",
+                "wechat_created_at": "2026-06-24T00:00:00+00:00",
+            }
+        },
+    )
+
+    rows = read_jsonl(tmp_path / "data" / "source_history" / "agent-memory.jsonl")
+    assert rows[0]["event"] == "wechat_draft"
+    assert rows[0]["family_key"] == "title:fixture-paper"
+    assert rows[0]["outcome"]["wechat_title"] == "Daily title"
+
+
+def test_source_history_preserves_empty_previous_outcome(tmp_path: Path) -> None:
+    source = _paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    annotate_source_history(tmp_path, "agent-memory", [source], run_id="run-1")
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [source],
+        run_id="run-1",
+        event="daily_outcome",
+        outcome_by_url={source.url: {}},
+    )
+
+    annotated_seen, _ = annotate_source_history(
+        tmp_path,
+        "agent-memory",
+        [_paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")],
+        run_id="run-2",
+    )
+
+    assert annotated_seen[0].metadata["source_history"]["previous_outcome"] == {}
 
 
 def _paper(

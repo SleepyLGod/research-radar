@@ -18,7 +18,7 @@ from research_radar.exceptions import (
     SecretError,
 )
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
-from research_radar.storage.files import read_json, write_json
+from research_radar.storage.files import read_json, read_jsonl, write_json, write_jsonl
 
 
 def test_topic_bootstrap_cli_writes_default_draft_and_prints_yaml(
@@ -1589,6 +1589,120 @@ def test_publish_wechat_draft_posts_rendered_article_draft(
     assert result["response"] == {"media_id": "draft-media"}
     assert article.title == "Daily title"
     assert "Verified claim for WeChat draft." in article.content
+
+
+def test_publish_wechat_draft_records_source_history_outcome(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path)
+    write_jsonl(
+        run_dir / "sources.jsonl",
+        [
+            {
+                "title": "Fixture Paper",
+                "url": "https://example.com/paper",
+                "source_type": "paper",
+                "source_name": "fixture",
+                "metadata": {
+                    "source_history": {
+                        "family_key": "title:fixture-paper",
+                        "family_keys": ["title:fixture-paper"],
+                    }
+                },
+            }
+        ],
+    )
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_draft(self, article) -> dict[str, object]:
+            return {"media_id": "draft-media"}
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+
+    cli.main(
+        [
+            "publish",
+            "wechat-draft",
+            "--run",
+            str(run_dir),
+            "--title",
+            "Daily title",
+            "--digest",
+            "Manual digest",
+            "--thumb-media-id",
+            "thumb123",
+        ]
+    )
+
+    result = read_json(run_dir / "publish_wechat_draft.json")
+    rows = read_jsonl(tmp_path / "data" / "source_history" / "agent-memory.jsonl")
+    assert result["source_history_outcome"]["appended_count"] == 1
+    assert rows[0]["event"] == "wechat_draft"
+    assert rows[0]["outcome"]["wechat_draft_status"] == "created"
+    assert rows[0]["outcome"]["wechat_title"] == "Daily title"
+    assert rows[0]["outcome"]["wechat_created_at"]
+
+
+def test_publish_wechat_draft_keeps_created_status_when_history_recording_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_publishable_article_draft(tmp_path)
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_draft(self, article) -> dict[str, object]:
+            return {"media_id": "draft-media"}
+
+    monkeypatch.setattr(cli, "WeChatDraftClient", FakeClient)
+    monkeypatch.setattr(
+        cli,
+        "_append_wechat_draft_source_history",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk token=secret-value")),
+    )
+
+    cli.main(
+        [
+            "publish",
+            "wechat-draft",
+            "--run",
+            str(run_dir),
+            "--title",
+            "Daily title",
+            "--digest",
+            "Manual digest",
+            "--thumb-media-id",
+            "thumb123",
+        ]
+    )
+
+    result = read_json(run_dir / "publish_wechat_draft.json")
+    assert result["status"] == "created"
+    assert result["draft_created"] is True
+    assert result["source_history_outcome"]["status"] == "history_record_failed"
+    assert "secret-value" not in result["source_history_outcome"]["message"]
+
+
+def test_article_draft_source_urls_include_reference_urls() -> None:
+    draft = Namespace(
+        sections=[
+            Namespace(
+                metadata={
+                    "references": [
+                        {"title": "Reference Paper", "url": "https://example.com/reference"}
+                    ]
+                }
+            )
+        ]
+    )
+
+    assert cli._article_draft_source_urls(draft) == {"https://example.com/reference"}
 
 
 def test_publish_wechat_draft_writes_failure_artifact(

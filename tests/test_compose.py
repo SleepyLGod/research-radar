@@ -526,6 +526,10 @@ def test_long_form_wechat_supports_no_new_papers_with_seen_sources() -> None:
                 "title": "Already read paper",
                 "url": "https://arxiv.org/abs/2605.00003",
                 "version": "v1",
+                "previous_outcome": {
+                    "wechat_title": "ResearchRadar 日报：agent-memory",
+                    "wechat_created_at": "2026-06-24T10:00:00+00:00",
+                },
             }
         ],
     )
@@ -536,7 +540,10 @@ def test_long_form_wechat_supports_no_new_papers_with_seen_sources() -> None:
     assert "No new paper or new version entered deep reading today" in html
     assert "Seen Before" in html
     assert "Already read paper" in html
+    assert "previous draft: 2026-06-24" in html
+    assert "ResearchRadar 日报：agent-memory" in html
     assert "Already read paper" in markdown
+    assert "previous draft: 2026-06-24" in markdown
 
 
 def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:

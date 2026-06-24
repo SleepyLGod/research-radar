@@ -186,8 +186,22 @@ def _seen_source_lines(raw_sources: object) -> list[str]:
         url = str(item.get("url", ""))
         version = str(item.get("version") or "")
         suffix = f" ({version})" if version else ""
-        lines.append(f"- [{title}](<{url}>){suffix}")
+        note = _seen_source_note(item)
+        lines.append(f"- [{title}](<{url}>){suffix}{note}")
     return lines
+
+
+def _seen_source_note(item: dict[str, object]) -> str:
+    created_at = str(item.get("wechat_created_at") or "").strip()
+    wechat_title = _escape_markdown_text(str(item.get("wechat_title") or "").strip())
+    if not created_at and not wechat_title:
+        return ""
+    pieces = []
+    if created_at:
+        pieces.append(f"previous draft: {created_at[:10]}")
+    if wechat_title:
+        pieces.append(wechat_title)
+    return " · " + " · ".join(pieces)
 
 
 def _append_figures(lines: list[str], label: str, value: object) -> None:

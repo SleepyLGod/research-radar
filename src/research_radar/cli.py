@@ -9,6 +9,7 @@ import os
 import shutil
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -58,7 +59,8 @@ from research_radar.security.privacy_scan import assert_clean
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import EnvSecretBackend, KeychainSecretBackend, SecretManager
 from research_radar.storage.encrypted_store import EncryptedJsonStore
-from research_radar.storage.files import write_json, write_text
+from research_radar.storage.files import read_jsonl, write_json, write_text
+from research_radar.storage.source_history import append_source_history_outcome_records
 from research_radar.topic_bootstrap import (
     bootstrap_topic_draft,
     render_topic_draft_yaml,
@@ -1271,12 +1273,18 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
             thumb_media_id=args.thumb_media_id,
         )
         response = client.add_draft(article)
+        source_history_outcome = _safe_append_wechat_draft_source_history(
+            args.run_dir,
+            draft,
+            title=args.title,
+        )
         result = {
             "status": "created",
             "draft_created": True,
             "request": request,
             "response": response,
             "media_uploads": media_uploads,
+            "source_history_outcome": source_history_outcome,
         }
         write_json(args.run_dir / "publish_wechat_draft.json", result)
         print(f"Created WeChat draft: {response}")
@@ -1410,6 +1418,91 @@ def _wechat_publish_request(
         "content_path": str(content_path),
         "media_uploads": media_uploads or [],
     }
+
+
+def _append_wechat_draft_source_history(
+    run_dir: Path,
+    draft: Any,
+    *,
+    title: str,
+) -> dict[str, object] | None:
+    sources_path = run_dir / "sources.jsonl"
+    if not sources_path.exists():
+        return None
+    draft_source_urls = _article_draft_source_urls(draft)
+    if not draft_source_urls:
+        return None
+    sources = [
+        source
+        for source in read_jsonl(sources_path)
+        if str(source.get("url") or "") in draft_source_urls
+    ]
+    if not sources:
+        return None
+    created_at = datetime.now(UTC).isoformat()
+    outcome_by_url = {
+        str(source["url"]): {
+            "wechat_draft_status": "created",
+            "wechat_title": title,
+            "wechat_created_at": created_at,
+        }
+        for source in sources
+        if source.get("url")
+    }
+    if not outcome_by_url:
+        return None
+    return append_source_history_outcome_records(
+        _run_root_for_history(run_dir),
+        str(getattr(draft, "topic_id", "unknown")),
+        sources,
+        run_id=run_dir.name,
+        event="wechat_draft",
+        outcome_by_url=outcome_by_url,
+    )
+
+
+def _safe_append_wechat_draft_source_history(
+    run_dir: Path,
+    draft: Any,
+    *,
+    title: str,
+) -> dict[str, object] | None:
+    try:
+        return _append_wechat_draft_source_history(run_dir, draft, title=title)
+    except Exception as exc:  # Best-effort audit after the draft already exists.
+        return {
+            "status": "history_record_failed",
+            "error_type": type(exc).__name__,
+            "message": redact_text(str(exc)),
+        }
+
+
+def _article_draft_source_urls(draft: Any) -> set[str]:
+    urls: set[str] = set()
+    for section in getattr(draft, "sections", []):
+        metadata = getattr(section, "metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        for key in ("sources", "references"):
+            raw_sources = metadata.get(key, [])
+            if not isinstance(raw_sources, list):
+                continue
+            for source in raw_sources:
+                if isinstance(source, dict) and source.get("url"):
+                    urls.add(str(source["url"]))
+        for deep_read in metadata.get("deep_reads", []):
+            if not isinstance(deep_read, dict):
+                continue
+            source = deep_read.get("source")
+            if isinstance(source, dict) and source.get("url"):
+                urls.add(str(source["url"]))
+    return urls
+
+
+def _run_root_for_history(run_dir: Path) -> Path:
+    if run_dir.parent.name == "runs":
+        return run_dir.parent.parent
+    return run_dir.parent
 
 
 def _publish_content_requires_media_upload(content: str) -> bool:

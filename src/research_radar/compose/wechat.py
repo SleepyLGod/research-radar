@@ -680,7 +680,8 @@ def _publish_seen_source_list(raw_sources: object, *, language: str) -> str:
         url = str(source.get("url") or "")
         version = str(source.get("version") or "")
         suffix = f" ({version})" if version else ""
-        lines.append(f"{title}{suffix}" + (f" | {url}" if url else ""))
+        note = _seen_source_note(source, language=language)
+        lines.append(f"{title}{suffix}{note}" + (f" | {url}" if url else ""))
     if not lines:
         return ""
     return "".join(
@@ -1249,10 +1250,32 @@ def _seen_source_list(raw_sources: object, *, language: str) -> str:
         url = escape(str(source.get("url") or ""))
         version = escape(str(source.get("version") or ""))
         suffix = f" ({version})" if version else ""
-        items.append(f'<li><a href="{url}">{title}</a>{suffix}</li>')
+        note = escape(_seen_source_note(source, language=language))
+        items.append(f'<li><a href="{url}">{title}</a>{suffix}{note}</li>')
     if not items:
         return ""
     return f"<p>{label}</p><ul>{''.join(items)}</ul>"
+
+
+def _seen_source_note(source: dict[str, object], *, language: str) -> str:
+    created_at = str(source.get("wechat_created_at") or "").strip()
+    wechat_title = str(source.get("wechat_title") or "").strip()
+    if not created_at and not wechat_title:
+        return ""
+    date_text = created_at[:10] if created_at else ""
+    if language == "zh":
+        pieces = []
+        if date_text:
+            pieces.append(f"上次草稿：{date_text}")
+        if wechat_title:
+            pieces.append(wechat_title)
+        return " · " + " · ".join(pieces)
+    pieces = []
+    if date_text:
+        pieces.append(f"previous draft: {date_text}")
+    if wechat_title:
+        pieces.append(wechat_title)
+    return " · " + " · ".join(pieces)
 
 
 def _references(

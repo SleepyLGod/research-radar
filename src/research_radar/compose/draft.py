@@ -493,6 +493,9 @@ def _seen_source_entries(seen_sources: list[dict[str, Any]]) -> list[dict[str, A
         url = str(source.get("url") or "").strip()
         if not title or not url:
             continue
+        previous_outcome = source.get("previous_outcome")
+        if not isinstance(previous_outcome, dict):
+            previous_outcome = {}
         entries.append(
             {
                 "title": title,
@@ -500,6 +503,10 @@ def _seen_source_entries(seen_sources: list[dict[str, Any]]) -> list[dict[str, A
                 "history_status": "seen",
                 "version": source.get("version"),
                 "family_key": source.get("family_key"),
+                "wechat_title": previous_outcome.get("wechat_title"),
+                "wechat_created_at": previous_outcome.get("wechat_created_at"),
+                "wechat_draft_status": previous_outcome.get("wechat_draft_status"),
+                "deep_reading_status": previous_outcome.get("deep_reading_status"),
             }
         )
     return entries

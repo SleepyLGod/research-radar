@@ -14,6 +14,7 @@ from research_radar.models import SourceCandidate, SourceType
 from research_radar.storage.files import ensure_dir, read_jsonl
 
 REPORTABLE_HISTORY_STATUSES = {"new", "version_update", "not_tracked"}
+OUTCOME_EVENTS = {"daily_outcome", "wechat_draft"}
 
 
 def annotate_source_history(
@@ -38,6 +39,57 @@ def annotate_source_history(
         _append_jsonl(path, append_rows)
     report = _history_report(path, annotated, append_rows)
     return annotated, report
+
+
+def append_source_history_outcomes(
+    root: Path,
+    topic_id: str,
+    candidates: list[SourceCandidate],
+    *,
+    run_id: str,
+    event: str,
+    outcome_by_url: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Append source outcome rows for successful daily or publish stages."""
+
+    if event not in OUTCOME_EVENTS:
+        raise ValueError(f"Unsupported source history outcome event: {event}")
+    path = root / "data" / "source_history" / f"{_safe_topic(topic_id)}.jsonl"
+    records = _latest_records(path)
+    rows = [
+        _outcome_row(candidate, records, run_id, event, outcome)
+        for candidate in candidates
+        if (outcome := outcome_by_url.get(candidate.url)) is not None
+    ]
+    rows = [row for row in rows if row is not None]
+    if rows:
+        _append_jsonl(path, rows)
+    return {"history_path": str(path), "event": event, "appended_count": len(rows)}
+
+
+def append_source_history_outcome_records(
+    root: Path,
+    topic_id: str,
+    sources: list[dict[str, Any]],
+    *,
+    run_id: str,
+    event: str,
+    outcome_by_url: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Append source outcome rows from serialized source candidates."""
+
+    if event not in OUTCOME_EVENTS:
+        raise ValueError(f"Unsupported source history outcome event: {event}")
+    path = root / "data" / "source_history" / f"{_safe_topic(topic_id)}.jsonl"
+    rows = [
+        _outcome_record(row, run_id, event, outcome)
+        for row in sources
+        if (outcome := outcome_by_url.get(str(row.get("url") or ""))) is not None
+    ]
+    rows = [row for row in rows if row is not None]
+    if rows:
+        _append_jsonl(path, rows)
+    return {"history_path": str(path), "event": event, "appended_count": len(rows)}
 
 
 def is_reportable_source(source: SourceCandidate) -> bool:
@@ -148,7 +200,21 @@ def _annotate_candidate(
             "alias_refresh",
             run_id,
         )
-    return _with_history(candidate, status, family_key, family_keys, version, previous_version), row
+    previous_outcome = previous.get("outcome") if isinstance(previous, dict) else None
+    if not isinstance(previous_outcome, dict):
+        previous_outcome = None
+    return (
+        _with_history(
+            candidate,
+            status,
+            family_key,
+            family_keys,
+            version,
+            previous_version,
+            previous_outcome=previous_outcome,
+        ),
+        row,
+    )
 
 
 def _previous_record(
@@ -169,18 +235,23 @@ def _with_history(
     family_keys: list[str],
     version: str | None,
     previous_version: str | None,
+    *,
+    previous_outcome: dict[str, Any] | None = None,
 ) -> SourceCandidate:
+    history = {
+        "status": status,
+        "family_key": family_key,
+        "family_keys": family_keys,
+        "version": version,
+        "previous_version": previous_version,
+    }
+    if previous_outcome is not None:
+        history["previous_outcome"] = previous_outcome
     return replace(
         candidate,
         metadata={
             **candidate.metadata,
-            "source_history": {
-                "status": status,
-                "family_key": family_key,
-                "family_keys": family_keys,
-                "version": version,
-                "previous_version": previous_version,
-            },
+            "source_history": history,
         },
     )
 
@@ -209,6 +280,78 @@ def _history_row(
         "run_id": run_id,
         "seen_at": datetime.now(UTC).isoformat(),
     }
+
+
+def _outcome_row(
+    candidate: SourceCandidate,
+    records: dict[str, dict[str, Any]],
+    run_id: str,
+    event: str,
+    outcome: dict[str, Any],
+) -> dict[str, Any] | None:
+    family_keys = source_family_keys(candidate)
+    if not family_keys:
+        return None
+    previous = _previous_record(records, family_keys)
+    previous_version = (
+        str(previous.get("latest_version")) if previous and previous.get("latest_version") else None
+    )
+    version = source_version(candidate) or previous_version
+    row = _history_row(
+        candidate,
+        family_keys[0],
+        _merged_family_keys(previous, family_keys) if previous else family_keys,
+        version,
+        previous_version,
+        event,
+        run_id,
+    )
+    row["outcome"] = outcome
+    return row
+
+
+def _outcome_record(
+    source: dict[str, Any],
+    run_id: str,
+    event: str,
+    outcome: dict[str, Any],
+) -> dict[str, Any] | None:
+    metadata = source.get("metadata", {})
+    history = metadata.get("source_history", {}) if isinstance(metadata, dict) else {}
+    family_keys = _record_family_keys(history)
+    if not family_keys:
+        return None
+    row = {
+        "event": event,
+        "family_key": family_keys[0],
+        "family_keys": family_keys,
+        "latest_version": history.get("version"),
+        "previous_version": history.get("previous_version"),
+        "title": source.get("title"),
+        "url": source.get("url"),
+        "canonical_id": source.get("canonical_id"),
+        "source_type": source.get("source_type"),
+        "source_name": source.get("source_name"),
+        "published_at": source.get("published_at"),
+        "run_id": run_id,
+        "seen_at": datetime.now(UTC).isoformat(),
+        "outcome": outcome,
+    }
+    return row
+
+
+def _record_family_keys(history: object) -> list[str]:
+    if not isinstance(history, dict):
+        return []
+    keys = history.get("family_keys")
+    if isinstance(keys, list):
+        values = [str(key) for key in keys if isinstance(key, str) and key]
+    else:
+        values = []
+    family_key = history.get("family_key")
+    if isinstance(family_key, str) and family_key:
+        values.append(family_key)
+    return list(dict.fromkeys(values))
 
 
 def _latest_records(path: Path) -> dict[str, dict[str, Any]]:
@@ -264,6 +407,7 @@ def _history_report(
                     "family_key": history.get("family_key"),
                     "family_keys": history.get("family_keys", []),
                     "version": history.get("version"),
+                    "previous_outcome": history.get("previous_outcome"),
                 }
             )
     return {

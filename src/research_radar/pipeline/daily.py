@@ -72,6 +72,7 @@ from research_radar.storage.files import write_json, write_jsonl, write_text
 from research_radar.storage.runs import create_run_dir, update_manifest
 from research_radar.storage.source_history import (
     annotate_source_history,
+    append_source_history_outcomes,
     is_reportable_source,
 )
 
@@ -652,7 +653,6 @@ def run_daily(
         write_json(run_dir / "research_plan.json", research_plan_to_dict(research_plan))
         write_jsonl(run_dir / "sources.jsonl", candidates)
         write_json(run_dir / "web_search_summary.json", web_search_summary)
-        write_json(run_dir / "source_history_report.json", history_report)
         write_json(run_dir / "wide_scan.json", build_wide_scan(candidates))
         write_json(
             run_dir / "source_selection.json",
@@ -753,6 +753,24 @@ def run_daily(
                 reader_attempts=reader_attempts,
             ),
         )
+        daily_outcome_report = append_source_history_outcomes(
+            root,
+            topic.id,
+            public_reportable_candidates,
+            run_id=manifest.run_id,
+            event="daily_outcome",
+            outcome_by_url=_daily_outcomes_by_url(
+                public_reportable_candidates,
+                selected_deep_candidates,
+                deep_reading_status_by_url,
+                publishable_claim_count_by_url=_publishable_claim_counts_by_url(claims),
+            ),
+        )
+        history_report = {
+            **history_report,
+            "daily_outcome": daily_outcome_report,
+        }
+        write_json(run_dir / "source_history_report.json", history_report)
         write_json(
             run_dir / "summary.json",
             {
@@ -791,6 +809,39 @@ def _relevance_count(candidates: list[SourceCandidate], status: str) -> int:
         for candidate in candidates
         if candidate.metadata.get("relevance", {}).get("status") == status
     )
+
+
+def _daily_outcomes_by_url(
+    candidates: list[SourceCandidate],
+    selected_deep_candidates: list[SourceCandidate],
+    deep_reading_status_by_url: dict[str, str],
+    *,
+    publishable_claim_count_by_url: dict[str, int],
+) -> dict[str, dict[str, object]]:
+    selected_urls = {candidate.url for candidate in selected_deep_candidates}
+    return {
+        candidate.url: {
+            "daily_included": True,
+            "selected_for_deep_reading": candidate.url in selected_urls,
+            "deep_reading_status": deep_reading_status_by_url.get(
+                candidate.url,
+                "not_selected",
+            ),
+            "publishable_claim_count": publishable_claim_count_by_url.get(candidate.url, 0),
+        }
+        for candidate in candidates
+    }
+
+
+def _publishable_claim_counts_by_url(claims: list[Claim]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for claim in claims:
+        if not claim.is_publishable():
+            continue
+        source_urls = {anchor.source_url for anchor in claim.evidence if anchor.source_url}
+        for source_url in source_urls:
+            counts[source_url] = counts.get(source_url, 0) + 1
+    return counts
 
 
 def _write_localization_failed_daily(
