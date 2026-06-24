@@ -82,6 +82,23 @@ def test_secrets_set_parser_accepts_xiaomi() -> None:
     assert args.name == "xiaomi"
 
 
+def test_eval_topics_parser_accepts_topic_budget_seconds() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["eval", "topics", "--topic-budget-seconds", "900"])
+
+    assert args.topic_budget_seconds == 900
+
+
+def test_eval_topics_parser_rejects_negative_topic_budget_seconds() -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["eval", "topics", "--topic-budget-seconds", "-1"])
+
+    assert exc_info.value.code == 2
+
+
 def test_secrets_set_named_parser_accepts_arbitrary_secret_name() -> None:
     parser = cli.build_parser()
 

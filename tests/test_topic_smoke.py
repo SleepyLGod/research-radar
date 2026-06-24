@@ -228,6 +228,40 @@ def test_topic_smoke_markdown_includes_skipped_paper_centrality(tmp_path: Path) 
     assert "0.780" in markdown
 
 
+def test_topic_smoke_markdown_includes_fit_and_history_status(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[0],
+        sources=[
+            _source(
+                "Grounded Agent Memory Benchmark",
+                "https://example.com/paper",
+                "benchmark_paper",
+                "A paper about agent memory benchmark evaluation.",
+                history_status="new",
+                history_family_key="arxiv:2604.01707",
+            )
+        ],
+    )
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[0])
+    report = TopicSmokeReport(
+        root=str(tmp_path),
+        summary_path=str(tmp_path / "summary.json"),
+        markdown_path=str(tmp_path / "summary.md"),
+        passed=result.passed,
+        results=[result],
+    )
+
+    markdown = render_topic_smoke_markdown(report)
+
+    assert "Fit" in markdown
+    assert "History" in markdown
+    assert "Deep Status" in markdown
+    assert "| agent-memory | PASS" in markdown
+    assert "| OK |" in markdown
+    assert "| new (arxiv:2604.01707) | succeeded |" in markdown
+
+
 def test_topic_smoke_distinguishes_missing_paper_from_below_threshold(tmp_path: Path) -> None:
     no_paper_run = _write_run(
         tmp_path / "missing",
@@ -448,6 +482,164 @@ def test_run_topic_smoke_writes_aggregate_summary(tmp_path: Path) -> None:
     assert (tmp_path / "topic_smoke_progress.jsonl").exists()
 
 
+def test_run_topic_smoke_refreshes_summary_after_each_topic(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    specs = [DEFAULT_TOPIC_SMOKE_SPECS[0], DEFAULT_TOPIC_SMOKE_SPECS[1]]
+
+    def fake_runner(root: Path, config, topic_id: str, connectors, **kwargs) -> Path:
+        if topic_id == "llm-reasoning-eval":
+            partial_summary = read_json(root / "topic_smoke_summary.json")
+            assert [item["topic_id"] for item in partial_summary["results"]] == [
+                "agent-memory"
+            ]
+            raise ResearchRadarError("fixture second topic failure")
+        spec = next(item for item in specs if item.id == topic_id)
+        return _write_run(root / topic_id, spec)
+
+    report = run_topic_smoke(
+        tmp_path,
+        config,
+        [],
+        StaticProvider("{}"),
+        model="fake-model",
+        specs=specs,
+        runner=fake_runner,
+    )
+
+    summary = read_json(Path(report.summary_path))
+    assert not report.passed
+    assert [item["topic_id"] for item in summary["results"]] == [
+        "agent-memory",
+        "llm-reasoning-eval",
+    ]
+    assert summary["results"][0]["passed"] is True
+    assert summary["results"][1]["passed"] is False
+
+
+def test_run_topic_smoke_soft_budget_warns_without_failing(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    def fake_runner(root: Path, config, topic_id: str, connectors, **kwargs) -> Path:
+        return _write_run(root / topic_id, DEFAULT_TOPIC_SMOKE_SPECS[0])
+
+    report = run_topic_smoke(
+        tmp_path,
+        config,
+        [],
+        StaticProvider("{}"),
+        model="fake-model",
+        specs=[DEFAULT_TOPIC_SMOKE_SPECS[0]],
+        runner=fake_runner,
+        topic_budget_seconds=0.000001,
+    )
+
+    summary = read_json(Path(report.summary_path))
+    assert report.passed
+    assert summary["results"][0]["passed"] is True
+    assert summary["results"][0]["elapsed_seconds"] is not None
+    assert "topic exceeded soft budget" in summary["results"][0]["topic_fit_warnings"][0]
+
+
+def test_reasoning_eval_warns_on_memory_centric_selection(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[1],
+        selected_url="https://example.com/memory-reasoning",
+        sources=[
+            _source(
+                "Continual Self-Improvement with Lightweight Experiential Latent Memories",
+                "https://example.com/memory-reasoning",
+                "benchmark_paper",
+                "A method paper about latent memories for math reasoning.",
+            )
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[1])
+
+    assert result.passed
+    assert result.topic_fit_warnings == [
+        "selected reasoning-eval paper appears method/memory-centric; "
+        "check for a reasoning benchmark or evaluation-centered paper"
+    ]
+
+
+def test_reasoning_eval_does_not_warn_on_benchmark_selection(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[1],
+        selected_url="https://example.com/reasoning-benchmark",
+        sources=[
+            _source(
+                "AIME and GPQA Reasoning Evaluation Benchmark",
+                "https://example.com/reasoning-benchmark",
+                "benchmark_paper",
+                "A benchmark for LLM reasoning evaluation with AIME and GPQA accuracy.",
+            )
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[1])
+
+    assert result.passed
+    assert result.topic_fit_warnings == []
+
+
+def test_rag_systems_warns_on_domain_or_modality_specific_selection(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[2],
+        selected_url="https://example.com/multimodal-docqa-rag",
+        sources=[
+            _source(
+                "Benchmarking Retrieval-Augmented Multimodal Generation for Document QA",
+                "https://example.com/multimodal-docqa-rag",
+                "benchmark_paper",
+                "A multimodal document question answering RAG benchmark.",
+            )
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[2])
+
+    assert result.passed
+    assert result.topic_fit_warnings == [
+        "selected RAG paper appears domain- or modality-specific; "
+        "check whether it represents general RAG systems"
+    ]
+
+
+def test_rag_systems_does_not_warn_on_general_system_selection(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        DEFAULT_TOPIC_SMOKE_SPECS[2],
+        selected_url="https://example.com/general-rag",
+        sources=[
+            _source(
+                "RAG Systems Evaluation Benchmark",
+                "https://example.com/general-rag",
+                "benchmark_paper",
+                "A general RAG systems evaluation benchmark with flaw analysis.",
+            )
+        ],
+    )
+
+    result = summarize_topic_run(run_dir, DEFAULT_TOPIC_SMOKE_SPECS[2])
+
+    assert result.passed
+    assert result.topic_fit_warnings == []
+
+
 def test_select_topic_specs_can_select_llm_inference() -> None:
     specs = select_topic_specs(["llm-inference"])
 
@@ -522,6 +714,10 @@ def _write_run(
                 "selected": source["url"] == selected_url,
                 "role": source["metadata"]["source_role"]["role"],
                 "deep_read_priority": source["metadata"]["source_role"]["deep_read_priority"],
+                "attempted_for_deep_reading": source["url"] == selected_url,
+                "deep_reading_status": (
+                    "succeeded" if source["url"] == selected_url else "not_attempted"
+                ),
             },
         }
         for source in source_rows
@@ -560,6 +756,8 @@ def _source(
     source_name: str = "arxiv",
     relevance: float = 1.0,
     centrality: float | None = None,
+    history_status: str | None = None,
+    history_family_key: str | None = None,
 ) -> dict:
     metadata = {
         "relevance": {"status": "relevant", "score": relevance},
@@ -575,6 +773,14 @@ def _source(
             "positive_signals": ["fixture"],
             "negative_signals": [],
             "reason": "fixture centrality",
+        }
+    if history_status is not None:
+        metadata["source_history"] = {
+            "status": history_status,
+            "family_key": history_family_key,
+            "family_keys": [history_family_key] if history_family_key else [],
+            "version": None,
+            "previous_version": None,
         }
     return {
         "title": title,

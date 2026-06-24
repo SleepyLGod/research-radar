@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from research_radar.analysis.providers import LLMProvider
@@ -60,6 +62,8 @@ class TopicSmokeResult:
     warning_count: int
     semantic_scholar_warning_count: int
     obvious_noise: bool
+    topic_fit_warnings: list[str] = field(default_factory=list)
+    elapsed_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -341,6 +345,7 @@ def run_topic_smoke(
     specs: Sequence[TopicSmokeSpec] = DEFAULT_TOPIC_SMOKE_SPECS,
     limit: int = 5,
     deep_limit: int = 1,
+    topic_budget_seconds: float = 0.0,
     language: str | None = None,
     runner: DailyRunner = run_daily,
 ) -> TopicSmokeReport:
@@ -350,14 +355,19 @@ def run_topic_smoke(
         raise ResearchRadarError("--limit must be at least 1.")
     if deep_limit < 1:
         raise ResearchRadarError("--deep-limit must be at least 1 for topic smoke.")
+    if topic_budget_seconds < 0:
+        raise ResearchRadarError("--topic-budget-seconds must be non-negative.")
 
     root = ensure_dir(root)
+    summary_path = root / "topic_smoke_summary.json"
+    markdown_path = root / "topic_smoke_summary.md"
     progress = ProgressWriter(root / "topic_smoke_progress.jsonl")
     progress.record("eval", "started", topic_count=len(specs))
     smoke_config = with_smoke_topics(config, specs)
     results: list[TopicSmokeResult] = []
     for spec in specs:
         progress.record("topic", "started", topic_id=spec.id)
+        started = perf_counter()
         try:
             run_dir = runner(
                 root,
@@ -379,16 +389,25 @@ def run_topic_smoke(
                 language=language,
             )
         except ResearchRadarError as exc:
+            elapsed = perf_counter() - started
             progress.record(
                 "topic",
                 "failed",
                 topic_id=spec.id,
+                elapsed_seconds=elapsed,
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
-            results.append(_failed_topic_result(spec.id, str(exc)))
+            results.append(_failed_topic_result(spec.id, str(exc), elapsed_seconds=elapsed))
+            _write_topic_smoke_report(root, summary_path, markdown_path, results)
             continue
+        elapsed = perf_counter() - started
         result = summarize_topic_run(run_dir, spec)
+        result = _with_topic_elapsed_and_budget_warning(
+            result,
+            elapsed_seconds=elapsed,
+            topic_budget_seconds=topic_budget_seconds,
+        )
         results.append(result)
         progress.record(
             "topic",
@@ -397,19 +416,12 @@ def run_topic_smoke(
             passed=result.passed,
             run_dir=str(run_dir),
             publishable_claim_count=result.publishable_claim_count,
+            elapsed_seconds=elapsed,
+            topic_fit_warnings=result.topic_fit_warnings,
         )
+        _write_topic_smoke_report(root, summary_path, markdown_path, results)
 
-    summary_path = root / "topic_smoke_summary.json"
-    markdown_path = root / "topic_smoke_summary.md"
-    report = TopicSmokeReport(
-        root=str(root),
-        summary_path=str(summary_path),
-        markdown_path=str(markdown_path),
-        passed=all(result.passed for result in results),
-        results=results,
-    )
-    write_json(summary_path, _report_to_dict(report))
-    write_text(markdown_path, render_topic_smoke_markdown(report))
+    report = _write_topic_smoke_report(root, summary_path, markdown_path, results)
     progress.record("eval", "completed", passed=report.passed)
     return report
 
@@ -448,6 +460,7 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
         daily_text=daily_text,
     )
     obvious_noise = selected_source is not None and not _has_required_signal(selected_source, spec)
+    topic_fit_warnings = _topic_fit_warnings(spec, selected_source)
     return TopicSmokeResult(
         topic_id=spec.id,
         run_dir=str(run_dir),
@@ -464,6 +477,7 @@ def summarize_topic_run(run_dir: Path, spec: TopicSmokeSpec) -> TopicSmokeResult
         warning_count=warning_count,
         semantic_scholar_warning_count=semantic_scholar_warning_count,
         obvious_noise=obvious_noise,
+        topic_fit_warnings=topic_fit_warnings,
     )
 
 
@@ -478,19 +492,28 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
         f"- Summary JSON: `{report.summary_path}`",
         "",
         "| Topic | Status | Selected Source | Role | "
-        "Centrality | Best Skipped Paper | Skipped Centrality | "
-        "Papers | Paper Status | Claims | Warnings | Failures |",
-        "| --- | --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | --- |",
+        "Fit | Centrality | Elapsed | History | Deep Status | "
+        "Best Skipped Paper | Skipped Centrality | Papers | Paper Status | "
+        "Claims | Warnings | Fit Warnings | Failures |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- | --- | "
+        "---: | ---: | --- | ---: | ---: | --- | --- |",
     ]
     for result in report.results:
         selected = result.selected_source or {}
         selected_title = str(selected.get("title", "-")).replace("|", "\\|")
         selected_role = str(selected.get("role", "-")).replace("|", "\\|")
+        fit = "WARN" if result.topic_fit_warnings else "OK"
         centrality = _format_optional_float(selected.get("centrality_score"))
+        elapsed = _format_optional_float(result.elapsed_seconds)
+        history_status = _format_history_status(selected).replace("|", "\\|")
+        deep_status = str(selected.get("deep_reading_status", "-")).replace("|", "\\|")
         skipped = result.best_skipped_paper or {}
         skipped_title = str(skipped.get("title", "-")).replace("|", "\\|")
         skipped_centrality = _format_optional_float(skipped.get("centrality_score"))
         paper_status = result.paper_selection_reason.replace("|", "\\|")
+        fit_warnings = (
+            "; ".join(result.topic_fit_warnings) if result.topic_fit_warnings else "-"
+        ).replace("|", "\\|")
         failures = ("; ".join(result.failures) if result.failures else "-").replace("|", "\\|")
         lines.append(
             "| "
@@ -498,7 +521,11 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
             f"{'PASS' if result.passed else 'FAIL'} | "
             f"{selected_title} | "
             f"{selected_role} | "
+            f"{fit} | "
             f"{centrality} | "
+            f"{elapsed} | "
+            f"{history_status} | "
+            f"{deep_status} | "
             f"{skipped_title} | "
             f"{skipped_centrality} | "
             f"{result.paper_candidate_count}/{result.relevant_paper_count}/"
@@ -506,6 +533,7 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
             f"{paper_status} | "
             f"{result.publishable_claim_count} | "
             f"{result.warning_count} | "
+            f"{fit_warnings} | "
             f"{failures} |"
         )
     lines.extend(_rejected_paper_lines(report.results))
@@ -513,7 +541,12 @@ def render_topic_smoke_markdown(report: TopicSmokeReport) -> str:
     return "\n".join(lines)
 
 
-def _failed_topic_result(topic_id: str, reason: str) -> TopicSmokeResult:
+def _failed_topic_result(
+    topic_id: str,
+    reason: str,
+    *,
+    elapsed_seconds: float | None = None,
+) -> TopicSmokeResult:
     safe_reason = _safe_failure_reason(reason)
     return TopicSmokeResult(
         topic_id=topic_id,
@@ -531,6 +564,7 @@ def _failed_topic_result(topic_id: str, reason: str) -> TopicSmokeResult:
         warning_count=0,
         semantic_scholar_warning_count=0,
         obvious_noise=True,
+        elapsed_seconds=elapsed_seconds,
     )
 
 
@@ -557,6 +591,43 @@ def _report_to_dict(report: TopicSmokeReport) -> dict[str, Any]:
     }
 
 
+def _write_topic_smoke_report(
+    root: Path,
+    summary_path: Path,
+    markdown_path: Path,
+    results: list[TopicSmokeResult],
+) -> TopicSmokeReport:
+    report = TopicSmokeReport(
+        root=str(root),
+        summary_path=str(summary_path),
+        markdown_path=str(markdown_path),
+        passed=all(result.passed for result in results),
+        results=results,
+    )
+    write_json(summary_path, _report_to_dict(report))
+    write_text(markdown_path, render_topic_smoke_markdown(report))
+    return report
+
+
+def _with_topic_elapsed_and_budget_warning(
+    result: TopicSmokeResult,
+    *,
+    elapsed_seconds: float,
+    topic_budget_seconds: float,
+) -> TopicSmokeResult:
+    warnings = list(result.topic_fit_warnings)
+    if topic_budget_seconds > 0 and elapsed_seconds > topic_budget_seconds:
+        warnings.append(
+            f"topic exceeded soft budget: {elapsed_seconds:.1f}s > "
+            f"{topic_budget_seconds:.1f}s"
+        )
+    return replace(
+        result,
+        elapsed_seconds=elapsed_seconds,
+        topic_fit_warnings=warnings,
+    )
+
+
 def _selected_source(
     sources: list[dict[str, Any]],
     findings: list[dict[str, Any]],
@@ -578,6 +649,7 @@ def _selected_source(
         if source.get("url") != selected_url:
             continue
         role = _source_role(source)
+        history = source.get("metadata", {}).get("source_history", {})
         return {
             "title": source.get("title"),
             "url": source.get("url"),
@@ -589,6 +661,12 @@ def _selected_source(
             "centrality_score": _centrality_score(source),
             "centrality_reason": _centrality_reason(source),
             "selection_score": _selection_score_from_findings(findings, selected_url),
+            "source_history_status": history.get("status"),
+            "source_history_family_key": history.get("family_key"),
+            "deep_reading_status": _deep_reading_status_from_findings(
+                findings,
+                selected_url,
+            ),
         }
     return {
         "title": None,
@@ -601,6 +679,9 @@ def _selected_source(
         "centrality_score": _centrality_score_from_findings(findings, selected_url),
         "centrality_reason": _centrality_reason_from_findings(findings, selected_url),
         "selection_score": _selection_score_from_findings(findings, selected_url),
+        "source_history_status": None,
+        "source_history_family_key": None,
+        "deep_reading_status": _deep_reading_status_from_findings(findings, selected_url),
     }
 
 
@@ -612,6 +693,21 @@ def _selection_score_from_findings(
         metadata = finding.get("metadata", {})
         if metadata.get("source_url") == source_url and "selection_score" in metadata:
             return float(metadata["selection_score"])
+    return None
+
+
+def _deep_reading_status_from_findings(
+    findings: list[dict[str, Any]],
+    source_url: str,
+) -> str | None:
+    for finding in findings:
+        metadata = finding.get("metadata", {})
+        if metadata.get("source_url") != source_url:
+            continue
+        if metadata.get("kind") != "deep_source_selection":
+            continue
+        value = metadata.get("deep_reading_status")
+        return str(value) if value is not None else None
     return None
 
 
@@ -870,6 +966,127 @@ def _format_optional_float(value: object) -> str:
     if value is None:
         return "-"
     return f"{float(value):.3f}"
+
+
+def _format_history_status(source: dict[str, Any]) -> str:
+    status = source.get("source_history_status")
+    family_key = source.get("source_history_family_key")
+    if status is None:
+        return "-"
+    if family_key is None:
+        return str(status)
+    return f"{status} ({family_key})"
+
+
+def _topic_fit_warnings(
+    spec: TopicSmokeSpec,
+    selected_source: dict[str, Any] | None,
+) -> list[str]:
+    if selected_source is None:
+        return []
+    text = _normalize_source_text(selected_source)
+    if spec.id == "llm-reasoning-eval":
+        return _llm_reasoning_eval_fit_warnings(text)
+    if spec.id == "rag-systems":
+        return _rag_systems_fit_warnings(text)
+    return []
+
+
+def _llm_reasoning_eval_fit_warnings(text: str) -> list[str]:
+    warnings: list[str] = []
+    method_only_signals = (
+        "latent memor",
+        "experiential memor",
+        "agent memory",
+        "self-improvement",
+        "self improvement",
+        "continual self",
+        "memory system",
+    )
+    evaluation_signals = (
+        "reasoning evaluation",
+        "reasoning benchmark",
+        "benchmark",
+        "evaluation",
+        "test-time scaling",
+        "test time scaling",
+        "aime",
+        "math",
+        "gpqa",
+        "pass@",
+        "accuracy",
+    )
+    if _contains_any(text, method_only_signals):
+        warnings.append(
+            "selected reasoning-eval paper appears method/memory-centric; "
+            "check for a reasoning benchmark or evaluation-centered paper"
+        )
+    elif not _contains_any(text, evaluation_signals):
+        warnings.append(
+            "selected reasoning-eval paper lacks benchmark/evaluation/test-time "
+            "reasoning signals"
+        )
+    return warnings
+
+
+def _rag_systems_fit_warnings(text: str) -> list[str]:
+    warnings: list[str] = []
+    domain_or_modality_signals = (
+        "legal",
+        "law",
+        "clinical",
+        "medical",
+        "healthcare",
+        "finance",
+        "financial",
+        "e-commerce",
+        "ecommerce",
+        "retail",
+        "food",
+        "healthy eating",
+        "news",
+        "multimodal",
+        "multi-modal",
+        "document question answering",
+        "document qa",
+        "docqa",
+        "docvqa",
+        "visual question answering",
+    )
+    general_system_signals = (
+        "rag system",
+        "rag systems",
+        "retrieval augmented generation system",
+        "retrieval-augmented generation system",
+        "rag evaluation",
+        "rag benchmark",
+        "retrieval augmented generation benchmark",
+        "retrieval-augmented generation benchmark",
+    )
+    if _contains_any(text, domain_or_modality_signals):
+        warnings.append(
+            "selected RAG paper appears domain- or modality-specific; "
+            "check whether it represents general RAG systems"
+        )
+    elif not _contains_any(text, general_system_signals):
+        warnings.append(
+            "selected RAG paper lacks general RAG systems/evaluation signals"
+        )
+    return warnings
+
+
+def _contains_any(text: str, signals: tuple[str, ...]) -> bool:
+    return any(_contains_signal(text, signal) for signal in signals)
+
+
+def _contains_signal(text: str, signal: str) -> bool:
+    if _needs_token_boundary(signal):
+        return re.search(rf"(?<![a-z0-9]){re.escape(signal)}(?![a-z0-9])", text) is not None
+    return signal in text
+
+
+def _needs_token_boundary(signal: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9@-]{1,4}", signal))
 
 
 def _acceptance_failures(

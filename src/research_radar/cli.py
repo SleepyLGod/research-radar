@@ -458,6 +458,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum relevant sources to deep-read per topic.",
     )
     eval_topics.add_argument(
+        "--topic-budget-seconds",
+        type=_non_negative_float,
+        default=0.0,
+        help=(
+            "Soft per-topic runtime budget. A topic exceeding this value is marked "
+            "with a fit warning; 0 disables the budget."
+        ),
+    )
+    eval_topics.add_argument(
         "--provider",
         default=None,
         help="Compatibility default provider for all model-backed eval tasks.",
@@ -687,6 +696,13 @@ def build_parser() -> argparse.ArgumentParser:
     privacy_scan.set_defaults(handler=handle_privacy_scan)
 
     return parser
+
+
+def _non_negative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
 
 
 def _add_provider_route_override_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1177,6 +1193,7 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         specs=select_topic_specs(args.topics),
         limit=args.limit,
         deep_limit=args.deep_limit,
+        topic_budget_seconds=args.topic_budget_seconds,
         language=getattr(args, "language", None),
     )
     print(f"Wrote topic smoke summary: {report.markdown_path}")
