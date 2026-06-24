@@ -57,6 +57,22 @@ DEFAULT_NEGATIVE_PHRASES = [
     "tutorial only",
 ]
 
+GENERIC_ALIASES = {
+    "ai",
+    "benchmark",
+    "benchmarks",
+    "dataset",
+    "datasets",
+    "evaluation",
+    "model",
+    "models",
+    "paper",
+    "papers",
+    "research",
+    "system",
+    "systems",
+}
+
 
 class _NoAliasDumper(yaml.SafeDumper):
     """YAML dumper that keeps editable drafts free of anchors."""
@@ -120,7 +136,33 @@ def render_topic_draft_yaml(topic: TopicConfig) -> str:
         }
     ]
     body = yaml.dump(payload, Dumper=_NoAliasDumper, sort_keys=False, allow_unicode=True)
-    return f"{DRAFT_HEADER}\n{body}"
+    warning_lines = [f"# - {warning}" for warning in lint_topic_draft(topic)]
+    warnings = "\n".join(["# Quality warnings:", *warning_lines, ""]) if warning_lines else ""
+    return f"{DRAFT_HEADER}\n{warnings}{body}"
+
+
+def lint_topic_draft(topic: TopicConfig) -> list[str]:
+    """Return deterministic quality warnings for an editable topic draft."""
+
+    warnings: list[str] = []
+    if len(topic.queries) < 2:
+        warnings.append("add at least two broad discovery queries")
+    if len(topic.paper_queries) < 3:
+        warnings.append("add at least three paper-focused queries")
+    if len(topic.negative_phrases) < 3:
+        warnings.append("add more negative phrases to reduce off-topic recall")
+    for group in [
+        "agent_context",
+        "memory_mechanism",
+        "evaluation_signal",
+        "negative_compute_or_training",
+    ]:
+        aliases = topic.concept_groups.get(group, [])
+        if not aliases:
+            warnings.append(f"concept group `{group}` is empty")
+        elif _aliases_are_too_generic(aliases):
+            warnings.append(f"concept group `{group}` is too generic")
+    return warnings
 
 
 def write_topic_draft(
@@ -143,6 +185,7 @@ def _heuristic_topic(topic_text: str, *, language: str) -> TopicConfig:
     base_phrase = " ".join(terms[:6])
     title_phrase = topic_text.casefold()
     concept_aliases = _concept_aliases(terms, title_phrase)
+    topic_negative_phrases = _negative_phrases_for_terms(terms)
     return TopicConfig(
         id=topic_id,
         queries=_unique(
@@ -169,7 +212,7 @@ def _heuristic_topic(topic_text: str, *, language: str) -> TopicConfig:
                 f"{base_phrase} github",
             ]
         ),
-        negative_phrases=list(DEFAULT_NEGATIVE_PHRASES),
+        negative_phrases=topic_negative_phrases,
         concept_groups={
             "agent_context": concept_aliases["context"],
             "memory_mechanism": concept_aliases["mechanism"],
@@ -180,7 +223,7 @@ def _heuristic_topic(topic_text: str, *, language: str) -> TopicConfig:
                 "evaluation",
                 "dataset",
             ],
-            "negative_compute_or_training": list(DEFAULT_NEGATIVE_PHRASES),
+            "negative_compute_or_training": topic_negative_phrases,
         },
         priority_sources=list(DEFAULT_PRIORITY_SOURCES),
         source_intent="research_brief",
@@ -265,7 +308,54 @@ def _known_mechanism_aliases(terms: list[str]) -> list[str]:
         aliases.extend(["memory retrieval", "long-term memory"])
     if "reasoning" in term_set:
         aliases.extend(["reasoning evaluation", "chain-of-thought"])
+    if "inference" in term_set or "serving" in term_set:
+        aliases.extend(
+            [
+                "llm serving",
+                "inference engine",
+                "kv cache",
+                "prefill",
+                "decode",
+                "batching",
+                "speculative decoding",
+            ]
+        )
+    if "robot" in term_set or "robotics" in term_set:
+        aliases.extend(
+            [
+                "robot foundation model",
+                "embodied agent",
+                "vision-language-action",
+                "robot manipulation benchmark",
+            ]
+        )
+    if "long" in term_set and "context" in term_set:
+        aliases.extend(
+            [
+                "long-context evaluation",
+                "context length",
+                "needle-in-a-haystack",
+                "long-context benchmark",
+            ]
+        )
     return aliases
+
+
+def _negative_phrases_for_terms(terms: list[str]) -> list[str]:
+    term_set = set(terms)
+    phrases = list(DEFAULT_NEGATIVE_PHRASES)
+    if "inference" in term_set or "serving" in term_set:
+        phrases.extend(["fine-tuning only", "post-training", "rag system", "agent memory"])
+    if "robot" in term_set or "robotics" in term_set:
+        phrases.extend(["industrial product page", "robot kit tutorial", "automation vendor"])
+    if "long" in term_set and "context" in term_set:
+        phrases.extend(["prompt engineering only", "chatbot tutorial", "short-context benchmark"])
+    return _unique(phrases)
+
+
+def _aliases_are_too_generic(aliases: list[str]) -> bool:
+    meaningful = [alias for alias in aliases if alias.casefold() not in GENERIC_ALIASES]
+    return len(meaningful) == 0
 
 
 def _load_json_object(raw_json: str) -> dict[str, Any]:

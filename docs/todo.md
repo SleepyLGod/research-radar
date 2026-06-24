@@ -14,6 +14,8 @@ drive the research model.
   daily report or WeChat draft.
 - Multi-topic eval gate v1 across `agent-memory`, `llm-reasoning-eval`, `rag-systems`, and
   `llm-inference`, validated with a real four-topic WeChat draft smoke.
+- Topic bootstrap quality lint for editable YAML drafts, with topic-specific signals for inference
+  serving, robot foundation models, and long-context evaluation.
 - Source-aware paper acquisition for arXiv and OpenReview, including OpenReview PDF ingestion.
 - Full-paper reading packets from extracted PDFs, with a completeness gate that rejects
   abstract-only HTML for research briefs.
@@ -80,34 +82,28 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Evaluate topic bootstrap quality.
-   - Generate editable topic YAML drafts.
-   - Check whether queries, concept groups, negative phrases, and priority sources are too broad or
-     too narrow.
-   - Keep manual review for new topic onboarding until quality is proven.
-
-2. Stabilize Codex reader for weekly deep dives.
+1. Stabilize Codex reader for weekly deep dives.
    - Keep DeepSeek v4 Pro as the default daily reader until Codex reader schema stability improves.
    - Use Codex reader for high-value weekly runs only after timeout and schema-retry behavior is
      reliable.
 
-3. Expand diagrams and figure handling.
+2. Expand diagrams and figure handling.
    - Improve self-drawn explanatory diagrams using only verified structured readings.
    - Improve TeX-source figure/caption extraction and license metadata coverage.
    - Improve PDF figure cropping for multi-column, caption-above, and unusual layouts.
    - Reuse original paper figures only with license and attribution audit.
 
-4. Continue cost and first-run runtime optimization.
+3. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
    - Consider reader/verifier budget strategies only after the daily E2E path is stable.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
-5. Add future publishing channels such as Zhihu.
+4. Add future publishing channels such as Zhihu.
    - Keep channel renderers downstream of the verified `ArticleDraft`.
    - Do not let channel formatting requirements change the core research and evidence model.
 
 ## Near-Term Execution Order
 
-1. Add deterministic quality checks for generated topic bootstrap YAML drafts.
-2. Use the multi-topic eval gate to tune reviewed topic profiles from recall/precision failures.
+1. Use the multi-topic eval gate to tune reviewed topic profiles from recall/precision failures.
+2. Stabilize Codex reader for weekly deep-dive runs.
 3. Expand diagram and figure handling after the evaluation loop is stable.
