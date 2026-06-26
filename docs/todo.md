@@ -82,28 +82,42 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Stabilize Codex reader for weekly deep dives.
-   - Keep DeepSeek v4 Pro as the default daily reader until Codex reader schema stability improves.
-   - Use Codex reader for high-value weekly runs only after timeout and schema-retry behavior is
-     reliable.
-
-2. Expand diagrams and figure handling.
+1. Improve figure and diagram quality.
    - Improve self-drawn explanatory diagrams using only verified structured readings.
    - Improve TeX-source figure/caption extraction and license metadata coverage.
    - Improve PDF figure cropping for multi-column, caption-above, and unusual layouts.
-   - Reuse original paper figures only with license and attribution audit.
+   - Improve Chinese captions and figure-to-text placement without creating new claims.
+   - Reuse original paper figures only with same-paper attribution and license audit.
 
-3. Continue cost and first-run runtime optimization.
+2. Add Zhihu and future channel MVPs.
+   - Build new channel renderers from the verified `ArticleDraft`; do not reuse WeChat HTML as the
+     source of truth.
+   - Keep channel-specific formatting downstream of verified claims, localized readings, source
+     metadata, and figure metadata.
+   - Do not let Zhihu or any future platform change the core research and evidence model.
+
+3. Tune topics from real daily runs.
+   - Do not overfit topic profiles before real usage shows a pattern.
+   - Use multi-topic eval and daily draft outcomes to identify recall failures, off-center source
+     selection, shallow readings, low publishable claim counts, or missing figures.
+   - Adjust queries, paper queries, concept groups, centrality signals, and negative phrases only
+     when repeated runs show the same issue.
+
+4. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
-   - Consider reader/verifier budget strategies only after the daily E2E path is stable.
+   - Consider reader/verifier budget strategies only when real scheduler runs show the cost is
+     painful.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
-4. Add future publishing channels such as Zhihu.
-   - Keep channel renderers downstream of the verified `ArticleDraft`.
-   - Do not let channel formatting requirements change the core research and evidence model.
+5. Keep weekly deep dive and Codex reader as future work.
+   - Weekly remains a later product mode; daily research plus WeChat draft is the current main path.
+   - Codex reader uses the same deep-reading prompt, schema, and evidence gate as DeepSeek reader.
+   - Future work is about Codex reader reliability: schema stability, timeout behavior, and long-paper
+     output quality.
 
 ## Near-Term Execution Order
 
-1. Use the multi-topic eval gate to tune reviewed topic profiles from recall/precision failures.
-2. Stabilize Codex reader for weekly deep-dive runs.
-3. Expand diagram and figure handling after the evaluation loop is stable.
+1. Improve figure and diagram quality for daily articles.
+2. Add a Zhihu renderer/export MVP from `ArticleDraft`.
+3. Use real daily runs to tune topic profiles when repeated failures appear.
+4. Revisit weekly deep dive and Codex reader only when daily usage shows the need.
