@@ -14,7 +14,6 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from research_radar.analysis.figure_text import (
-    FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX,
     FIGURE_EXPLANATION_SOURCE_CONTEXT,
 )
 from research_radar.discovery.dedupe import canonicalize_url
@@ -24,20 +23,23 @@ from research_radar.storage.files import ensure_dir
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".eps"}
 RASTER_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-FIGURE_KEYWORDS = (
-    "method",
-    "architecture",
-    "framework",
-    "pipeline",
-    "system",
-    "overview",
-    "benchmark",
-    "evaluation",
-    "result",
-    "ablation",
-    "performance",
-    "table",
-)
+FIGURE_KEYWORD_WEIGHTS = {
+    "architecture": 3.0,
+    "framework": 2.6,
+    "pipeline": 2.6,
+    "system": 2.2,
+    "overview": 2.2,
+    "method": 2.0,
+    "mechanism": 2.0,
+    "design": 1.8,
+    "benchmark": 1.8,
+    "evaluation": 1.8,
+    "result": 1.6,
+    "ablation": 1.6,
+    "performance": 1.4,
+    "table": 1.0,
+}
+FIGURE_KEYWORDS = tuple(FIGURE_KEYWORD_WEIGHTS)
 PDF_FIGURE_CROP_DPI = 160
 PDF_MIN_CROP_WIDTH = 180
 PDF_MIN_CROP_HEIGHT = 120
@@ -898,13 +900,13 @@ def _pdf_figure_title(caption: str) -> str:
 def _figure_score(raw_image: str, caption: str, label: str) -> float:
     text = f"{raw_image} {caption} {label}".casefold()
     score = 0.0
-    for keyword in FIGURE_KEYWORDS:
+    for keyword, weight in FIGURE_KEYWORD_WEIGHTS.items():
         if keyword in text:
-            score += 1.0
-    if "overview" in text or "architecture" in text:
-        score += 1.5
+            score += weight
+    if "fig:" in text and ("architecture" in text or "framework" in text):
+        score += 0.8
     if "appendix" in text or "supplement" in text:
-        score -= 0.5
+        score -= 1.0
     return score
 
 
@@ -952,7 +954,7 @@ def _claim_matches_source(claim: Claim, source: SourceCandidate) -> bool:
 def _figure_explanation(caption: str, claim: Claim | None) -> str:
     if claim is None:
         return FIGURE_EXPLANATION_SOURCE_CONTEXT
-    return f"{FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX}{claim.text}"
+    return f"Visual context for this verified point: {claim.text}"
 
 
 def _figure_title(candidate: FigureCandidate) -> str:

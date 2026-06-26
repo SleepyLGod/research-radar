@@ -368,10 +368,11 @@ def test_daily_markdown_supports_chinese_language() -> None:
 def test_long_form_wechat_renders_toc_deep_reads_and_collapsed_references() -> None:
     source = _paper_source()
     claim = _supported_paper_claim(source)
+    problem_claim = _supported_problem_claim(source)
     draft = build_daily_draft(
         "agent-memory",
         [source],
-        [claim],
+        [problem_claim, claim],
         readings=[_paper_reading(source.title)],
         deep_read_sources=[source],
     )
@@ -397,6 +398,35 @@ def test_long_form_wechat_renders_toc_deep_reads_and_collapsed_references() -> N
     assert "<summary>Key Evidence</summary>" in html
     assert "rr-diagram" in html
     assert "Supported paper claim" in html
+
+
+def test_long_form_diagram_uses_supported_claims_only() -> None:
+    source = _paper_source()
+    problem_claim = _supported_problem_claim(source)
+    solution_claim = _supported_paper_claim(source)
+    unsupported = Claim(
+        text="Experiment: Unsupported benchmark claim",
+        status=ClaimStatus.UNSUPPORTED,
+        evidence=[EvidenceAnchor(source_url=source.url, quote="Unsupported benchmark claim")],
+    )
+
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [problem_claim, solution_claim, unsupported],
+        readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+    )
+
+    deep_read = draft.sections[1].metadata["deep_reads"][0]
+    diagram = deep_read["diagram"]
+    html = render_wechat_html(draft)
+
+    assert diagram["kind"] == "mechanism_flow"
+    assert [node["label"] for node in diagram["nodes"]] == ["Problem", "Method"]
+    assert "Supported problem claim" in html
+    assert "Supported paper claim" in html
+    assert "Unsupported benchmark claim" not in html
 
 
 def test_wechat_visual_polish_does_not_change_markdown_or_zhihu_fallback() -> None:
@@ -657,7 +687,7 @@ def test_long_form_wechat_renders_paper_figures_without_new_claims() -> None:
     assert "Reuse status: needs_manual_review" in html
     assert "Figure license and reuse" in html
     assert "license=unknown; reuse_status=needs_manual_review" in html
-    assert "This figure is included because its caption aligns with a verified observation" in html
+    assert "Visual context for this verified point" in html
     assert "fabricated interpretation" not in html
 
 
@@ -1012,7 +1042,7 @@ def test_chinese_figure_fallback_explanation_does_not_expose_english_boilerplate
         )
     )
 
-    assert "这张图用于辅助理解；它的图注与一条已核验判断相关" in html
+    assert "这张图对应一条已核验判断" in html
     assert "This figure is included because" not in html
     assert "Solution: The system uses a retrieval memory pipeline" not in html
 
@@ -1093,6 +1123,21 @@ def _supported_paper_claim(source: SourceCandidate) -> Claim:
     )
 
 
+def _supported_problem_claim(source: SourceCandidate) -> Claim:
+    return Claim(
+        text="Problem: Supported problem claim",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                source_title=source.title,
+                quote="Supported problem claim",
+                location="page 1",
+            )
+        ],
+    )
+
+
 def _paper_figure(
     source: SourceCandidate,
     matched_claim: str,
@@ -1108,10 +1153,7 @@ def _paper_figure(
         "original_path": "figures/architecture",
         "caption": "Architecture overview for the memory retrieval pipeline.",
         "label": "fig:architecture",
-        "explanation": (
-            "This figure is included because its caption aligns with a verified observation: "
-            f"{matched_claim}"
-        ),
+        "explanation": f"Visual context for this verified point: {matched_claim}",
         "matched_claim": matched_claim,
         "license": "unknown",
         "reuse_status": "needs_manual_review",

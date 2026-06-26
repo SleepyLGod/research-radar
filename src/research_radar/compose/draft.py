@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from research_radar.analysis.source_gist import sanitize_source_gist
+from research_radar.compose.diagrams import build_mechanism_diagram
 from research_radar.compose.source_groups import source_group_for_candidate
 from research_radar.evidence.policy import publishable_claims
 from research_radar.models import ArticleDraft, ArticleSection, Claim, SourceCandidate
@@ -355,6 +356,7 @@ def _deep_read_entries(
                     getattr(reading, "plain_language_example", "")
                 ),
                 "figures": _figure_entries(source, figures_by_source_url),
+                "diagram": build_mechanism_diagram(reading_claims, language=language),
                 "claims": [_claim_entry(claim, language=language) for claim in reading_claims],
             }
         )

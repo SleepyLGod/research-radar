@@ -55,7 +55,7 @@ def test_extract_latex_figures_parses_caption_label_and_claim_link(tmp_path: Pat
     assert figure.caption == "Architecture overview for retrieval memory in the agent pipeline."
     assert figure.label == "fig:architecture"
     assert figure.matched_claim == claim.text
-    assert "verified observation" in figure.explanation
+    assert figure.explanation == f"Visual context for this verified point: {claim.text}"
     assert figure.reuse_status == "allowed_with_attribution"
     assert figure.attribution == (
         "Memory Paper; Ada Lovelace, Alan Turing; https://arxiv.org/abs/2605.00001"
@@ -63,6 +63,54 @@ def test_extract_latex_figures_parses_caption_label_and_claim_link(tmp_path: Pat
     assert Path(figure.asset_path).exists()
     assert figure.relative_path.startswith("figures/")
     assert figure.renderable is True
+
+
+def test_extract_latex_figures_prefers_method_architecture_over_appendix(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source"
+    image_dir = tmp_path / "figures" / "images"
+    (source_dir / "figures").mkdir(parents=True)
+    (source_dir / "figures" / "appendix.png").write_bytes(b"appendix")
+    (source_dir / "figures" / "architecture.png").write_bytes(b"architecture")
+    (source_dir / "main.tex").write_text(
+        r"""
+        \begin{figure}
+        \includegraphics{figures/appendix}
+        \caption{Supplement appendix examples for retrieval memory in the agent pipeline.}
+        \label{fig:appendix}
+        \end{figure}
+
+        \begin{figure}
+        \includegraphics{figures/architecture}
+        \caption{System architecture overview for retrieval memory in the agent pipeline.}
+        \label{fig:architecture}
+        \end{figure}
+        """,
+        encoding="utf-8",
+    )
+    source = SourceCandidate(
+        title="Memory Paper",
+        url="https://arxiv.org/abs/2605.00001",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+    )
+    claim = Claim(
+        text="Solution: The system architecture uses retrieval memory in the agent pipeline.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                quote="retrieval memory in the agent pipeline",
+            )
+        ],
+    )
+
+    figures = extract_latex_figures(source_dir, image_dir, source, [claim], max_figures=1)
+
+    assert len(figures) == 1
+    assert figures[0].label == "fig:architecture"
+    assert "architecture" in figures[0].asset_path
 
 
 def test_extract_latex_figures_skips_unmatched_figure_claim(

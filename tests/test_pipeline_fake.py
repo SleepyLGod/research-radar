@@ -1757,9 +1757,8 @@ def test_daily_pipeline_writes_selected_figure_metadata(
                 "caption": "Architecture overview for memory retrieval.",
                 "label": "fig:memory",
                 "explanation": (
-                    "This figure is included because its caption aligns with a verified "
-                    "observation: Solution: Require cited memory evidence before crediting "
-                    "answers."
+                    "Visual context for this verified point: Solution: Require cited memory "
+                    "evidence before crediting answers."
                 ),
                 "matched_claim": (
                     "Solution: Require cited memory evidence before crediting answers."

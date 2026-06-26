@@ -409,6 +409,9 @@ def _publish_explanatory_diagram(
     entry: dict[object, object],
     labels: dict[str, str],
 ) -> str:
+    diagram = entry.get("diagram")
+    if isinstance(diagram, dict):
+        return _publish_diagram_from_metadata(diagram)
     steps = [
         (labels["problem_short"], _nested_value(entry.get("problem"), "core")),
         (labels["method_short"], _nested_value(entry.get("solution"), "core")),
@@ -431,6 +434,41 @@ def _publish_explanatory_diagram(
         '<section style="display:block;border-left:3px solid #60a5fa;'
         'background:#f8fbff;padding:12px 14px;margin:18px 0;">'
         f'{"".join(rendered)}</section>'
+    )
+
+
+def _publish_diagram_from_metadata(diagram: dict[object, object]) -> str:
+    nodes = diagram.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) < 2:
+        return ""
+    title = str(diagram.get("title") or "").strip()
+    heading = (
+        f'<p style="margin:0 0 10px;color:#1e40af;font-weight:700;">'
+        f"{escape(title)}</p>"
+        if title
+        else ""
+    )
+    rendered = []
+    for raw_node in nodes[:5]:
+        if not isinstance(raw_node, dict):
+            continue
+        label = str(raw_node.get("label") or "").strip()
+        text = str(raw_node.get("text") or "").strip()
+        if not label or not text:
+            continue
+        rendered.append(
+            '<section style="display:block;margin:8px 0;padding:10px 12px;'
+            'background:#ffffff;border:1px solid #bfdbfe;border-radius:6px;">'
+            f'<p style="margin:0;color:#1e40af;"><strong>{escape(label)}</strong></p>'
+            f'<p style="margin:4px 0 0;">{_publish_format_text(_shorten(text))}</p>'
+            '</section>'
+        )
+    if len(rendered) < 2:
+        return ""
+    return (
+        '<section style="display:block;border-left:3px solid #60a5fa;'
+        'background:#f8fbff;padding:12px 14px;margin:18px 0;">'
+        f'{heading}{"".join(rendered)}</section>'
     )
 
 
@@ -990,6 +1028,9 @@ def _paper_descriptor(source: object, *, language: str) -> str:
 
 
 def _explanatory_diagram(entry: dict[object, object], labels: dict[str, str]) -> str:
+    diagram = entry.get("diagram")
+    if isinstance(diagram, dict):
+        return _diagram_from_metadata(diagram)
     steps = [
         (labels["problem_short"], _nested_value(entry.get("problem"), "core")),
         (labels["method_short"], _nested_value(entry.get("solution"), "core")),
@@ -1006,6 +1047,29 @@ def _explanatory_diagram(entry: dict[object, object], labels: dict[str, str]) ->
     if len(rendered) < 2:
         return ""
     return f'<div class="rr-diagram">{"".join(rendered)}</div>'
+
+
+def _diagram_from_metadata(diagram: dict[object, object]) -> str:
+    nodes = diagram.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) < 2:
+        return ""
+    title = str(diagram.get("title") or "").strip()
+    title_html = f"<strong>{escape(title)}</strong>" if title else ""
+    rendered = []
+    for raw_node in nodes[:5]:
+        if not isinstance(raw_node, dict):
+            continue
+        label = str(raw_node.get("label") or "").strip()
+        text = str(raw_node.get("text") or "").strip()
+        if not label or not text:
+            continue
+        rendered.append(
+            '<span class="rr-step">'
+            f"<strong>{escape(label)}</strong>{_format_display_text(_shorten(text))}</span>"
+        )
+    if len(rendered) < 2:
+        return ""
+    return f'<div class="rr-diagram">{title_html}{"".join(rendered)}</div>'
 
 
 def _deep_text_block(title: str, value: object) -> str:
@@ -1437,9 +1501,26 @@ def _localized_figure_explanation(explanation: str, labels: dict[str, str]) -> s
         FIGURE_EXPLANATION_CAPTION_ALIGNMENT_PREFIX
     ):
         return "这张图用于辅助理解；它的图注与一条已核验判断相关，具体证据见本节“关键证据”。"
+    if labels["figure"] == "论文图" and explanation.startswith(
+        "Visual context for this verified point:"
+    ):
+        claim_text = explanation.removeprefix(
+            "Visual context for this verified point:"
+        ).strip()
+        return f"这张图对应一条已核验判断：{_format_display_text(_strip_claim_prefix(claim_text))}"
     if labels["figure"] == "论文图" and explanation:
         return _format_display_text(explanation)
     return _format_display_text(explanation)
+
+
+def _strip_claim_prefix(value: str) -> str:
+    return re.sub(
+        r"^(?:Problem|Solution|Experiment|Related work|Limitations|"
+        r"Critical assessment|Essence):\s*",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
 
 
 def _clean_display_text(value: str) -> str:
