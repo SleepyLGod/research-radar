@@ -60,6 +60,7 @@ class ArticleChannel(StrEnum):
     MARKDOWN = "markdown"
     WECHAT = "wechat"
     ZHIHU = "zhihu"
+    ARCHIVE = "archive"
 
 
 @dataclass(frozen=True)

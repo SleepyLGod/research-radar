@@ -22,6 +22,7 @@ from research_radar.analysis.routing import (
     resolve_task_route,
     resolve_task_route_preview,
 )
+from research_radar.compose.archive import export_archive_run
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.wechat import (
     render_wechat_html,
@@ -556,6 +557,21 @@ def build_parser() -> argparse.ArgumentParser:
     compose_wechat.add_argument("--run", dest="run_dir", type=Path, required=True)
     compose_wechat.add_argument("--topic", default=None)
     compose_wechat.set_defaults(handler=handle_compose_wechat)
+
+    archive_parser = subparsers.add_parser("archive", help="Export public archive artifacts.")
+    archive_subparsers = archive_parser.add_subparsers(dest="archive_target", required=True)
+    archive_export = archive_subparsers.add_parser(
+        "export",
+        help="Export one run into static archive HTML and RSS artifacts.",
+    )
+    archive_export.add_argument("--run", dest="run_dir", type=Path, required=True)
+    archive_export.add_argument("--output", type=Path, required=True)
+    archive_export.add_argument(
+        "--base-url",
+        required=True,
+        help="Public base URL used for canonical article links and RSS entries.",
+    )
+    archive_export.set_defaults(handler=handle_archive_export)
 
     publish_parser = subparsers.add_parser("publish", help="Publish draft artifacts.")
     publish_subparsers = publish_parser.add_subparsers(dest="publish_target", required=True)
@@ -1217,6 +1233,18 @@ def handle_compose_wechat(args: argparse.Namespace) -> None:
     from research_radar.compose.wechat import compose_wechat_html
     write_text(args.run_dir / "wechat.html", compose_wechat_html(topic_id, claims))
     print(f"Wrote {args.run_dir / 'wechat.html'}")
+
+
+def handle_archive_export(args: argparse.Namespace) -> None:
+    """Export one run into a static public archive."""
+
+    try:
+        result = export_archive_run(args.run_dir, args.output, base_url=args.base_url)
+    except ValueError as exc:
+        raise PublishError(str(exc)) from exc
+    print(f"Wrote archive article: {result.article_path}")
+    print(f"Wrote archive index: {result.index_path}")
+    print(f"Wrote archive RSS: {result.feed_path}")
 
 
 def handle_publish_wechat(args: argparse.Namespace) -> None:
