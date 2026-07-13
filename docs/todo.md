@@ -37,6 +37,9 @@ drive the research model.
   warnings for template-like public text.
 - Paper figure support from arXiv source assets and conservative PDF-only figure crops; full-page
   PDF screenshots are not allowed as public figures.
+- Verified mechanism diagrams and improved figure selection for daily public articles.
+- Local Public Archive/RSS export from `ArticleDraft`, including static article pages, an archive
+  index, public metadata, and a feed; hosting is not yet configured.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
@@ -82,34 +85,36 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Improve figure and diagram quality.
-   - Improve self-drawn explanatory diagrams using only verified structured readings.
-   - Improve TeX-source figure/caption extraction and license metadata coverage.
-   - Improve PDF figure cropping for multi-column, caption-above, and unusual layouts.
-   - Improve Chinese captions and figure-to-text placement without creating new claims.
-   - Reuse original paper figures only with same-paper attribution and license audit.
+1. Deploy the Public Archive/RSS output.
+   - Choose GitHub Pages, Vercel, Cloudflare Pages, or a personal-domain host.
+   - Deploy the generated static directory without moving research logic into the hosting layer.
+   - Keep one canonical base URL per archive.
 
-2. Add Zhihu and future channel MVPs.
+2. Add a Zhihu renderer/export MVP.
    - Build new channel renderers from the verified `ArticleDraft`; do not reuse WeChat HTML as the
      source of truth.
    - Keep channel-specific formatting downstream of verified claims, localized readings, source
      metadata, and figure metadata.
    - Do not let Zhihu or any future platform change the core research and evidence model.
 
-3. Tune topics from real daily runs.
+3. Continue figure and diagram quality from real failures.
+   - Improve TeX-source extraction and difficult PDF crops only when real papers expose gaps.
+   - Keep figure explanations bound to same-paper verified content.
+
+4. Tune topics from real daily runs.
    - Do not overfit topic profiles before real usage shows a pattern.
    - Use multi-topic eval and daily draft outcomes to identify recall failures, off-center source
      selection, shallow readings, low publishable claim counts, or missing figures.
    - Adjust queries, paper queries, concept groups, centrality signals, and negative phrases only
      when repeated runs show the same issue.
 
-4. Continue cost and first-run runtime optimization.
+5. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
    - Consider reader/verifier budget strategies only when real scheduler runs show the cost is
      painful.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
-5. Keep weekly deep dive and Codex reader as future work.
+6. Keep weekly deep dive and Codex reader as future work.
    - Weekly remains a later product mode; daily research plus WeChat draft is the current main path.
    - Codex reader uses the same deep-reading prompt, schema, and evidence gate as DeepSeek reader.
    - Future work is about Codex reader reliability: schema stability, timeout behavior, and long-paper
@@ -117,7 +122,7 @@ drive the research model.
 
 ## Near-Term Execution Order
 
-1. Improve figure and diagram quality for daily articles.
+1. Deploy the static Public Archive/RSS output.
 2. Add a Zhihu renderer/export MVP from `ArticleDraft`.
-3. Use real daily runs to tune topic profiles when repeated failures appear.
+3. Improve figures and tune topic profiles when repeated real-run failures appear.
 4. Revisit weekly deep dive and Codex reader only when daily usage shows the need.

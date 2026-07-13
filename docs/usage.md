@@ -147,6 +147,36 @@ evidence artifacts. Public content still comes only from supported claims with c
 Public writing style warnings may appear in `review_report.md` or `review_findings.jsonl`; they are
 audit notes, not an automatic rewrite pass.
 
+## Public Archive and RSS
+
+Export any completed run from its platform-neutral `article_draft.json`:
+
+```bash
+uv run research-radar archive export \
+  --run runs/<date-topic> \
+  --output public-archive \
+  --base-url https://research.example.com
+```
+
+The export writes:
+
+```text
+public-archive/
+├── archive.json
+├── index.html
+├── feed.xml
+├── articles/<run-id>/index.html
+├── articles/<run-id>/metadata.json
+└── assets/<run-id>/...
+```
+
+One output directory is bound to the first valid `--base-url` used with it. Later exports must use
+the same URL so article canonical links and RSS entries cannot drift across domains. The command
+only builds static files; deployment is intentionally separate.
+
+Archive and WeChat are sibling outputs from `ArticleDraft`. Archive export does not rewrite
+`wechat.html`, upload WeChat media, create a draft, or change scheduler behavior.
+
 ## WeChat Drafts
 
 Upload a cover image once and store the returned media id somewhere local:

@@ -4,9 +4,10 @@
 
 ResearchRadar 面向想自托管研究日报的人：给它一个审核过的研究 topic，它每天发现新论文，
 精读最值得看的几篇，用原文证据核验公开事实点，然后把一篇中文长文放进公众号草稿箱。
-你只需要去草稿箱审稿，而不是每天重新搜论文、读 PDF、整理证据。
+你只需要去草稿箱审稿，而不是每天重新搜论文、读 PDF、整理证据。同一份已核验文章也可以
+导出成静态公开归档和 RSS。
 
-`本地优先` · `证据门控` · `整篇论文精读` · `微信公众号草稿` · `定时任务`
+`本地优先` · `证据门控` · `整篇论文精读` · `微信公众号草稿` · `Archive/RSS`
 
 `DeepSeek reader` · `Codex verifier` · `Tavily 召回` · `OpenAI-compatible providers`
 
@@ -29,6 +30,7 @@ flowchart LR
     E --> F["Codex verifier"]
     F --> G["可读的长文草稿"]
     G --> H["公众号草稿箱"]
+    G --> J["公开归档与 RSS"]
     E --> I["审计记录"]
     F --> I
 ```
@@ -46,6 +48,7 @@ flowchart LR
 一次成功的日报会生成：
 
 - 一篇可以直接在微信公众号后台审阅的长文草稿；
+- 一份从同一已核验草稿导出的可选静态文章归档和 RSS；
 - 一个带安全论文图的本地 HTML 预览；
 - 一组带原文证据锚点的 verified claims；
 - 一套记录 rejected / weak / unsupported claim 的审计 artifacts。
@@ -84,6 +87,17 @@ uv run research-radar run daily \
   --model-cache
 ```
 
+如需公开归档，可以把这次 run 导出成静态网页和 RSS：
+
+```bash
+uv run research-radar archive export \
+  --run runs/<date-topic> \
+  --output public-archive \
+  --base-url https://research.example.com
+```
+
+这条命令只生成静态文件，不负责部署到 GitHub Pages、Vercel、Cloudflare Pages 或个人域名。
+
 创建微信公众号草稿：
 
 ```bash
@@ -117,7 +131,7 @@ Xiaomi `mimo-v2.5-pro` 已作为可选 OpenAI-compatible provider 接入，可�
 
 ## 更多文档
 
-- [详细使用说明](docs/usage.md)：安装、密钥、日报、单篇论文、微信草稿、scheduler、隐私检查。
+- [详细使用说明](docs/usage.md)：安装、密钥、日报、单篇论文、Archive/RSS、微信草稿、scheduler、隐私检查。
 - [Provider 配置](docs/providers.md)：如何接入 Kimi、Qwen、Minimax、本地 OpenAI-compatible 服务或 CLI agent。
 - [架构](docs/architecture.md)：从 source discovery 到 article draft 的数据流。
 - [安全说明](docs/security.md)：本地 secret、隐私扫描和发布边界。

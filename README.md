@@ -5,9 +5,9 @@
 Daily research briefs for people who want the paper, the evidence, and the draft, not another loose
 summary. Give ResearchRadar a reviewed topic; it finds new papers, deep-reads the central ones,
 checks each public claim against source anchors, and leaves a long-form WeChat draft for you to
-review.
+review. The same verified article can also be exported as a static public archive with RSS.
 
-`Local-first` · `Evidence-gated` · `Full-paper reading` · `WeChat draft` · `Scheduler`
+`Local-first` · `Evidence-gated` · `Full-paper reading` · `WeChat draft` · `Archive/RSS`
 
 `DeepSeek reader` · `Codex verifier` · `Tavily recall` · `OpenAI-compatible providers`
 
@@ -32,6 +32,7 @@ flowchart LR
     E --> F["Codex verifier"]
     F --> G["Readable article draft"]
     G --> H["WeChat draft box"]
+    G --> J["Public archive and RSS"]
     E --> I["Audit artifacts"]
     F --> I
 ```
@@ -49,6 +50,7 @@ The default daily path is:
 Each successful daily run creates:
 
 - a WeChat draft-ready long-form article for review in the Official Account editor;
+- an optional static article archive and RSS feed built from the same verified draft;
 - a local HTML preview with safe paper figures when available;
 - verified claims with exact source anchors;
 - audit artifacts for rejected, weak, or unsupported claims.
@@ -88,6 +90,18 @@ uv run research-radar run daily \
   --model-cache
 ```
 
+Optionally export that run to a static public archive:
+
+```bash
+uv run research-radar archive export \
+  --run runs/<date-topic> \
+  --output public-archive \
+  --base-url https://research.example.com
+```
+
+This writes static files only. Hosting on GitHub Pages, Vercel, Cloudflare Pages, or a personal
+domain is a separate deployment step.
+
 Create a WeChat draft for review:
 
 ```bash
@@ -117,13 +131,14 @@ Public reports only use supported claims with complete source anchors. Internal 
 `review_report.md`, `claims.jsonl`, `sources.jsonl`, and `runtime_summary.json` stay available for
 audit, but the reader-facing article is built from verified content.
 
-WeChat and future publishing channels are downstream renderers. The research model remains the
-same: discover broadly, read deeply, verify conservatively, and keep every run auditable.
+WeChat, the public archive, and future publishing channels are sibling renderers downstream of
+`ArticleDraft`. The research model remains the same: discover broadly, read deeply, verify
+conservatively, and keep every run auditable.
 
 ## More
 
-- [Detailed usage](docs/usage.md) covers setup, providers, single-paper runs, WeChat drafts,
-  scheduler installation, and privacy checks.
+- [Detailed usage](docs/usage.md) covers setup, providers, single-paper runs, archive/RSS export,
+  WeChat drafts, scheduler installation, and privacy checks.
 - [Provider configuration](docs/providers.md) shows how to add OpenAI-compatible APIs, local
   servers, or CLI agent providers without changing public examples.
 - [Architecture](docs/architecture.md) describes the source-to-draft pipeline.
