@@ -162,6 +162,41 @@ def test_archive_export_does_not_render_unsafe_public_links(tmp_path: Path) -> N
     assert "Verified archive claim." in report_html
 
 
+def test_archive_export_upgrades_arxiv_links_to_https(tmp_path: Path) -> None:
+    run_dir = _write_archive_draft(tmp_path)
+    draft_path = run_dir / "article_draft.json"
+    data = read_json(draft_path)
+    arxiv_url = "http://arxiv.org/abs/2606.29778v1"
+    data["sections"][0]["metadata"]["deep_reads"][0]["source"]["url"] = arxiv_url
+    data["sections"][1]["metadata"]["sources"][0]["url"] = arxiv_url
+    data["sections"][1]["claims"][0]["evidence"][0]["source_url"] = arxiv_url
+    write_json(draft_path, data)
+
+    result = export_archive_run(
+        run_dir,
+        tmp_path / "archive",
+        base_url="https://example.com/research",
+    )
+
+    report_html = result.report_path.read_text(encoding="utf-8")
+    assert "http://arxiv.org" not in report_html
+    assert "https://arxiv.org/abs/2606.29778v1" in report_html
+
+
+def test_archive_index_canonical_url_has_trailing_slash(tmp_path: Path) -> None:
+    run_dir = _write_archive_draft(tmp_path)
+
+    result = export_archive_run(
+        run_dir,
+        tmp_path / "archive",
+        base_url="https://example.com/research",
+    )
+
+    index_html = result.index_path.read_text(encoding="utf-8")
+    assert '<link rel="canonical" href="https://example.com/research/">' in index_html
+    assert "--muted: #4f6569;" in index_html
+
+
 @pytest.mark.parametrize(
     "base_url",
     [

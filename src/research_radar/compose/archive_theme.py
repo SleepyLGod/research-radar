@@ -5,7 +5,7 @@ ARCHIVE_CSS = """
   color-scheme: light;
   --ink: #18343a;
   --body: #2f4247;
-  --muted: #667a7e;
+  --muted: #4f6569;
   --accent: #2f766f;
   --accent-soft: #e9f1ef;
   --line: #d5dfdc;

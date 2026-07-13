@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from html import escape
 from typing import Any
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from research_radar.compose.archive_figures import (
     figure_source,
@@ -112,7 +112,7 @@ def render_archive_index(
         content = f'<p class="rr-empty">{escape(labels["empty"])}</p>'
     return _html_document(
         title=labels["site_title"],
-        canonical_url=base_url,
+        canonical_url=base_url.rstrip("/") + "/",
         language=site_language,
         body=f"""
 {_site_header(home_href="./", feed_href="feed.xml", language=site_language)}
@@ -592,6 +592,10 @@ def _public_http_url(value: object) -> str:
         or parsed.password is not None
     ):
         return ""
+    if parsed.scheme.casefold() == "http" and parsed.hostname.casefold() == "arxiv.org":
+        return urlunsplit(
+            ("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment)
+        )
     return text
 
 
