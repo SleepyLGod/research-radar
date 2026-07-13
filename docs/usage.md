@@ -155,7 +155,8 @@ Export any completed run from its platform-neutral `article_draft.json`:
 uv run research-radar archive export \
   --run runs/<date-topic> \
   --output public-archive \
-  --base-url https://research.example.com
+  --base-url https://research.example.com \
+  --site-language zh
 ```
 
 The export writes:
@@ -165,17 +166,69 @@ public-archive/
 ├── archive.json
 ├── index.html
 ├── feed.xml
-├── articles/<run-id>/index.html
-├── articles/<run-id>/metadata.json
+├── reports/<run-id>/index.html
+├── reports/<run-id>/metadata.json
 └── assets/<run-id>/...
 ```
 
 One output directory is bound to the first valid `--base-url` used with it. Later exports must use
-the same URL so article canonical links and RSS entries cannot drift across domains. The command
-only builds static files; deployment is intentionally separate.
+the same URL so report canonical links and RSS entries cannot drift across domains. It is also
+bound to one site navigation language, selected with `--site-language zh|en`. A report is one daily
+research edition and may contain several deep-read papers; `/papers/` is reserved for a future
+single-paper knowledge base. The command only builds static files; deployment is intentionally
+separate.
 
 Archive and WeChat are sibling outputs from `ArticleDraft`. Archive export does not rewrite
 `wechat.html`, upload WeChat media, create a draft, or change scheduler behavior.
+
+### Manual GitHub Pages deployment
+
+The project archive is currently published at
+<https://sleepylgod.github.io/research-radar/archive/>. GitHub Pages is only the hosting layer; the
+archive remains a host-neutral static directory.
+
+Use a dedicated checkout of the `gh-pages` branch. Keep it separate from the main development
+checkout, add a `.nojekyll` file, ignore `/.archive-retired-assets/`, and keep a small root
+`index.html` that links to `./archive/`:
+
+```bash
+PAGES_CHECKOUT="/path/to/research-radar-pages"
+RUN_DIR="runs/<date-topic>"
+
+git clone --branch gh-pages --single-branch \
+  https://github.com/<owner>/<repository>.git "$PAGES_CHECKOUT"
+
+: > "$PAGES_CHECKOUT/.nojekyll"
+printf '/.archive-retired-assets/\n' > "$PAGES_CHECKOUT/.gitignore"
+cat > "$PAGES_CHECKOUT/index.html" <<'HTML'
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0; url=./archive/">
+  <title>ResearchRadar 研究归档</title>
+</head>
+<body>
+  <p><a href="./archive/">打开 ResearchRadar 研究归档</a></p>
+</body>
+</html>
+HTML
+
+uv run research-radar archive export \
+  --run "$RUN_DIR" \
+  --output "$PAGES_CHECKOUT/archive" \
+  --base-url https://sleepylgod.github.io/research-radar/archive \
+  --site-language zh
+
+git -C "$PAGES_CHECKOUT" add .nojekyll .gitignore index.html archive
+git -C "$PAGES_CHECKOUT" commit -s -m "[publish] Update ResearchRadar archive"
+git -C "$PAGES_CHECKOUT" push origin gh-pages
+```
+
+Configure GitHub Pages to publish `gh-pages` from `/(root)`. To use another repository, point
+`--output` at that repository's local checkout and use its public base URL instead. No GitHub API
+or hosting-provider code is required.
 
 ## WeChat Drafts
 

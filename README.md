@@ -96,7 +96,8 @@ Optionally export that run to a static public archive:
 uv run research-radar archive export \
   --run runs/<date-topic> \
   --output public-archive \
-  --base-url https://research.example.com
+  --base-url https://research.example.com \
+  --site-language en
 ```
 
 This writes static files only. Hosting on GitHub Pages, Vercel, Cloudflare Pages, or a personal

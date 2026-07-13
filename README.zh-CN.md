@@ -93,7 +93,8 @@ uv run research-radar run daily \
 uv run research-radar archive export \
   --run runs/<date-topic> \
   --output public-archive \
-  --base-url https://research.example.com
+  --base-url https://research.example.com \
+  --site-language zh
 ```
 
 这条命令只生成静态文件，不负责部署到 GitHub Pages、Vercel、Cloudflare Pages 或个人域名。
