@@ -1,0 +1,20 @@
+{
+  "run_id": "2026-07-13-agent-memory",
+  "topic_id": "agent-memory",
+  "title": "ResearchRadar 日报：agent-memory",
+  "digest": "今天精读了 2 篇新论文，并保留其他新增来源供后续跟进。",
+  "created_at": "2026-07-13T09:50:36.466562+00:00",
+  "link": "https://sleepylgod.github.io/research-radar/archive/reports/2026-07-13-agent-memory/",
+  "language": "zh",
+  "claim_count": 22,
+  "deep_read_count": 2,
+  "source_count": 19,
+  "assets": [
+    "assets/2026-07-13-agent-memory/figures/2606.29778v1/images/01-memory-model.png",
+    "assets/2026-07-13-agent-memory/figures/2606.29778v1/images/02-Data-structure-Retrieval.png",
+    "assets/2026-07-13-agent-memory/figures/2606.29778v1/images/03-resource_assumption.png",
+    "assets/2026-07-13-agent-memory/figures/2607.01935v2/images/01-framework.png",
+    "assets/2026-07-13-agent-memory/figures/2607.01935v2/images/02-intro.png"
+  ],
+  "lead_asset": "assets/2026-07-13-agent-memory/figures/2606.29778v1/images/01-memory-model.png"
+}
