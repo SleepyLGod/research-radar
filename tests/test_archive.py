@@ -8,6 +8,7 @@ from research_radar.compose.archive_figures import (
     figure_source,
     is_pdf_page_fallback_figure,
 )
+from research_radar.compose.display_text import clean_display_text, format_display_text
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.wechat import render_wechat_html, render_wechat_publish_html
 from research_radar.models import (
@@ -39,30 +40,37 @@ def test_archive_pdf_page_fallback_recognizes_legacy_page_assets() -> None:
     )
 
 
-def test_archive_export_writes_article_index_feed_and_metadata(tmp_path: Path) -> None:
+def test_archive_export_writes_report_index_feed_and_metadata(tmp_path: Path) -> None:
     run_dir = _write_archive_draft(tmp_path, with_figure=True)
     output_dir = tmp_path / "archive"
 
     result = export_archive_run(run_dir, output_dir, base_url="https://example.com/research")
 
-    article_html = result.article_path.read_text(encoding="utf-8")
+    report_html = result.report_path.read_text(encoding="utf-8")
     index_html = result.index_path.read_text(encoding="utf-8")
     feed_xml = result.feed_path.read_text(encoding="utf-8")
     metadata = result.metadata_path.read_text(encoding="utf-8")
 
-    assert result.article_path == output_dir / "articles" / "2026-06-28-agent-memory" / "index.html"
-    assert "Verified archive claim." in article_html
-    assert "Unsupported archive claim." not in article_html
-    assert "role=" not in article_html
-    assert "status=" not in article_html
-    assert "score=" not in article_html
-    assert "reuse_status" not in article_html
-    assert "/private/" not in article_html
-    assert "../../assets/2026-06-28-agent-memory/figures/paper/architecture.png" in article_html
+    assert result.report_path == output_dir / "reports" / "2026-06-28-agent-memory" / "index.html"
+    assert not (output_dir / "articles").exists()
+    assert "Verified archive claim." in report_html
+    assert "Unsupported archive claim." not in report_html
+    assert "role=" not in report_html
+    assert "status=" not in report_html
+    assert "score=" not in report_html
+    assert "reuse_status" not in report_html
+    assert "/private/" not in report_html
+    assert "../../assets/2026-06-28-agent-memory/figures/paper/architecture.png" in report_html
     assert (output_dir / "assets/2026-06-28-agent-memory/figures/paper/architecture.png").exists()
     assert "ResearchRadar Daily: agent-memory" in index_html
-    assert "https://example.com/research/articles/2026-06-28-agent-memory/" in feed_xml
+    assert "Latest report" in index_html
+    assert "assets/2026-06-28-agent-memory/figures/paper/architecture.png" in index_html
+    assert "https://example.com/research/reports/2026-06-28-agent-memory/" in feed_xml
     assert '"claim_count": 1' in metadata
+    assert (
+        '"lead_asset": "assets/2026-06-28-agent-memory/figures/paper/architecture.png"'
+        in metadata
+    )
 
 
 def test_archive_export_omits_missing_figure_images(tmp_path: Path) -> None:
@@ -71,7 +79,7 @@ def test_archive_export_omits_missing_figure_images(tmp_path: Path) -> None:
     export_archive_run(run_dir, tmp_path / "archive", base_url="https://example.com/research")
 
     article_html = (
-        tmp_path / "archive/articles/2026-06-28-agent-memory/index.html"
+        tmp_path / "archive/reports/2026-06-28-agent-memory/index.html"
     ).read_text(encoding="utf-8")
     assert "missing.png" not in article_html
     assert "<img" not in article_html
@@ -101,7 +109,7 @@ def test_archive_export_rejects_asset_symlink_outside_run(tmp_path: Path) -> Non
 
     copied = output_dir / f"assets/{run_dir.name}/figures/paper/missing.png"
     assert not copied.exists()
-    assert "<img" not in result.article_path.read_text(encoding="utf-8")
+    assert "<img" not in result.report_path.read_text(encoding="utf-8")
 
 
 def test_archive_export_allows_absolute_asset_path_inside_run(tmp_path: Path) -> None:
@@ -121,8 +129,8 @@ def test_archive_export_allows_absolute_asset_path_inside_run(tmp_path: Path) ->
         base_url="https://example.com/research",
     )
 
-    article_html = result.article_path.read_text(encoding="utf-8")
-    assert "../../assets/2026-06-28-agent-memory/figures/paper/architecture.png" in article_html
+    report_html = result.report_path.read_text(encoding="utf-8")
+    assert "../../assets/2026-06-28-agent-memory/figures/paper/architecture.png" in report_html
 
 
 def test_archive_export_does_not_render_unsafe_public_links(tmp_path: Path) -> None:
@@ -146,12 +154,12 @@ def test_archive_export_does_not_render_unsafe_public_links(tmp_path: Path) -> N
         base_url="https://example.com/research",
     )
 
-    article_html = result.article_path.read_text(encoding="utf-8")
-    assert "javascript:" not in article_html
-    assert "data:text/html" not in article_html
-    assert "file:///" not in article_html
-    assert "Fixture Paper" in article_html
-    assert "Verified archive claim." in article_html
+    report_html = result.report_path.read_text(encoding="utf-8")
+    assert "javascript:" not in report_html
+    assert "data:text/html" not in report_html
+    assert "file:///" not in report_html
+    assert "Fixture Paper" in report_html
+    assert "Verified archive claim." in report_html
 
 
 @pytest.mark.parametrize(
@@ -183,8 +191,9 @@ def test_archive_output_directory_is_bound_to_one_base_url(tmp_path: Path) -> No
         export_archive_run(run_dir, output_dir, base_url="https://new.example/research")
 
     state = read_json(output_dir / "archive.json")
-    assert state["schema_version"] == 1
+    assert state["schema_version"] == 2
     assert state["base_url"] == "https://old.example/research"
+    assert state["site_language"] == "en"
 
 
 def test_archive_feed_rebuilds_links_from_bound_base_url(tmp_path: Path) -> None:
@@ -194,15 +203,15 @@ def test_archive_feed_rebuilds_links_from_bound_base_url(tmp_path: Path) -> None
     base_url = "https://example.com/research"
     first = export_archive_run(first_run, output_dir, base_url=base_url)
     first_metadata = read_json(first.metadata_path)
-    first_metadata["link"] = "https://stale.example/articles/old/"
+    first_metadata["link"] = "https://stale.example/reports/old/"
     write_json(first.metadata_path, first_metadata)
 
     export_archive_run(second_run, output_dir, base_url=base_url)
 
     feed_xml = (output_dir / "feed.xml").read_text(encoding="utf-8")
     assert "stale.example" not in feed_xml
-    assert f"{base_url}/articles/{first_run.name}/" in feed_xml
-    assert f"{base_url}/articles/{second_run.name}/" in feed_xml
+    assert f"{base_url}/reports/{first_run.name}/" in feed_xml
+    assert f"{base_url}/reports/{second_run.name}/" in feed_xml
 
 
 def test_archive_reexport_retires_assets_no_longer_referenced(tmp_path: Path) -> None:
@@ -253,11 +262,87 @@ def test_chinese_archive_uses_chinese_navigation_and_source_labels(tmp_path: Pat
         base_url="https://example.com/research",
     )
 
-    article_html = result.article_path.read_text(encoding="utf-8")
-    assert ">目录<" in article_html
-    assert ">原文链接<" in article_html
-    assert ">Contents<" not in article_html
-    assert ">Original source<" not in article_html
+    report_html = result.report_path.read_text(encoding="utf-8")
+    assert ">目录<" in report_html
+    assert ">原文链接<" in report_html
+    assert ">Contents<" not in report_html
+    assert ">Original source<" not in report_html
+
+
+def test_archive_site_language_is_locked_and_can_differ_from_report_language(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_archive_draft(tmp_path, language="en")
+    output_dir = tmp_path / "archive"
+
+    first = export_archive_run(
+        run_dir,
+        output_dir,
+        base_url="https://example.com/research",
+        site_language="zh",
+    )
+
+    assert ">研究报告<" in first.index_path.read_text(encoding="utf-8")
+    assert 'lang="en"' in first.report_path.read_text(encoding="utf-8")
+    assert read_json(output_dir / "archive.json")["site_language"] == "zh"
+
+    with pytest.raises(ValueError, match="site_language"):
+        export_archive_run(
+            run_dir,
+            output_dir,
+            base_url="https://example.com/research",
+            site_language="en",
+        )
+
+
+def test_archive_unknown_draft_language_defaults_site_navigation_to_english(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_archive_draft(tmp_path)
+    draft_path = run_dir / "article_draft.json"
+    data = read_json(draft_path)
+    data["metadata"]["language"] = "unknown"
+    write_json(draft_path, data)
+    output_dir = tmp_path / "archive"
+
+    export_archive_run(
+        run_dir,
+        output_dir,
+        base_url="https://example.com/research",
+    )
+
+    assert read_json(output_dir / "archive.json")["site_language"] == "en"
+    with pytest.raises(ValueError, match="site_language"):
+        export_archive_run(
+            run_dir,
+            tmp_path / "explicit-invalid",
+            base_url="https://example.com/research",
+            site_language="unknown",
+        )
+
+
+def test_display_text_consumes_all_latex_macro_arguments() -> None:
+    assert clean_display_text(r"Ratio: \frac{a}{b}.") == "Ratio: a/b."
+    formatted = format_display_text(r"$\frac{a}{b}$")
+    assert "a/b" in formatted
+    assert "{b}" not in formatted
+
+
+def test_archive_formats_display_formula_but_preserves_raw_evidence_quote(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_archive_draft(tmp_path, formula_text="R(t)=e^{-t/S(m)}")
+
+    result = export_archive_run(
+        run_dir,
+        tmp_path / "archive",
+        base_url="https://example.com/research",
+    )
+
+    report_html = result.report_path.read_text(encoding="utf-8")
+    assert '<span class="rr-formula"' in report_html
+    assert "R(t)=e^{-t/S(m)}" in report_html
+    assert "Raw evidence uses R(t)=e^{-t/S(m)} exactly." in report_html
 
 
 def test_archive_export_cli_writes_static_artifacts(tmp_path: Path) -> None:
@@ -277,7 +362,7 @@ def test_archive_export_cli_writes_static_artifacts(tmp_path: Path) -> None:
         ]
     )
 
-    assert (output_dir / "articles/2026-06-28-agent-memory/index.html").exists()
+    assert (output_dir / "reports/2026-06-28-agent-memory/index.html").exists()
     assert (output_dir / "index.html").exists()
     assert (output_dir / "feed.xml").exists()
 
@@ -290,7 +375,7 @@ def test_rss_escapes_xml_text() -> None:
                 "title": "A < B & C",
                 "digest": "Use <quoted> evidence & anchors.",
                 "created_at": "2026-06-28T00:00:00+00:00",
-                "link": "https://example.com/archive/articles/run-1/",
+                "link": "https://example.com/archive/reports/run-1/",
             }
         ],
         base_url="https://example.com/archive",
@@ -307,6 +392,7 @@ def _write_archive_draft(
     with_missing_figure: bool = False,
     run_id: str = "2026-06-28-agent-memory",
     language: str = "en",
+    formula_text: str = "",
 ) -> Path:
     run_dir = tmp_path / "runs" / run_id
     claim = Claim(
@@ -316,7 +402,11 @@ def _write_archive_draft(
             EvidenceAnchor(
                 source_url="https://example.com/paper",
                 source_title="Fixture Paper",
-                quote="Verified archive claim.",
+                quote=(
+                    f"Raw evidence uses {formula_text} exactly."
+                    if formula_text
+                    else "Verified archive claim."
+                ),
             )
         ],
     )
@@ -359,7 +449,8 @@ def _write_archive_draft(
                             "reader_explanation": {
                                 "opening_context": "The paper studies a concrete system.",
                                 "solution_walkthrough": (
-                                    "The method routes data through verified components."
+                                    formula_text
+                                    or "The method routes data through verified components."
                                 ),
                             },
                             "figures": [figure] if with_figure or with_missing_figure else [],
@@ -390,7 +481,12 @@ def _write_archive_draft(
                 },
             ),
         ],
-        metadata={"language": language, "draft_type": "daily_long_form"},
+        metadata={
+            "language": language,
+            "draft_type": "daily_long_form",
+            "deep_read_count": 1,
+            "source_count": 2,
+        },
     )
     write_json(run_dir / "article_draft.json", draft)
     return run_dir

@@ -25,41 +25,53 @@ from research_radar.compose.draft_io import load_article_draft
 from research_radar.models import ArticleDraft
 from research_radar.storage.files import ensure_dir, read_json, write_json, write_text
 
-ARCHIVE_SCHEMA_VERSION = 1
+ARCHIVE_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
 class ArchiveExportResult:
     """Paths written by an archive export."""
 
-    article_path: Path
+    report_path: Path
     index_path: Path
     feed_path: Path
     metadata_path: Path
 
 
-def export_archive_run(run_dir: Path, output_dir: Path, *, base_url: str) -> ArchiveExportResult:
+def export_archive_run(
+    run_dir: Path,
+    output_dir: Path,
+    *,
+    base_url: str,
+    site_language: str | None = None,
+) -> ArchiveExportResult:
     """Export one run's article draft into a static archive directory."""
 
     draft = load_article_draft(run_dir / "article_draft.json")
     run_id = run_dir.name
     normalized_base_url = _normalized_base_url(base_url)
-    _bind_archive_base_url(output_dir, normalized_base_url)
-    article_dir = output_dir / "articles" / run_id
-    article_path = article_dir / "index.html"
-    metadata_path = article_dir / "metadata.json"
+    archive_language = _bind_archive_identity(
+        output_dir,
+        normalized_base_url,
+        site_language=site_language,
+        draft_language=str(draft.metadata.get("language") or ""),
+    )
+    report_dir = output_dir / "reports" / run_id
+    report_path = report_dir / "index.html"
+    metadata_path = report_dir / "metadata.json"
     previous_metadata = read_json(metadata_path) if metadata_path.exists() else {}
     previous_assets = _metadata_assets(previous_metadata)
     asset_map, current_assets = _copy_archive_assets(draft, run_dir, output_dir, run_id)
-    article_url = _article_url(normalized_base_url, run_id)
-    metadata = _public_metadata(draft, run_id, article_url, assets=current_assets)
+    report_url = _report_url(normalized_base_url, run_id)
+    metadata = _public_metadata(draft, run_id, report_url, assets=current_assets)
 
     write_text(
-        article_path,
+        report_path,
         render_archive_article(
             draft,
             run_id=run_id,
             base_url=normalized_base_url,
+            site_language=archive_language,
             asset_map=asset_map,
         ),
     )
@@ -73,24 +85,46 @@ def export_archive_run(run_dir: Path, output_dir: Path, *, base_url: str) -> Arc
     entries = _archive_entries(output_dir)
     write_text(
         output_dir / "index.html",
-        render_archive_index(entries, base_url=normalized_base_url),
+        render_archive_index(
+            entries,
+            base_url=normalized_base_url,
+            site_language=archive_language,
+        ),
     )
-    write_text(output_dir / "feed.xml", render_archive_feed(entries, base_url=normalized_base_url))
+    write_text(
+        output_dir / "feed.xml",
+        render_archive_feed(
+            entries,
+            base_url=normalized_base_url,
+            site_language=archive_language,
+        ),
+    )
     return ArchiveExportResult(
-        article_path=article_path,
+        report_path=report_path,
         index_path=output_dir / "index.html",
         feed_path=output_dir / "feed.xml",
         metadata_path=metadata_path,
     )
 
 
-def render_archive_feed(entries: list[dict[str, Any]], *, base_url: str) -> str:
+def render_archive_feed(
+    entries: list[dict[str, Any]],
+    *,
+    base_url: str,
+    site_language: str = "en",
+) -> str:
     """Render an RSS feed for archive entries."""
 
+    feed_title = "ResearchRadar 研究归档" if site_language == "zh" else "ResearchRadar Archive"
+    feed_description = (
+        "经过证据核验的每日研究报告。"
+        if site_language == "zh"
+        else "Evidence-gated daily research reports."
+    )
     items = []
     for entry in entries[:50]:
-        link = _article_url(base_url, str(entry["run_id"]))
-        title = str(entry.get("title") or "Untitled article")
+        link = _report_url(base_url, str(entry["run_id"]))
+        title = str(entry.get("title") or "Untitled report")
         digest = str(entry.get("digest") or "")
         created_at = _parse_datetime(str(entry.get("created_at") or ""))
         pub_date = format_datetime(created_at) if created_at else ""
@@ -106,9 +140,9 @@ def render_archive_feed(entries: list[dict[str, Any]], *, base_url: str) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<rss version="2.0"><channel>'
-        "<title>ResearchRadar Archive</title>"
+        f"<title>{feed_title}</title>"
         f"<link>{xml_escape(base_url)}</link>"
-        "<description>Evidence-gated daily research briefs.</description>"
+        f"<description>{feed_description}</description>"
         f"{''.join(items)}"
         "</channel></rss>\n"
     )
@@ -135,13 +169,13 @@ def _copy_archive_assets(
         shutil.copy2(source_path, target)
         archive_src = posixpath.relpath(
             f"assets/{run_id}/{relative_source}",
-            start=f"articles/{run_id}",
+            start=f"reports/{run_id}",
         )
         public_path = f"assets/{run_id}/{relative_source}"
         asset_map[raw_src] = archive_src
         asset_map[relative_source] = archive_src
         public_assets.append(public_path)
-    return asset_map, sorted(set(public_assets))
+    return asset_map, list(dict.fromkeys(public_assets))
 
 
 def _draft_figures(draft: ArticleDraft) -> list[dict[str, Any]]:
@@ -182,7 +216,7 @@ def _is_public_image(path: Path) -> bool:
 def _public_metadata(
     draft: ArticleDraft,
     run_id: str,
-    article_url: str,
+    report_url: str,
     *,
     assets: list[str],
 ) -> dict[str, Any]:
@@ -192,23 +226,27 @@ def _public_metadata(
         "title": draft.title,
         "digest": draft.digest,
         "created_at": draft.created_at.isoformat(),
-        "link": article_url,
+        "link": report_url,
+        "language": _report_language(draft),
         "claim_count": len(draft.publishable_claims()),
+        "deep_read_count": _metadata_count(draft, "deep_read_count"),
+        "source_count": _metadata_count(draft, "source_count"),
         "assets": assets,
+        "lead_asset": assets[0] if assets else "",
     }
 
 
 def _archive_entries(output_dir: Path) -> list[dict[str, Any]]:
     entries = []
-    for path in sorted((output_dir / "articles").glob("*/metadata.json")):
+    for path in sorted((output_dir / "reports").glob("*/metadata.json")):
         data = read_json(path)
         if isinstance(data, dict) and data.get("run_id"):
             entries.append(data)
     return sorted(entries, key=lambda item: str(item.get("created_at") or ""), reverse=True)
 
 
-def _article_url(base_url: str, run_id: str) -> str:
-    return urljoin(base_url.rstrip("/") + "/", f"articles/{run_id}/")
+def _report_url(base_url: str, run_id: str) -> str:
+    return urljoin(base_url.rstrip("/") + "/", f"reports/{run_id}/")
 
 
 def _normalized_base_url(value: str) -> str:
@@ -234,23 +272,70 @@ def _normalized_base_url(value: str) -> str:
     return text.rstrip("/")
 
 
-def _bind_archive_base_url(output_dir: Path, base_url: str) -> None:
+def _bind_archive_identity(
+    output_dir: Path,
+    base_url: str,
+    *,
+    site_language: str | None,
+    draft_language: str,
+) -> str:
     state_path = output_dir / "archive.json"
+    requested_language = _normalized_site_language(site_language) if site_language else None
     if state_path.exists():
         state = read_json(state_path)
+        schema_version = state.get("schema_version") if isinstance(state, dict) else None
+        if schema_version != ARCHIVE_SCHEMA_VERSION:
+            raise ValueError(
+                "archive schema is incompatible; rebuild the output directory for schema v2"
+            )
         existing = str(state.get("base_url") or "") if isinstance(state, dict) else ""
         if existing != base_url:
             raise ValueError(
                 f"archive output is already bound to base_url {existing or '<unknown>'}"
             )
-        return
+        existing_language = str(state.get("site_language") or "")
+        if existing_language not in {"en", "zh"}:
+            raise ValueError("archive site_language is missing or invalid")
+        if requested_language and requested_language != existing_language:
+            raise ValueError(
+                f"archive output is already bound to site_language {existing_language}"
+            )
+        return existing_language
+    resolved_language = requested_language or _fallback_site_language(draft_language)
     write_json(
         state_path,
         {
             "schema_version": ARCHIVE_SCHEMA_VERSION,
             "base_url": base_url,
+            "site_language": resolved_language,
         },
     )
+    return resolved_language
+
+
+def _normalized_site_language(value: str) -> str:
+    language = value.strip().casefold()
+    if language not in {"en", "zh"}:
+        raise ValueError("site_language must be en or zh")
+    return language
+
+
+def _report_language(draft: ArticleDraft) -> str:
+    return _fallback_site_language(str(draft.metadata.get("language") or ""))
+
+
+def _fallback_site_language(value: str) -> str:
+    language = value.strip().casefold()
+    return language if language in {"en", "zh"} else "en"
+
+
+def _metadata_count(draft: ArticleDraft, key: str) -> int:
+    value = draft.metadata.get(key)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return 0
 
 
 def _metadata_assets(metadata: object) -> list[str]:

@@ -12,6 +12,8 @@ from research_radar.compose.archive_figures import (
     figure_source,
     is_pdf_page_fallback_figure,
 )
+from research_radar.compose.archive_theme import ARCHIVE_CSS
+from research_radar.compose.display_text import format_display_text
 from research_radar.compose.source_display import source_descriptor
 from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, ArticleSection, Claim
@@ -22,12 +24,13 @@ def render_archive_article(
     *,
     run_id: str,
     base_url: str,
+    site_language: str,
     asset_map: Mapping[str, str] | None = None,
 ) -> str:
     """Render a public archive article page."""
 
     language = str(draft.metadata.get("language", "en"))
-    canonical_url = _article_url(base_url, run_id)
+    canonical_url = _report_url(base_url, run_id)
     sections = []
     for index, section in enumerate(draft.sections, start=1):
         sections.append(
@@ -39,14 +42,30 @@ def render_archive_article(
             )
         )
     toc = _table_of_contents(draft, language=language)
+    mobile_toc = _table_of_contents(draft, language=language, mobile=True)
+    created_at = draft.created_at.date().isoformat()
+    report_label = "研究报告" if site_language == "zh" else "Research report"
+    stats = _report_stats(draft, language=site_language)
     body = f"""
-<header class="rr-hero">
-  <p class="rr-kicker">ResearchRadar</p>
-  <h1>{escape(draft.title)}</h1>
-  <p class="rr-lede">{_format_text(_display_lede(draft.lede))}</p>
-</header>
-{toc}
-{''.join(sections)}
+{_site_header(home_href="../../", feed_href="../../feed.xml", language=site_language)}
+<main id="main-content" class="rr-report">
+  <header class="rr-report-hero">
+    <p class="rr-eyebrow">
+      {escape(report_label)} · {escape(draft.topic_id)} · {escape(created_at)}
+    </p>
+    <h1>{escape(draft.title)}</h1>
+    <p class="rr-lede">{_format_text(_display_lede(draft.lede))}</p>
+    {stats}
+  </header>
+  <div class="rr-report-layout">
+    {toc}
+    <div class="rr-report-main">
+      {mobile_toc}
+      {''.join(sections)}
+    </div>
+  </div>
+</main>
+{_footer(site_language)}
 """
     return _html_document(
         title=draft.title,
@@ -56,34 +75,49 @@ def render_archive_article(
     )
 
 
-def render_archive_index(entries: list[dict[str, Any]], *, base_url: str) -> str:
+def render_archive_index(
+    entries: list[dict[str, Any]],
+    *,
+    base_url: str,
+    site_language: str,
+) -> str:
     """Render the archive landing page."""
 
+    latest = entries[0] if entries else None
     rows = []
-    for entry in entries:
-        href = _relative_article_href(str(entry["run_id"]))
+    for entry in entries[1:] if latest else []:
+        href = _relative_report_href(str(entry["run_id"]))
+        entry_title = str(entry.get("title") or _site_labels(site_language)["untitled"])
         rows.append(
             f"""
 <article class="rr-list-item">
-  <p class="rr-kicker">{escape(str(entry.get("topic_id") or ""))}</p>
-  <h2><a href="{escape(href)}">{escape(str(entry.get("title") or "Untitled article"))}</a></h2>
+  <p class="rr-eyebrow">{escape(str(entry.get("topic_id") or ""))}</p>
+  <h2><a href="{escape(href)}">{escape(entry_title)}</a></h2>
   <p>{_format_text(str(entry.get("digest") or ""))}</p>
   <p class="rr-meta">{escape(str(entry.get("created_at") or "")[:10])}</p>
 </article>
 """
         )
-    content = "".join(rows) or "<p>No archived articles yet.</p>"
+    labels = _site_labels(site_language)
+    if latest:
+        latest_html = _latest_report(latest, language=site_language)
+        recent_html = (
+            f'<section class="rr-recent"><p class="rr-eyebrow">{escape(labels["recent"])}</p>'
+            f'<div class="rr-report-list">{"".join(rows)}</div></section>'
+            if rows
+            else ""
+        )
+        content = latest_html + recent_html
+    else:
+        content = f'<p class="rr-empty">{escape(labels["empty"])}</p>'
     return _html_document(
-        title="ResearchRadar Archive",
+        title=labels["site_title"],
         canonical_url=base_url,
-        language="en",
+        language=site_language,
         body=f"""
-<header class="rr-hero">
-  <p class="rr-kicker">ResearchRadar</p>
-  <h1>Research archive</h1>
-  <p class="rr-lede">Evidence-gated daily research briefs.</p>
-</header>
-<section class="rr-section">{content}</section>
+{_site_header(home_href="./", feed_href="feed.xml", language=site_language)}
+<main id="main-content" class="rr-home">{content}</main>
+{_footer(site_language)}
 """,
     )
 
@@ -111,7 +145,7 @@ def _render_section(
     elif kind == "evidence_trail":
         content = _evidence_list(section.claims, language=language)
     elif kind == "today_summary":
-        content = _paragraphs(section.body)
+        content = f'<div class="rr-summary">{_paragraphs(section.body)}</div>'
     else:
         content = _paragraphs(section.body) + "".join(
             _claim_card(claim, language=language)
@@ -220,7 +254,7 @@ def _figure_gallery(raw_figures: object, *, asset_map: Mapping[str, str]) -> str
         explanation = str(figure.get("explanation") or "").strip()
         caption_html = f"<figcaption>{_format_text(caption)}</figcaption>" if caption else ""
         explanation_html = (
-            f"<p>{_format_text(_clean_figure_explanation(explanation))}</p>"
+            f'<p class="rr-figure-note">{_format_text(_clean_figure_explanation(explanation))}</p>'
             if explanation
             else ""
         )
@@ -268,7 +302,7 @@ def _source_list(raw_sources: object, *, language: str) -> str:
     for group, items in group_source_entries(raw_sources):
         if not items:
             continue
-        blocks.append(f"<h3>{escape(source_group_label(group, language=language))}</h3>")
+        rows = []
         for item in items:
             title = escape(str(item.get("title") or "Untitled source"))
             url = _public_http_url(item.get("url"))
@@ -277,9 +311,14 @@ def _source_list(raw_sources: object, *, language: str) -> str:
             link = f'<a href="{escape(url)}">{title}</a>' if url else title
             meta_html = f'<p class="rr-meta">{descriptor}</p>' if descriptor else ""
             gist_html = f"<p>{_format_text(gist)}</p>" if gist else ""
-            blocks.append(
-                f'<article class="rr-card"><h4>{link}</h4>{meta_html}{gist_html}</article>'
+            rows.append(
+                f'<article class="rr-source"><h4>{link}</h4>{meta_html}{gist_html}</article>'
             )
+        blocks.append(
+            '<div class="rr-source-group">'
+            f"<h3>{escape(source_group_label(group, language=language))}</h3>"
+            f'<div class="rr-source-list">{"".join(rows)}</div></div>'
+        )
     return "".join(blocks)
 
 
@@ -300,7 +339,7 @@ def _seen_source_list(raw_sources: object, *, language: str) -> str:
             if url
             else f"<li>{title}{note}</li>"
         )
-    return f"<ol>{''.join(rows)}</ol>" if rows else ""
+    return f'<ol class="rr-seen">{"".join(rows)}</ol>' if rows else ""
 
 
 def _references(claims: list[Claim], metadata: dict[str, Any], *, language: str) -> str:
@@ -399,12 +438,23 @@ def _key_evidence(value: object, labels: dict[str, str]) -> str:
     )
 
 
-def _table_of_contents(draft: ArticleDraft, *, language: str) -> str:
+def _table_of_contents(
+    draft: ArticleDraft,
+    *,
+    language: str,
+    mobile: bool = False,
+) -> str:
     items = []
     for index, section in enumerate(draft.sections, start=1):
         items.append(f'<li><a href="#section-{index}">{escape(section.title)}</a></li>')
     label = "目录" if language == "zh" else "Contents"
-    return f'<nav class="rr-toc"><strong>{label}</strong><ol>{"".join(items)}</ol></nav>'
+    contents = f'<strong>{label}</strong><ol>{"".join(items)}</ol>'
+    if mobile:
+        return (
+            f'<details class="rr-mobile-toc"><summary>{label}</summary>'
+            f'<ol>{"".join(items)}</ol></details>'
+        )
+    return f'<nav class="rr-toc" aria-label="{escape(label)}">{contents}</nav>'
 
 
 def _paragraphs(text: str) -> str:
@@ -416,7 +466,7 @@ def _paragraphs(text: str) -> str:
 
 
 def _format_text(value: str) -> str:
-    return escape(_strip_html(value))
+    return format_display_text(_strip_html(value))
 
 
 def _strip_html(value: str) -> str:
@@ -519,12 +569,12 @@ def _shorten(value: str, limit: int = 130) -> str:
     return text[: limit - 3].rstrip() + "..."
 
 
-def _relative_article_href(run_id: str) -> str:
-    return f"articles/{run_id}/"
+def _relative_report_href(run_id: str) -> str:
+    return f"reports/{run_id}/"
 
 
-def _article_url(base_url: str, run_id: str) -> str:
-    return urljoin(base_url.rstrip("/") + "/", f"articles/{run_id}/")
+def _report_url(base_url: str, run_id: str) -> str:
+    return urljoin(base_url.rstrip("/") + "/", f"reports/{run_id}/")
 
 
 def _public_http_url(value: object) -> str:
@@ -545,6 +595,136 @@ def _public_http_url(value: object) -> str:
     return text
 
 
+def _site_labels(language: str) -> dict[str, str]:
+    if language == "zh":
+        return {
+            "archive": "研究报告",
+            "rss": "RSS",
+            "skip": "跳到正文",
+            "latest": "最新研究报告",
+            "recent": "近期报告",
+            "empty": "还没有可公开的研究报告。",
+            "untitled": "未命名报告",
+            "site_title": "ResearchRadar 研究归档",
+            "deep_reads": "精读论文",
+            "verified": "核验证据",
+            "sources": "相关来源",
+            "footer": "ResearchRadar 只公开通过证据门控的研究内容。",
+        }
+    return {
+        "archive": "Research reports",
+        "rss": "RSS",
+        "skip": "Skip to content",
+        "latest": "Latest report",
+        "recent": "Recent reports",
+        "empty": "No public research reports yet.",
+        "untitled": "Untitled report",
+        "site_title": "ResearchRadar Archive",
+        "deep_reads": "Deep reads",
+        "verified": "Verified observations",
+        "sources": "Related sources",
+        "footer": "ResearchRadar publishes only evidence-gated research content.",
+    }
+
+
+def _site_header(*, home_href: str, feed_href: str, language: str) -> str:
+    labels = _site_labels(language)
+    return f"""
+<a class="rr-skip" href="#main-content">{escape(labels["skip"])}</a>
+<header class="rr-site-header">
+  <div class="rr-site-bar">
+    <a class="rr-brand" href="{escape(home_href)}">RESEARCHRADAR</a>
+    <nav class="rr-site-nav" aria-label="{escape(labels["archive"])}">
+      <a href="{escape(home_href)}">{escape(labels["archive"])}</a>
+      <a href="{escape(feed_href)}">{escape(labels["rss"])}</a>
+    </nav>
+  </div>
+</header>
+"""
+
+
+def _footer(language: str) -> str:
+    return f'<footer class="rr-footer">{escape(_site_labels(language)["footer"])}</footer>'
+
+
+def _latest_report(entry: dict[str, Any], *, language: str) -> str:
+    labels = _site_labels(language)
+    run_id = str(entry.get("run_id") or "")
+    href = _relative_report_href(run_id)
+    title = str(entry.get("title") or labels["untitled"])
+    topic_id = str(entry.get("topic_id") or "")
+    created_at = str(entry.get("created_at") or "")[:10]
+    digest = str(entry.get("digest") or "")
+    lead_asset = _public_asset_href(entry.get("lead_asset"))
+    media = (
+        '<div class="rr-home-latest-media">'
+        f'<a href="{escape(href)}"><img src="{escape(lead_asset)}" alt="{escape(title)}"></a>'
+        "</div>"
+        if lead_asset
+        else ""
+    )
+    no_media_class = " rr-no-media" if not media else ""
+    return f"""
+<section class="rr-home-latest{no_media_class}">
+  <div>
+    <p class="rr-eyebrow">{escape(labels["latest"])} · {escape(created_at)}</p>
+    <h1><a href="{escape(href)}">{escape(title)}</a></h1>
+    <p class="rr-lede">{_format_text(digest)}</p>
+    <p class="rr-meta">{escape(topic_id)}</p>
+    {_entry_stats(entry, language=language)}
+  </div>
+  {media}
+</section>
+"""
+
+
+def _entry_stats(entry: Mapping[str, Any], *, language: str) -> str:
+    labels = _site_labels(language)
+    values = [
+        (labels["deep_reads"], _entry_count(entry, "deep_read_count")),
+        (labels["verified"], _entry_count(entry, "claim_count")),
+        (labels["sources"], _entry_count(entry, "source_count")),
+    ]
+    items = [
+        f'<span class="rr-stat">{escape(label)} {count}</span>'
+        for label, count in values
+        if count
+    ]
+    return f'<div class="rr-stats">{"".join(items)}</div>' if items else ""
+
+
+def _report_stats(draft: ArticleDraft, *, language: str) -> str:
+    return _entry_stats(
+        {
+            "deep_read_count": draft.metadata.get("deep_read_count", 0),
+            "claim_count": len(draft.publishable_claims()),
+            "source_count": draft.metadata.get("source_count", 0),
+        },
+        language=language,
+    )
+
+
+def _entry_count(entry: Mapping[str, Any], key: str) -> int:
+    value = entry.get(key)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return 0
+
+
+def _public_asset_href(value: object) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    if not text or text.startswith("/"):
+        return ""
+    parts = text.split("/")
+    if ".." in parts or parts[0] != "assets":
+        return ""
+    if not text.casefold().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return ""
+    return text
+
+
 def _html_document(*, title: str, canonical_url: str, language: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang="{escape(language)}">
@@ -553,76 +733,7 @@ def _html_document(*, title: str, canonical_url: str, language: str, body: str) 
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{escape(title)}</title>
   <link rel="canonical" href="{escape(canonical_url)}">
-  <style>
-    body {{
-      margin: 0;
-      background: #f6f7f9;
-      color: #1f2933;
-      font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-    }}
-    a {{ color: #1d4ed8; text-decoration: none; }}
-    a:hover {{ text-decoration: underline; }}
-    .rr-hero, .rr-section, .rr-toc {{
-      max-width: 880px;
-      margin: 0 auto;
-      padding: 28px 22px;
-      box-sizing: border-box;
-    }}
-    .rr-hero {{ padding-top: 54px; }}
-    .rr-kicker, .rr-meta {{ color: #64748b; font-size: 0.92rem; margin: 0 0 8px; }}
-    h1 {{
-      font-size: clamp(2rem, 5vw, 3.4rem);
-      line-height: 1.08;
-      margin: 0 0 18px;
-      letter-spacing: 0;
-    }}
-    h2 {{ font-size: 1.65rem; margin: 0 0 18px; padding-top: 12px; border-top: 1px solid #d7dde5; }}
-    h3 {{ font-size: 1.3rem; margin: 26px 0 10px; }}
-    h4 {{ font-size: 1.06rem; margin: 22px 0 8px; color: #334155; }}
-    p {{ margin: 10px 0; }}
-    .rr-lede {{ font-size: 1.15rem; color: #475569; max-width: 720px; }}
-    .rr-toc ol {{ margin: 10px 0 0; padding-left: 22px; }}
-    .rr-deep, .rr-card, .rr-list-item {{
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 20px;
-      margin: 18px 0;
-    }}
-    .rr-figure {{ margin: 24px 0; }}
-    .rr-figure img {{
-      max-width: 100%;
-      border-radius: 8px;
-      border: 1px solid #d7dde5;
-      background: #fff;
-    }}
-    figcaption {{ color: #475569; font-size: 0.95rem; margin-top: 8px; }}
-    .rr-diagram {{
-      display: grid;
-      gap: 10px;
-      margin: 18px 0;
-      padding: 14px;
-      border: 1px solid #dbe3ec;
-      border-radius: 10px;
-      background: #f8fafc;
-    }}
-    .rr-diagram span {{ display: block; padding: 10px 12px; border-radius: 8px; background: #fff; }}
-    .rr-diagram strong {{ display: block; color: #0f172a; }}
-    details.rr-evidence {{
-      margin: 12px 0;
-      padding: 12px 14px;
-      border: 1px solid #dbe3ec;
-      border-radius: 8px;
-      background: #fff;
-    }}
-    blockquote {{
-      margin: 12px 0;
-      padding-left: 14px;
-      border-left: 3px solid #94a3b8;
-      color: #334155;
-    }}
-    code, .rr-formula {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-  </style>
+  <style>{ARCHIVE_CSS}</style>
 </head>
 <body>{body}</body>
 </html>

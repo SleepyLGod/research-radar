@@ -569,7 +569,13 @@ def build_parser() -> argparse.ArgumentParser:
     archive_export.add_argument(
         "--base-url",
         required=True,
-        help="Public base URL used for canonical article links and RSS entries.",
+        help="Public base URL used for canonical report links and RSS entries.",
+    )
+    archive_export.add_argument(
+        "--site-language",
+        choices=["en", "zh"],
+        default=None,
+        help="Archive navigation language; defaults to the first report or existing archive.",
     )
     archive_export.set_defaults(handler=handle_archive_export)
 
@@ -1239,10 +1245,15 @@ def handle_archive_export(args: argparse.Namespace) -> None:
     """Export one run into a static public archive."""
 
     try:
-        result = export_archive_run(args.run_dir, args.output, base_url=args.base_url)
+        result = export_archive_run(
+            args.run_dir,
+            args.output,
+            base_url=args.base_url,
+            site_language=args.site_language,
+        )
     except ValueError as exc:
         raise PublishError(str(exc)) from exc
-    print(f"Wrote archive article: {result.article_path}")
+    print(f"Wrote archive report: {result.report_path}")
     print(f"Wrote archive index: {result.index_path}")
     print(f"Wrote archive RSS: {result.feed_path}")
 
