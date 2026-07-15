@@ -42,25 +42,26 @@ def test_version_metadata_matches_package() -> None:
 def test_readme_is_concise_project_entrypoint() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "![ResearchRadar](docs/assets/research-radar-plus.png)" in readme
+    assert "![ResearchRadar](docs/assets/research-radar-hero.png)" in readme
     assert "[简体中文](README.zh-CN.md)" in readme
-    assert "[Detailed usage](docs/usage.md)" in readme
-    assert "[Provider configuration](docs/providers.md)" in readme
+    assert "[Live Archive](https://sleepylgod.github.io/research-radar/archive/)" in readme
+    assert "[RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml)" in readme
+    assert "[Detailed Usage](docs/usage.md)" in readme
+    assert "[Provider Configuration](docs/providers.md)" in readme
     assert "DeepSeek v4 Pro" in readme
-    assert "Codex `gpt-5.5`" in readme
+    assert "Codex `gpt-5.6-terra`" in readme
     assert "`Evidence-gated`" in readme
-    assert (
-        "Daily research briefs for people who want the paper, the evidence, and the draft"
-        in readme
-    )
-    assert "create a WeChat draft, never an automatic publish" in readme
+    assert "Turn a reviewed research topic into a daily article" in readme
+    assert "ResearchRadar does not publish" in readme
     assert "[Roadmap](docs/todo.md)" in readme
+    for unsupported_label in ["Exa", "Citation Graph", "PubMed", "Firecrawl"]:
+        assert unsupported_label not in readme
     assert "## Target E2E Flow" not in readme
     assert "## What v1 Does" not in readme
 
 
 def test_readme_cover_image_exists() -> None:
-    image = Path("docs/assets/research-radar-plus.png")
+    image = Path("docs/assets/research-radar-hero.png")
 
     assert image.exists()
     assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
@@ -77,9 +78,10 @@ def test_chinese_readme_and_usage_doc_exist() -> None:
     assert "--config config.example.yaml" not in chinese
     assert "# ResearchRadar Usage Guide" in usage
     assert "Deep reading: `deepseek/deepseek-v4-pro`" in usage
-    assert "Verification: `codex/gpt-5.5`" in usage
+    assert "Verification: `codex/gpt-5.6-terra`" in usage
     assert "--deepseek-provider xiaomi" in usage
     assert "[Provider Configuration](providers.md)" in usage
+    assert "research-radar compose zhihu" in usage
 
 
 def test_provider_docs_explain_interfaces_without_expanding_public_config() -> None:
@@ -103,16 +105,12 @@ def test_provider_docs_explain_interfaces_without_expanding_public_config() -> N
     assert "model_providers:\n  qwen:" not in config
 
 
-def test_readme_wechat_publish_command_includes_required_flags() -> None:
+def test_readme_daily_command_uses_printed_run_directory_contract() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    command_start = readme.index("uv run research-radar publish wechat-draft")
-    command_block = readme[command_start : readme.index("```", command_start)]
-
-    assert "--run runs/<date-topic>" in command_block
-    assert "--title" in command_block
-    assert "--digest" in command_block
-    assert "--thumb-media-id" in command_block
+    assert "--root research-radar-data" in readme
+    assert "Created run: <RUN_DIR>" in readme
+    assert "--run runs/<date-topic>" not in readme
 
 
 def test_example_config_enables_tavily_web_search() -> None:
@@ -122,10 +120,11 @@ def test_example_config_enables_tavily_web_search() -> None:
     assert "header_secret_name: web_search.api_key" in config
 
 
-def test_example_config_uses_codex_gpt_55_verifier() -> None:
+def test_example_config_uses_codex_terra_high_verifier() -> None:
     config = Path("config.example.yaml").read_text(encoding="utf-8")
 
-    assert "verifier:\n      provider: codex\n      model: gpt-5.5" in config
+    assert "reasoning_effort: high" in config
+    assert "verifier:\n      provider: codex\n      model: gpt-5.6-terra" in config
 
 
 def test_architecture_contains_canonical_e2e_flow() -> None:

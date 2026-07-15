@@ -24,7 +24,8 @@ drive the research model.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
 - Source centrality reranking and curated public daily source lists.
 - DeepSeek v4 Pro as the default reader route.
-- Codex or command-backed providers as verifier routes.
+- Codex `gpt-5.6-terra` with `high` reasoning effort as the default verifier route; other
+  command-backed providers remain optional.
 - Opt-in model call cache and runtime summaries for reader/verifier cost audit.
 - Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
   model work.
@@ -43,6 +44,10 @@ drive the research model.
   automatic archive publishing is not yet configured. `/papers/` remains a future single-paper
   knowledge base.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
+- Zhihu-specific Markdown export v2 from `ArticleDraft`, including a title-free two-level document,
+  flat source lists, safe local assets or public image URLs, and schema-v2 export metadata. Final
+  real-editor acceptance is still pending; login and automatic publishing are intentionally out of
+  scope.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
 ## Non-Negotiable Quality Rules
@@ -87,12 +92,9 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Add a Zhihu renderer/export MVP.
-   - Build new channel renderers from the verified `ArticleDraft`; do not reuse WeChat HTML as the
-     source of truth.
-   - Keep channel-specific formatting downstream of verified claims, localized readings, source
-     metadata, and figure metadata.
-   - Do not let Zhihu or any future platform change the core research and evidence model.
+1. Complete one real Zhihu editor acceptance pass.
+   - Check heading levels, flat lists, references, and remote image import in the real editor.
+   - Keep login, browser automation, and automatic publishing out of scope.
 
 2. Revisit Archive publishing automation after repeated manual use.
    - Keep the static output directory as the hosting-neutral interface.
@@ -124,7 +126,7 @@ drive the research model.
 
 ## Near-Term Execution Order
 
-1. Add a Zhihu renderer/export MVP from `ArticleDraft`.
+1. Complete one real Zhihu editor acceptance pass.
 2. Repeat the manual Archive update flow before deciding whether to automate Git publishing.
 3. Improve figures and tune topic profiles when repeated real-run failures appear.
 4. Revisit weekly deep dive and Codex reader only when daily usage shows the need.

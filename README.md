@@ -1,85 +1,73 @@
 # ResearchRadar
 
-![ResearchRadar](docs/assets/research-radar-plus.png)
+![ResearchRadar](docs/assets/research-radar-hero.png)
 
-Daily research briefs for people who want the paper, the evidence, and the draft, not another loose
-summary. Give ResearchRadar a reviewed topic; it finds new papers, deep-reads the central ones,
-checks each public claim against source anchors, and leaves a long-form WeChat draft for you to
-review. The same verified article can also be exported as a static public archive with RSS.
+**Turn a reviewed research topic into a daily article whose claims point back to the source.**
 
-`Local-first` · `Evidence-gated` · `Full-paper reading` · `WeChat draft` · `Archive/RSS`
+ResearchRadar watches a topic for new work, chooses the papers worth reading, reads the full text,
+and checks public claims against exact source anchors. It runs locally and leaves the finished article
+where you want to review it: the WeChat draft box, a public web archive with RSS, or a Markdown export.
 
-`DeepSeek reader` · `Codex verifier` · `Tavily recall` · `OpenAI-compatible providers`
+[简体中文](README.zh-CN.md) ·
+[Live Archive](https://sleepylgod.github.io/research-radar/archive/) ·
+[RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml) ·
+[Usage](docs/usage.md) · [Providers](docs/providers.md)
 
-[简体中文](README.zh-CN.md) · [Detailed usage](docs/usage.md) ·
-[Provider configuration](docs/providers.md) · [Architecture](docs/architecture.md) ·
-[Security](docs/security.md)
+`Local-first` · `Full-paper reading` · `Evidence-gated` · `No auto-publish`
 
-## What It Does
+## What You Get
 
-Most research bots summarize whatever they find. ResearchRadar is stricter. Search improves recall,
-but public claims must come from ingested papers or trusted source artifacts with complete evidence
-anchors.
+- **A focused daily read.** Paper-first discovery and topic-aware ranking keep the brief centered on
+  the research question instead of filling it with generic web results.
+- **Full-paper explanations.** Selected papers are read from usable source text or PDFs, with the
+  problem, method, experiments, limitations, and figures explained in plain language.
+- **Claims you can inspect.** Public factual claims need complete evidence anchors. Weak, broad, or
+  unmatched claims stay in local audit artifacts instead of leaking into the article.
+- **One verified draft, several outputs.** The same `ArticleDraft` can become a WeChat draft, a static
+  Archive/RSS report, or a Zhihu-ready Markdown export.
 
-### How a daily brief is made
+## How It Works
 
 ```mermaid
 flowchart LR
-    A["Reviewed topic"] --> B["Discover new papers and sources"]
-    B --> C["Select central papers"]
-    C --> D["Full-paper deep reading"]
-    D --> E["Claim splitting and evidence anchors"]
-    E --> F["Codex verifier"]
-    F --> G["Readable article draft"]
-    G --> H["WeChat draft box"]
-    G --> J["Public archive and RSS"]
-    E --> I["Audit artifacts"]
-    F --> I
+    A["Reviewed topic"] --> B["Discover and rank"]
+    B --> C["Acquire full papers"]
+    C --> D["Read and explain"]
+    D --> E["Split claims and anchor quotes"]
+    E --> F["Verify conservatively"]
+    F --> G["ArticleDraft"]
+    G --> H["WeChat draft"]
+    G --> I["Archive and RSS"]
+    G --> J["Zhihu Markdown"]
 ```
 
-The default daily path is:
+Search expands recall, but snippets do not become publishable facts. The public article is built only
+after full-text acquisition, claim splitting, anchor checks, and verifier review.
 
-1. discover sources with paper-first ranking and Tavily recall;
-2. deep-read selected papers with DeepSeek v4 Pro;
-3. verify claims with Codex `gpt-5.5`;
-4. render a readable long-form article;
-5. create a WeChat draft, never an automatic publish.
+## Try It Once
 
-## Output
+You need Python 3.12+, `uv`, a configured reader API, and the Codex CLI used by the default verifier.
+WeChat credentials are optional until you create a WeChat draft.
 
-Each successful daily run creates:
-
-- a WeChat draft-ready long-form article for review in the Official Account editor;
-- an optional static article archive and RSS feed built from the same verified draft;
-- a local HTML preview with safe paper figures when available;
-- verified claims with exact source anchors;
-- audit artifacts for rejected, weak, or unsupported claims.
-
-## Quick Start
-
-Daily use is intentionally simple: configure reviewed topics and secrets once, then check the
-WeChat draft box when the scheduled job runs.
-
-Install dependencies and initialize local config:
+Install the project and create a private local config:
 
 ```bash
 uv sync --extra dev
 uv run research-radar init
 ```
 
-`config.example.yaml` is a public template. Put your real reviewed topics in local
-`config.yaml`; it is gitignored and should not be committed.
+Edit `config.yaml` and replace `example-topic` with a topic you have reviewed. The file is gitignored;
+keep real topics and provider settings there rather than in `config.example.yaml`.
 
-Store local secrets in Keychain, then confirm readiness:
+Store the secrets needed by the default discovery and reading path in macOS Keychain:
 
 ```bash
 uv run research-radar secrets set deepseek
 uv run research-radar secrets set web-search
-uv run research-radar secrets set wechat
 uv run research-radar secrets status
 ```
 
-Run a daily research brief:
+Run the topic once:
 
 ```bash
 uv run research-radar run daily \
@@ -90,61 +78,43 @@ uv run research-radar run daily \
   --model-cache
 ```
 
-Optionally export that run to a static public archive:
+The command prints `Created run: <RUN_DIR>`. Treat that exact path as the input to later compose,
+archive, and publishing commands. Start with `<RUN_DIR>/wechat.html` or `<RUN_DIR>/daily.md`.
 
-```bash
-uv run research-radar archive export \
-  --run runs/<date-topic> \
-  --output public-archive \
-  --base-url https://research.example.com \
-  --site-language en
-```
+## Publishing And Automation
 
-This writes static files only. Hosting on GitHub Pages, Vercel, Cloudflare Pages, or a personal
-domain is a separate deployment step.
+- **WeChat:** upload safe paper figures and create a draft for review. ResearchRadar does not publish
+  or mass-send it.
+- **Public Archive and RSS:** export static files that can be hosted on GitHub Pages or another static
+  host. The [live archive](https://sleepylgod.github.io/research-radar/archive/) is one deployment.
+- **Zhihu:** export constrained Markdown with local or public image URLs for manual import.
+- **Daily scheduler:** generate a local macOS launchd job that runs reviewed topics and creates drafts.
 
-Create a WeChat draft for review:
+See [Detailed Usage](docs/usage.md) for the exact commands and deployment steps.
 
-```bash
-uv run research-radar publish wechat-draft \
-  --run runs/<date-topic> \
-  --title "ResearchRadar: <topic>" \
-  --digest "One-sentence reviewed digest" \
-  --thumb-media-id "<wechat-thumb-media-id>"
-```
+## Defaults, Not Lock-In
 
-Schedule a daily WeChat draft job:
+The current quality path uses DeepSeek v4 Pro for deep reading, lightweight DeepSeek routes for
+gists and localization, Tavily for web recall, and Codex `gpt-5.6-terra` with `high` reasoning for
+verification. Provider instances and task routes are configurable; see
+[Provider Configuration](docs/providers.md).
 
-```bash
-uv run research-radar schedule daily-draft \
-  --topic <topic-id> \
-  --time 09:00 \
-  --config config.yaml \
-  --root research-radar-data \
-  --thumb-media-id "<wechat-thumb-media-id>" \
-  --language zh \
-  --model-cache
-```
+## Trust Boundary
 
-## Quality Boundary
+Reader-facing reports use only supported claims with complete evidence anchors. Rejected claims,
+weak evidence, source-selection details, provider diagnostics, and timing data remain in local audit
+artifacts. Renderers may reorganize verified content, but they cannot invent research claims.
 
-Public reports only use supported claims with complete source anchors. Internal artifacts such as
-`review_report.md`, `claims.jsonl`, `sources.jsonl`, and `runtime_summary.json` stay available for
-audit, but the reader-facing article is built from verified content.
+ResearchRadar is self-hosted software, not a hosted research service. It stores secrets locally and
+does not automatically publish to WeChat, the public Archive, or Zhihu.
 
-WeChat, the public archive, and future publishing channels are sibling renderers downstream of
-`ArticleDraft`. The research model remains the same: discover broadly, read deeply, verify
-conservatively, and keep every run auditable.
+## Documentation
 
-## More
-
-- [Detailed usage](docs/usage.md) covers setup, providers, single-paper runs, archive/RSS export,
-  WeChat drafts, scheduler installation, and privacy checks.
-- [Provider configuration](docs/providers.md) shows how to add OpenAI-compatible APIs, local
-  servers, or CLI agent providers without changing public examples.
-- [Architecture](docs/architecture.md) describes the source-to-draft pipeline.
-- [Security](docs/security.md) documents secret handling and privacy boundaries.
-- [Roadmap](docs/todo.md) tracks product and engineering priorities.
+- [Detailed Usage](docs/usage.md)
+- [Provider Configuration](docs/providers.md)
+- [Architecture](docs/architecture.md)
+- [Security](docs/security.md)
+- [Roadmap](docs/todo.md)
 
 ## License
 

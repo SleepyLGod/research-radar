@@ -1,82 +1,73 @@
 # ResearchRadar
 
-![ResearchRadar](docs/assets/research-radar-plus.png)
+![ResearchRadar](docs/assets/research-radar-hero.png)
 
-ResearchRadar 面向想自托管研究日报的人：给它一个审核过的研究 topic，它每天发现新论文，
-精读最值得看的几篇，用原文证据核验公开事实点，然后把一篇中文长文放进公众号草稿箱。
-你只需要去草稿箱审稿，而不是每天重新搜论文、读 PDF、整理证据。同一份已核验文章也可以
-导出成静态公开归档和 RSS。
+**盯住一个研究方向，每天得到一篇能追溯原文的研究长文。**
 
-`本地优先` · `证据门控` · `整篇论文精读` · `微信公众号草稿` · `Archive/RSS`
+ResearchRadar 会寻找新工作，挑出真正值得读的论文，读取全文，再逐条核对准备写进正文的事实。
+它在本地运行，最后把文章放到你方便审阅的地方：微信公众号草稿箱、带 RSS 的公开网页，
+或者适合导入知乎的 Markdown。
 
-`DeepSeek reader` · `Codex verifier` · `Tavily 召回` · `OpenAI-compatible providers`
+[English README](README.md) ·
+[在线 Archive](https://sleepylgod.github.io/research-radar/archive/) ·
+[RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml) ·
+[使用说明](docs/usage.md) · [Provider 配置](docs/providers.md)
 
-[English README](README.md) · [详细使用说明](docs/usage.md) ·
-[Provider 配置](docs/providers.md) · [架构](docs/architecture.md) · [安全说明](docs/security.md)
+`本地运行` · `读取论文全文` · `证据核验` · `不会自动发布`
 
-## 它解决什么问题
+## 你会得到什么
 
-多数 research bot 会总结它搜到的内容；ResearchRadar 更保守。搜索只负责补召回，公开正文里的事实
-必须来自已经读取的论文或可信来源，并且要有完整的 evidence anchor。
+- **一份重点明确的日报。** 搜索会尽量找全，但选源优先考虑论文是否真正切中研究方向，不拿一堆
+  泛泛的网页结果凑数。
+- **真正基于全文的解读。** 对选中的论文解释问题、方法、实验和局限；有合适的论文图时，也会把图
+  和正文放在一起讲清楚。
+- **可以回查的事实。** 准备公开的事实必须有完整 evidence anchor。证据不足、说得太宽或无法匹配
+  原文的 claim 只留在本地审计记录里。
+- **一份内容，可以发到不同地方。** 同一个 `ArticleDraft` 可以生成微信公众号草稿、Archive/RSS 网页，
+  或者知乎专用 Markdown。
 
-### 一篇日报是怎么生成的
+## 它怎么工作
 
 ```mermaid
 flowchart LR
-    A["审核过的 topic"] --> B["发现新论文和来源"]
-    B --> C["选择最核心的论文"]
-    C --> D["整篇论文精读"]
-    D --> E["拆分事实点并绑定证据"]
-    E --> F["Codex verifier"]
-    F --> G["可读的长文草稿"]
-    G --> H["公众号草稿箱"]
-    G --> J["公开归档与 RSS"]
-    E --> I["审计记录"]
-    F --> I
+    A["审核过的 topic"] --> B["发现并排序"]
+    B --> C["获取论文全文"]
+    C --> D["精读并解释"]
+    D --> E["拆分 claim 并锚定原文"]
+    E --> F["保守核验"]
+    F --> G["ArticleDraft"]
+    G --> H["公众号草稿"]
+    G --> I["Archive 和 RSS"]
+    G --> J["知乎 Markdown"]
 ```
 
-默认日报链路是：
+搜索只负责尽量找全，搜索摘要不能直接变成公开事实。ResearchRadar 会先拿到论文全文，再经过
+claim 拆分、原文锚定和 verifier 检查，最后才生成给读者看的文章。
 
-1. 用 paper-first ranking 和 Tavily 补充召回；
-2. 用 DeepSeek v4 Pro 精读选中的论文；
-3. 用 Codex `gpt-5.5` 检查可发布 claim；
-4. 渲染成可读的中文长文；
-5. 创建微信公众号草稿，只进草稿箱，不自动发布。
+## 先跑通一次
 
-## 每次运行会得到什么
+你需要 Python 3.12+、`uv`、一个可用的 reader API，以及默认 verifier 使用的 Codex CLI。
+微信公众号配置可以晚一点再做，不影响先生成本地日报。
 
-一次成功的日报会生成：
-
-- 一篇可以直接在微信公众号后台审阅的长文草稿；
-- 一份从同一已核验草稿导出的可选静态文章归档和 RSS；
-- 一个带安全论文图的本地 HTML 预览；
-- 一组带原文证据锚点的 verified claims；
-- 一套记录 rejected / weak / unsupported claim 的审计 artifacts。
-
-## 快速开始
-
-日常使用分两步：第一次配好 topic、密钥和 scheduler；之后每天去微信公众号草稿箱审稿。
-
-安装依赖并初始化本地配置：
+安装依赖并创建本地配置：
 
 ```bash
 uv sync --extra dev
 uv run research-radar init
 ```
 
-`config.example.yaml` 是公开模板。正式 topic 和日常偏好放在本地 `config.yaml`；
-`config.yaml` 已被 gitignore 覆盖，不应提交。
+打开 `config.yaml`，把 `example-topic` 换成你已经确认过的研究方向。这个文件已被 gitignore，
+正式 topic 和 provider 设置都应该留在这里，不要写进公开模板。
 
-把本地密钥存进 Keychain，并检查状态：
+把默认搜索和精读需要的密钥存进 macOS Keychain：
 
 ```bash
 uv run research-radar secrets set deepseek
 uv run research-radar secrets set web-search
-uv run research-radar secrets set wechat
 uv run research-radar secrets status
 ```
 
-运行一次日报：
+运行一次：
 
 ```bash
 uv run research-radar run daily \
@@ -87,56 +78,41 @@ uv run research-radar run daily \
   --model-cache
 ```
 
-如需公开归档，可以把这次 run 导出成静态网页和 RSS：
+命令结束时会打印 `Created run: <RUN_DIR>`。后续 compose、Archive 和发布命令都使用这个准确路径。
+你可以先打开 `<RUN_DIR>/wechat.html`，或者阅读 `<RUN_DIR>/daily.md`。
 
-```bash
-uv run research-radar archive export \
-  --run runs/<date-topic> \
-  --output public-archive \
-  --base-url https://research.example.com \
-  --site-language zh
-```
+## 发布与自动运行
 
-这条命令只生成静态文件，不负责部署到 GitHub Pages、Vercel、Cloudflare Pages 或个人域名。
+- **微信公众号：** 上传安全的论文图并创建草稿，只进草稿箱，不自动发布或群发。
+- **Archive 和 RSS：** 导出普通静态文件，可以放到 GitHub Pages 或其他静态托管服务。
+  [在线 Archive](https://sleepylgod.github.io/research-radar/archive/) 是一个真实部署示例。
+- **知乎：** 生成专门适配知乎标题和列表层级的 Markdown，并支持本地图片包或公网图片 URL，供人工导入。
+- **本地 scheduler：** 生成 macOS launchd 任务，定时运行审核过的 topic 并创建公众号草稿。
 
-创建微信公众号草稿：
+具体命令和部署步骤见[详细使用说明](docs/usage.md)。
 
-```bash
-uv run research-radar publish wechat-draft \
-  --run runs/<date-topic> \
-  --title "ResearchRadar 日报：<topic>" \
-  --digest "今日精选 <topic> 相关论文精读。" \
-  --thumb-media-id "<wechat-thumb-media-id>"
-```
+## 默认模型可以替换
 
-生成本地定时任务：
+当前默认使用 DeepSeek v4 Pro 精读论文、轻量 DeepSeek 路由生成 gist 和中文表达、Tavily 补充网页召回，
+再由 Codex `gpt-5.6-terra` 以 `high` reasoning 做 verifier。默认值只是经过验证的组合，不是硬编码限制；
+自定义 API、本地模型和 CLI agent 的接入方式见 [Provider 配置](docs/providers.md)。
 
-```bash
-uv run research-radar schedule daily-draft \
-  --topic <topic-id> \
-  --time 09:00 \
-  --config config.yaml \
-  --root research-radar-data \
-  --thumb-media-id "<wechat-thumb-media-id>" \
-  --language zh \
-  --model-cache
-```
+## 内容边界
 
-## 质量边界
+给读者看的报告只使用 supported 且 evidence anchor 完整的 claim。被拒绝的 claim、弱证据、选源细节、
+provider 报错和运行耗时仍会保存在本地 artifacts 中，方便排查，但不会混进正文。Renderer 可以重新组织
+已经核验的内容，不能自己补研究结论。
 
-公开报告只展示 supported 且 evidence anchor 完整的 claim。弱证据、拒绝项、调试信息和审计记录会留在
-本地 artifacts 里，不会混进普通读者看到的正文。
+ResearchRadar 是自托管工具，不是在线研究服务。Secret 保存在本地，也不会自动把内容发布到公众号、
+公开 Archive 或知乎。
 
-Xiaomi `mimo-v2.5-pro` 已作为可选 OpenAI-compatible provider 接入，可以显式替代 DeepSeek 路由；
-默认路径仍保持 DeepSeek reader 和 Codex verifier。
+## 文档
 
-## 更多文档
-
-- [详细使用说明](docs/usage.md)：安装、密钥、日报、单篇论文、Archive/RSS、微信草稿、scheduler、隐私检查。
-- [Provider 配置](docs/providers.md)：如何接入 Kimi、Qwen、Minimax、本地 OpenAI-compatible 服务或 CLI agent。
-- [架构](docs/architecture.md)：从 source discovery 到 article draft 的数据流。
-- [安全说明](docs/security.md)：本地 secret、隐私扫描和发布边界。
-- [路线图](docs/todo.md)：产品和工程 TODO。
+- [详细使用说明](docs/usage.md)
+- [Provider 配置](docs/providers.md)
+- [架构](docs/architecture.md)
+- [安全说明](docs/security.md)
+- [路线图](docs/todo.md)
 
 ## License
 

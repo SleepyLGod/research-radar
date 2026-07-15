@@ -58,7 +58,7 @@ The default quality path is:
 
 - Deep reading: `deepseek/deepseek-v4-pro`
 - Source gist and report localization: lightweight DeepSeek routes
-- Verification: `codex/gpt-5.5`
+- Verification: `codex/gpt-5.6-terra` with `high` reasoning effort
 - Web search: Tavily when the web-search secret is present
 
 Daily users usually do not need route flags. Use the defaults first, then inspect or override
@@ -181,6 +181,37 @@ separate.
 Archive and WeChat are sibling outputs from `ArticleDraft`. Archive export does not rewrite
 `wechat.html`, upload WeChat media, create a draft, or change scheduler behavior.
 
+## Zhihu Manual Export
+
+Export one completed daily run as a title-free Zhihu article body and a safe local image bundle:
+
+```bash
+uv run research-radar compose zhihu --run runs/<date-topic>
+```
+
+The command writes `zhihu.md`, `zhihu_export.json`, and `zhihu-assets/` inside the run directory.
+Uploading `zhihu.md` alone does not upload the adjacent image directory. In local image mode, use the
+asset list in `zhihu_export.json` to upload the images manually.
+
+To give Zhihu public image URLs it can fetch during Markdown import, first publish the images to an
+HTTP(S) location, then pass that run-specific image root:
+
+```bash
+uv run research-radar compose zhihu \
+  --run runs/<date-topic> \
+  --asset-base-url https://example.com/archive/assets/<run-id>/
+```
+
+The URL is an explicit hosting interface; it is not tied to GitHub Pages. The exporter records
+`image_mode` and each resolved public image URL in `zhihu_export.json`. Use the metadata title in
+Zhihu's title field and import the generated body once. ResearchRadar does not log in to Zhihu,
+store browser cookies, or publish automatically. WeChat and Archive remain independent outputs from
+the same `ArticleDraft`.
+
+The Zhihu renderer intentionally uses only two heading levels, flat source lists, ordinary HTTP(S)
+links, and compact figure notes. A final real-editor preview is still required because Zhihu may
+normalize imported Markdown and fetch remote images asynchronously.
+
 ### Manual GitHub Pages deployment
 
 The project archive is currently published at
@@ -289,6 +320,11 @@ The scheduler writes a runner script and plist under:
 ```text
 <root>/schedules/daily-draft-<topic>/
 ```
+
+The generated runner is a configuration snapshot. An installed launchd job does not automatically
+pick up later changes to provider routes, model names, or Codex `reasoning_effort`. After changing
+those settings, run `schedule daily-draft` again with the same stable root, then unload the installed
+plist before copying and loading the regenerated one.
 
 Install manually:
 
