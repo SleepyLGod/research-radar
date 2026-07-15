@@ -40,7 +40,7 @@ class DailyDraftScheduleSpec:
     reader_provider: str | None = None
     reader_model: str | None = None
     verifier_provider: str | None = "codex"
-    verifier_model: str | None = "gpt-5.5"
+    verifier_model: str | None = "gpt-5.6-terra"
     anchor_repair_provider: str | None = None
     anchor_repair_model: str | None = None
     localization_provider: str | None = None

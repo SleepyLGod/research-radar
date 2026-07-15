@@ -29,6 +29,7 @@ from research_radar.compose.wechat import (
     render_wechat_publish_html,
     wechat_publish_html_issues,
 )
+from research_radar.compose.zhihu import export_zhihu_run
 from research_radar.config import AppConfig, load_config, parse_config
 from research_radar.discovery.arxiv import ArxivConnector
 from research_radar.discovery.base import DiscoveryConnector
@@ -557,6 +558,17 @@ def build_parser() -> argparse.ArgumentParser:
     compose_wechat.add_argument("--run", dest="run_dir", type=Path, required=True)
     compose_wechat.add_argument("--topic", default=None)
     compose_wechat.set_defaults(handler=handle_compose_wechat)
+    compose_zhihu = compose_subparsers.add_parser(
+        "zhihu",
+        help="Export a Zhihu-ready Markdown article and safe images.",
+    )
+    compose_zhihu.add_argument("--run", dest="run_dir", type=Path, required=True)
+    compose_zhihu.add_argument(
+        "--asset-base-url",
+        default=None,
+        help="Optional public HTTP(S) base URL for images already hosted online.",
+    )
+    compose_zhihu.set_defaults(handler=handle_compose_zhihu)
 
     archive_parser = subparsers.add_parser("archive", help="Export public archive artifacts.")
     archive_subparsers = archive_parser.add_subparsers(dest="archive_target", required=True)
@@ -856,6 +868,7 @@ def handle_provider_list(args: argparse.Namespace) -> None:
                 "host": _provider_host(provider_config.base_url),
                 "command": provider_config.command or "",
                 "timeout_seconds": provider_config.timeout_seconds,
+                "reasoning_effort": provider_config.reasoning_effort or "",
                 "secret": _provider_secret_status(provider_config.api_key_secret, manager),
             }
         )
@@ -876,6 +889,10 @@ def handle_provider_routes(args: argparse.Namespace) -> None:
                 "provider": preview.provider_name,
                 "model": preview.model or "",
                 "kind": provider_config.kind if provider_config else "local",
+                "reasoning_effort": (
+                    provider_config.reasoning_effort if provider_config else None
+                )
+                or "",
             }
         )
     print(json.dumps({"mode": args.mode, "routes": routes}, ensure_ascii=False, indent=2))
@@ -1241,6 +1258,18 @@ def handle_compose_wechat(args: argparse.Namespace) -> None:
     print(f"Wrote {args.run_dir / 'wechat.html'}")
 
 
+def handle_compose_zhihu(args: argparse.Namespace) -> None:
+    """Export a verified article draft for manual Zhihu publishing."""
+
+    result = export_zhihu_run(
+        args.run_dir,
+        asset_base_url=args.asset_base_url,
+    )
+    print(f"Wrote Zhihu body: {result.markdown_path}")
+    print(f"Wrote Zhihu metadata: {result.metadata_path}")
+    print(f"Wrote Zhihu assets: {result.asset_dir}")
+
+
 def handle_archive_export(args: argparse.Namespace) -> None:
     """Export one run into a static public archive."""
 
@@ -1426,7 +1455,7 @@ def _scheduled_verifier_model(provider_name: str, model_name: str | None) -> str
     if model_name is not None:
         return model_name
     if provider_name == "codex":
-        return "gpt-5.5"
+        return "gpt-5.6-terra"
     return None
 
 

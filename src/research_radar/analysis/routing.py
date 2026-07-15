@@ -182,6 +182,7 @@ def _build_provider(
             name=provider_name,
             command=provider_config.command,
             timeout_seconds=provider_config.timeout_seconds,
+            reasoning_effort=provider_config.reasoning_effort,
         )
     if provider_config.kind == "claude_code_cli":
         if provider_config.command is None:
@@ -200,7 +201,7 @@ def _default_model(provider_name: str) -> str | None:
         "xiaomi": "mimo-v2.5-pro",
         "openai": "gpt-5.4",
         "anthropic": "claude-sonnet-4-5",
-        "codex": "gpt-5.4",
+        "codex": "gpt-5.6-terra",
         "claude": "sonnet",
         "von_claude": "sonnet",
         "local": "local",

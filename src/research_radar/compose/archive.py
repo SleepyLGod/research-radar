@@ -22,6 +22,7 @@ from research_radar.compose.archive_html import (
     render_archive_index,
 )
 from research_radar.compose.draft_io import load_article_draft
+from research_radar.compose.public_assets import is_public_image, safe_run_asset_path
 from research_radar.models import ArticleDraft
 from research_radar.storage.files import ensure_dir, read_json, write_json, write_text
 
@@ -160,8 +161,8 @@ def _copy_archive_assets(
         raw_src = figure_source(figure)
         if not raw_src or raw_src in asset_map or is_pdf_page_fallback_figure(figure):
             continue
-        source_path = _safe_run_asset_path(run_dir, raw_src)
-        if source_path is None or not _is_public_image(source_path):
+        source_path = safe_run_asset_path(run_dir, raw_src)
+        if source_path is None or not is_public_image(source_path):
             continue
         relative_source = source_path.relative_to(run_dir.resolve(strict=True)).as_posix()
         target = output_dir / "assets" / run_id / relative_source
@@ -189,28 +190,6 @@ def _draft_figures(draft: ArticleDraft) -> list[dict[str, Any]]:
                 if isinstance(entry, dict) and isinstance(entry.get("figures"), list):
                     figures.extend(item for item in entry["figures"] if isinstance(item, dict))
     return figures
-
-
-def _safe_run_asset_path(run_dir: Path, raw_src: str) -> Path | None:
-    source = Path(raw_src)
-    if source.is_absolute():
-        candidate = source
-    else:
-        normalized = PurePosixPath(raw_src.replace("\\", "/"))
-        if normalized.is_absolute() or ".." in normalized.parts:
-            return None
-        candidate = run_dir / Path(*normalized.parts)
-    try:
-        run_root = run_dir.resolve(strict=True)
-        resolved = candidate.resolve(strict=True)
-        resolved.relative_to(run_root)
-    except (OSError, RuntimeError, ValueError):
-        return None
-    return resolved if resolved.is_file() else None
-
-
-def _is_public_image(path: Path) -> bool:
-    return path.suffix.casefold() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def _public_metadata(

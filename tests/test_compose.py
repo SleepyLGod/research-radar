@@ -429,7 +429,7 @@ def test_long_form_diagram_uses_supported_claims_only() -> None:
     assert "Unsupported benchmark claim" not in html
 
 
-def test_wechat_visual_polish_does_not_change_markdown_or_zhihu_fallback() -> None:
+def test_wechat_visual_polish_does_not_change_markdown_or_zhihu_public_reading() -> None:
     source = _paper_source()
     draft = build_daily_draft(
         "agent-memory",
@@ -446,7 +446,8 @@ def test_wechat_visual_polish_does_not_change_markdown_or_zhihu_fallback() -> No
     assert 'class="rr-summary"' in html
     assert 'class="rr-deep"' in html
     assert "Supported paper claim" in markdown
-    assert "Supported paper claim" in zhihu
+    assert "The paper turns agent memory into a managed retrieval layer." in zhihu
+    assert "Exact source quote." not in zhihu
     assert "rr-summary" not in markdown
     assert "rr-summary" not in zhihu
 

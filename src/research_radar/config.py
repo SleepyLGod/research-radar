@@ -70,6 +70,7 @@ class ModelProviderConfig:
     api_key_secret: str | None = None
     command: str | None = None
     timeout_seconds: int = 120
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True)
@@ -280,6 +281,14 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             item.get("timeout_seconds", 120),
             f"model_providers.{name}.timeout_seconds",
         )
+        reasoning_effort = _reasoning_effort(
+            item.get("reasoning_effort", "high" if kind == "codex_cli" else None),
+            f"model_providers.{name}.reasoning_effort",
+        )
+        if reasoning_effort is not None and kind != "codex_cli":
+            raise ConfigError(
+                f"model_providers.{name}.reasoning_effort is only valid for codex_cli."
+            )
         configs[name.strip()] = ModelProviderConfig(
             kind=kind,
             base_url=_optional_string(item.get("base_url"), f"model_providers.{name}.base_url"),
@@ -289,6 +298,7 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             ),
             command=_optional_string(item.get("command"), f"model_providers.{name}.command"),
             timeout_seconds=timeout_seconds,
+            reasoning_effort=reasoning_effort,
         )
     return configs
 
@@ -318,8 +328,9 @@ def _default_model_providers() -> dict[str, ModelProviderConfig]:
         ),
         "codex": ModelProviderConfig(
             kind="codex_cli",
-            command="/Applications/Codex.app/Contents/Resources/codex",
+            command="/Applications/ChatGPT.app/Contents/Resources/codex",
             timeout_seconds=900,
+            reasoning_effort="high",
         ),
         "claude": ModelProviderConfig(
             kind="claude_code_cli",
@@ -416,6 +427,14 @@ def _optional_string(value: Any, name: str) -> str | None:
         return None
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{name} must be a non-empty string or null.")
+    return value.strip()
+
+
+def _reasoning_effort(value: Any, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or value.strip() not in {"medium", "high", "xhigh"}:
+        raise ConfigError(f"{name} must be medium, high, or xhigh.")
     return value.strip()
 
 

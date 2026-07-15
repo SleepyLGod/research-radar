@@ -26,6 +26,12 @@ class CountingProvider:
         )
 
 
+class VariantProvider(CountingProvider):
+    def __init__(self, cache_identity: str) -> None:
+        super().__init__()
+        self.cache_identity = cache_identity
+
+
 def test_model_cache_key_changes_by_task_model_provider_and_messages() -> None:
     messages = [Message(role="user", content="private prompt")]
     base = model_call_cache_key(
@@ -82,6 +88,25 @@ def test_cached_provider_returns_cached_response_without_prompt_storage(tmp_path
     rendered = str(payload)
     assert "secret prompt text" not in rendered
     assert payload["content"] == "cached response"
+
+
+def test_model_cache_key_changes_with_provider_cache_identity(tmp_path: Path) -> None:
+    messages = [Message(role="user", content="same prompt")]
+    high = CachedLLMProvider(
+        VariantProvider("reasoning_effort=high"),
+        cache_dir=tmp_path,
+        task_name="verifier",
+    )
+    xhigh = CachedLLMProvider(
+        VariantProvider("reasoning_effort=xhigh"),
+        cache_dir=tmp_path,
+        task_name="verifier",
+    )
+
+    high_response = high.complete(messages, model="gpt-5.6-terra")
+    xhigh_response = xhigh.complete(messages, model="gpt-5.6-terra")
+
+    assert high_response.metadata["cache_key"] != xhigh_response.metadata["cache_key"]
 
 
 def test_cache_stats_helpers_treat_none_as_no_cache() -> None:

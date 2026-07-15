@@ -10,7 +10,7 @@ from pathlib import Path
 from research_radar.analysis.providers import LLMProvider, Message, ModelResponse
 from research_radar.storage.files import ensure_dir, read_json, write_json
 
-CACHE_SCHEMA_VERSION = 1
+CACHE_SCHEMA_VERSION = 2
 
 
 class CachedLLMProvider:
@@ -21,6 +21,7 @@ class CachedLLMProvider:
         self.name = provider.name
         self.cache_dir = ensure_dir(cache_dir / task_name)
         self.task_name = task_name
+        self.provider_cache_identity = str(getattr(provider, "cache_identity", ""))
         self.hit_count = 0
         self.miss_count = 0
 
@@ -32,6 +33,7 @@ class CachedLLMProvider:
             model=model,
             task_name=self.task_name,
             messages=messages,
+            provider_cache_identity=self.provider_cache_identity,
         )
         cache_path = self.cache_dir / f"{cache_key}.json"
         cached = _read_cached_response(cache_path, cache_key)
@@ -76,6 +78,7 @@ def model_call_cache_key(
     model: str,
     task_name: str,
     messages: list[Message],
+    provider_cache_identity: str = "",
 ) -> str:
     """Return a stable cache key without storing raw prompt text."""
 
@@ -84,6 +87,7 @@ def model_call_cache_key(
         "provider": provider_name,
         "model": model,
         "task_name": task_name,
+        "provider_cache_identity": provider_cache_identity,
         "message_hash": _messages_hash(messages),
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()

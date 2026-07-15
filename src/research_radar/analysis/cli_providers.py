@@ -15,10 +15,21 @@ from research_radar.exceptions import AnalysisError
 class CodexCliProvider:
     """Provider backed by `codex exec` in read-only ephemeral mode."""
 
-    def __init__(self, *, name: str, command: str, timeout_seconds: int = 120) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        command: str,
+        timeout_seconds: int = 120,
+        reasoning_effort: str | None = None,
+    ) -> None:
         self.name = name
         self.command = command
         self._timeout_seconds = timeout_seconds
+        self.reasoning_effort = reasoning_effort
+        self.cache_identity = (
+            f"reasoning_effort={reasoning_effort}" if reasoning_effort is not None else ""
+        )
 
     def health_check(self) -> None:
         """Fail if the configured command cannot be executed."""
@@ -43,15 +54,26 @@ class CodexCliProvider:
                 str(output_path),
                 "-m",
                 model,
-                prompt,
             ]
+            if self.reasoning_effort is not None:
+                command.extend(
+                    ["-c", f'model_reasoning_effort="{self.reasoning_effort}"']
+                )
+            command.append(prompt)
             _run_command(command, self.name, timeout_seconds=self._timeout_seconds)
             if not output_path.exists():
                 raise AnalysisError(f"{self.name} did not write an output message.")
             content = output_path.read_text(encoding="utf-8").strip()
         if not content:
             raise AnalysisError(f"{self.name} returned an empty response.")
-        return ModelResponse(content=content, model=model, metadata={"provider": self.name})
+        return ModelResponse(
+            content=content,
+            model=model,
+            metadata={
+                "provider": self.name,
+                "reasoning_effort": self.reasoning_effort or "inherited",
+            },
+        )
 
 
 class ClaudeCodeCliProvider:

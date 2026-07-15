@@ -351,6 +351,39 @@ def test_codex_cli_provider_reads_output_last_message(tmp_path: Path) -> None:
     assert response.metadata["provider"] == "codex"
 
 
+def test_codex_cli_provider_passes_explicit_reasoning_effort(tmp_path: Path) -> None:
+    args_path = tmp_path / "args.txt"
+    command = tmp_path / "fake-codex"
+    command.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$@\" > {args_path}\n"
+        "output=''\n"
+        "prev=''\n"
+        "for arg in \"$@\"; do\n"
+        "  if [ \"$prev\" = '--output-last-message' ]; then output=\"$arg\"; fi\n"
+        "  prev=\"$arg\"\n"
+        "done\n"
+        "printf 'codex response\\n' > \"$output\"\n",
+        encoding="utf-8",
+    )
+    command.chmod(0o755)
+    provider = CodexCliProvider(
+        name="codex",
+        command=str(command),
+        reasoning_effort="high",
+    )
+
+    response = provider.complete(
+        [Message(role="user", content="hello")],
+        model="gpt-5.6-terra",
+    )
+
+    args = args_path.read_text(encoding="utf-8").splitlines()
+    assert response.metadata["reasoning_effort"] == "high"
+    assert ["-m", "gpt-5.6-terra"] == args[args.index("-m") : args.index("-m") + 2]
+    assert "model_reasoning_effort=\"high\"" in args
+
+
 def test_claude_code_cli_provider_reads_stdout(tmp_path: Path) -> None:
     command = _fake_claude_command(tmp_path)
     provider = ClaudeCodeCliProvider(name="von_claude", command=str(command))
@@ -415,7 +448,7 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
     )
 
     assert route.provider_name == "codex"
-    assert route.model == "gpt-5.4"
+    assert route.model == "gpt-5.6-terra"
     assert isinstance(route.provider, CodexCliProvider)
 
 

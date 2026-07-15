@@ -1,3 +1,5 @@
+import pytest
+
 from research_radar.config import ConfigError, parse_config
 
 
@@ -253,6 +255,59 @@ def test_command_provider_timeout_can_be_overridden() -> None:
     )
 
     assert config.model_providers["codex"].timeout_seconds == 120
+
+
+def test_codex_reasoning_effort_is_configurable() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "codex": {
+                    "kind": "codex_cli",
+                    "command": "codex",
+                    "reasoning_effort": "xhigh",
+                }
+            },
+        }
+    )
+
+    assert config.model_providers["codex"].reasoning_effort == "xhigh"
+
+
+def test_reasoning_effort_is_rejected_for_non_codex_provider() -> None:
+    data = {
+        "project": {"name": "ResearchRadar"},
+        "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        "model_providers": {
+            "deepseek": {
+                "kind": "openai_compatible",
+                "base_url": "https://api.deepseek.com/chat/completions",
+                "api_key_secret": "deepseek.api_key",
+                "reasoning_effort": "high",
+            }
+        },
+    }
+
+    with pytest.raises(ConfigError, match="only valid for codex_cli"):
+        parse_config(data)
+
+
+def test_codex_reasoning_effort_rejects_unknown_value() -> None:
+    data = {
+        "project": {"name": "ResearchRadar"},
+        "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        "model_providers": {
+            "codex": {
+                "kind": "codex_cli",
+                "command": "codex",
+                "reasoning_effort": "ultra",
+            }
+        },
+    }
+
+    with pytest.raises(ConfigError, match="medium, high, or xhigh"):
+        parse_config(data)
 
 
 def test_parse_config_rejects_empty_web_search_endpoint() -> None:

@@ -65,7 +65,7 @@ def test_daily_draft_runner_runs_daily_before_wechat_draft(tmp_path: Path) -> No
     assert "sed -n 's/^Created run:" not in runner
     assert "--secret-source keychain" in runner
     assert "--verifier-provider codex" in runner
-    assert "--verifier-model gpt-5.5" in runner
+    assert "--verifier-model gpt-5.6-terra" in runner
     assert "--dry-run" in runner
     assert "auto-publish" not in runner
     assert "API_KEY" not in runner

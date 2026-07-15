@@ -128,15 +128,19 @@ Codex CLI verifier:
 model_providers:
   codex:
     kind: codex_cli
-    command: /Applications/Codex.app/Contents/Resources/codex
+    command: /Applications/ChatGPT.app/Contents/Resources/codex
     timeout_seconds: 900
+    reasoning_effort: high
 
 models:
   task_routes:
     verifier:
       provider: codex
-      model: gpt-5.5
+      model: gpt-5.6-terra
 ```
+
+`reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a
+specific route, define another named `codex_cli` provider instance and route that task to it.
 
 Claude Code compatible CLI:
 

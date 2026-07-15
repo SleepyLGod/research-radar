@@ -44,8 +44,9 @@ model_providers:
     api_key_secret: deepseek.api_key
   codex:
     kind: codex_cli
-    command: /Applications/Codex.app/Contents/Resources/codex
+    command: /Applications/ChatGPT.app/Contents/Resources/codex
     timeout_seconds: 900
+    reasoning_effort: high
   local:
     kind: local
 
@@ -71,7 +72,7 @@ models:
       model: deepseek-v4-flash
     verifier:
       provider: codex
-      model: gpt-5.5
+      model: gpt-5.6-terra
 
 publishing:
   channel: wechat_draft

@@ -225,6 +225,7 @@ def test_provider_list_outputs_configured_providers_without_secret_values(
     assert kimi["timeout_seconds"] == 333
     assert kimi["secret"] == "present"
     assert codex["secret"] == "not_required"
+    assert codex["reasoning_effort"] == "high"
     assert "secret-value-that-must-not-print" not in output_text
 
 
@@ -286,6 +287,7 @@ def test_provider_routes_show_daily_defaults_and_deepseek_replacement(
     assert routes["deep_reading"]["model"] == "mimo-v2.5-pro"
     assert routes["verifier"]["provider"] == "codex"
     assert routes["verifier"]["model"] == "gpt-5.5"
+    assert routes["verifier"]["reasoning_effort"] == "high"
 
 
 def test_provider_routes_show_task_specific_override_precedence(
@@ -482,7 +484,7 @@ def test_schedule_daily_draft_writes_runner_and_plist(
     assert "--secret-source keychain" in runner
     assert "--deepseek-provider xiaomi" in runner
     assert "--verifier-provider codex" in runner
-    assert "--verifier-model gpt-5.5" in runner
+    assert "--verifier-model gpt-5.6-terra" in runner
     assert "--dry-run" in runner
     assert "API_KEY" not in plist
     assert "appsecret" not in plist.casefold()
@@ -536,7 +538,7 @@ def test_schedule_daily_draft_non_codex_verifier_does_not_inherit_codex_model(
         output_dir / "ai.research-radar.daily-draft.agent-memory.sh"
     ).read_text(encoding="utf-8")
     assert "--verifier-provider deepseek" in runner
-    assert "--verifier-model gpt-5.5" not in runner
+    assert "--verifier-model gpt-5.6-terra" not in runner
 
 
 def test_schedule_daily_draft_fails_when_uv_is_missing(
