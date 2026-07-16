@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from research_radar.exceptions import ConfigError
@@ -100,6 +100,18 @@ class PublishingConfig:
 
 
 @dataclass(frozen=True)
+class ArchivePublishConfig:
+    """Optional settings for publishing a static archive through Git."""
+
+    checkout: Path | None = None
+    output_subdir: str = "archive"
+    base_url: str | None = None
+    site_language: str | None = None
+    remote: str = "origin"
+    branch: str = "gh-pages"
+
+
+@dataclass(frozen=True)
 class SecurityConfig:
     """Security configuration."""
 
@@ -118,6 +130,7 @@ class AppConfig:
     cadence: CadenceConfig = field(default_factory=CadenceConfig)
     models: ModelConfig = field(default_factory=ModelConfig)
     publishing: PublishingConfig = field(default_factory=PublishingConfig)
+    archive: ArchivePublishConfig = field(default_factory=ArchivePublishConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
 
     def topic(self, topic_id: str) -> TopicConfig:
@@ -215,7 +228,45 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
         cadence=CadenceConfig(**_mapping(data.get("cadence", {}), "cadence")),
         models=_model_config(_mapping(data.get("models", {}), "models")),
         publishing=PublishingConfig(**publishing),
+        archive=_archive_publish_config(_mapping(data.get("archive", {}), "archive")),
         security=SecurityConfig(**_mapping(data.get("security", {}), "security")),
+    )
+
+
+def _archive_publish_config(data: dict[str, Any]) -> ArchivePublishConfig:
+    allowed = {
+        "checkout",
+        "output_subdir",
+        "base_url",
+        "site_language",
+        "remote",
+        "branch",
+    }
+    unknown = sorted(set(data) - allowed)
+    if unknown:
+        raise ConfigError(f"Unknown archive keys: {', '.join(unknown)}")
+    checkout = _optional_string(data.get("checkout"), "archive.checkout")
+    output_subdir = str(data.get("output_subdir", "archive")).strip()
+    normalized_output = PurePosixPath(output_subdir.replace("\\", "/"))
+    windows_output = PureWindowsPath(output_subdir)
+    if (
+        not output_subdir
+        or normalized_output.is_absolute()
+        or bool(windows_output.drive)
+        or normalized_output == PurePosixPath(".")
+        or ".." in normalized_output.parts
+    ):
+        raise ConfigError("archive.output_subdir must be a non-empty relative path")
+    site_language = _optional_string(data.get("site_language"), "archive.site_language")
+    if site_language is not None and site_language not in {"en", "zh"}:
+        raise ConfigError("archive.site_language must be en or zh")
+    return ArchivePublishConfig(
+        checkout=Path(checkout).expanduser() if checkout else None,
+        output_subdir=normalized_output.as_posix(),
+        base_url=_optional_string(data.get("base_url"), "archive.base_url"),
+        site_language=site_language,
+        remote=str(data.get("remote", "origin")).strip() or "origin",
+        branch=str(data.get("branch", "gh-pages")).strip() or "gh-pages",
     )
 
 

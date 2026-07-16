@@ -90,6 +90,18 @@ def test_eval_topics_parser_accepts_topic_budget_seconds() -> None:
     assert args.topic_budget_seconds == 900
 
 
+def test_archive_publish_git_parser_uses_local_config_by_default() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(
+        ["archive", "publish-git", "--run", "runs/2026-07-17-agent-memory"]
+    )
+
+    assert args.run_dir == Path("runs/2026-07-17-agent-memory")
+    assert args.config == Path("config.yaml")
+    assert args.dry_run is False
+
+
 def test_eval_topics_parser_rejects_negative_topic_budget_seconds() -> None:
     parser = cli.build_parser()
 

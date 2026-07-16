@@ -50,6 +50,45 @@ def test_parse_config_accepts_default_plan_shape() -> None:
     assert config.publishing.auto_publish is False
 
 
+def test_parse_config_accepts_archive_git_publish_settings(tmp_path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "archive": {
+                "checkout": str(tmp_path / "pages"),
+                "output_subdir": "archive",
+                "base_url": "https://example.com/research-radar/archive",
+                "site_language": "zh",
+                "remote": "origin",
+                "branch": "gh-pages",
+            },
+        }
+    )
+
+    assert config.archive.checkout == tmp_path / "pages"
+    assert config.archive.output_subdir == "archive"
+    assert config.archive.base_url == "https://example.com/research-radar/archive"
+    assert config.archive.site_language == "zh"
+    assert config.archive.remote == "origin"
+    assert config.archive.branch == "gh-pages"
+
+
+@pytest.mark.parametrize(
+    "output_subdir",
+    ["../archive", "/tmp/archive", ".", "C:\\archive", "C:archive"],
+)
+def test_parse_config_rejects_unsafe_archive_output_subdir(output_subdir: str) -> None:
+    with pytest.raises(ConfigError, match="output_subdir"):
+        parse_config(
+            {
+                "project": {"name": "ResearchRadar"},
+                "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+                "archive": {"output_subdir": output_subdir},
+            }
+        )
+
+
 def test_parse_config_accepts_implementation_scan_source_intent() -> None:
     config = parse_config(
         {

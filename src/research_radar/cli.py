@@ -47,6 +47,7 @@ from research_radar.exceptions import ConfigError, PublishError, ResearchRadarEr
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
 from research_radar.pipeline.weekly import compose_weekly_from_run
+from research_radar.publishers.archive.git import publish_archive_git
 from research_radar.publishers.wechat.client import (
     WeChatArticle,
     WeChatDraftClient,
@@ -590,6 +591,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Archive navigation language; defaults to the first report or existing archive.",
     )
     archive_export.set_defaults(handler=handle_archive_export)
+    archive_publish_git = archive_subparsers.add_parser(
+        "publish-git",
+        help="Export one run and publish it through a configured Git checkout.",
+    )
+    archive_publish_git.add_argument("--run", dest="run_dir", type=Path, required=True)
+    archive_publish_git.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.yaml"),
+        help="Local config containing the archive checkout and public base URL.",
+    )
+    archive_publish_git.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate a temporary export without changing, committing, or pushing the checkout.",
+    )
+    archive_publish_git.set_defaults(handler=handle_archive_publish_git)
 
     publish_parser = subparsers.add_parser("publish", help="Publish draft artifacts.")
     publish_subparsers = publish_parser.add_subparsers(dest="publish_target", required=True)
@@ -1285,6 +1303,23 @@ def handle_archive_export(args: argparse.Namespace) -> None:
     print(f"Wrote archive report: {result.report_path}")
     print(f"Wrote archive index: {result.index_path}")
     print(f"Wrote archive RSS: {result.feed_path}")
+
+
+def handle_archive_publish_git(args: argparse.Namespace) -> None:
+    """Publish one run through the configured static-site Git checkout."""
+
+    config = load_config(args.config)
+    result = publish_archive_git(
+        args.run_dir,
+        config.archive,
+        dry_run=bool(args.dry_run),
+    )
+    if result.status == "dry_run":
+        print(f"Archive Git preflight passed: {result.report_url}")
+    elif result.status == "unchanged":
+        print(f"Archive already up to date: {result.report_url}")
+    else:
+        print(f"Published archive report: {result.report_url} ({result.commit[:12]})")
 
 
 def handle_publish_wechat(args: argparse.Namespace) -> None:
