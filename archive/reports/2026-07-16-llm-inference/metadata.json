@@ -1,0 +1,18 @@
+{
+  "run_id": "2026-07-16-llm-inference",
+  "topic_id": "llm-inference",
+  "title": "ResearchRadar 日报：llm-inference",
+  "digest": "今天精读了 1 篇新论文，并保留其他新增来源供后续跟进。",
+  "created_at": "2026-07-16T16:02:42.560575+00:00",
+  "link": "https://sleepylgod.github.io/research-radar/archive/reports/2026-07-16-llm-inference/",
+  "language": "zh",
+  "claim_count": 16,
+  "deep_read_count": 1,
+  "source_count": 17,
+  "assets": [
+    "assets/2026-07-16-llm-inference/figures/2607.05147v1/images/01-model_arch.png",
+    "assets/2026-07-16-llm-inference/figures/2607.05147v1/images/02-position_cond_accept.png",
+    "assets/2026-07-16-llm-inference/figures/2607.05147v1/images/03-online_service_tradeoff.png"
+  ],
+  "lead_asset": "assets/2026-07-16-llm-inference/figures/2607.05147v1/images/01-model_arch.png"
+}
