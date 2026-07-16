@@ -174,7 +174,9 @@ def _deep_reads(raw_deep_reads: object, *, language: str, asset_map: Mapping[str
             _paper_header(title, source, language=language),
             _diagram(raw_entry.get("diagram")),
             _reader_explanation(raw_entry.get("reader_explanation"), labels),
-            _figure_gallery(raw_entry.get("figures"), asset_map=asset_map),
+            _figure_gallery(
+                raw_entry.get("figures"), language=language, asset_map=asset_map
+            ),
         ]
         if not content[2]:
             content.extend(
@@ -239,7 +241,9 @@ def _reader_explanation(value: object, labels: dict[str, str]) -> str:
     return "".join(_text_block(title, value.get(key)) for key, title in sections)
 
 
-def _figure_gallery(raw_figures: object, *, asset_map: Mapping[str, str]) -> str:
+def _figure_gallery(
+    raw_figures: object, *, language: str, asset_map: Mapping[str, str]
+) -> str:
     if not isinstance(raw_figures, list):
         return ""
     blocks = []
@@ -252,9 +256,10 @@ def _figure_gallery(raw_figures: object, *, asset_map: Mapping[str, str]) -> str
             continue
         caption = str(figure.get("localized_caption") or figure.get("caption") or "").strip()
         explanation = str(figure.get("explanation") or "").strip()
+        explanation = _clean_figure_explanation(explanation, language=language)
         caption_html = f"<figcaption>{_format_text(caption)}</figcaption>" if caption else ""
         explanation_html = (
-            f'<p class="rr-figure-note">{_format_text(_clean_figure_explanation(explanation))}</p>'
+            f'<p class="rr-figure-note">{_format_text(explanation)}</p>'
             if explanation
             else ""
         )
@@ -557,9 +562,18 @@ def _localized_claim_text(text: str, *, language: str) -> str:
     return text
 
 
-def _clean_figure_explanation(value: str) -> str:
-    text = re.sub(r"^This figure is included as source context;\s*", "", value).strip()
-    return text or value
+def _clean_figure_explanation(value: str, *, language: str) -> str:
+    text = value.strip()
+    for prefix in (
+        "This figure is included as source context;",
+        "Visual context for this verified point:",
+        "此已验证要点的视觉背景：",
+        "针对本验证点的可视化上下文：",
+    ):
+        if text.startswith(prefix):
+            text = text[len(prefix) :].lstrip()
+            break
+    return _localized_claim_text(text, language=language)
 
 
 def _shorten(value: str, limit: int = 130) -> str:

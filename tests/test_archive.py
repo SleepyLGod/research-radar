@@ -73,6 +73,31 @@ def test_archive_export_writes_report_index_feed_and_metadata(tmp_path: Path) ->
     )
 
 
+def test_archive_export_cleans_chinese_figure_explanation_boilerplate(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_archive_draft(tmp_path, with_figure=True, language="zh")
+    data = read_json(run_dir / "article_draft.json")
+    figure = data["sections"][0]["metadata"]["deep_reads"][0]["figures"][0]
+    figure["explanation"] = (
+        "此已验证要点的视觉背景：Solution: "
+        "DSpark 使用置信度调度器选择验证前缀。"
+    )
+    write_json(run_dir / "article_draft.json", data)
+
+    result = export_archive_run(
+        run_dir,
+        tmp_path / "archive",
+        base_url="https://example.com/research",
+        site_language="zh",
+    )
+    report_html = result.report_path.read_text(encoding="utf-8")
+
+    assert "此已验证要点的视觉背景" not in report_html
+    assert "Solution:" not in report_html
+    assert "方法：DSpark 使用置信度调度器选择验证前缀。" in report_html
+
+
 def test_archive_export_omits_missing_figure_images(tmp_path: Path) -> None:
     run_dir = _write_archive_draft(tmp_path, with_figure=False, with_missing_figure=True)
 
