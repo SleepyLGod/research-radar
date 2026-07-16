@@ -45,8 +45,8 @@ drive the research model.
   knowledge base.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
 - Zhihu-specific Markdown export v2 from `ArticleDraft`, including a title-free two-level document,
-  flat source lists, safe local assets or public image URLs, and schema-v2 export metadata. Final
-  real-editor acceptance is still pending; login and automatic publishing are intentionally out of
+  flat source lists, safe local assets or public image URLs, and schema-v2 export metadata. The
+  export has been validated in the real Zhihu editor; login and automatic publishing remain out of
   scope.
 - Privacy scan, redaction, local secret handling, and no auto-publish boundary.
 
@@ -92,33 +92,29 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Complete one real Zhihu editor acceptance pass.
-   - Check heading levels, flat lists, references, and remote image import in the real editor.
-   - Keep login, browser automation, and automatic publishing out of scope.
-
-2. Revisit Archive publishing automation after repeated manual use.
+1. Revisit Archive publishing automation after repeated manual use.
    - Keep the static output directory as the hosting-neutral interface.
    - Add a small Git publisher only if repeated manual pushes prove it is useful.
    - Keep Archive failures independent from WeChat draft creation.
 
-3. Continue figure and diagram quality from real failures.
+2. Continue figure and diagram quality from real failures.
    - Improve TeX-source extraction and difficult PDF crops only when real papers expose gaps.
    - Keep figure explanations bound to same-paper verified content.
 
-4. Tune topics from real daily runs.
+3. Tune topics from real daily runs.
    - Do not overfit topic profiles before real usage shows a pattern.
    - Use multi-topic eval and daily draft outcomes to identify recall failures, off-center source
      selection, shallow readings, low publishable claim counts, or missing figures.
    - Adjust queries, paper queries, concept groups, centrality signals, and negative phrases only
      when repeated runs show the same issue.
 
-5. Continue cost and first-run runtime optimization.
+4. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
    - Consider reader/verifier budget strategies only when real scheduler runs show the cost is
      painful.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
-6. Keep weekly deep dive and Codex reader as future work.
+5. Keep weekly deep dive and Codex reader as future work.
    - Weekly remains a later product mode; daily research plus WeChat draft is the current main path.
    - Codex reader uses the same deep-reading prompt, schema, and evidence gate as DeepSeek reader.
    - Future work is about Codex reader reliability: schema stability, timeout behavior, and long-paper
@@ -126,7 +122,6 @@ drive the research model.
 
 ## Near-Term Execution Order
 
-1. Complete one real Zhihu editor acceptance pass.
-2. Repeat the manual Archive update flow before deciding whether to automate Git publishing.
-3. Improve figures and tune topic profiles when repeated real-run failures appear.
-4. Revisit weekly deep dive and Codex reader only when daily usage shows the need.
+1. Repeat the manual Archive update flow before deciding whether to automate Git publishing.
+2. Improve figures and tune topic profiles when repeated real-run failures appear.
+3. Revisit weekly deep dive and Codex reader only when daily usage shows the need.
