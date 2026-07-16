@@ -89,6 +89,40 @@ def test_parse_config_rejects_unsafe_archive_output_subdir(output_subdir: str) -
         )
 
 
+def test_parse_config_accepts_private_email_settings() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "email": {
+                "smtp_host": "smtp.example.com",
+                "smtp_port": 587,
+                "security": "starttls",
+                "username": "reader@example.com",
+                "password_secret": "email.smtp_password",
+                "from_address": "reader@example.com",
+                "to_address": "reader@example.com",
+            },
+        }
+    )
+
+    assert config.email.smtp_host == "smtp.example.com"
+    assert config.email.smtp_port == 587
+    assert config.email.security == "starttls"
+    assert config.email.password_secret == "email.smtp_password"
+
+
+def test_parse_config_rejects_plaintext_email_transport() -> None:
+    with pytest.raises(ConfigError, match="tls or starttls"):
+        parse_config(
+            {
+                "project": {"name": "ResearchRadar"},
+                "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+                "email": {"security": "plaintext"},
+            }
+        )
+
+
 def test_parse_config_accepts_implementation_scan_source_intent() -> None:
     config = parse_config(
         {

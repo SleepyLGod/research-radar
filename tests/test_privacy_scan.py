@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from research_radar.exceptions import PrivacyScanError
 from research_radar.security.privacy_scan import assert_clean
 
@@ -29,6 +31,29 @@ def test_privacy_scan_allows_secret_reference_names(tmp_path: Path) -> None:
     path.write_text('api_key_secret="deepseek.api_key"\n', encoding="utf-8")
 
     assert_clean(tmp_path)
+
+
+def test_privacy_scan_allows_smtp_password_secret_reference_name(tmp_path: Path) -> None:
+    path = tmp_path / "email_config.py"
+    reference = "email.smtp_" + "password"
+    path.write_text(
+        "password_" + "secret" + "=" + repr(reference) + "\n",
+        encoding="utf-8",
+    )
+
+    assert_clean(tmp_path)
+
+
+def test_privacy_scan_does_not_hide_secret_beside_smtp_reference(tmp_path: Path) -> None:
+    path = tmp_path / "bad_email_config.py"
+    fake_value = "abcd1234abcd1234"
+    path.write_text(
+        'password_secret="email.smtp_password"; token="' + fake_value + '"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PrivacyScanError, match="token"):
+        assert_clean(tmp_path)
 
 
 def test_privacy_scan_skips_local_only_secret_files(tmp_path: Path) -> None:

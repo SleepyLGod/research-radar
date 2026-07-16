@@ -48,6 +48,7 @@ from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
 from research_radar.pipeline.weekly import compose_weekly_from_run
 from research_radar.publishers.archive.git import publish_archive_git
+from research_radar.publishers.email.client import publish_email_run
 from research_radar.publishers.wechat.client import (
     WeChatArticle,
     WeChatDraftClient,
@@ -623,6 +624,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Prepare the draft request artifact without calling the WeChat API.",
     )
     publish_wechat.set_defaults(handler=handle_publish_wechat)
+    publish_email = publish_subparsers.add_parser(
+        "email",
+        help="Send one verified report to a private email address through SMTP.",
+    )
+    publish_email.add_argument("--run", dest="run_dir", type=Path, required=True)
+    publish_email.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.yaml"),
+        help="Local config containing SMTP and recipient settings.",
+    )
+    publish_email.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Write email.html and email.txt without connecting to SMTP.",
+    )
+    publish_email.add_argument(
+        "--allow-resend",
+        action="store_true",
+        help="Explicitly allow sending a run that already has a successful email result.",
+    )
+    publish_email.set_defaults(handler=handle_publish_email)
     upload_thumb = publish_subparsers.add_parser(
         "wechat-upload-thumb",
         help="Upload a WeChat draft thumbnail image and print its media id.",
@@ -1394,6 +1417,24 @@ def handle_publish_wechat(args: argparse.Namespace) -> None:
     except ResearchRadarError as exc:
         _write_publish_error(args.run_dir, exc)
         raise
+
+
+def handle_publish_email(args: argparse.Namespace) -> None:
+    """Prepare or send one private SMTP email from a verified article draft."""
+
+    config = load_config(args.config)
+    manager = _secret_manager(config.security.secret_backend)
+    result = publish_email_run(
+        args.run_dir,
+        config.email,
+        manager,
+        dry_run=bool(args.dry_run),
+        allow_resend=bool(args.allow_resend),
+    )
+    if result.status == "dry_run":
+        print(f"Prepared email preview: {args.run_dir / 'email.html'}")
+    else:
+        print(f"Sent private email to {result.recipient}")
 
 
 def handle_publish_wechat_thumb(args: argparse.Namespace) -> None:

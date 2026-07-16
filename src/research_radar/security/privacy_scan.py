@@ -49,6 +49,12 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("openid", re.compile(r"(?i)(openid|unionid)['\"]?\s*[:=]\s*['\"][A-Za-z0-9_-]{8,}['\"]")),
 ]
 
+_SMTP_PASSWORD_REFERENCE = re.compile(
+    r"""password_secret\s*(?:(?::\s*str\s*=)|[:=])\s*['\"]?email\.smtp_password"""
+    r"""['\"]?\s*,?\s*(?:#.*)?""",
+    flags=re.IGNORECASE,
+)
+
 
 def scan_path(path: Path) -> list[PrivacyFinding]:
     """Scan a file or directory for privacy-sensitive strings."""
@@ -106,6 +112,8 @@ def _is_allowed_example_line(line: str) -> bool:
     if "fake" in lowered or "example" in lowered:
         return True
     if "api_key_secret" in lowered and ".api_key" in stripped:
+        return True
+    if _SMTP_PASSWORD_REFERENCE.fullmatch(stripped):
         return True
     if "local_path_pattern" in lowered or 're.compile(r"/users/' in lowered:
         return True

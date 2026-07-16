@@ -102,6 +102,26 @@ def test_archive_publish_git_parser_uses_local_config_by_default() -> None:
     assert args.dry_run is False
 
 
+def test_publish_email_parser_supports_dry_run_and_explicit_resend() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(
+        [
+            "publish",
+            "email",
+            "--run",
+            "runs/2026-07-17-agent-memory",
+            "--dry-run",
+            "--allow-resend",
+        ]
+    )
+
+    assert args.run_dir == Path("runs/2026-07-17-agent-memory")
+    assert args.config == Path("config.yaml")
+    assert args.dry_run is True
+    assert args.allow_resend is True
+
+
 def test_eval_topics_parser_rejects_negative_topic_budget_seconds() -> None:
     parser = cli.build_parser()
 

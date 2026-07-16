@@ -112,6 +112,20 @@ class ArchivePublishConfig:
 
 
 @dataclass(frozen=True)
+class EmailPublishConfig:
+    """Optional private SMTP email delivery settings."""
+
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    security: str = "tls"
+    username: str | None = None
+    password_secret: str = "email.smtp_password"
+    from_address: str | None = None
+    to_address: str | None = None
+    timeout_seconds: int = 30
+
+
+@dataclass(frozen=True)
 class SecurityConfig:
     """Security configuration."""
 
@@ -131,6 +145,7 @@ class AppConfig:
     models: ModelConfig = field(default_factory=ModelConfig)
     publishing: PublishingConfig = field(default_factory=PublishingConfig)
     archive: ArchivePublishConfig = field(default_factory=ArchivePublishConfig)
+    email: EmailPublishConfig = field(default_factory=EmailPublishConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
 
     def topic(self, topic_id: str) -> TopicConfig:
@@ -229,6 +244,7 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
         models=_model_config(_mapping(data.get("models", {}), "models")),
         publishing=PublishingConfig(**publishing),
         archive=_archive_publish_config(_mapping(data.get("archive", {}), "archive")),
+        email=_email_publish_config(_mapping(data.get("email", {}), "email")),
         security=SecurityConfig(**_mapping(data.get("security", {}), "security")),
     )
 
@@ -267,6 +283,41 @@ def _archive_publish_config(data: dict[str, Any]) -> ArchivePublishConfig:
         site_language=site_language,
         remote=str(data.get("remote", "origin")).strip() or "origin",
         branch=str(data.get("branch", "gh-pages")).strip() or "gh-pages",
+    )
+
+
+def _email_publish_config(data: dict[str, Any]) -> EmailPublishConfig:
+    allowed = {
+        "smtp_host",
+        "smtp_port",
+        "security",
+        "username",
+        "password_secret",
+        "from_address",
+        "to_address",
+        "timeout_seconds",
+    }
+    unknown = sorted(set(data) - allowed)
+    if unknown:
+        raise ConfigError(f"Unknown email keys: {', '.join(unknown)}")
+    security = str(data.get("security", "tls")).strip().casefold()
+    if security not in {"tls", "starttls"}:
+        raise ConfigError("email.security must be tls or starttls")
+    return EmailPublishConfig(
+        smtp_host=_optional_string(data.get("smtp_host"), "email.smtp_host"),
+        smtp_port=_positive_int(data.get("smtp_port", 465), "email.smtp_port"),
+        security=security,
+        username=_optional_string(data.get("username"), "email.username"),
+        password_secret=(
+            _optional_string(data.get("password_secret"), "email.password_secret")
+            or "email.smtp_password"
+        ),
+        from_address=_optional_string(data.get("from_address"), "email.from_address"),
+        to_address=_optional_string(data.get("to_address"), "email.to_address"),
+        timeout_seconds=_positive_int(
+            data.get("timeout_seconds", 30),
+            "email.timeout_seconds",
+        ),
     )
 
 
