@@ -181,6 +181,49 @@ separate.
 Archive and WeChat are sibling outputs from `ArticleDraft`. Archive export does not rewrite
 `wechat.html`, upload WeChat media, create a draft, or change scheduler behavior.
 
+### Publish the Archive through Git
+
+After the dedicated Pages checkout has been created once, keep its non-secret settings in the
+gitignored local `config.yaml`:
+
+```yaml
+archive:
+  checkout: /path/to/research-radar-pages
+  output_subdir: archive
+  base_url: https://example.github.io/research-radar/archive
+  site_language: zh
+  remote: origin
+  branch: gh-pages
+```
+
+Run a side-effect-free preflight first. It copies the existing Archive into a temporary directory,
+exports the new report there, and validates RSS, canonical links, images, and public-content
+boundaries. It does not change the Pages checkout, commit, or push:
+
+```bash
+uv run research-radar archive publish-git \
+  --run <RUN_DIR> \
+  --config config.yaml \
+  --dry-run
+```
+
+The dry run requires the checkout to match its remote. If it is behind, update it with a normal
+fast-forward first; the dry run will not change the checkout on your behalf.
+
+Publish after the preflight succeeds:
+
+```bash
+uv run research-radar archive publish-git \
+  --run <RUN_DIR> \
+  --config config.yaml
+```
+
+The publisher requires a clean checkout on the configured branch. It fetches and safely
+fast-forwards a checkout that is only behind its remote, stages only `output_subdir`, creates a
+signed-off commit, and pushes it. It refuses dirty, diverged, or locally-ahead checkouts instead of
+guessing. A successful run writes `archive_publish_result.json`; a failed publish writes
+`archive_publish_error.json`. If the export produces no changes, it does not create an empty commit.
+
 ## Zhihu Manual Export
 
 Export one completed daily run as a title-free Zhihu article body and a safe local image bundle:
@@ -260,6 +303,62 @@ git -C "$PAGES_CHECKOUT" push origin gh-pages
 Configure GitHub Pages to publish `gh-pages` from `/(root)`. To use another repository, point
 `--output` at that repository's local checkout and use its public base URL instead. No GitHub API
 or hosting-provider code is required.
+
+The manual commands above remain useful for initial Pages setup and recovery. Routine updates can
+use `archive publish-git` once the local `archive` config has been reviewed.
+
+## Private Email
+
+Private email v1 sends one completed `ArticleDraft` to one personal inbox. It does not manage
+subscribers, tracking, unsubscribe links, or campaigns. Add SMTP settings to the gitignored local
+`config.yaml`:
+
+```yaml
+email:
+  smtp_host: smtp.example.com
+  smtp_port: 465
+  security: tls
+  username: you@example.com
+  password_secret: email.smtp_password
+  from_address: you@example.com
+  to_address: you@example.com
+  timeout_seconds: 30
+```
+
+Use `security: tls` for implicit TLS, commonly on port 465, or `security: starttls`, commonly on
+port 587. Plaintext SMTP is rejected. Store the provider's SMTP application password in Keychain:
+
+```bash
+uv run research-radar secrets set-named email.smtp_password
+```
+
+Prepare `email.html`, `email.txt`, and safe preview images without connecting to SMTP:
+
+```bash
+uv run research-radar publish email \
+  --run <RUN_DIR> \
+  --config config.yaml \
+  --dry-run
+```
+
+Send after reviewing the preview:
+
+```bash
+uv run research-radar publish email \
+  --run <RUN_DIR> \
+  --config config.yaml
+```
+
+The sent MIME message embeds safe PNG/JPEG paper figures using CID attachments, so it does not
+depend on the public Archive and does not expose local file paths. A successful send writes
+`email_send_result.json`; failures write a redacted `email_send_error.json`. The same run is not
+sent twice unless `--allow-resend` is provided explicitly. Email is not part of the daily scheduler
+in v1.
+
+If the SMTP connection drops after delivery starts, ResearchRadar records `delivery_unknown` and
+refuses an automatic retry. Check the inbox first; use `--allow-resend` only when a second copy is
+acceptable. A dry run writes `email_preview_result.json` and never overwrites the durable send
+record.
 
 ## WeChat Drafts
 

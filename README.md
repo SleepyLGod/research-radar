@@ -86,8 +86,10 @@ archive, and publishing commands. Start with `<RUN_DIR>/wechat.html` or `<RUN_DI
 - **WeChat:** upload safe paper figures and create a draft for review. ResearchRadar does not publish
   or mass-send it.
 - **Public Archive and RSS:** export static files that can be hosted on GitHub Pages or another static
-  host. The [live archive](https://sleepylgod.github.io/research-radar/archive/) is one deployment.
+  host, or publish through a configured clean Git checkout. The
+  [live archive](https://sleepylgod.github.io/research-radar/archive/) is one deployment.
 - **Zhihu:** export constrained Markdown with local or public image URLs for manual import.
+- **Private email:** send the same verified report to one personal inbox through TLS-protected SMTP.
 - **Daily scheduler:** generate a local macOS launchd job that runs reviewed topics and creates drafts.
 
 See [Detailed Usage](docs/usage.md) for the exact commands and deployment steps.

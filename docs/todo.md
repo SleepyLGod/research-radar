@@ -41,8 +41,10 @@ drive the research model.
 - Verified mechanism diagrams and improved figure selection for daily public articles.
 - Local Public Archive/RSS export from `ArticleDraft`, including static daily report pages, a
   research-journal index, public metadata, and a feed. A Chinese GitHub Pages deployment is live;
-  automatic archive publishing is not yet configured. `/papers/` remains a future single-paper
-  knowledge base.
+  the Git checkout publisher adds preflight, signed-off commit, and push automation without tying
+  the exporter to GitHub. `/papers/` remains a future single-paper knowledge base.
+- Private SMTP email v1 can render HTML/plain-text from `ArticleDraft`, embed safe PNG/JPEG figures
+  with CID, and send one report to one personal inbox. It does not manage public subscribers.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
 - Zhihu-specific Markdown export v2 from `ArticleDraft`, including a title-free two-level document,
   flat source lists, safe local assets or public image URLs, and schema-v2 export metadata. The
@@ -92,10 +94,10 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Revisit Archive publishing automation after repeated manual use.
-   - Keep the static output directory as the hosting-neutral interface.
-   - Add a small Git publisher only if repeated manual pushes prove it is useful.
-   - Keep Archive failures independent from WeChat draft creation.
+1. Validate the Archive Git publisher and private email with real local configuration.
+   - Run `archive publish-git --dry-run` before the first real push.
+   - Send one private email manually before considering scheduler integration.
+   - Keep Archive and email failures independent from WeChat draft creation.
 
 2. Continue figure and diagram quality from real failures.
    - Improve TeX-source extraction and difficult PDF crops only when real papers expose gaps.
@@ -122,6 +124,6 @@ drive the research model.
 
 ## Near-Term Execution Order
 
-1. Repeat the manual Archive update flow before deciding whether to automate Git publishing.
+1. Complete one real Archive Git preflight/push and one private SMTP send.
 2. Improve figures and tune topic profiles when repeated real-run failures appear.
 3. Revisit weekly deep dive and Codex reader only when daily usage shows the need.

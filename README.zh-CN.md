@@ -85,8 +85,10 @@ uv run research-radar run daily \
 
 - **微信公众号：** 上传安全的论文图并创建草稿，只进草稿箱，不自动发布或群发。
 - **Archive 和 RSS：** 导出普通静态文件，可以放到 GitHub Pages 或其他静态托管服务。
+  也可以通过配置好的干净 Git checkout 一键提交并推送。
   [在线 Archive](https://sleepylgod.github.io/research-radar/archive/) 是一个真实部署示例。
 - **知乎：** 生成专门适配知乎标题和列表层级的 Markdown，并支持本地图片包或公网图片 URL，供人工导入。
+- **私人邮件：** 通过 TLS 保护的 SMTP，把同一份已核验日报发到自己的邮箱。
 - **本地 scheduler：** 生成 macOS launchd 任务，定时运行审核过的 topic 并创建公众号草稿。
 
 具体命令和部署步骤见[详细使用说明](docs/usage.md)。
