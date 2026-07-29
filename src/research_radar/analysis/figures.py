@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from PIL import Image, UnidentifiedImageError
+
 from research_radar.analysis.figure_text import (
     FIGURE_EXPLANATION_SOURCE_CONTEXT,
 )
@@ -45,6 +47,7 @@ PDF_MIN_CROP_WIDTH = 180
 PDF_MIN_CROP_HEIGHT = 120
 PDF_MAX_CROP_HEIGHT_RATIO = 0.62
 PDF_COLUMN_GAP_RATIO = 0.04
+PDF_MAX_EDGE_DARK_RATIO = 0.02
 
 
 class FigureExtractionError(Exception):
@@ -137,7 +140,7 @@ class PdfPageBbox:
 
 @dataclass(frozen=True)
 class PdfCropBox:
-    """Pixel crop box passed to pdftoppm."""
+    """Crop box expressed in PDF points until the render boundary."""
 
     x: int
     y: int
@@ -225,6 +228,8 @@ def extract_pdf_cropped_figures(
             f"{candidate.page_number}.png"
         )
         if not _render_pdf_crop(pdf_path, candidate.page_number, crop_box, destination):
+            continue
+        if not _rendered_crop_is_publishable(destination):
             continue
         used_pages.add(candidate.page_number)
         figures.append(
@@ -573,7 +578,16 @@ def _pdf_caption_crop_box(
     page = _pdf_page_bbox(pdf_path, candidate.page_number)
     if page is None:
         return _pypdf_caption_crop_box(pdf_path, candidate)
-    return _pdf_caption_crop_box_from_bbox(page, candidate)
+    crop_box = _pdf_caption_crop_box_from_bbox(page, candidate)
+    if crop_box is None:
+        return None
+    if not _pdf_crop_text_is_publishable(
+        page,
+        crop_box,
+        figure_number=candidate.figure_number,
+    ):
+        return None
+    return crop_box
 
 
 def _pdf_caption_crop_box_from_bbox(
@@ -659,22 +673,19 @@ def _pypdf_caption_crop_box(
     if not marks:
         return None
 
-    caption_x, caption_y, caption_font_size = max(marks, key=lambda item: item[1])
-    scale = PDF_FIGURE_CROP_DPI / 72.0
-    page_width_px = page_width * scale
-    page_height_px = page_height * scale
-    caption_top_px = (page_height - (caption_y + caption_font_size)) * scale
-    if caption_top_px <= page_height_px * 0.08 or caption_top_px >= page_height_px * 0.55:
+    _, caption_y, caption_font_size = max(marks, key=lambda item: item[1])
+    caption_top = page_height - (caption_y + caption_font_size)
+    if caption_top <= page_height * 0.08 or caption_top >= page_height * 0.55:
         return None
 
-    horizontal_margin = max(24.0, page_width_px * 0.09)
-    top_margin = max(24.0, page_height_px * 0.045)
-    bottom = caption_top_px - max(12.0, caption_font_size * scale)
-    width = page_width_px - (horizontal_margin * 2)
+    horizontal_margin = max(12.0, page_width * 0.09)
+    top_margin = max(12.0, page_height * 0.045)
+    bottom = caption_top - max(6.0, caption_font_size)
+    width = page_width - (horizontal_margin * 2)
     height = bottom - top_margin
     if width < PDF_MIN_CROP_WIDTH or height < PDF_MIN_CROP_HEIGHT:
         return None
-    if height > page_height_px * PDF_MAX_CROP_HEIGHT_RATIO:
+    if height > page_height * PDF_MAX_CROP_HEIGHT_RATIO:
         return None
     return PdfCropBox(
         x=max(0, int(round(horizontal_margin))),
@@ -693,8 +704,6 @@ def _pdf_page_bbox(pdf_path: Path, page_number: int) -> PdfPageBbox | None:
             [
                 pdftotext,
                 "-bbox-layout",
-                "-r",
-                str(PDF_FIGURE_CROP_DPI),
                 "-f",
                 str(page_number),
                 "-l",
@@ -761,12 +770,81 @@ def _caption_line_words(words: list[PdfTextWord], figure_number: str) -> list[Pd
             continue
         line_y = (word.y_min + word.y_max + words[index + 1].y_min + words[index + 1].y_max) / 4
         tolerance = max(5.0, (word.y_max - word.y_min) * 0.9)
-        return [
-            item
-            for item in words
-            if abs(((item.y_min + item.y_max) / 2) - line_y) <= tolerance
-        ]
+        same_line = sorted(
+            [
+                item
+                for item in words
+                if abs(((item.y_min + item.y_max) / 2) - line_y) <= tolerance
+            ],
+            key=lambda item: item.x_min,
+        )
+        try:
+            figure_index = same_line.index(word)
+        except ValueError:
+            return []
+        if figure_index + 1 >= len(same_line):
+            return []
+        caption_words = same_line[figure_index : figure_index + 2]
+        max_gap = max(12.0, (word.y_max - word.y_min) * 1.2)
+        for item in same_line[figure_index + 2 :]:
+            if item.x_min - caption_words[-1].x_max > max_gap:
+                break
+            caption_words.append(item)
+        return caption_words
     return []
+
+
+def _pdf_crop_text_is_publishable(
+    page: PdfPageBbox,
+    crop_box: PdfCropBox,
+    *,
+    figure_number: str,
+) -> bool:
+    """Reject crops that visibly include article text or another float caption."""
+
+    crop_right = crop_box.x + crop_box.width
+    crop_bottom = crop_box.y + crop_box.height
+    words = [
+        word
+        for word in page.words
+        if crop_box.x <= (word.x_min + word.x_max) / 2 <= crop_right
+        and crop_box.y <= (word.y_min + word.y_max) / 2 <= crop_bottom
+    ]
+    paragraph_lines = 0
+    for line in _pdf_words_by_line(words):
+        normalized = "".join(_pdf_word_key(word.text) for word in line)
+        if normalized.startswith("table"):
+            return False
+        figure_match = re.match(r"^figure(?P<number>\d+)", normalized)
+        if figure_match and figure_match.group("number") != figure_number:
+            return False
+        line_width = max(word.x_max for word in line) - min(word.x_min for word in line)
+        if len(line) >= 7 and line_width >= crop_box.width * 0.65:
+            paragraph_lines += 1
+    return paragraph_lines < 3
+
+
+def _pdf_words_by_line(words: list[PdfTextWord]) -> list[list[PdfTextWord]]:
+    """Group positioned PDF words into approximate visual lines."""
+
+    lines: list[list[PdfTextWord]] = []
+    for word in sorted(words, key=lambda item: (item.y_min, item.x_min)):
+        center = (word.y_min + word.y_max) / 2
+        target = next(
+            (
+                line
+                for line in lines
+                if min(item.y_min for item in line) - 4
+                <= center
+                <= max(item.y_max for item in line) + 4
+            ),
+            None,
+        )
+        if target is None:
+            lines.append([word])
+        else:
+            target.append(word)
+    return [sorted(line, key=lambda item: item.x_min) for line in lines]
 
 
 def _pdf_caption_column(
@@ -851,6 +929,7 @@ def _render_pdf_crop(
     if not pdftoppm:
         return False
     output_prefix = destination.with_suffix("")
+    pixel_crop = _pdf_points_to_pixels(crop_box)
     try:
         subprocess.run(
             [
@@ -864,13 +943,13 @@ def _render_pdf_crop(
                 "-l",
                 str(page_number),
                 "-x",
-                str(crop_box.x),
+                str(pixel_crop.x),
                 "-y",
-                str(crop_box.y),
+                str(pixel_crop.y),
                 "-W",
-                str(crop_box.width),
+                str(pixel_crop.width),
                 "-H",
-                str(crop_box.height),
+                str(pixel_crop.height),
                 str(pdf_path),
                 str(output_prefix),
             ],
@@ -882,6 +961,47 @@ def _render_pdf_crop(
     except (OSError, subprocess.SubprocessError):
         return False
     return destination.is_file()
+
+
+def _pdf_points_to_pixels(crop_box: PdfCropBox) -> PdfCropBox:
+    """Convert one PDF-point crop box to pdftoppm pixel coordinates."""
+
+    scale = PDF_FIGURE_CROP_DPI / 72.0
+    return PdfCropBox(
+        x=max(0, int(round(crop_box.x * scale))),
+        y=max(0, int(round(crop_box.y * scale))),
+        width=max(1, int(round(crop_box.width * scale))),
+        height=max(1, int(round(crop_box.height * scale))),
+    )
+
+
+def _rendered_crop_is_publishable(path: Path) -> bool:
+    """Reject blank or visibly clipped PNG crops before public rendering."""
+
+    try:
+        with Image.open(path) as image:
+            grayscale = image.convert("L")
+    except (OSError, UnidentifiedImageError):
+        return False
+    width, height = grayscale.size
+    if width < PDF_MIN_CROP_WIDTH or height < PDF_MIN_CROP_HEIGHT:
+        return False
+    border = max(2, int(round(min(width, height) * 0.015)))
+    edges = (
+        grayscale.crop((0, 0, width, border)),
+        grayscale.crop((0, height - border, width, height)),
+        grayscale.crop((0, 0, border, height)),
+        grayscale.crop((width - border, 0, width, height)),
+    )
+    for edge in edges:
+        pixels = edge.tobytes()
+        if (
+            pixels
+            and sum(value < 245 for value in pixels) / len(pixels)
+            > PDF_MAX_EDGE_DARK_RATIO
+        ):
+            return False
+    return True
 
 
 def _xml_name(tag: str) -> str:

@@ -11,6 +11,7 @@ authors = [
 dependencies = [
   "cryptography>=42.0.0",
   "keyring>=25.0.0",
+  "pillow>=10.0.0",
   "pypdf>=5.0.0",
   "pyyaml>=6.0.0",
 ]

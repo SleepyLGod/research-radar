@@ -330,6 +330,7 @@ def test_extract_pdf_page_figures_renders_matched_openreview_figure(
         return figures_module.subprocess.CompletedProcess(args=args, returncode=0)
 
     monkeypatch.setattr(figures_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(figures_module, "_rendered_crop_is_publishable", lambda path: True)
 
     selected = extract_pdf_cropped_figures(artifact, image_dir, [claim])
 
@@ -344,6 +345,249 @@ def test_extract_pdf_page_figures_renders_matched_openreview_figure(
     assert "-y" in render_call
     assert "-W" in render_call
     assert "-H" in render_call
+
+
+def test_pdf_full_width_caption_renders_full_page_width_crop(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    source = SourceCandidate(
+        title="Systems Paper",
+        url="https://example.org/paper.pdf",
+        canonical_id="paper:systems",
+        source_type=SourceType.PAPER,
+        source_name="web_search",
+    )
+    artifact = Artifact(
+        source=source,
+        text="[page 4]\nFigure 2: Full-width system design overview.\n",
+        artifact_path=str(pdf_path),
+        content_type="application/pdf",
+    )
+    claim = Claim(
+        text=(
+            "Solution: The full-width system design coordinates profiling "
+            "and scheduling."
+        ),
+        status=ClaimStatus.SUPPORTED,
+        evidence=[
+            EvidenceAnchor(
+                source_url=source.url,
+                quote="profiling and scheduling",
+            )
+        ],
+    )
+
+    monkeypatch.setattr(
+        figures_module.shutil,
+        "which",
+        lambda name: f"/usr/bin/{name}",
+    )
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> object:
+        calls.append(args)
+        if args[0].endswith("pdftotext"):
+            return figures_module.subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=_pdf_bbox_xml(
+                    width=600,
+                    height=840,
+                    words=[
+                        ("Figure", 70, 200, 98, 212),
+                        ("2:", 101, 200, 109, 212),
+                        ("Full-width", 112, 200, 172, 212),
+                        ("system", 175, 200, 214, 212),
+                        ("design", 217, 200, 254, 212),
+                        ("overview", 257, 200, 306, 212),
+                        ("across", 309, 200, 346, 212),
+                        ("both", 349, 200, 375, 212),
+                        ("paper", 378, 200, 409, 212),
+                        ("columns.", 412, 200, 465, 212),
+                    ],
+                ),
+            )
+        Path(args[-1]).with_suffix(".png").write_bytes(b"fake-crop")
+        return figures_module.subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(figures_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(figures_module, "_rendered_crop_is_publishable", lambda path: True)
+
+    selected = extract_pdf_cropped_figures(artifact, tmp_path / "figures", [claim])
+
+    assert len(selected) == 1
+    render_call = next(call for call in calls if call[0].endswith("pdftoppm"))
+    rendered_width = int(render_call[render_call.index("-W") + 1])
+    assert rendered_width > 1200
+
+
+def test_pdf_caption_line_does_not_merge_neighboring_column() -> None:
+    page = figures_module.PdfPageBbox(
+        width=600,
+        height=840,
+        words=[
+            figures_module.PdfTextWord("Figure", 70, 410, 98, 422),
+            figures_module.PdfTextWord("4:", 101, 410, 109, 422),
+            figures_module.PdfTextWord("Offloading", 112, 410, 166, 422),
+            figures_module.PdfTextWord("pipeline", 169, 410, 213, 422),
+            figures_module.PdfTextWord("where", 325, 410, 358, 422),
+            figures_module.PdfTextWord("throughput", 361, 410, 423, 422),
+            figures_module.PdfTextWord("improves", 426, 410, 475, 422),
+        ],
+    )
+
+    caption_words = figures_module._caption_line_words(page.words, "4")
+
+    assert [word.text for word in caption_words] == [
+        "Figure",
+        "4:",
+        "Offloading",
+        "pipeline",
+    ]
+
+
+def test_pdf_point_crop_is_scaled_once_for_pdftoppm(monkeypatch, tmp_path: Path) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    destination = tmp_path / "figure.png"
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(figures_module.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    def fake_run(args: list[str], **kwargs: object) -> object:
+        calls.append(args)
+        destination.write_bytes(b"fake-crop")
+        return figures_module.subprocess.CompletedProcess(args=args, returncode=0)
+
+    monkeypatch.setattr(figures_module.subprocess, "run", fake_run)
+
+    rendered = figures_module._render_pdf_crop(
+        pdf_path,
+        3,
+        figures_module.PdfCropBox(x=72, y=36, width=144, height=72),
+        destination,
+    )
+
+    assert rendered is True
+    call = calls[0]
+    assert call[call.index("-x") + 1] == "160"
+    assert call[call.index("-y") + 1] == "80"
+    assert call[call.index("-W") + 1] == "320"
+    assert call[call.index("-H") + 1] == "160"
+
+
+def test_pypdf_fallback_returns_pdf_point_crop(monkeypatch, tmp_path: Path) -> None:
+    class FakeMediaBox:
+        width = 612
+        height = 792
+
+    class FakePage:
+        mediabox = FakeMediaBox()
+
+        def extract_text(self, *, visitor_text: object) -> None:
+            visitor_text("Figure 2", None, [1, 0, 0, 1, 80, 520], None, 12)
+
+    class FakeReader:
+        def __init__(self, path: str) -> None:
+            self.pages = [FakePage()]
+
+    monkeypatch.setattr("pypdf.PdfReader", FakeReader)
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF fake")
+    candidate = figures_module.PdfFigureCandidate(
+        page_number=1,
+        figure_number="2",
+        caption="Figure 2: System overview.",
+        label="fig:system",
+        score=1.0,
+    )
+
+    crop = figures_module._pypdf_caption_crop_box(pdf_path, candidate)
+
+    assert crop == figures_module.PdfCropBox(x=55, y=36, width=502, height=212)
+
+
+def test_pdf_crop_with_table_caption_is_not_publishable() -> None:
+    page = figures_module.PdfPageBbox(
+        width=600,
+        height=840,
+        words=[
+            figures_module.PdfTextWord("Table", 70, 120, 100, 132),
+            figures_module.PdfTextWord("4:", 103, 120, 111, 132),
+            figures_module.PdfTextWord("Results", 114, 120, 154, 132),
+            figures_module.PdfTextWord("Figure", 70, 300, 98, 312),
+            figures_module.PdfTextWord("12:", 101, 300, 116, 312),
+        ],
+    )
+
+    publishable = figures_module._pdf_crop_text_is_publishable(
+        page,
+        figures_module.PdfCropBox(x=60, y=100, width=240, height=190),
+        figure_number="12",
+    )
+
+    assert publishable is False
+
+
+def test_pdf_crop_with_different_prefix_figure_number_is_not_publishable() -> None:
+    page = figures_module.PdfPageBbox(
+        width=600,
+        height=840,
+        words=[
+            figures_module.PdfTextWord("Figure", 70, 120, 100, 132),
+            figures_module.PdfTextWord("12:", 103, 120, 118, 132),
+            figures_module.PdfTextWord("Results", 121, 120, 161, 132),
+        ],
+    )
+
+    publishable = figures_module._pdf_crop_text_is_publishable(
+        page,
+        figures_module.PdfCropBox(x=60, y=100, width=240, height=90),
+        figure_number="1",
+    )
+
+    assert publishable is False
+
+
+def test_rendered_crop_touching_edge_is_not_publishable(tmp_path: Path) -> None:
+    from PIL import Image, ImageDraw
+
+    image_path = tmp_path / "clipped.png"
+    image = Image.new("RGB", (300, 180), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((80, 30, 299, 150), fill="black")
+    image.save(image_path)
+
+    assert figures_module._rendered_crop_is_publishable(image_path) is False
+
+
+def test_rendered_crop_with_short_edge_intersection_is_not_publishable(
+    tmp_path: Path,
+) -> None:
+    from PIL import Image, ImageDraw
+
+    image_path = tmp_path / "partially-clipped.png"
+    image = Image.new("RGB", (300, 180), "white")
+    draw = ImageDraw.Draw(image)
+    draw.line((299, 82, 299, 93), fill="black", width=3)
+    image.save(image_path)
+
+    assert figures_module._rendered_crop_is_publishable(image_path) is False
+
+
+def test_rendered_crop_with_white_margin_is_publishable(tmp_path: Path) -> None:
+    from PIL import Image, ImageDraw
+
+    image_path = tmp_path / "complete.png"
+    image = Image.new("RGB", (300, 180), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((50, 30, 250, 150), fill="black")
+    image.save(image_path)
+
+    assert figures_module._rendered_crop_is_publishable(image_path) is True
 
 
 def test_extract_pdf_page_figures_does_not_match_other_openreview_paper(
