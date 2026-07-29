@@ -325,11 +325,24 @@ email:
   timeout_seconds: 30
 ```
 
+For a personal Gmail self-send, use `smtp.gmail.com`, port `465`, and `security: tls`. Set
+`username`, `from_address`, and `to_address` to the Gmail address you control. Gmail requires
+two-step verification and a 16-character App Password for SMTP. Enter the generated App Password
+without display spaces; do not use the normal Google account password.
+
 Use `security: tls` for implicit TLS, commonly on port 465, or `security: starttls`, commonly on
 port 587. Plaintext SMTP is rejected. Store the provider's SMTP application password in Keychain:
 
 ```bash
 uv run research-radar secrets set-named email.smtp_password
+```
+
+Confirm only that the secret is present; this command never prints its value:
+
+```bash
+uv run research-radar secrets status \
+  --name email.smtp_password \
+  --secret-source keychain
 ```
 
 Prepare `email.html`, `email.txt`, and safe preview images without connecting to SMTP:

@@ -6,7 +6,8 @@
 
 ResearchRadar watches a topic for new work, chooses the papers worth reading, reads the full text,
 and checks public claims against exact source anchors. It runs locally and leaves the finished article
-where you want to review it: the WeChat draft box, a public web archive with RSS, or a Markdown export.
+where you want to review it: the WeChat draft box, a public web archive with RSS, a Markdown export,
+or your private inbox.
 
 [简体中文](README.zh-CN.md) ·
 [Live Archive](https://sleepylgod.github.io/research-radar/archive/) ·
@@ -24,7 +25,7 @@ where you want to review it: the WeChat draft box, a public web archive with RSS
 - **Claims you can inspect.** Public factual claims need complete evidence anchors. Weak, broad, or
   unmatched claims stay in local audit artifacts instead of leaking into the article.
 - **One verified draft, several outputs.** The same `ArticleDraft` can become a WeChat draft, a static
-  Archive/RSS report, or a Zhihu-ready Markdown export.
+  Archive/RSS report, a Zhihu-ready Markdown export, or a private email.
 
 ## How It Works
 
@@ -39,6 +40,7 @@ flowchart LR
     G --> H["WeChat draft"]
     G --> I["Archive and RSS"]
     G --> J["Zhihu Markdown"]
+    G --> K["Private email"]
 ```
 
 Search expands recall, but snippets do not become publishable facts. The public article is built only

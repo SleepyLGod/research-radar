@@ -36,15 +36,17 @@ drive the research model.
   links, seen-before fallback, and concise evidence notes.
 - Public writing style contract for reader explanations and localization, plus non-blocking style
   warnings for template-like public text.
-- Paper figure support from arXiv source assets and conservative PDF-only figure crops; full-page
-  PDF screenshots are not allowed as public figures.
+- Paper figure support from arXiv source assets and conservative PDF-only figure crops. PDF point
+  coordinates are converted once at render time, and crops containing text, another caption, or
+  clipped edges fail closed; full-page PDF screenshots are not allowed as public figures.
 - Verified mechanism diagrams and improved figure selection for daily public articles.
 - Local Public Archive/RSS export from `ArticleDraft`, including static daily report pages, a
   research-journal index, public metadata, and a feed. A Chinese GitHub Pages deployment is live;
   the Git checkout publisher adds preflight, signed-off commit, and push automation without tying
   the exporter to GitHub. `/papers/` remains a future single-paper knowledge base.
 - Private SMTP email v1 can render HTML/plain-text from `ArticleDraft`, embed safe PNG/JPEG figures
-  with CID, and send one report to one personal inbox. It does not manage public subscribers.
+  with CID, and send one report to one personal inbox. Gmail TLS/App Password self-send has been
+  validated end to end. It does not manage public subscribers.
 - Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
 - Zhihu-specific Markdown export v2 from `ArticleDraft`, including a title-free two-level document,
   flat source lists, safe local assets or public image URLs, and schema-v2 export metadata. The
@@ -94,21 +96,21 @@ drive the research model.
 
 ## Prioritized TODO
 
-1. Validate the Archive Git publisher and private email with real local configuration.
-   - Run `archive publish-git --dry-run` before the first real push.
-   - Send one private email manually before considering scheduler integration.
-   - Keep Archive and email failures independent from WeChat draft creation.
-
-2. Continue figure and diagram quality from real failures.
+1. Continue figure and diagram quality from real failures.
    - Improve TeX-source extraction and difficult PDF crops only when real papers expose gaps.
    - Keep figure explanations bound to same-paper verified content.
 
-3. Tune topics from real daily runs.
+2. Tune topics from real daily runs.
    - Do not overfit topic profiles before real usage shows a pattern.
    - Use multi-topic eval and daily draft outcomes to identify recall failures, off-center source
      selection, shallow readings, low publishable claim counts, or missing figures.
    - Adjust queries, paper queries, concept groups, centrality signals, and negative phrases only
      when repeated runs show the same issue.
+
+3. Decide whether Archive and private email belong in scheduled delivery.
+   - Keep WeChat draft creation, Archive publishing, and email delivery as independent failure
+     domains.
+   - Automate another channel only after repeated manual use shows that it is useful.
 
 4. Continue cost and first-run runtime optimization.
    - Treat first-run latency as a background-job cost issue, not a reason to weaken evidence gates.
@@ -124,6 +126,7 @@ drive the research model.
 
 ## Near-Term Execution Order
 
-1. Complete one real Archive Git preflight/push and one private SMTP send.
-2. Improve figures and tune topic profiles when repeated real-run failures appear.
-3. Revisit weekly deep dive and Codex reader only when daily usage shows the need.
+1. Use real daily runs across several topics and record repeated quality failures.
+2. Improve figures and tune topic profiles only when those failures repeat.
+3. Decide whether Archive or private email should join scheduled delivery.
+4. Revisit weekly deep dive and Codex reader only when daily usage shows the need.

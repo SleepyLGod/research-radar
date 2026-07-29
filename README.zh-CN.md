@@ -6,7 +6,7 @@
 
 ResearchRadar 会寻找新工作，挑出真正值得读的论文，读取全文，再逐条核对准备写进正文的事实。
 它在本地运行，最后把文章放到你方便审阅的地方：微信公众号草稿箱、带 RSS 的公开网页，
-或者适合导入知乎的 Markdown。
+适合导入知乎的 Markdown，或者你自己的邮箱。
 
 [English README](README.md) ·
 [在线 Archive](https://sleepylgod.github.io/research-radar/archive/) ·
@@ -23,8 +23,8 @@ ResearchRadar 会寻找新工作，挑出真正值得读的论文，读取全文
   和正文放在一起讲清楚。
 - **可以回查的事实。** 准备公开的事实必须有完整 evidence anchor。证据不足、说得太宽或无法匹配
   原文的 claim 只留在本地审计记录里。
-- **一份内容，可以发到不同地方。** 同一个 `ArticleDraft` 可以生成微信公众号草稿、Archive/RSS 网页，
-  或者知乎专用 Markdown。
+- **一份内容，可以发到不同地方。** 同一个 `ArticleDraft` 可以生成微信公众号草稿、Archive/RSS 网页、
+  知乎专用 Markdown，或者私人邮件。
 
 ## 它怎么工作
 
@@ -39,6 +39,7 @@ flowchart LR
     G --> H["公众号草稿"]
     G --> I["Archive 和 RSS"]
     G --> J["知乎 Markdown"]
+    G --> K["私人邮件"]
 ```
 
 搜索只负责尽量找全，搜索摘要不能直接变成公开事实。ResearchRadar 会先拿到论文全文，再经过

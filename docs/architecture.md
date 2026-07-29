@@ -70,3 +70,8 @@ For PDF-only papers, figure extraction is conservative. ResearchRadar may crop a
 when it can bind a caption to the same paper and compute a credible crop; it must not publish a full
 PDF page as if it were a figure. If a safe crop is unavailable, the public draft simply omits the
 figure section and keeps diagnostics in audit artifacts.
+
+The PDF fallback keeps Poppler bounding boxes in PDF points and converts them to render pixels only
+at the `pdftoppm` boundary. Caption matching stays within one visual line and column. Crops that
+contain article paragraphs, another figure/table caption, implausible geometry, or visible edge
+clipping fail closed and are not exposed to any public renderer.
