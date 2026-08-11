@@ -24,20 +24,15 @@ def annotate_source_history(
     *,
     run_id: str,
 ) -> tuple[list[SourceCandidate], dict[str, Any]]:
-    """Annotate sources with local history status and append new/update events."""
+    """Annotate sources from successful history outcomes without mutating history."""
 
     path = root / "data" / "source_history" / f"{_safe_topic(topic_id)}.jsonl"
     records = _latest_records(path)
     annotated: list[SourceCandidate] = []
-    append_rows: list[dict[str, Any]] = []
     for candidate in candidates:
-        annotated_candidate, row = _annotate_candidate(candidate, records, run_id)
+        annotated_candidate, _ = _annotate_candidate(candidate, records, run_id)
         annotated.append(annotated_candidate)
-        if row is not None:
-            append_rows.append(row)
-    if append_rows:
-        _append_jsonl(path, append_rows)
-    report = _history_report(path, annotated, append_rows)
+    report = _history_report(path, annotated, [])
     return annotated, report
 
 
@@ -179,27 +174,6 @@ def _annotate_candidate(
         status = "version_update"
     else:
         status = "seen"
-    row = None
-    if status in {"new", "version_update"}:
-        row = _history_row(
-            candidate,
-            family_key,
-            family_keys,
-            version,
-            previous_version,
-            status,
-            run_id,
-        )
-    elif previous is not None and _should_refresh_alias_row(previous, family_keys, version):
-        row = _history_row(
-            candidate,
-            family_key,
-            _merged_family_keys(previous, family_keys),
-            version or previous_version,
-            previous_version,
-            "alias_refresh",
-            run_id,
-        )
     previous_outcome = previous.get("outcome") if isinstance(previous, dict) else None
     if not isinstance(previous_outcome, dict):
         previous_outcome = None
@@ -213,7 +187,7 @@ def _annotate_candidate(
             previous_version,
             previous_outcome=previous_outcome,
         ),
-        row,
+        None,
     )
 
 
@@ -357,9 +331,65 @@ def _record_family_keys(history: object) -> list[str]:
 def _latest_records(path: Path) -> dict[str, dict[str, Any]]:
     records: dict[str, dict[str, Any]] = {}
     for row in read_jsonl(path):
-        for family_key in _row_family_keys(row):
-            records[family_key] = row
+        if not _is_successful_outcome(row):
+            continue
+        family_keys = _row_family_keys(row)
+        previous_records: list[dict[str, Any]] = []
+        seen_records: set[int] = set()
+        for family_key in family_keys:
+            previous = records.get(family_key)
+            if previous is not None and id(previous) not in seen_records:
+                previous_records.append(previous)
+                seen_records.add(id(previous))
+
+        resolved: dict[str, Any] | None = None
+        for previous in sorted(
+            previous_records,
+            key=lambda record: str(record.get("seen_at") or ""),
+        ):
+            resolved = _merge_outcome_record(resolved, previous)
+        resolved = _merge_outcome_record(resolved, row)
+        for family_key in _row_family_keys(resolved):
+            records[family_key] = resolved
     return records
+
+
+def _is_successful_outcome(row: dict[str, Any]) -> bool:
+    event = row.get("event")
+    outcome = row.get("outcome")
+    if not isinstance(outcome, dict):
+        return False
+    if event == "daily_outcome":
+        return outcome.get("daily_included") is True
+    if event == "wechat_draft":
+        return outcome.get("wechat_draft_status") == "created"
+    return False
+
+
+def _merge_outcome_record(
+    previous: dict[str, Any] | None,
+    current: dict[str, Any],
+) -> dict[str, Any]:
+    if previous is None:
+        return {
+            **current,
+            "family_keys": _row_family_keys(current),
+            "outcome": dict(current.get("outcome", {})),
+        }
+    previous_outcome = previous.get("outcome", {})
+    current_outcome = current.get("outcome", {})
+    return {
+        **previous,
+        **current,
+        "latest_version": current.get("latest_version") or previous.get("latest_version"),
+        "family_keys": list(
+            dict.fromkeys([*_row_family_keys(previous), *_row_family_keys(current)])
+        ),
+        "outcome": {
+            **(previous_outcome if isinstance(previous_outcome, dict) else {}),
+            **(current_outcome if isinstance(current_outcome, dict) else {}),
+        },
+    }
 
 
 def _row_family_keys(row: dict[str, Any]) -> list[str]:
@@ -371,17 +401,6 @@ def _row_family_keys(row: dict[str, Any]) -> list[str]:
     if isinstance(family_key, str) and family_key:
         keys.append(family_key)
     return list(dict.fromkeys(keys))
-
-
-def _should_refresh_alias_row(
-    previous: dict[str, Any],
-    family_keys: list[str],
-    version: str | None,
-) -> bool:
-    previous_keys = set(_row_family_keys(previous))
-    if version is not None and not previous.get("latest_version"):
-        return True
-    return any(key not in previous_keys and not _weak_paper_family_key(key) for key in family_keys)
 
 
 def _merged_family_keys(previous: dict[str, Any], family_keys: list[str]) -> list[str]:
@@ -420,15 +439,18 @@ def _history_report(
 
 def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     ensure_dir(path.parent)
+    path.parent.chmod(0o700)
     with path.open("a", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _is_newer_version(version: str | None, previous_version: str | None) -> bool:
-    if version is None or previous_version is None or version == previous_version:
+    if version is None or version == previous_version:
         return False
     current = _version_number(version)
+    if previous_version is None:
+        return current is not None and current > 1
     previous = _version_number(previous_version)
     if current is None or previous is None:
         return version != previous_version

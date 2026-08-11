@@ -22,21 +22,38 @@ def test_source_history_tracks_new_seen_and_version_update(tmp_path: Path) -> No
         run_id="run-1",
     )
 
-    annotated_seen, seen_report = annotate_source_history(
+    annotated_retry, retry_report = annotate_source_history(
         tmp_path,
         "agent-memory",
         [_paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")],
         run_id="run-2",
     )
 
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [first],
+        run_id="run-1",
+        event="daily_outcome",
+        outcome_by_url={first.url: {"daily_included": True}},
+    )
+
+    annotated_seen, seen_report = annotate_source_history(
+        tmp_path,
+        "agent-memory",
+        [_paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")],
+        run_id="run-3",
+    )
+
     annotated_update, update_report = annotate_source_history(
         tmp_path,
         "agent-memory",
         [_paper("http://arxiv.org/abs/2604.01707v2", "2604.01707v2")],
-        run_id="run-3",
+        run_id="run-4",
     )
 
     assert annotated_first[0].metadata["source_history"]["status"] == "new"
+    assert annotated_retry[0].metadata["source_history"]["status"] == "new"
     assert annotated_seen[0].metadata["source_history"]["status"] == "seen"
     assert annotated_update[0].metadata["source_history"]["status"] == "version_update"
     assert not is_reportable_source(annotated_seen[0])
@@ -44,9 +61,10 @@ def test_source_history_tracks_new_seen_and_version_update(tmp_path: Path) -> No
     assert seen_report["omitted_seen_sources"][0]["family_key"] == "arxiv:2604.01707"
     assert update_report["counts"]["version_update"] == 1
     history_rows = read_jsonl(tmp_path / "data" / "source_history" / "agent-memory.jsonl")
-    assert [row["event"] for row in history_rows] == ["new", "version_update"]
+    assert [row["event"] for row in history_rows] == ["daily_outcome"]
     assert history_rows[0]["family_keys"][0] == "arxiv:2604.01707"
-    assert first_report["appended_count"] == 1
+    assert first_report["appended_count"] == 0
+    assert retry_report["appended_count"] == 0
 
 
 def test_source_history_marks_semantic_scholar_mirror_seen_after_arxiv(
@@ -72,6 +90,14 @@ def test_source_history_marks_semantic_scholar_mirror_seen_after_arxiv(
         [arxiv],
         run_id="run-1",
     )
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [arxiv],
+        run_id="run-1",
+        event="daily_outcome",
+        outcome_by_url={arxiv.url: {"daily_included": True}},
+    )
     annotated_second, report = annotate_source_history(
         tmp_path,
         "agent-memory",
@@ -88,9 +114,58 @@ def test_source_history_marks_semantic_scholar_mirror_seen_after_arxiv(
     assert report["omitted_seen_sources"][0]["family_keys"] == family_keys
     history_rows = read_jsonl(tmp_path / "data" / "source_history" / "agent-memory.jsonl")
     assert len(history_rows) == 1
+    assert history_rows[0]["event"] == "daily_outcome"
 
 
-def test_source_history_reads_legacy_single_family_key_rows(tmp_path: Path) -> None:
+def test_source_history_merges_outcomes_across_bridged_aliases(tmp_path: Path) -> None:
+    history_path = tmp_path / "data" / "source_history" / "agent-memory.jsonl"
+    history_path.parent.mkdir(parents=True)
+    rows = [
+        {
+            "event": "daily_outcome",
+            "family_key": "title:old-title",
+            "family_keys": ["title:old-title", "doi:10.1234/shared"],
+            "seen_at": "2026-08-09T00:00:00+00:00",
+            "outcome": {"daily_included": True, "deep_reading_status": "succeeded"},
+        },
+        {
+            "event": "wechat_draft",
+            "family_key": "doi:10.1234/shared",
+            "family_keys": ["doi:10.1234/shared", "title:new-title"],
+            "seen_at": "2026-08-10T00:00:00+00:00",
+            "outcome": {
+                "wechat_draft_status": "created",
+                "wechat_title": "Bridged title",
+            },
+        },
+    ]
+    history_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    annotated, _ = annotate_source_history(
+        tmp_path,
+        "agent-memory",
+        [
+            _paper(
+                "https://example.com/old-title",
+                "",
+                title="Old Title",
+                source_name="web",
+            )
+        ],
+        run_id="run-3",
+    )
+
+    previous = annotated[0].metadata["source_history"]["previous_outcome"]
+    assert previous["daily_included"] is True
+    assert previous["deep_reading_status"] == "succeeded"
+    assert previous["wechat_draft_status"] == "created"
+    assert previous["wechat_title"] == "Bridged title"
+
+
+def test_source_history_does_not_suppress_from_legacy_discovery_row(tmp_path: Path) -> None:
     history_path = tmp_path / "data" / "source_history" / "agent-memory.jsonl"
     history_path.parent.mkdir(parents=True)
     history_path.write_text(
@@ -113,7 +188,7 @@ def test_source_history_reads_legacy_single_family_key_rows(tmp_path: Path) -> N
         run_id="run-2",
     )
 
-    assert annotated[0].metadata["source_history"]["status"] == "seen"
+    assert annotated[0].metadata["source_history"]["status"] == "new"
 
 
 def test_source_history_seeds_arxiv_version_after_mirror_first(
@@ -128,6 +203,14 @@ def test_source_history_seeds_arxiv_version_after_mirror_first(
     )
 
     annotate_source_history(tmp_path, "agent-memory", [semantic], run_id="run-1")
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [semantic],
+        run_id="run-1",
+        event="daily_outcome",
+        outcome_by_url={semantic.url: {"daily_included": True}},
+    )
     annotated_v1, _ = annotate_source_history(
         tmp_path,
         "agent-memory",
@@ -159,12 +242,7 @@ def test_source_history_seeds_arxiv_version_after_mirror_first(
     assert annotated_v2[0].metadata["source_history"]["status"] == "version_update"
     assert report_v2["counts"]["version_update"] == 1
     rows = read_jsonl(tmp_path / "data" / "source_history" / "agent-memory.jsonl")
-    assert [row["event"] for row in rows] == ["new", "alias_refresh", "version_update"]
-    assert rows[1]["latest_version"] == "v1"
-    assert rows[1]["family_key"] == "arxiv:2604.04514"
-    assert "title:superlocalmemory-v3-3-biologically-inspired-agent-memory-systems" in rows[1][
-        "family_keys"
-    ]
+    assert [row["event"] for row in rows] == ["daily_outcome"]
 
 
 def test_source_family_key_normalizes_doi() -> None:
@@ -228,6 +306,57 @@ def test_source_history_daily_outcome_is_available_on_seen_source(
     assert report["omitted_seen_sources"][0]["previous_outcome"] == previous_outcome
 
 
+def test_source_history_merges_daily_and_wechat_outcomes(tmp_path: Path) -> None:
+    source = _paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    annotated, _ = annotate_source_history(
+        tmp_path,
+        "agent-memory",
+        [source],
+        run_id="run-1",
+    )
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        annotated,
+        run_id="run-1",
+        event="daily_outcome",
+        outcome_by_url={
+            source.url: {
+                "daily_included": True,
+                "deep_reading_status": "succeeded",
+                "publishable_claim_count": 3,
+            }
+        },
+    )
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        annotated,
+        run_id="run-1",
+        event="wechat_draft",
+        outcome_by_url={
+            source.url: {
+                "wechat_draft_status": "created",
+                "wechat_title": "Daily title",
+            }
+        },
+    )
+
+    annotated_seen, _ = annotate_source_history(
+        tmp_path,
+        "agent-memory",
+        [source],
+        run_id="run-2",
+    )
+
+    previous = annotated_seen[0].metadata["source_history"]["previous_outcome"]
+    assert previous["daily_included"] is True
+    assert previous["deep_reading_status"] == "succeeded"
+    assert previous["publishable_claim_count"] == 3
+    assert previous["wechat_draft_status"] == "created"
+    assert previous["wechat_title"] == "Daily title"
+
+
 def test_source_history_wechat_draft_outcome_records_serialized_source(
     tmp_path: Path,
 ) -> None:
@@ -265,7 +394,7 @@ def test_source_history_wechat_draft_outcome_records_serialized_source(
     assert rows[0]["outcome"]["wechat_title"] == "Daily title"
 
 
-def test_source_history_preserves_empty_previous_outcome(tmp_path: Path) -> None:
+def test_source_history_ignores_unsuccessful_empty_outcome(tmp_path: Path) -> None:
     source = _paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")
     annotate_source_history(tmp_path, "agent-memory", [source], run_id="run-1")
     append_source_history_outcomes(
@@ -277,14 +406,16 @@ def test_source_history_preserves_empty_previous_outcome(tmp_path: Path) -> None
         outcome_by_url={source.url: {}},
     )
 
-    annotated_seen, _ = annotate_source_history(
+    annotated_retry, _ = annotate_source_history(
         tmp_path,
         "agent-memory",
         [_paper("http://arxiv.org/abs/2604.01707v1", "2604.01707v1")],
         run_id="run-2",
     )
 
-    assert annotated_seen[0].metadata["source_history"]["previous_outcome"] == {}
+    history = annotated_retry[0].metadata["source_history"]
+    assert history["status"] == "new"
+    assert "previous_outcome" not in history
 
 
 def _paper(

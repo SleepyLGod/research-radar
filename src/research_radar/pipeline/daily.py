@@ -68,6 +68,7 @@ from research_radar.pipeline.progress import ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.pipeline.runtime import build_runtime_summary
+from research_radar.security.redaction import redact_text
 from research_radar.storage.files import write_json, write_jsonl, write_text
 from research_radar.storage.runs import create_run_dir, update_manifest
 from research_radar.storage.source_history import (
@@ -704,6 +705,32 @@ def run_daily(
             seen_sources=history_report["omitted_seen_sources"],
             figures_by_source_url=display_figures_by_source_url,
         )
+        explanation_audit = draft.metadata.get("explanation_audit", {})
+        if isinstance(explanation_audit, dict):
+            dropped_count = int(explanation_audit.get("dropped_count", 0) or 0)
+            fallback_count = int(
+                explanation_audit.get("fallback_section_count", 0) or 0
+            )
+            progress.record(
+                "explanation_policy",
+                "warning" if dropped_count else "passed",
+                **explanation_audit,
+            )
+            if dropped_count or fallback_count:
+                findings.append(
+                    ReviewFinding(
+                        severity="warning" if dropped_count else "info",
+                        message=(
+                            "Public explanation policy filtered reader prose and used "
+                            "verified atomic-claim fallbacks where needed."
+                        ),
+                        metadata={
+                            "kind": "public_explanation_policy",
+                            **explanation_audit,
+                        },
+                    )
+                )
+                write_jsonl(run_dir / "review_findings.jsonl", findings)
         write_json(run_dir / "article_draft.json", dataclass_to_dict(draft))
         write_text(
             run_dir / "synthesis_outline.md",
@@ -753,19 +780,56 @@ def run_daily(
                 reader_attempts=reader_attempts,
             ),
         )
-        daily_outcome_report = append_source_history_outcomes(
-            root,
-            topic.id,
-            public_reportable_candidates,
-            run_id=manifest.run_id,
-            event="daily_outcome",
-            outcome_by_url=_daily_outcomes_by_url(
+        try:
+            daily_outcome_report = append_source_history_outcomes(
+                root,
+                topic.id,
                 public_reportable_candidates,
-                selected_deep_candidates,
-                deep_reading_status_by_url,
-                publishable_claim_count_by_url=_publishable_claim_counts_by_url(claims),
-            ),
-        )
+                run_id=manifest.run_id,
+                event="daily_outcome",
+                outcome_by_url=_daily_outcomes_by_url(
+                    public_reportable_candidates,
+                    selected_deep_candidates,
+                    deep_reading_status_by_url,
+                    publishable_claim_count_by_url=_publishable_claim_counts_by_url(claims),
+                ),
+            )
+        except OSError as exc:
+            message = (
+                "The report completed, but source history could not be updated; "
+                "a source may be reported again on the next run."
+            )
+            findings.append(
+                ReviewFinding(
+                    severity="warning",
+                    message=message,
+                    metadata={
+                        "kind": "source_history_write",
+                        "error_type": type(exc).__name__,
+                    },
+                )
+            )
+            daily_outcome_report = {
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": redact_text(str(exc))[:300],
+            }
+            progress.record(
+                "history",
+                "warning",
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            write_jsonl(run_dir / "review_findings.jsonl", findings)
+            write_text(
+                run_dir / "review_report.md",
+                render_review_report(
+                    findings,
+                    model_feedback=model_feedback,
+                    verification_actions=verification_actions,
+                    reader_attempts=reader_attempts,
+                ),
+            )
         history_report = {
             **history_report,
             "daily_outcome": daily_outcome_report,
