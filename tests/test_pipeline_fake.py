@@ -138,6 +138,48 @@ def test_daily_pipeline_writes_required_outputs(tmp_path: Path) -> None:
     runtime = read_json(run_dir / "runtime_summary.json")
     assert "total_elapsed_seconds" in runtime
     assert runtime["cache"] == {"hit_count": 0, "miss_count": 0}
+    assert any(event["stage"] == "explanation_policy" for event in progress)
+    assert runtime["explanation_policy"] == {
+        "paragraph_count": 0,
+        "kept_count": 0,
+        "dropped_count": 0,
+        "fallback_section_count": 0,
+    }
+
+
+def test_daily_pipeline_history_write_failure_does_not_discard_report(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    def fail_history_write(*args, **kwargs):
+        raise OSError("history path unavailable")
+
+    monkeypatch.setattr(daily, "append_source_history_outcomes", fail_history_write)
+
+    run_dir = run_daily(tmp_path, config, "agent-memory", [FakeConnector()])
+
+    assert (run_dir / "daily.md").exists()
+    assert read_json(run_dir / "source_history_report.json")["daily_outcome"]["status"] == (
+        "failed"
+    )
+    findings = read_jsonl(run_dir / "review_findings.jsonl")
+    assert any(
+        finding.get("metadata", {}).get("kind") == "source_history_write"
+        for finding in findings
+    )
+    progress = read_jsonl(run_dir / "run_progress.jsonl")
+    assert any(
+        event["stage"] == "history" and event["status"] == "warning"
+        for event in progress
+    )
+    assert progress[-1]["status"] == "completed"
 
 
 def test_daily_pipeline_requires_localizer_for_chinese_report(tmp_path: Path) -> None:
@@ -1905,7 +1947,7 @@ def test_daily_pipeline_records_public_style_warning_without_blocking(
         "请先确认答案是否有 cited memory evidence，再给答案计分。",
         "综上所述，请先确认答案是否有 cited memory evidence，再给答案计分。",
     )
-    localizer = SequenceProvider([styley_body, _daily_localization_json()])
+    localizer = SequenceProvider([_daily_localization_json(), styley_body])
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
         return Artifact(source=source, text=DEEP_READING_FIXTURE_TEXT)

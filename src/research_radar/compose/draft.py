@@ -5,6 +5,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from research_radar.analysis.explanation_policy import (
+    claim_section_text,
+    explanation_fallbacks,
+    public_explanation,
+)
+from research_radar.analysis.paper_reading import ReaderExplanation
 from research_radar.analysis.source_gist import sanitize_source_gist
 from research_radar.compose.diagrams import build_mechanism_diagram
 from research_radar.compose.source_groups import source_group_for_candidate
@@ -100,6 +106,7 @@ def _build_long_form_daily_draft(
         language=language,
         figures_by_source_url=figures_by_source_url,
     )
+    explanation_audit = _explanation_audit(deep_read_entries)
     other_source_entries = [entry for entry in source_entries if not entry.get("deep_read")]
     seen_entries = _seen_source_entries(seen_sources)
     lede = _long_form_lede(verified, deep_read_entries, source_entries, seen_entries, language)
@@ -151,39 +158,8 @@ def _build_long_form_daily_draft(
             "seen_source_count": len(seen_entries),
             "draft_type": "daily_long_form",
             "language": language,
+            "explanation_audit": explanation_audit,
         },
-    )
-
-
-def build_weekly_draft(topic_id: str, claims: list[Claim]) -> ArticleDraft:
-    """Build a platform-neutral weekly deep-dive draft."""
-
-    verified = publishable_claims(claims)
-    lede = _lede(verified)
-    return ArticleDraft(
-        title=f"{topic_id}: Weekly Research Deep Dive",
-        topic_id=topic_id,
-        digest=lede[:120],
-        lede=lede,
-        claims=verified,
-        sections=[
-            ArticleSection(
-                title="One-line conclusion",
-                body=lede,
-                claims=verified[:1],
-            ),
-            ArticleSection(
-                title="What changed",
-                body="\n".join(claim.text for claim in verified) or "No verified change yet.",
-                claims=verified,
-            ),
-            ArticleSection(
-                title="Evidence map",
-                body=_evidence_text(verified),
-                claims=verified,
-            ),
-        ],
-        metadata={"draft_type": "weekly"},
     )
 
 
@@ -338,45 +314,72 @@ def _deep_read_entries(
     for index, reading in enumerate(readings):
         source = deep_read_sources[index] if index < len(deep_read_sources) else None
         reading_claims = _claims_for_reading(reading, source, verified)
+        fallbacks = explanation_fallbacks(reading_claims)
+        reader_explanation, explanation_audit = public_explanation(
+            _reading_explanation(reading),
+            reading_claims,
+            fallbacks=fallbacks,
+        )
         entries.append(
             {
                 "title": str(getattr(reading, "title", "") or getattr(source, "title", "")),
                 "source": _source_entry(source, language=language, deep_read=True)
                 if source
                 else None,
-                "essence": str(getattr(reading, "essence", "")),
-                "reader_explanation": _reader_explanation_entry(reading),
-                "problem": _problem_entry(reading),
-                "solution": _solution_entry(reading),
-                "experiments": _experiments_entry(reading),
-                "related_work": _related_work_entry(reading),
-                "limitations": _limitations_entry(reading),
-                "critical_assessment": _critical_entry(reading),
-                "plain_language_example": str(
-                    getattr(reading, "plain_language_example", "")
+                "essence": fallbacks.get("core_thesis", ""),
+                "reader_explanation": reader_explanation,
+                "problem": {"core": fallbacks.get("problem_walkthrough", "")},
+                "solution": {"core": fallbacks.get("solution_walkthrough", "")},
+                "experiments": {
+                    "summary": fallbacks.get("experiment_interpretation", "")
+                },
+                "related_work": {
+                    "novelty": fallbacks.get("related_work_context", "")
+                },
+                "limitations": {
+                    "explicit_limitations": [
+                        fallbacks["limitations_discussion"]
+                    ]
+                    if fallbacks.get("limitations_discussion")
+                    else []
+                },
+                "critical_assessment": {
+                    "bottom_line": claim_section_text(
+                        reading_claims,
+                        "critical_assessment",
+                    )
+                },
+                "plain_language_example": reader_explanation.get(
+                    "plain_language_story", ""
                 ),
                 "figures": _figure_entries(source, figures_by_source_url),
                 "diagram": build_mechanism_diagram(reading_claims, language=language),
                 "claims": [_claim_entry(claim, language=language) for claim in reading_claims],
+                "explanation_audit": explanation_audit,
             }
         )
     return entries
 
 
-def _reader_explanation_entry(reading: Any) -> dict[str, str]:
-    value = getattr(reading, "reader_explanation", None)
+def _reading_explanation(reading: Any) -> ReaderExplanation:
+    explanation = getattr(reading, "reader_explanation", None)
+    return explanation if isinstance(explanation, ReaderExplanation) else ReaderExplanation()
+
+
+def _explanation_audit(entries: list[dict[str, Any]]) -> dict[str, int]:
+    keys = (
+        "paragraph_count",
+        "kept_count",
+        "dropped_count",
+        "fallback_section_count",
+    )
     return {
-        "opening_context": str(getattr(value, "opening_context", "")),
-        "core_thesis": str(getattr(value, "core_thesis", "")),
-        "problem_walkthrough": str(getattr(value, "problem_walkthrough", "")),
-        "solution_walkthrough": str(getattr(value, "solution_walkthrough", "")),
-        "experiment_interpretation": str(
-            getattr(value, "experiment_interpretation", "")
-        ),
-        "related_work_context": str(getattr(value, "related_work_context", "")),
-        "limitations_discussion": str(getattr(value, "limitations_discussion", "")),
-        "plain_language_story": str(getattr(value, "plain_language_story", "")),
-        "reader_takeaway": str(getattr(value, "reader_takeaway", "")),
+        key: sum(
+            int(entry.get("explanation_audit", {}).get(key, 0))
+            for entry in entries
+            if isinstance(entry.get("explanation_audit"), dict)
+        )
+        for key in keys
     }
 
 
@@ -421,55 +424,6 @@ def _claims_for_reading(
                 matches.append(claim)
                 break
     return matches
-
-
-def _problem_entry(reading: Any) -> dict[str, Any]:
-    value = getattr(reading, "problem_solution", None)
-    return {
-        "core": str(getattr(value, "problem", "")),
-        "why_it_matters": str(getattr(value, "why_it_matters", "")),
-        "hidden_assumptions": list(getattr(value, "hidden_assumptions", []) or []),
-    }
-
-
-def _solution_entry(reading: Any) -> dict[str, str]:
-    value = getattr(reading, "problem_solution", None)
-    return {
-        "core": str(getattr(value, "solution", "")),
-        "mechanism": str(getattr(value, "mechanism", "")),
-    }
-
-
-def _experiments_entry(reading: Any) -> dict[str, str]:
-    return {"summary": str(getattr(reading, "experiment_summary", ""))}
-
-
-def _related_work_entry(reading: Any) -> dict[str, Any]:
-    value = getattr(reading, "related_work", None)
-    return {
-        "novelty": str(getattr(value, "novelty", "")),
-        "prior_work": list(getattr(value, "prior_work", []) or []),
-        "repackaging_risk": str(getattr(value, "repackaging_risk", "")),
-    }
-
-
-def _limitations_entry(reading: Any) -> dict[str, Any]:
-    value = getattr(reading, "limitations", None)
-    return {
-        "explicit_limitations": list(getattr(value, "explicit_limitations", []) or []),
-        "inferred_weaknesses": list(getattr(value, "inferred_weaknesses", []) or []),
-        "future_work": list(getattr(value, "future_work", []) or []),
-    }
-
-
-def _critical_entry(reading: Any) -> dict[str, Any]:
-    value = getattr(reading, "critical_assessment", None)
-    return {
-        "bottom_line": str(getattr(value, "bottom_line", "")),
-        "overclaiming_risk": str(getattr(value, "overclaiming_risk", "")),
-        "weak_evaluations": list(getattr(value, "weak_evaluations", []) or []),
-        "missing_ablations": list(getattr(value, "missing_ablations", []) or []),
-    }
 
 
 def _claim_entry(claim: Claim, *, language: str) -> dict[str, Any]:

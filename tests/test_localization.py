@@ -11,6 +11,7 @@ from research_radar.analysis.paper_reading import (
     PaperReading,
     ProblemSolution,
     ReaderExplanation,
+    ReaderExplanationParagraph,
     RelatedWorkAssessment,
 )
 from research_radar.analysis.providers import Message, ModelResponse
@@ -123,15 +124,42 @@ def test_localization_changes_display_text_only() -> None:
               "essence": "论文说明 scoring target 会改变 benchmark 结论。",
               "plain_language_example": "同一条记忆用不同 credit target 评分会得到不同结果。",
               "reader_explanation": {
-                "opening_context": "这篇论文讨论 LOCOMO 和 LongMemEval 这类 benchmark。",
-                "core_thesis": "核心是 scoring target 会影响结论。",
-                "problem_walkthrough": "问题在于 Raw、Source、Canonical 会改变评价对象。",
-                "solution_walkthrough": "论文把这些 target 分开比较。",
-                "experiment_interpretation": "70.4% 这样的数字需要放在对应 target 下理解。",
-                "related_work_context": "BM25 是一个保留英文的 baseline。",
-                "limitations_discussion": "局限是没有 deployment evaluation。",
-                "plain_language_story": "可以把它理解为同一答案用不同 credit target 打分。",
-                "reader_takeaway": "读者应该先问 benchmark 到底在奖励什么。"
+                "opening_context": [{
+                  "text": "这篇论文讨论 LOCOMO 和 LongMemEval 这类 benchmark。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "core_thesis": [{
+                  "text": "核心是 scoring target 会影响结论。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "problem_walkthrough": [{
+                  "text": "问题在于 Raw、Source、Canonical 会改变评价对象。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "solution_walkthrough": [{
+                  "text": "论文把这些 target 分开比较。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "experiment_interpretation": [{
+                  "text": "70.4% 这样的数字需要放在对应 target 下理解。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "related_work_context": [{
+                  "text": "BM25 是一个保留英文的 baseline。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "limitations_discussion": [{
+                  "text": "局限是没有 deployment evaluation。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "plain_language_story": [{
+                  "text": "可以把它理解为同一答案用不同 credit target 打分。",
+                  "supporting_claim_ids": ["c1"]
+                }],
+                "reader_takeaway": [{
+                  "text": "读者应该先问 benchmark 到底在奖励什么。",
+                  "supporting_claim_ids": ["c1"]
+                }]
               }
             }
           ],
@@ -175,11 +203,12 @@ def test_localization_changes_display_text_only() -> None:
     )
 
     assert result.readings[0].problem_solution.problem == "论文评估 LLM agent memory。"
-    assert result.readings[0].reader_explanation.core_thesis == (
+    assert result.readings[0].reader_explanation.core_thesis[0].text == (
         "核心是 scoring target 会影响结论。"
     )
-    assert "LOCOMO" in result.readings[0].reader_explanation.opening_context
-    assert "70.4%" in result.readings[0].reader_explanation.experiment_interpretation
+    assert "LOCOMO" in result.readings[0].reader_explanation.opening_context[0].text
+    assert "70.4%" in result.readings[0].reader_explanation.experiment_interpretation[0].text
+    assert result.readings[0].reader_explanation.core_thesis[0].supporting_claim_ids == ["c1"]
     assert result.claims[0].text == "Problem: 论文评估 LLM agent memory。"
     assert result.claims[0].status == claim.status
     assert result.claims[0].evidence == claim.evidence
@@ -220,9 +249,7 @@ def test_localization_failed_reading_chunk_is_marked_not_silent_fallback() -> No
     assert result.status == "failed"
     assert localization_body_failed(result) is True
     assert localization_failed(result) is True
-    assert result.readings[0].problem_solution.problem == (
-        "The paper evaluates LLM agent memory."
-    )
+    assert result.readings[0].problem_solution.problem == ("The paper evaluates LLM agent memory.")
     assert result.attempts[0].scope == "reading"
     assert result.attempts[0].status == "failed"
     assert result.attempts[0].response_excerpt == "not json"
@@ -274,6 +301,77 @@ def test_localization_failed_display_chunk_is_marked_failed() -> None:
     assert result.attempts[1].status == "failed"
 
 
+def test_localization_drops_explanation_paragraph_when_claim_ids_change() -> None:
+    provider = CapturingProvider(
+        """
+        {
+          "readings": [{
+            "index": 0,
+            "reader_explanation": {
+              "opening_context": [{
+                "text": "背景译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "core_thesis": [{
+                "text": "本段篡改了 claim id。",
+                "supporting_claim_ids": ["different-id"]
+              }],
+              "problem_walkthrough": [{
+                "text": "问题译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "solution_walkthrough": [{
+                "text": "方法译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "experiment_interpretation": [{
+                "text": "实验译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "related_work_context": [{
+                "text": "相关工作译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "limitations_discussion": [{
+                "text": "局限译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "plain_language_story": [{
+                "text": "通俗解释译文。",
+                "supporting_claim_ids": ["c1"]
+              }],
+              "reader_takeaway": [{
+                "text": "读者结论译文。",
+                "supporting_claim_ids": ["c1"]
+              }]
+            }
+          }],
+          "claims": [],
+          "sources": [],
+          "figures": []
+        }
+        """
+    )
+
+    result = localize_report_content(
+        readings=[_reading()],
+        claims=[],
+        sources=[],
+        provider=provider,
+        model="fake-localizer",
+        language="zh",
+    )
+
+    assert result.readings[0].reader_explanation.core_thesis == []
+    assert result.readings[0].reader_explanation.opening_context[0].text == "背景译文。"
+    finding = next(
+        finding
+        for finding in result.findings
+        if finding.metadata.get("kind") == "report_localization_claim_ids_changed"
+    )
+    assert finding.metadata["dropped_paragraph_count"] == 1
+
+
 def _source() -> SourceCandidate:
     return SourceCandidate(
         title="LOCOMO Memory Paper",
@@ -295,6 +393,7 @@ def _claim() -> Claim:
                 quote="The paper evaluates LLM agent memory on LOCOMO.",
             )
         ],
+        metadata={"paper_reading": {"claim_id": "c1"}},
     )
 
 
@@ -337,14 +436,28 @@ def _reading() -> PaperReading:
         plain_language_example="Different credit targets can change the score.",
         experiment_summary="LOCOMO results remain 70.4%.",
         reader_explanation=ReaderExplanation(
-            opening_context="This paper explains LOCOMO and LongMemEval evaluation.",
-            core_thesis="The central point is target noninvariance.",
-            problem_walkthrough="Raw, Source, and Canonical targets reward different things.",
-            solution_walkthrough="The paper compares those targets explicitly.",
-            experiment_interpretation="70.4% only makes sense under its target definition.",
-            related_work_context="BM25 is treated as a baseline.",
-            limitations_discussion="The analysis does not include deployment evaluation.",
-            plain_language_story="The same answer can score differently under different targets.",
-            reader_takeaway="Ask what the benchmark is rewarding before trusting the score.",
+            opening_context=[_paragraph("This paper explains LOCOMO and LongMemEval evaluation.")],
+            core_thesis=[_paragraph("The central point is target noninvariance.")],
+            problem_walkthrough=[
+                _paragraph("Raw, Source, and Canonical targets reward different things.")
+            ],
+            solution_walkthrough=[_paragraph("The paper compares those targets explicitly.")],
+            experiment_interpretation=[
+                _paragraph("70.4% only makes sense under its target definition.")
+            ],
+            related_work_context=[_paragraph("BM25 is treated as a baseline.")],
+            limitations_discussion=[
+                _paragraph("The analysis does not include deployment evaluation.")
+            ],
+            plain_language_story=[
+                _paragraph("The same answer can score differently under different targets.")
+            ],
+            reader_takeaway=[
+                _paragraph("Ask what the benchmark is rewarding before trusting the score.")
+            ],
         ),
     )
+
+
+def _paragraph(text: str) -> ReaderExplanationParagraph:
+    return ReaderExplanationParagraph(text=text, supporting_claim_ids=["c1"])

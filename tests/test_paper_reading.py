@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from research_radar.analysis.paper_reading import (
     AreaContext,
     CriticalAssessment,
@@ -519,18 +523,37 @@ def test_parse_reader_explanation_without_creating_claims() -> None:
         "essence": "Memory benchmark fixture.",
         "plain_language_example": "Memory benchmark fixture.",
         "reader_explanation": {
-          "opening_context": "This paragraph explains the benchmark setting.",
-          "core_thesis": "This paragraph explains the paper's core thesis.",
-          "problem_walkthrough": "This paragraph walks through the problem.",
-          "solution_walkthrough": "This paragraph walks through the mechanism.",
-          "experiment_interpretation": "This paragraph explains how to read results.",
-          "related_work_context": "This paragraph compares named prior work.",
-          "limitations_discussion": "This paragraph explains caveats.",
-          "plain_language_story": "This paragraph gives a simple grounded story.",
-          "reader_takeaway": "This paragraph states the reader takeaway."
+          "opening_context": [{
+            "text": "This paragraph explains the benchmark setting.",
+            "supporting_claim_ids": ["c1"]
+          }],
+          "core_thesis": [{
+            "text": "This paragraph explains the paper's core thesis.",
+            "supporting_claim_ids": ["c1"]
+          }],
+          "problem_walkthrough": [{
+            "text": "This paragraph walks through the problem.",
+            "supporting_claim_ids": ["c1"]
+          }],
+          "solution_walkthrough": [{
+            "text": "This paragraph walks through the mechanism.",
+            "supporting_claim_ids": ["c1"]
+          }],
+          "experiment_interpretation": [],
+          "related_work_context": [],
+          "limitations_discussion": [],
+          "plain_language_story": [{
+            "text": "This paragraph gives a simple grounded story.",
+            "supporting_claim_ids": ["c1"]
+          }],
+          "reader_takeaway": [{
+            "text": "This paragraph states the reader takeaway.",
+            "supporting_claim_ids": ["c1"]
+          }]
         },
         "claim_units": [
           {
+            "claim_id": "c1",
             "section": "problem",
             "claim_kind": "fact",
             "text": "Memory benchmark fixture.",
@@ -545,13 +568,14 @@ def test_parse_reader_explanation_without_creating_claims() -> None:
     reading = parse_paper_reading(raw, artifact)
     claims = reading_to_claims(reading)
 
-    assert reading.reader_explanation.solution_walkthrough.startswith(
+    assert reading.reader_explanation.solution_walkthrough[0].text.startswith(
         "This paragraph walks through"
     )
     matching_claims = [
         claim for claim in claims if claim.text == "Problem: Memory benchmark fixture."
     ]
     assert len(matching_claims) == 1
+    assert matching_claims[0].metadata["paper_reading"]["claim_id"] == "c1"
     assert not any("reader takeaway" in claim.text.lower() for claim in claims)
 
 
@@ -559,6 +583,28 @@ def test_legacy_reader_json_uses_empty_reader_explanation() -> None:
     reading = parse_paper_reading(_claim_units_fixture(["Memory benchmark fixture."]), _artifact())
 
     assert reading.reader_explanation == ReaderExplanation()
+
+
+def test_whitespace_claim_id_uses_legacy_fallback() -> None:
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))
+    payload["deep_readings"]["claim_units"][0]["claim_id"] = "   "
+
+    reading = parse_paper_reading(json.dumps(payload), _artifact())
+
+    assert reading.claim_units[0].claim_id == "legacy-c1"
+
+
+def test_reader_explanation_rejects_non_list_supporting_claim_ids() -> None:
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))
+    payload["deep_readings"]["reader_explanation"] = {
+        "core_thesis": {
+            "text": "This paragraph should not parse.",
+            "supporting_claim_ids": "c1",
+        }
+    }
+
+    with pytest.raises(AnalysisError, match="supporting_claim_ids must be a list"):
+        parse_paper_reading(json.dumps(payload), _artifact())
 
 
 def test_claim_units_convert_to_atomic_evidence_backed_claims() -> None:
@@ -636,9 +682,7 @@ def test_claim_units_convert_to_atomic_evidence_backed_claims() -> None:
     assert claims[0].status == ClaimStatus.SUPPORTED
     assert claims[1].status == ClaimStatus.UNSUPPORTED
     assert claims[2].status == ClaimStatus.NEEDS_REVIEW
-    assert any(
-        finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings
-    )
+    assert any(finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings)
 
 
 def test_top_level_claim_units_are_preserved_for_model_compatibility() -> None:
@@ -1182,9 +1226,7 @@ def test_validate_paper_reading_downgrades_unfound_evidence_quote() -> None:
     claims, findings = validate_paper_reading(reading, artifact)
 
     assert all(claim.status == ClaimStatus.UNSUPPORTED for claim in claims)
-    assert any(
-        finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings
-    )
+    assert any(finding.metadata.get("kind") == "evidence_anchor_unmatched" for finding in findings)
 
 
 def test_validate_paper_reading_handles_pdf_extraction_noise() -> None:

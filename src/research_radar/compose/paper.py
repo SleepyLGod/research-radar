@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from research_radar.analysis.explanation_policy import (
+    claim_section_text,
+    explanation_fallbacks,
+    public_explanation,
+)
 from research_radar.analysis.paper_reading import PaperReading
 from research_radar.evidence.policy import publishable_claims
 from research_radar.models import Claim
@@ -16,57 +21,57 @@ def render_paper_brief(
     """Render a conservative, evidence-backed paper brief."""
 
     verified = publishable_claims(claims)
+    explanation, _ = public_explanation(
+        reading.reader_explanation,
+        verified,
+        fallbacks=explanation_fallbacks(verified),
+    )
     labels = _paper_labels(language)
     lines = [
         f"# {labels['title']}: {reading.title}",
         "",
         f"## {labels['essence']}",
-        _explanation_value(reading, "core_thesis") or _claim_body(verified, "Essence:")
+        explanation["core_thesis"] or _claim_body(verified, "Essence:")
         or "No verified essence claim.",
         "",
         f"## {labels['background']}",
-        _explanation_value(reading, "opening_context") or labels["no_background"],
+        explanation["opening_context"] or labels["no_background"],
         "",
         f"## {labels['problem']}",
-        _explanation_value(reading, "problem_walkthrough")
+        explanation["problem_walkthrough"]
         or _claim_body(verified, "Problem:")
         or labels["no_problem"],
         "",
         f"## {labels['solution']}",
-        _explanation_value(reading, "solution_walkthrough")
+        explanation["solution_walkthrough"]
         or _claim_body(verified, "Solution:")
         or labels["no_solution"],
         "",
         f"## {labels['experiment']}",
-        _explanation_value(reading, "experiment_interpretation")
+        explanation["experiment_interpretation"]
         or _claim_body(verified, "Experiment:")
         or "No verified experiment claim.",
         "",
         f"## {labels['plain_example']}",
-        _explanation_value(reading, "plain_language_story") or labels["no_example"],
+        explanation["plain_language_story"] or labels["no_example"],
         "",
         f"## {labels['related_work']}",
-        _explanation_value(reading, "related_work_context")
+        explanation["related_work_context"]
         or _claim_body(verified, "Related work:")
         or labels["no_related_work"],
         "",
         f"## {labels['limitations']}",
-        _explanation_value(reading, "limitations_discussion")
+        explanation["limitations_discussion"]
         or _claim_body(verified, "Limitations:")
         or labels["no_limitations"],
         "",
         f"## {labels['critique']}",
-        _claim_body(verified, "Critical assessment:") or labels["no_critique"],
+        claim_section_text(verified, "critical_assessment") or labels["no_critique"],
         "",
         f"## {labels['evidence']}",
         _evidence_trail(verified, language=language),
     ]
     return "\n".join(lines).strip() + "\n"
-
-
-def _explanation_value(reading: PaperReading, key: str) -> str:
-    explanation = getattr(reading, "reader_explanation", None)
-    return str(getattr(explanation, key, "")).strip()
 
 
 def _claim_body(claims: list[Claim], prefix: str) -> str:

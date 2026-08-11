@@ -12,6 +12,7 @@ from research_radar.analysis.paper_reading import (
     PaperReading,
     ProblemSolution,
     ReaderExplanation,
+    ReaderExplanationParagraph,
     RelatedWorkAssessment,
 )
 from research_radar.analysis.providers import LLMProvider, Message
@@ -148,10 +149,26 @@ def localize_report_content(
         if payload is None:
             findings.append(_localization_failure_finding(attempt))
             continue
-        localized_readings[index] = _localized_reading(
+        localized_reading, changed_id_count = _localized_reading(
             reading,
             _entries_by_index(payload.get("readings")).get(0, {}),
         )
+        localized_readings[index] = localized_reading
+        if changed_id_count:
+            findings.append(
+                ReviewFinding(
+                    severity="warning",
+                    message=(
+                        "Localized explanation paragraphs were dropped because their "
+                        "supporting claim ids were missing or changed."
+                    ),
+                    metadata={
+                        "kind": "report_localization_claim_ids_changed",
+                        "reading_index": index,
+                        "dropped_paragraph_count": changed_id_count,
+                    },
+                )
+            )
 
     if claims or sources or figures:
         payload, attempt = _localization_payload(
@@ -215,6 +232,8 @@ Rules:
   unchanged.
 - Keep claim prefixes exactly as provided, for example "Problem:" and "Solution:".
   Translate only the body after the prefix.
+- In reader_explanation, translate only each paragraph's text. Return every
+  supporting_claim_ids array unchanged and in the same paragraph position.
 - For figures, translate caption into localized_caption and translate explanation into
   Chinese display prose while preserving figure labels, model names, metrics, formulas,
   and numbers. Keep the original caption unchanged in the input; do not put extra
@@ -242,15 +261,15 @@ Return JSON only with this shape:
       "essence": "...",
       "plain_language_example": "...",
       "reader_explanation": {{
-        "opening_context": "...",
-        "core_thesis": "...",
-        "problem_walkthrough": "...",
-        "solution_walkthrough": "...",
-        "experiment_interpretation": "...",
-        "related_work_context": "...",
-        "limitations_discussion": "...",
-        "plain_language_story": "...",
-        "reader_takeaway": "..."
+        "opening_context": [{{"text": "...", "supporting_claim_ids": ["c1"]}}],
+        "core_thesis": [{{"text": "...", "supporting_claim_ids": ["c1"]}}],
+        "problem_walkthrough": [{{"text": "...", "supporting_claim_ids": ["c1"]}}],
+        "solution_walkthrough": [{{"text": "...", "supporting_claim_ids": ["c2"]}}],
+        "experiment_interpretation": [{{"text": "...", "supporting_claim_ids": ["c3"]}}],
+        "related_work_context": [{{"text": "...", "supporting_claim_ids": ["c4"]}}],
+        "limitations_discussion": [{{"text": "...", "supporting_claim_ids": ["c5"]}}],
+        "plain_language_story": [{{"text": "...", "supporting_claim_ids": ["c2"]}}],
+        "reader_takeaway": [{{"text": "...", "supporting_claim_ids": ["c1"]}}]
       }}
     }}
   ],
@@ -401,17 +420,26 @@ def _reading_payload(index: int, reading: PaperReading) -> dict[str, object]:
     }
 
 
-def _reader_explanation_payload(explanation: ReaderExplanation) -> dict[str, str]:
+def _reader_explanation_payload(explanation: ReaderExplanation) -> dict[str, object]:
     return {
-        "opening_context": explanation.opening_context,
-        "core_thesis": explanation.core_thesis,
-        "problem_walkthrough": explanation.problem_walkthrough,
-        "solution_walkthrough": explanation.solution_walkthrough,
-        "experiment_interpretation": explanation.experiment_interpretation,
-        "related_work_context": explanation.related_work_context,
-        "limitations_discussion": explanation.limitations_discussion,
-        "plain_language_story": explanation.plain_language_story,
-        "reader_takeaway": explanation.reader_takeaway,
+        key: [
+            {
+                "text": paragraph.text,
+                "supporting_claim_ids": paragraph.supporting_claim_ids,
+            }
+            for paragraph in getattr(explanation, key)
+        ]
+        for key in (
+            "opening_context",
+            "core_thesis",
+            "problem_walkthrough",
+            "solution_walkthrough",
+            "experiment_interpretation",
+            "related_work_context",
+            "limitations_discussion",
+            "plain_language_story",
+            "reader_takeaway",
+        )
     }
 
 
@@ -444,12 +472,15 @@ def _figure_payloads(
 def _localized_readings(readings: list[PaperReading], raw: object) -> list[PaperReading]:
     entries = _entries_by_index(raw)
     return [
-        _localized_reading(reading, entries.get(index, {}))
+        _localized_reading(reading, entries.get(index, {}))[0]
         for index, reading in enumerate(readings)
     ]
 
 
-def _localized_reading(reading: PaperReading, data: dict[str, object]) -> PaperReading:
+def _localized_reading(
+    reading: PaperReading,
+    data: dict[str, object],
+) -> tuple[PaperReading, int]:
     area = _mapping(data.get("area_context"))
     problem = _mapping(data.get("problem_solution"))
     related = _mapping(data.get("related_work"))
@@ -457,7 +488,11 @@ def _localized_reading(reading: PaperReading, data: dict[str, object]) -> PaperR
     limitations = _mapping(data.get("limitations"))
     critical = _mapping(data.get("critical_assessment"))
     reader_explanation = _mapping(data.get("reader_explanation"))
-    return replace(
+    localized_explanation, changed_id_count = _localized_reader_explanation(
+        reading.reader_explanation,
+        reader_explanation,
+    )
+    localized = replace(
         reading,
         area_context=AreaContext(
             background=_string(area, "background", reading.area_context.background),
@@ -551,54 +586,55 @@ def _localized_reading(reading: PaperReading, data: dict[str, object]) -> PaperR
             "summary",
             reading.experiment_summary,
         ),
-        reader_explanation=ReaderExplanation(
-            opening_context=_string(
-                reader_explanation,
-                "opening_context",
-                reading.reader_explanation.opening_context,
-            ),
-            core_thesis=_string(
-                reader_explanation,
-                "core_thesis",
-                reading.reader_explanation.core_thesis,
-            ),
-            problem_walkthrough=_string(
-                reader_explanation,
-                "problem_walkthrough",
-                reading.reader_explanation.problem_walkthrough,
-            ),
-            solution_walkthrough=_string(
-                reader_explanation,
-                "solution_walkthrough",
-                reading.reader_explanation.solution_walkthrough,
-            ),
-            experiment_interpretation=_string(
-                reader_explanation,
-                "experiment_interpretation",
-                reading.reader_explanation.experiment_interpretation,
-            ),
-            related_work_context=_string(
-                reader_explanation,
-                "related_work_context",
-                reading.reader_explanation.related_work_context,
-            ),
-            limitations_discussion=_string(
-                reader_explanation,
-                "limitations_discussion",
-                reading.reader_explanation.limitations_discussion,
-            ),
-            plain_language_story=_string(
-                reader_explanation,
-                "plain_language_story",
-                reading.reader_explanation.plain_language_story,
-            ),
-            reader_takeaway=_string(
-                reader_explanation,
-                "reader_takeaway",
-                reading.reader_explanation.reader_takeaway,
-            ),
-        ),
+        reader_explanation=localized_explanation,
     )
+    return localized, changed_id_count
+
+
+def _localized_reader_explanation(
+    original: ReaderExplanation,
+    raw: dict[str, object],
+) -> tuple[ReaderExplanation, int]:
+    values: dict[str, list[ReaderExplanationParagraph]] = {}
+    dropped_count = 0
+    for key in (
+        "opening_context",
+        "core_thesis",
+        "problem_walkthrough",
+        "solution_walkthrough",
+        "experiment_interpretation",
+        "related_work_context",
+        "limitations_discussion",
+        "plain_language_story",
+        "reader_takeaway",
+    ):
+        original_paragraphs = getattr(original, key)
+        localized_items = raw.get(key)
+        localized_items = localized_items if isinstance(localized_items, list) else []
+        kept: list[ReaderExplanationParagraph] = []
+        for index, paragraph in enumerate(original_paragraphs):
+            item = localized_items[index] if index < len(localized_items) else None
+            if not isinstance(item, dict):
+                dropped_count += 1
+                continue
+            text = str(item.get("text") or "").strip()
+            claim_ids = item.get("supporting_claim_ids")
+            normalized_ids = (
+                [str(claim_id).strip() for claim_id in claim_ids]
+                if isinstance(claim_ids, list)
+                else []
+            )
+            if not text or normalized_ids != paragraph.supporting_claim_ids:
+                dropped_count += 1
+                continue
+            kept.append(
+                ReaderExplanationParagraph(
+                    text=text,
+                    supporting_claim_ids=list(paragraph.supporting_claim_ids),
+                )
+            )
+        values[key] = kept
+    return ReaderExplanation(**values), dropped_count
 
 
 def _localized_claims(claims: list[Claim], raw: object) -> list[Claim]:

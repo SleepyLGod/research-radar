@@ -88,22 +88,31 @@ class ClaimUnit:
     claim_kind: str
     text: str
     evidence: list[EvidenceAnchor]
+    claim_id: str = ""
     publishable_default: bool = True
 
 
 @dataclass(frozen=True)
-class ReaderExplanation:
-    """Reader-facing explanation that must stay within verified paper evidence."""
+class ReaderExplanationParagraph:
+    """One reader-facing paragraph bound to atomic claim ids."""
 
-    opening_context: str = ""
-    core_thesis: str = ""
-    problem_walkthrough: str = ""
-    solution_walkthrough: str = ""
-    experiment_interpretation: str = ""
-    related_work_context: str = ""
-    limitations_discussion: str = ""
-    plain_language_story: str = ""
-    reader_takeaway: str = ""
+    text: str
+    supporting_claim_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ReaderExplanation:
+    """Reader-facing explanation grouped into evidence-bound paragraphs."""
+
+    opening_context: list[ReaderExplanationParagraph] = field(default_factory=list)
+    core_thesis: list[ReaderExplanationParagraph] = field(default_factory=list)
+    problem_walkthrough: list[ReaderExplanationParagraph] = field(default_factory=list)
+    solution_walkthrough: list[ReaderExplanationParagraph] = field(default_factory=list)
+    experiment_interpretation: list[ReaderExplanationParagraph] = field(default_factory=list)
+    related_work_context: list[ReaderExplanationParagraph] = field(default_factory=list)
+    limitations_discussion: list[ReaderExplanationParagraph] = field(default_factory=list)
+    plain_language_story: list[ReaderExplanationParagraph] = field(default_factory=list)
+    reader_takeaway: list[ReaderExplanationParagraph] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -201,9 +210,10 @@ Return structured JSON with these fields:
 
 Rules:
 - Separate facts from interpretation and speculation.
-- reader_explanation is the reader-facing explanation layer. Write it as natural
-  research prose, not bullet fragments: each field should usually be 1-3 concise
-  paragraphs that walk a technical reader from motivation to mechanism to evidence.
+- Give every claim_unit a unique short claim_id such as c1, c2, or c3.
+- reader_explanation is the reader-facing explanation layer. Each field must be a JSON
+  list of 1-3 paragraph objects with text and supporting_claim_ids. Keep each paragraph
+  on one topic and cite every claim_unit needed for its factual content.
 - reader_explanation must not introduce any new facts, URLs, rankings, critique, or
   speculation beyond the anchored section fields and claim_units. If a point cannot
   be grounded in the supplied packet, omit it or mark it unknown in unsupported_or_rejected_claims.
@@ -273,11 +283,14 @@ Rules:
 Evidence object shape:
 {{"quote": "source-backed anchor", "location": "README section, page, or extracted text"}}
 Claim unit shape:
-{{"section": "problem|solution|experiment|related_work|limitations|critical_assessment|essence",
+{{"claim_id": "c1",
+  "section": "problem|solution|experiment|related_work|limitations|critical_assessment|essence",
   "claim_kind": "fact|interpretation|novelty|limitation|critique|essence",
   "text": "one atomic assertion",
   "evidence": [{{"quote": "exact substring", "location": "section or page"}}],
   "publishable_default": true}}
+Reader explanation paragraph shape:
+{{"text": "one natural paragraph", "supporting_claim_ids": ["c1", "c2"]}}
 """
 
 
@@ -397,6 +410,10 @@ def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
         artifact,
         required=False,
     )
+    claim_units = _parse_claim_units(
+        reading_data.get("claim_units") or payload.get("claim_units", []),
+        artifact,
+    )
     reading = PaperReading(
         title=str(reading_data.get("title") or artifact.source.title),
         area_context=_parse_area_context(reading_data.get("area_context", {}), artifact),
@@ -435,10 +452,7 @@ def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
             for item in reading_data.get("unsupported_or_rejected_claims", [])
             if str(item).strip()
         ],
-        claim_units=_parse_claim_units(
-            reading_data.get("claim_units") or payload.get("claim_units", []),
-            artifact,
-        ),
+        claim_units=claim_units,
         reader_explanation=_parse_reader_explanation(
             reading_data.get("reader_explanation", {}),
         ),
@@ -645,7 +659,11 @@ def _reader_explanation_lines(
     ]
     lines: list[str] = []
     for key, label in sections:
-        text = str(getattr(explanation, key, "")).strip()
+        text = "\n\n".join(
+            paragraph.text
+            for paragraph in getattr(explanation, key, [])
+            if paragraph.text.strip()
+        )
         if text:
             lines.extend([f"### {label}", text, ""])
     return lines
@@ -827,6 +845,7 @@ def _claim_units_to_claims(units: list[ClaimUnit]) -> list[Claim]:
                 metadata={
                     "paper_reading": {
                         "source": "claim_units",
+                        "claim_id": unit.claim_id,
                         "section": unit.section,
                         "claim_kind": unit.claim_kind,
                         "publishable_default": unit.publishable_default,
@@ -1392,18 +1411,47 @@ def _parse_reader_explanation(value: object) -> ReaderExplanation:
     )
 
 
-def _optional_explanation(data: dict[object, object], key: str) -> str:
+def _optional_explanation(
+    data: dict[object, object],
+    key: str,
+) -> list[ReaderExplanationParagraph]:
     value = data.get(key)
-    if isinstance(value, list):
-        return "\n\n".join(str(item).strip() for item in value if str(item).strip())
-    return str(value or "").strip()
+    items = value if isinstance(value, list) else [value]
+    paragraphs: list[ReaderExplanationParagraph] = []
+    for item in items:
+        if isinstance(item, dict):
+            text = str(item.get("text") or "").strip()
+            raw_supporting_claim_ids = item.get("supporting_claim_ids", [])
+            if raw_supporting_claim_ids is None:
+                raw_supporting_claim_ids = []
+            if not isinstance(raw_supporting_claim_ids, list):
+                raise AnalysisError(
+                    "Reader explanation paragraph supporting_claim_ids must be a list."
+                )
+            supporting_claim_ids = [
+                str(claim_id).strip()
+                for claim_id in raw_supporting_claim_ids
+                if str(claim_id).strip()
+            ]
+        else:
+            text = str(item or "").strip()
+            supporting_claim_ids = []
+        if text:
+            paragraphs.append(
+                ReaderExplanationParagraph(
+                    text=text,
+                    supporting_claim_ids=supporting_claim_ids,
+                )
+            )
+    return paragraphs
 
 
 def _parse_claim_units(value: object, artifact: Artifact) -> list[ClaimUnit]:
     if not isinstance(value, list):
         return []
     units: list[ClaimUnit] = []
-    for item in value:
+    seen_claim_ids: set[str] = set()
+    for index, item in enumerate(value):
         if not isinstance(item, dict):
             continue
         section = str(item.get("section") or "").strip()
@@ -1411,6 +1459,12 @@ def _parse_claim_units(value: object, artifact: Artifact) -> list[ClaimUnit]:
         text = str(item.get("text") or item.get("claim") or "").strip()
         if not section or not claim_kind or not text:
             continue
+        claim_id = str(item.get("claim_id") or "").strip()
+        if not claim_id:
+            claim_id = f"legacy-c{index + 1}"
+        if claim_id in seen_claim_ids:
+            raise AnalysisError(f"Paper reading contains duplicate claim_id: {claim_id}")
+        seen_claim_ids.add(claim_id)
         evidence = _parse_evidence(item.get("evidence", []), artifact, required=False)
         publishable_default = item.get("publishable_default", True)
         units.append(
@@ -1419,6 +1473,7 @@ def _parse_claim_units(value: object, artifact: Artifact) -> list[ClaimUnit]:
                 claim_kind=claim_kind,
                 text=text,
                 evidence=evidence,
+                claim_id=claim_id,
                 publishable_default=_bool_value(publishable_default),
             )
         )

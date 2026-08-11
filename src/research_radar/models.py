@@ -178,6 +178,8 @@ class RunManifest:
     run_id: str
     topic_id: str
     mode: str
+    report_date: str = ""
+    attempt_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
     source_count: int = 0
     claim_count: int = 0

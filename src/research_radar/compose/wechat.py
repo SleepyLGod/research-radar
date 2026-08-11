@@ -16,7 +16,7 @@ from research_radar.compose.display_text import (
 from research_radar.compose.display_text import (
     format_display_text as _format_display_text,
 )
-from research_radar.compose.draft import build_weekly_draft
+from research_radar.compose.draft import build_daily_draft
 from research_radar.compose.source_display import source_descriptor
 from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, ArticleSection, Claim
@@ -112,7 +112,7 @@ def render_wechat_html(
 def compose_wechat_html(topic_id: str, claims: list[Claim]) -> str:
     """Compose a WeChat-compatible article body."""
 
-    return render_wechat_html(build_weekly_draft(topic_id, claims))
+    return render_wechat_html(build_daily_draft(topic_id, [], claims))
 
 
 def render_wechat_publish_html(

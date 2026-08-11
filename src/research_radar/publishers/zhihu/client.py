@@ -15,4 +15,6 @@ class ZhihuPublisher:
     def publish_draft(self, draft: ArticleDraft) -> None:
         """Reject publishing until the Zhihu integration is explicitly designed."""
 
-        raise PublishError("Zhihu publishing is not implemented in the v0.0.0 foundation.")
+        raise PublishError(
+            "Automatic Zhihu publishing is not supported; use 'compose zhihu' for manual export."
+        )

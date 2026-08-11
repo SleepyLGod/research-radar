@@ -29,7 +29,7 @@ def build_runtime_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
         if stage not in SLOW_STAGE_THRESHOLDS:
             continue
         stage_events.append(_stage_runtime_row(event))
-    return {
+    summary = {
         "total_elapsed_seconds": _total_elapsed_seconds(events),
         "slow_stage_count": sum(1 for event in stage_events if event.get("slow") is True),
         "cache": {
@@ -38,6 +38,25 @@ def build_runtime_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "stages": stage_events,
     }
+    explanation_event = next(
+        (
+            event
+            for event in reversed(events)
+            if event.get("stage") == "explanation_policy"
+        ),
+        None,
+    )
+    if explanation_event is not None:
+        summary["explanation_policy"] = {
+            key: int(explanation_event.get(key, 0) or 0)
+            for key in (
+                "paragraph_count",
+                "kept_count",
+                "dropped_count",
+                "fallback_section_count",
+            )
+        }
+    return summary
 
 
 def _stage_runtime_row(event: dict[str, Any]) -> dict[str, Any]:

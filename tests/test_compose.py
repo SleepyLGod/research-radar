@@ -7,9 +7,10 @@ from research_radar.analysis.paper_reading import (
     PaperReading,
     ProblemSolution,
     ReaderExplanation,
+    ReaderExplanationParagraph,
     RelatedWorkAssessment,
 )
-from research_radar.compose.draft import build_daily_draft, build_weekly_draft
+from research_radar.compose.draft import build_daily_draft
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.markdown import render_markdown
 from research_radar.compose.source_groups import group_source_entries
@@ -101,7 +102,7 @@ def test_markdown_and_wechat_render_same_article_draft() -> None:
         status=ClaimStatus.SUPPORTED,
         evidence=[EvidenceAnchor(source_url="https://example.com", quote="Grounded")],
     )
-    draft = build_weekly_draft("agent-memory", [claim])
+    draft = build_daily_draft("agent-memory", [], [claim])
 
     markdown = render_markdown(draft)
     html = render_wechat_html(draft)
@@ -198,9 +199,7 @@ def test_daily_markdown_groups_sources_by_display_role() -> None:
         metadata={"source_role": {"role": "blog_or_web"}},
     )
 
-    markdown = render_markdown(
-        build_daily_draft("agent-memory", [web, repo, benchmark, paper], [])
-    )
+    markdown = render_markdown(build_daily_draft("agent-memory", [web, repo, benchmark, paper], []))
 
     assert "### Research Papers" in markdown
     assert "### Benchmarks" in markdown
@@ -228,14 +227,10 @@ def test_daily_markdown_keeps_survey_papers_in_research_papers() -> None:
         metadata={"source_role": {"role": "survey_or_list"}},
     )
 
-    markdown = render_markdown(
-        build_daily_draft("agent-memory", [web_survey, survey_paper], [])
-    )
+    markdown = render_markdown(build_daily_draft("agent-memory", [web_survey, survey_paper], []))
 
     assert markdown.index("### Research Papers") < markdown.index("Agent Memory Survey")
-    assert markdown.index("### Web / Blog Context") < markdown.index(
-        "Agent Memory Resources"
-    )
+    assert markdown.index("### Web / Blog Context") < markdown.index("Agent Memory Resources")
 
 
 def test_wechat_html_groups_daily_sources() -> None:
@@ -319,9 +314,7 @@ def test_daily_draft_strips_url_like_text_from_source_gist() -> None:
         url="https://arxiv.org/abs/2605.00001",
         source_type=SourceType.PAPER,
         source_name="arxiv",
-        metadata={
-            "source_gist": {"text": "Read fabricated detail at https://evil.example/path"}
-        },
+        metadata={"source_gist": {"text": "Read fabricated detail at https://evil.example/path"}},
     )
 
     markdown = render_markdown(build_daily_draft("agent-memory", [source], []))
@@ -391,10 +384,7 @@ def test_long_form_wechat_renders_toc_deep_reads_and_collapsed_references() -> N
     assert "arXiv:2605.00001" in html
     assert "Problem and Motivation" in html
     assert "Solution Mechanism" in html
-    assert "Experiments" in html
-    assert "Related Work" in html
-    assert "Explicit limitations" in html
-    assert "Plain-language Example" in html
+    assert "Experiments" not in html
     assert "<summary>Key Evidence</summary>" in html
     assert "rr-diagram" in html
     assert "Supported paper claim" in html
@@ -446,7 +436,7 @@ def test_wechat_visual_polish_does_not_change_markdown_or_zhihu_public_reading()
     assert 'class="rr-summary"' in html
     assert 'class="rr-deep"' in html
     assert "Supported paper claim" in markdown
-    assert "The paper turns agent memory into a managed retrieval layer." in zhihu
+    assert "Supported paper claim" in zhihu
     assert "Exact source quote." not in zhihu
     assert "rr-summary" not in markdown
     assert "rr-summary" not in zhihu
@@ -480,19 +470,33 @@ def test_long_form_wechat_prefers_reader_explanation_prose() -> None:
     reading = replace(
         _paper_reading(source.title),
         reader_explanation=ReaderExplanation(
-            opening_context="Start from the long-term memory problem.",
-            core_thesis="The paper treats memory as a managed retrieval layer.",
-            problem_walkthrough="The reader should first see why repeated tasks lose context.",
-            solution_walkthrough="The mechanism retrieves and filters stored memories.",
-            experiment_interpretation=(
-                "The reported benchmark result should be read as scoped evidence."
-            ),
-            related_work_context="MemGPT and Zep frame the comparison.",
-            limitations_discussion="The evidence remains narrow.",
-            plain_language_story=(
-                "Imagine an assistant carrying project preferences across sessions."
-            ),
-            reader_takeaway="The useful question is whether recall stays grounded.",
+            opening_context=[_explanation_paragraph("Start from the long-term memory problem.")],
+            core_thesis=[
+                _explanation_paragraph("The paper treats memory as a managed retrieval layer.")
+            ],
+            problem_walkthrough=[
+                _explanation_paragraph(
+                    "The reader should first see why repeated tasks lose context."
+                )
+            ],
+            solution_walkthrough=[
+                _explanation_paragraph("The mechanism retrieves and filters stored memories.")
+            ],
+            experiment_interpretation=[
+                _explanation_paragraph(
+                    "The reported benchmark result should be read as scoped evidence."
+                )
+            ],
+            related_work_context=[_explanation_paragraph("MemGPT and Zep frame the comparison.")],
+            limitations_discussion=[_explanation_paragraph("The evidence remains narrow.")],
+            plain_language_story=[
+                _explanation_paragraph(
+                    "Imagine an assistant carrying project preferences across sessions."
+                )
+            ],
+            reader_takeaway=[
+                _explanation_paragraph("The useful question is whether recall stays grounded.")
+            ],
         ),
     )
     draft = build_daily_draft(
@@ -510,6 +514,46 @@ def test_long_form_wechat_prefers_reader_explanation_prose() -> None:
     assert "The mechanism retrieves and filters stored memories." in html
     assert "Start from the long-term memory problem." in markdown
     assert "The mechanism retrieves and filters stored memories." in markdown
+
+
+def test_long_form_falls_back_to_verified_claim_when_explanation_is_not_publishable() -> None:
+    source = _paper_source()
+    reading = replace(
+        _paper_reading(source.title),
+        reader_explanation=ReaderExplanation(
+            solution_walkthrough=[
+                ReaderExplanationParagraph(
+                    text="This paragraph depends on a rejected claim.",
+                    supporting_claim_ids=["c2"],
+                )
+            ]
+        ),
+    )
+    rejected = Claim(
+        text="Solution: Rejected detail",
+        status=ClaimStatus.NEEDS_REVIEW,
+        evidence=[EvidenceAnchor(source_url=source.url, quote="Rejected detail")],
+        metadata={"paper_reading": {"claim_id": "c2", "section": "solution"}},
+    )
+
+    draft = build_daily_draft(
+        "agent-memory",
+        [source],
+        [_supported_paper_claim(source), rejected],
+        readings=[reading],
+        deep_read_sources=[source],
+    )
+    html = render_wechat_html(draft)
+
+    assert "This paragraph depends on a rejected claim." not in html
+    assert "The paper adds a structured memory layer." not in html
+    assert "Supported paper claim" in html
+    assert draft.metadata["explanation_audit"] == {
+        "paragraph_count": 1,
+        "kept_count": 0,
+        "dropped_count": 1,
+        "fallback_section_count": 1,
+    }
 
 
 def test_long_form_wechat_separates_deep_read_and_other_sources() -> None:
@@ -590,6 +634,7 @@ def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
                 location="page 1",
             )
         ],
+        metadata={"paper_reading": {"claim_id": "c1", "section": "problem"}},
     )
 
     html = render_wechat_html(
@@ -602,8 +647,8 @@ def test_long_form_chinese_uses_chinese_labels_and_preserves_quote() -> None:
                 replace(
                     _paper_reading(source.title),
                     reader_explanation=ReaderExplanation(
-                        opening_context="这是一段背景知识。",
-                        problem_walkthrough="这是一段问题与动机说明。",
+                        opening_context=[_explanation_paragraph("这是一段背景知识。")],
+                        problem_walkthrough=[_explanation_paragraph("这是一段问题与动机说明。")],
                     ),
                 )
             ],
@@ -641,9 +686,7 @@ def test_long_form_chinese_lede_does_not_append_first_claim() -> None:
         readings=[_paper_reading(source.title)],
         deep_read_sources=[source],
     )
-    legacy_suffix = (
-        " method: FRQAD is a new metric on the Gaussian statistical manifold."
-    )
+    legacy_suffix = " method: FRQAD is a new metric on the Gaussian statistical manifold."
     legacy_sections = [
         replace(
             draft.sections[0],
@@ -903,6 +946,7 @@ def test_long_form_chinese_renders_figures_and_keeps_evidence_quote_english() ->
                 quote="retrieval memory pipeline",
             )
         ],
+        metadata={"paper_reading": {"claim_id": "c1", "section": "solution"}},
     )
 
     html = render_wechat_html(
@@ -915,7 +959,7 @@ def test_long_form_chinese_renders_figures_and_keeps_evidence_quote_english() ->
                 replace(
                     _paper_reading(source.title),
                     reader_explanation=ReaderExplanation(
-                        opening_context="这是一段背景知识。",
+                        opening_context=[_explanation_paragraph("这是一段背景知识。")],
                     ),
                 )
             ],
@@ -969,17 +1013,14 @@ def test_wechat_static_formula_formatting_keeps_raw_evidence_quote() -> None:
         ],
     )
 
-    html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
+    html = render_wechat_html(build_daily_draft("agent-memory", [source], [claim]))
 
     assert html.count('class="rr-formula"') >= 3
     assert ">R(t) = e^{-t/S(m)}</span>" in html
     assert ">κ=2.0</span>" in html
     assert ">32×</span>" in html
     assert "R(t) = e^{-t/<span" not in html
-    assert (
-        "<p>Retention follows R(t) = e^{-t/S(m)} with κ=2.0 and 32× speedup.</p>"
-        in html
-    )
+    assert "<p>Retention follows R(t) = e^{-t/S(m)} with κ=2.0 and 32× speedup.</p>" in html
 
 
 def test_wechat_formula_formatter_does_not_wrap_plain_english() -> None:
@@ -996,7 +1037,7 @@ def test_wechat_formula_formatter_does_not_wrap_plain_english() -> None:
         ],
     )
 
-    html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
+    html = render_wechat_html(build_daily_draft("agent-memory", [source], [claim]))
 
     assert 'class="rr-formula"' not in html
 
@@ -1015,7 +1056,7 @@ def test_wechat_formula_formatter_does_not_wrap_currency_prose() -> None:
         ],
     )
 
-    html = render_wechat_html(build_weekly_draft("agent-memory", [claim]))
+    html = render_wechat_html(build_daily_draft("agent-memory", [source], [claim]))
 
     assert "costs $5 for input and $10 for output" in html
     assert 'class="rr-formula"' not in html
@@ -1082,9 +1123,7 @@ def test_long_form_wechat_renders_multiple_deep_reads_with_own_figures() -> None
             deep_read_sources=[first, second],
             figures_by_source_url={
                 first.url: [_paper_figure(first, first_claim.text, path="figures/first.png")],
-                second.url: [
-                    _paper_figure(second, second_claim.text, path="figures/second.png")
-                ],
+                second.url: [_paper_figure(second, second_claim.text, path="figures/second.png")],
             },
         )
     )
@@ -1121,6 +1160,12 @@ def _supported_paper_claim(source: SourceCandidate) -> Claim:
                 location="page 2",
             )
         ],
+        metadata={
+            "paper_reading": {
+                "claim_id": "c1",
+                "section": "solution",
+            }
+        },
     )
 
 
@@ -1205,3 +1250,7 @@ def _paper_reading(title: str) -> PaperReading:
         ),
         experiment_summary="The paper reports improved memory QA accuracy on a benchmark.",
     )
+
+
+def _explanation_paragraph(text: str) -> ReaderExplanationParagraph:
+    return ReaderExplanationParagraph(text=text, supporting_claim_ids=["c1"])

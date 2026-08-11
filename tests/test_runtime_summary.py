@@ -40,10 +40,19 @@ def test_runtime_summary_marks_slow_stages_and_counts_cache() -> None:
                 "cache_hit_count": 1,
                 "cache_miss_count": 0,
             },
+            {
+                "stage": "explanation_policy",
+                "status": "warning",
+                "elapsed_seconds": 345.0,
+                "paragraph_count": 8,
+                "kept_count": 5,
+                "dropped_count": 3,
+                "fallback_section_count": 2,
+            },
         ]
     )
 
-    assert summary["total_elapsed_seconds"] == 344.0
+    assert summary["total_elapsed_seconds"] == 345.0
     assert summary["slow_stage_count"] == 1
     assert summary["cache"] == {"hit_count": 2, "miss_count": 1}
     assert summary["stages"][0]["slow"] is True
@@ -55,3 +64,9 @@ def test_runtime_summary_marks_slow_stages_and_counts_cache() -> None:
     assert summary["stages"][2]["stage"] == "localization"
     assert summary["stages"][2]["slow"] is False
     assert summary["stages"][2]["status_detail"] == "failed"
+    assert summary["explanation_policy"] == {
+        "paragraph_count": 8,
+        "kept_count": 5,
+        "dropped_count": 3,
+        "fallback_section_count": 2,
+    }

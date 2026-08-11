@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from research_radar.compose.draft import build_daily_draft, build_weekly_draft
+from research_radar.compose.draft import build_daily_draft
 from research_radar.compose.source_display import source_descriptor
 from research_radar.compose.source_groups import group_source_entries, source_group_label
 from research_radar.models import ArticleDraft, Claim, SourceCandidate
@@ -56,12 +56,6 @@ def compose_daily_markdown(
     """Compose a daily monitoring report."""
 
     return render_markdown(build_daily_draft(topic_id, sources, claims, language=language))
-
-
-def compose_weekly_markdown(topic_id: str, claims: list[Claim]) -> str:
-    """Compose a weekly deep-dive draft."""
-
-    return render_markdown(build_weekly_draft(topic_id, claims))
 
 
 def _source_lines(raw_sources: object, *, language: str) -> list[str]:
