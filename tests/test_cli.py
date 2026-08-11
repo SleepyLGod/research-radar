@@ -433,6 +433,15 @@ def test_schedule_daily_draft_parser_defaults_to_codex_verifier() -> None:
     assert args.verifier_model is None
 
 
+def test_run_weekly_command_is_not_exposed() -> None:
+    parser = cli.build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["run", "weekly", "--topic", "agent-memory", "--run", "run"])
+
+    assert exc_info.value.code == 2
+
+
 def test_schedule_daily_draft_parser_requires_core_arguments() -> None:
     parser = cli.build_parser()
 
@@ -453,6 +462,18 @@ def test_schedule_daily_draft_parser_requires_core_arguments() -> None:
         )
 
     assert exc_info.value.code == 2
+
+
+@pytest.mark.parametrize("command", ["install", "status", "run-now", "uninstall"])
+def test_schedule_lifecycle_parsers_require_topic_and_root(command: str) -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        ["schedule", command, "--topic", "agent-memory", "--root", "/tmp/radar"]
+    )
+
+    assert args.topic == "agent-memory"
+    assert args.root == Path("/tmp/radar")
+    assert callable(args.handler)
 
 
 def test_schedule_daily_draft_writes_runner_and_plist(
@@ -503,21 +524,27 @@ def test_schedule_daily_draft_writes_runner_and_plist(
     output = capsys.readouterr().out
     runner_path = output_dir / "ai.research-radar.daily-draft.agent-memory.sh"
     plist_path = output_dir / "ai.research-radar.daily-draft.agent-memory.plist"
+    schedule_path = output_dir / "schedule.json"
     runner = runner_path.read_text(encoding="utf-8")
     plist = plist_path.read_text(encoding="utf-8")
+    schedule = json.loads(schedule_path.read_text(encoding="utf-8"))
+    daily_command = " ".join(schedule["daily_command"])
+    publish_command = " ".join(schedule["publish_command"])
 
     assert "Generated local daily draft schedule artifacts" in output
     assert runner_path.exists()
     assert plist_path.exists()
+    assert schedule_path.exists()
     assert str(uv_path.resolve()) in runner
     assert "RUN_OUTPUT=\"$(uv run " not in runner
-    assert "research-radar run daily" in runner
-    assert "research-radar publish wechat-draft" in runner
-    assert "--secret-source keychain" in runner
-    assert "--deepseek-provider xiaomi" in runner
-    assert "--verifier-provider codex" in runner
-    assert "--verifier-model gpt-5.6-terra" in runner
-    assert "--dry-run" in runner
+    assert "research-radar schedule execute" in runner
+    assert "research-radar run daily" in daily_command
+    assert "research-radar publish wechat-draft" in publish_command
+    assert "--secret-source keychain" in daily_command
+    assert "--deepseek-provider xiaomi" in daily_command
+    assert "--verifier-provider codex" in daily_command
+    assert "--verifier-model gpt-5.6-terra" in daily_command
+    assert "--dry-run" in publish_command
     assert "API_KEY" not in plist
     assert "appsecret" not in plist.casefold()
     assert "access_token" not in plist.casefold()
@@ -566,11 +593,10 @@ def test_schedule_daily_draft_non_codex_verifier_does_not_inherit_codex_model(
         )
     )
 
-    runner = (
-        output_dir / "ai.research-radar.daily-draft.agent-memory.sh"
-    ).read_text(encoding="utf-8")
-    assert "--verifier-provider deepseek" in runner
-    assert "--verifier-model gpt-5.6-terra" not in runner
+    schedule = json.loads((output_dir / "schedule.json").read_text(encoding="utf-8"))
+    daily_command = " ".join(schedule["daily_command"])
+    assert "--verifier-provider deepseek" in daily_command
+    assert "--verifier-model gpt-5.6-terra" not in daily_command
 
 
 def test_schedule_daily_draft_fails_when_uv_is_missing(

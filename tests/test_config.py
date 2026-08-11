@@ -3,19 +3,26 @@ import pytest
 from research_radar.config import ConfigError, parse_config
 
 
-def test_parse_config_rejects_auto_publish() -> None:
+@pytest.mark.parametrize(
+    ("legacy_config", "message"),
+    [
+        ({"cadence": {"daily_monitor": "09:00"}}, "cadence"),
+        ({"publishing": {"auto_publish": False}}, "publishing"),
+        ({"security": {"encrypt_storage": True}}, "encrypt_storage"),
+    ],
+)
+def test_parse_config_rejects_removed_settings(
+    legacy_config: dict[str, object],
+    message: str,
+) -> None:
     data = {
         "project": {"name": "ResearchRadar"},
         "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
-        "publishing": {"auto_publish": True},
+        **legacy_config,
     }
 
-    try:
+    with pytest.raises(ConfigError, match=message):
         parse_config(data)
-    except ConfigError as exc:
-        assert "auto_publish" in str(exc)
-    else:
-        raise AssertionError("Expected ConfigError")
 
 
 def test_parse_config_accepts_default_plan_shape() -> None:
@@ -32,7 +39,7 @@ def test_parse_config_accepts_default_plan_shape() -> None:
                     "priority_sources": ["arxiv.org", "github.com"],
                 }
             ],
-            "security": {"secret_backend": "keychain", "encrypt_storage": True},
+            "security": {"secret_backend": "keychain"},
         }
     )
 
@@ -47,7 +54,7 @@ def test_parse_config_accepts_default_plan_shape() -> None:
     assert config.discovery.trusted_domains == []
     assert config.discovery.web_search.endpoint is None
     assert config.topic("agent-memory").source_intent == "research_brief"
-    assert config.publishing.auto_publish is False
+    assert config.security.secret_backend == "keychain"
 
 
 def test_parse_config_accepts_archive_git_publish_settings(tmp_path) -> None:

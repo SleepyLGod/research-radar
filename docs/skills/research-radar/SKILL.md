@@ -5,7 +5,8 @@ description: Use when planning, reading, synthesizing, or publishing ResearchRad
 
 # ResearchRadar Skill
 
-Use this skill for ResearchRadar daily monitoring, weekly deep dives, and paper/article/repo analysis.
+Use this skill for ResearchRadar daily monitoring and paper/article/repo analysis. A future weekly
+mode may reuse the same research contract, but the current product does not expose a weekly run.
 
 ## Core Rule
 

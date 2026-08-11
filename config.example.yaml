@@ -33,10 +33,6 @@ discovery:
     search_depth: basic
     timeout_seconds: 30
 
-cadence:
-  daily_monitor: "09:00"
-  weekly_deep_dive: "Sunday 10:00"
-
 model_providers:
   deepseek:
     kind: openai_compatible
@@ -74,10 +70,5 @@ models:
       provider: codex
       model: gpt-5.6-terra
 
-publishing:
-  channel: wechat_draft
-  auto_publish: false
-
 security:
   secret_backend: keychain
-  encrypt_storage: true

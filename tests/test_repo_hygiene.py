@@ -137,18 +137,20 @@ def test_architecture_contains_canonical_e2e_flow() -> None:
         "Wide scan",
         "Ingestion stores PDFs, HTML pages, and repository metadata",
         "Deep research reading",
-        "Evidence ledger",
-        "Review checks hallucination risk",
+        "supporting claim IDs",
+        "Evidence ledger and review",
+        "public explanation policy",
         "Synthesis outline / prewriting",
         "`ArticleDraft`",
-        "Rendering transforms the same draft",
-        "Manual publishing creates a WeChat draft",
+        "Rendering transforms that draft",
+        "Publishing is explicit",
         "Audit artifacts",
     ]:
         assert phrase in architecture
 
-    assert "v0.0.0 foundation" in architecture
-    assert "WeChat and Zhihu are downstream publishing channels" in architecture
+    assert "v0.0.0 foundation" not in architecture
+    assert "WeChat, Archive/RSS, Zhihu, and email are sibling outputs" in architecture
+    assert "Normal run artifacts are local plaintext files" in architecture
 
 
 def test_old_version_labels_are_not_used() -> None:

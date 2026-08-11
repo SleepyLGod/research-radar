@@ -46,7 +46,6 @@ from research_radar.evidence.ledger import load_claims
 from research_radar.exceptions import ConfigError, PublishError, ResearchRadarError, SecretError
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
-from research_radar.pipeline.weekly import compose_weekly_from_run
 from research_radar.publishers.archive.git import publish_archive_git
 from research_radar.publishers.email.client import publish_email_run
 from research_radar.publishers.wechat.client import (
@@ -55,7 +54,12 @@ from research_radar.publishers.wechat.client import (
 )
 from research_radar.scheduler.local import (
     DailyDraftScheduleSpec,
+    execute_daily_draft_schedule,
+    install_daily_draft_schedule,
     parse_daily_time,
+    run_daily_draft_schedule_now,
+    status_daily_draft_schedule,
+    uninstall_daily_draft_schedule,
     write_daily_draft_schedule,
 )
 from research_radar.security.crypto import EnvelopeEncryptor, SecretMasterKeyProvider
@@ -431,10 +435,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cache model responses under <root>/cache/model_calls for repeat local runs.",
     )
     paper.set_defaults(handler=handle_run_paper)
-    weekly = run_subparsers.add_parser("weekly", help="Compose weekly draft from latest run.")
-    weekly.add_argument("--topic", required=True)
-    weekly.add_argument("--run", dest="run_dir", type=Path, required=True)
-    weekly.set_defaults(handler=handle_run_weekly)
 
     eval_parser = subparsers.add_parser("eval", help="Run evaluation harnesses.")
     eval_subparsers = eval_parser.add_subparsers(dest="eval_target", required=True)
@@ -762,6 +762,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generated runner prepares draft artifacts without calling WeChat.",
     )
     daily_draft.set_defaults(handler=handle_schedule_daily_draft)
+    for command, help_text, handler in (
+        ("install", "Install a generated schedule with launchd.", handle_schedule_install),
+        ("status", "Show launchd and last-run schedule status.", handle_schedule_status),
+        ("run-now", "Run a generated schedule immediately.", handle_schedule_run_now),
+        ("uninstall", "Unload an installed launchd schedule.", handle_schedule_uninstall),
+    ):
+        lifecycle = schedule_subparsers.add_parser(command, help=help_text)
+        lifecycle.add_argument("--topic", required=True)
+        lifecycle.add_argument("--root", type=Path, required=True)
+        lifecycle.set_defaults(handler=handler)
+    schedule_execute = schedule_subparsers.add_parser(
+        "execute",
+        help=argparse.SUPPRESS,
+    )
+    schedule_execute.add_argument("--schedule", type=Path, required=True)
+    schedule_execute.set_defaults(handler=handle_schedule_execute)
 
     privacy_parser = subparsers.add_parser("privacy", help="Privacy utilities.")
     privacy_subparsers = privacy_parser.add_subparsers(dest="privacy_command", required=True)
@@ -1136,13 +1152,6 @@ def handle_run_daily(args: argparse.Namespace) -> None:
     print(f"Created run: {run_dir}")
 
 
-def handle_run_weekly(args: argparse.Namespace) -> None:
-    """Compose weekly artifacts from a run."""
-
-    compose_weekly_from_run(args.run_dir, args.topic)
-    print(f"Updated weekly draft artifacts in {args.run_dir}")
-
-
 def handle_run_paper(args: argparse.Namespace) -> None:
     """Run single-paper deep reading."""
 
@@ -1510,11 +1519,50 @@ def handle_schedule_daily_draft(args: argparse.Namespace) -> None:
     print(f"  label: {artifacts.label}")
     print(f"  runner: {artifacts.runner_path}")
     print(f"  plist: {artifacts.plist_path}")
+    print(f"  metadata: {artifacts.schedule_path}")
+    print(f"  state: {artifacts.state_path}")
     print(f"  logs: {artifacts.log_dir}")
     print()
-    print("Install manually with:")
-    print(f"  cp {artifacts.plist_path} ~/Library/LaunchAgents/")
-    print(f"  launchctl load ~/Library/LaunchAgents/{artifacts.plist_path.name}")
+    print("Install with:")
+    print(
+        "  uv run research-radar schedule install "
+        f"--topic {args.topic} --root {args.root}"
+    )
+
+
+def handle_schedule_install(args: argparse.Namespace) -> None:
+    """Install one generated launchd schedule."""
+
+    path = install_daily_draft_schedule(args.root, args.topic)
+    print(f"Installed schedule: {path}")
+
+
+def handle_schedule_status(args: argparse.Namespace) -> None:
+    """Print current launchd and last-run schedule status."""
+
+    status = status_daily_draft_schedule(args.root, args.topic)
+    print(json.dumps(status, ensure_ascii=False, indent=2))
+
+
+def handle_schedule_run_now(args: argparse.Namespace) -> None:
+    """Run one generated schedule immediately."""
+
+    result = run_daily_draft_schedule_now(args.root, args.topic)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def handle_schedule_uninstall(args: argparse.Namespace) -> None:
+    """Unload one generated launchd schedule."""
+
+    uninstall_daily_draft_schedule(args.root, args.topic)
+    print(f"Uninstalled schedule: {args.topic}")
+
+
+def handle_schedule_execute(args: argparse.Namespace) -> None:
+    """Execute a generated schedule from its metadata snapshot."""
+
+    result = execute_daily_draft_schedule(args.schedule)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def _resolve_uv_executable() -> Path:

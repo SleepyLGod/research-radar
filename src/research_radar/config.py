@@ -54,14 +54,6 @@ class ProjectConfig:
 
 
 @dataclass(frozen=True)
-class CadenceConfig:
-    """Schedule configuration."""
-
-    daily_monitor: str = "09:00"
-    weekly_deep_dive: str = "Sunday 10:00"
-
-
-@dataclass(frozen=True)
 class ModelProviderConfig:
     """One named model provider instance."""
 
@@ -89,14 +81,6 @@ class ModelConfig:
     analyst: str = "deepseek-v4-pro"
     verifier: str = "codex_or_openai_high_reasoning"
     task_routes: dict[str, TaskRouteConfig] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class PublishingConfig:
-    """Publishing configuration."""
-
-    channel: str = "wechat_draft"
-    auto_publish: bool = False
 
 
 @dataclass(frozen=True)
@@ -130,7 +114,6 @@ class SecurityConfig:
     """Security configuration."""
 
     secret_backend: str = "keychain"
-    encrypt_storage: bool = True
 
 
 @dataclass(frozen=True)
@@ -141,9 +124,7 @@ class AppConfig:
     topics: list[TopicConfig]
     model_providers: dict[str, ModelProviderConfig] = field(default_factory=dict)
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
-    cadence: CadenceConfig = field(default_factory=CadenceConfig)
     models: ModelConfig = field(default_factory=ModelConfig)
-    publishing: PublishingConfig = field(default_factory=PublishingConfig)
     archive: ArchivePublishConfig = field(default_factory=ArchivePublishConfig)
     email: EmailPublishConfig = field(default_factory=EmailPublishConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
@@ -176,6 +157,7 @@ def load_config(path: Path) -> AppConfig:
 def parse_config(data: dict[str, Any]) -> AppConfig:
     """Parse an already-loaded configuration mapping."""
 
+    _reject_removed_settings(data)
     project_data = _mapping(data.get("project", {}), "project")
     topics_data = data.get("topics")
     if not isinstance(topics_data, list) or not topics_data:
@@ -229,10 +211,6 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
             )
         )
 
-    publishing = _mapping(data.get("publishing", {}), "publishing")
-    if bool(publishing.get("auto_publish", False)):
-        raise ConfigError("auto_publish=true is not allowed before the planned v1 boundary.")
-
     return AppConfig(
         project=ProjectConfig(name=str(project_data.get("name", "ResearchRadar"))),
         topics=topics,
@@ -240,12 +218,34 @@ def parse_config(data: dict[str, Any]) -> AppConfig:
             _mapping(data.get("model_providers", {}), "model_providers")
         ),
         discovery=_discovery_config(_mapping(data.get("discovery", {}), "discovery")),
-        cadence=CadenceConfig(**_mapping(data.get("cadence", {}), "cadence")),
         models=_model_config(_mapping(data.get("models", {}), "models")),
-        publishing=PublishingConfig(**publishing),
         archive=_archive_publish_config(_mapping(data.get("archive", {}), "archive")),
         email=_email_publish_config(_mapping(data.get("email", {}), "email")),
-        security=SecurityConfig(**_mapping(data.get("security", {}), "security")),
+        security=_security_config(_mapping(data.get("security", {}), "security")),
+    )
+
+
+def _reject_removed_settings(data: dict[str, Any]) -> None:
+    for key in ("cadence", "publishing"):
+        if key in data:
+            raise ConfigError(
+                f"{key} was removed from config. Use the scheduler or an explicit "
+                "publish command instead."
+            )
+    security = _mapping(data.get("security", {}), "security")
+    if "encrypt_storage" in security:
+        raise ConfigError(
+            "security.encrypt_storage was removed because run artifacts are not encrypted. "
+            "Delete this key and protect the local root with FileVault and file permissions."
+        )
+
+
+def _security_config(data: dict[str, Any]) -> SecurityConfig:
+    unknown = sorted(set(data) - {"secret_backend"})
+    if unknown:
+        raise ConfigError(f"Unknown security keys: {', '.join(unknown)}")
+    return SecurityConfig(
+        secret_backend=str(data.get("secret_backend", "keychain")).strip() or "keychain"
     )
 
 

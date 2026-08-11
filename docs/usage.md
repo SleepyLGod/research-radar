@@ -17,6 +17,11 @@ uv run research-radar init
 local `config.yaml`. `config.yaml`, `.env`, `runs/`, `data/`, `cache/`, and scheduler outputs are
 local-only runtime state. Do not commit them.
 
+If an older local config still contains `cadence`, `publishing`, or
+`security.encrypt_storage`, remove those keys before running ResearchRadar. Schedule time now comes
+from `schedule daily-draft`, publishing remains an explicit command, and ordinary run artifacts are
+plaintext local files rather than encrypted document storage.
+
 Check the repository privacy boundary before committing:
 
 ```bash
@@ -107,6 +112,10 @@ uv run research-radar run daily \
   --model-cache
 ```
 
+The command prints `Created run: <RUN_DIR>`. Use that exact directory for later compose and
+publish commands. Each attempt gets its own timestamped directory, even when the topic is rerun on
+the same day; the manifest stores the report date separately from the attempt ID.
+
 Useful outputs under the run directory:
 
 - `daily.md`: public Markdown report
@@ -153,7 +162,7 @@ Export any completed run from its platform-neutral `article_draft.json`:
 
 ```bash
 uv run research-radar archive export \
-  --run runs/<date-topic> \
+  --run <RUN_DIR> \
   --output public-archive \
   --base-url https://research.example.com \
   --site-language zh
@@ -229,7 +238,7 @@ guessing. A successful run writes `archive_publish_result.json`; a failed publis
 Export one completed daily run as a title-free Zhihu article body and a safe local image bundle:
 
 ```bash
-uv run research-radar compose zhihu --run runs/<date-topic>
+uv run research-radar compose zhihu --run <RUN_DIR>
 ```
 
 The command writes `zhihu.md`, `zhihu_export.json`, and `zhihu-assets/` inside the run directory.
@@ -241,7 +250,7 @@ HTTP(S) location, then pass that run-specific image root:
 
 ```bash
 uv run research-radar compose zhihu \
-  --run runs/<date-topic> \
+  --run <RUN_DIR> \
   --asset-base-url https://example.com/archive/assets/<run-id>/
 ```
 
@@ -267,7 +276,7 @@ checkout, add a `.nojekyll` file, ignore `/.archive-retired-assets/`, and keep a
 
 ```bash
 PAGES_CHECKOUT="/path/to/research-radar-pages"
-RUN_DIR="runs/<date-topic>"
+RUN_DIR="<RUN_DIR>"
 
 git clone --branch gh-pages --single-branch \
   https://github.com/<owner>/<repository>.git "$PAGES_CHECKOUT"
@@ -393,7 +402,7 @@ Create a draft from a completed run:
 
 ```bash
 uv run research-radar publish wechat-draft \
-  --run runs/<date-topic> \
+  --run <RUN_DIR> \
   --title "ResearchRadar 日报：<topic>" \
   --digest "今日精选 <topic> 相关论文精读。" \
   --thumb-media-id "$THUMB_MEDIA_ID"
@@ -403,7 +412,7 @@ For local validation without calling WeChat:
 
 ```bash
 uv run research-radar publish wechat-draft \
-  --run runs/<date-topic> \
+  --run <RUN_DIR> \
   --title "ResearchRadar 日报：<topic>" \
   --digest "今日精选 <topic> 相关论文精读。" \
   --thumb-media-id "$THUMB_MEDIA_ID" \
@@ -427,44 +436,71 @@ uv run research-radar schedule daily-draft \
   --model-cache
 ```
 
-The scheduler writes a runner script and plist under:
+The generator writes the runner, launchd plist, a non-secret `schedule.json`, logs, and
+`schedule_state.json` under:
 
 ```text
 <root>/schedules/daily-draft-<topic>/
 ```
 
 The generated runner is a configuration snapshot. An installed launchd job does not automatically
-pick up later changes to provider routes, model names, or Codex `reasoning_effort`. After changing
-those settings, run `schedule daily-draft` again with the same stable root, then unload the installed
-plist before copying and loading the regenerated one.
+pick up later changes to provider routes, model names, Codex `reasoning_effort`, or publishing
+arguments. Scheduler snapshots also carry the execution safety policy: the daily run has a
+six-hour watchdog and WeChat draft creation has a ten-minute watchdog. After changing scheduler
+settings or upgrading a snapshot schema, regenerate the schedule with the same root.
 
-Install manually:
-
-```bash
-cp <root>/schedules/daily-draft-<topic-id>/ai.research-radar.daily-draft.<topic-id>.plist \
-  ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/ai.research-radar.daily-draft.<topic-id>.plist
-```
-
-Check or test the job:
+Install the reviewed snapshot:
 
 ```bash
-LABEL="ai.research-radar.daily-draft.<topic-id>"
-launchctl print "gui/$(id -u)/$LABEL"
-launchctl kickstart -k "gui/$(id -u)/$LABEL"
-tail -F <root>/schedules/daily-draft-<topic-id>/logs/stdout.log \
-        <root>/schedules/daily-draft-<topic-id>/logs/stderr.log
+uv run research-radar schedule install \
+  --topic <topic-id> \
+  --root <root>
 ```
 
-Uninstall a temporary job:
+Inspect launchd and the last recorded attempt without exposing secrets:
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/ai.research-radar.daily-draft.<topic-id>.plist
-rm ~/Library/LaunchAgents/ai.research-radar.daily-draft.<topic-id>.plist
+uv run research-radar schedule status \
+  --topic <topic-id> \
+  --root <root>
 ```
 
-Use a stable root such as `research-radar-data` for long-running schedules. Avoid using
-`/private/tmp` for permanent jobs.
+Run the exact same schedule once now, without duplicating the daily or WeChat command in your shell:
+
+```bash
+uv run research-radar schedule run-now \
+  --topic <topic-id> \
+  --root <root>
+```
+
+The runner holds a non-blocking lock, so launchd and `run-now` cannot execute the same schedule at
+the same time. `schedule_state.json` records the last attempt, last success, current or final stage,
+run directory, WeChat draft status, and a short redacted error. It does not contain API keys or
+publisher secrets. A failed daily run does not proceed to draft creation. Before publishing, the
+scheduler also verifies that the daily command returned an existing run below `<root>/runs/` with
+an `article_draft.json` artifact.
+
+The watchdog is a last-resort guard against a stuck process, not a model quality budget. On timeout
+it terminates the complete daily or publisher process group, records the failed stage, and releases
+the schedule lock only after the processes have stopped. Child output reaches the launchd logs as
+the command runs; only a short tail is retained in memory for failure reporting. Provider-specific
+timeouts continue to apply independently.
+
+Uninstall the job before regenerating an installed snapshot, or when the schedule is no longer
+needed:
+
+```bash
+uv run research-radar schedule uninstall \
+  --topic <topic-id> \
+  --root <root>
+```
+
+Uninstall moves the installed plist to macOS Trash. It never permanently deletes the file; if
+Trash is unavailable, the command fails and leaves the plist in place.
+
+Use a stable private root such as `research-radar-data` for long-running schedules. Avoid
+`/private/tmp` for permanent jobs. ResearchRadar does not yet send a separate failure notification;
+use `schedule status` when an expected draft is missing.
 
 ## Evidence Boundary
 
@@ -473,10 +509,20 @@ ResearchRadar separates internal audit material from reader-facing content:
 - `sources.jsonl` keeps full discovery records.
 - `claims.jsonl` keeps claim status and evidence anchors.
 - `review_report.md` keeps verifier findings and follow-up actions.
-- Public reports render only supported, complete-anchor claims and localized reading text.
+- Public reports render supported, complete-anchor claims. Explanatory paragraphs must name their
+  supporting claim IDs, and every named claim from the same paper must still be publishable after
+  verification. Unbound or downgraded prose is hidden and may fall back only to verified atomic
+  claim text.
 
 Web snippets help discovery and ranking. They do not become publishable research claims by
 themselves.
+
+## Weekly Reports
+
+ResearchRadar does not currently expose a `run weekly` command. The previous single-run composer
+did not aggregate a real week and was removed to avoid promising a feature it did not provide. A
+future weekly mode must combine multiple completed daily runs and define its own deduplication and
+reporting semantics.
 
 ## Validation Commands
 

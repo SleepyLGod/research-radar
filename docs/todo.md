@@ -9,9 +9,14 @@ drive the research model.
 
 - Paper-first source selection for research briefs.
 - Topic concept gates for precision-sensitive discovery.
-- Source history so daily reports focus on new papers and new versions.
+- Outcome-based source history so daily reports suppress a paper only after a successful report
+  outcome. A failed reader, verifier, or artifact write can be retried as new; version updates and
+  paper-family aliases remain visible.
 - Source-history outcome memory so later runs can show when a source previously appeared in a
-  daily report or WeChat draft.
+  daily report or WeChat draft. History write failures warn without invalidating an otherwise
+  successful research run.
+- Unique attempt IDs and owner-only run/history directories, so same-day reruns never overwrite
+  one another and the report date remains a separate manifest field.
 - Multi-topic eval gate v1 across `agent-memory`, `llm-reasoning-eval`, `rag-systems`, and
   `llm-inference`, validated with a real four-topic WeChat draft smoke.
 - Topic bootstrap quality lint for editable YAML drafts, with topic-specific signals for inference
@@ -20,6 +25,9 @@ drive the research model.
 - Full-paper reading packets from extracted PDFs, with a completeness gate that rejects
   abstract-only HTML for research briefs.
 - Atomic claim units, claim linting, anchor completeness checks, and quote-only anchor repair.
+- Claim-bound public explanations: reader paragraphs carry supporting claim IDs, localization must
+  preserve those IDs, and `ArticleDraft` keeps only paragraphs whose same-paper claims remain
+  publishable. Unsafe prose falls back to verified atomic claim text.
 - Table-aware evidence windows for experiment and result claims.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
 - Source centrality reranking and curated public daily source lists.
@@ -47,7 +55,9 @@ drive the research model.
 - Private SMTP email v1 can render HTML/plain-text from `ArticleDraft`, embed safe PNG/JPEG figures
   with CID, and send one report to one personal inbox. Gmail TLS/App Password self-send has been
   validated end to end. It does not manage public subscribers.
-- Local launchd scheduler generation and real-run validation for daily WeChat draft jobs.
+- Local launchd scheduler generation and lifecycle commands for daily WeChat draft jobs, including
+  install, status, run-now, uninstall, overlap protection, validated run handoff, process-group
+  watchdogs, live bounded logs, and redacted last-run state.
 - Zhihu-specific Markdown export v2 from `ArticleDraft`, including a title-free two-level document,
   flat source lists, safe local assets or public image URLs, and schema-v2 export metadata. The
   export has been validated in the real Zhihu editor; login and automatic publishing remain out of
@@ -57,6 +67,8 @@ drive the research model.
 ## Non-Negotiable Quality Rules
 
 - `paper.md` and daily public reports may only use supported claims with complete evidence anchors.
+- Reader explanations may appear publicly only when every supporting claim ID belongs to the same
+  paper and remains publishable after verification. Localization cannot add or replace IDs.
 - `review_report.md` may contain weak evidence, warnings, rejected claims, and follow-up actions; it
   is an internal audit artifact, not the reader-facing report.
 - Readability must never weaken evidence requirements.
@@ -119,7 +131,9 @@ drive the research model.
    - Preserve `--model-cache` for repeat smoke and debugging runs.
 
 5. Keep weekly deep dive and Codex reader as future work.
-   - Weekly remains a later product mode; daily research plus WeChat draft is the current main path.
+   - There is no current `run weekly` command. A future weekly mode must aggregate multiple daily
+     runs rather than relabel one run as a weekly report.
+   - Daily research plus WeChat draft is the current main path.
    - Codex reader uses the same deep-reading prompt, schema, and evidence gate as DeepSeek reader.
    - Future work is about Codex reader reliability: schema stability, timeout behavior, and long-paper
      output quality.
