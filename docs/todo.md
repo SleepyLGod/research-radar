@@ -31,7 +31,7 @@ drive the research model.
 - Table-aware evidence windows for experiment and result claims.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
 - Source centrality reranking and curated public daily source lists.
-- DeepSeek v4 Pro as the default reader route.
+- DeepSeek v4 Flash with explicit thinking and `high` reasoning effort as the default reader route.
 - Codex `gpt-5.6-terra` with `high` reasoning effort as the default verifier route; other
   command-backed providers remain optional.
 - Opt-in model call cache and runtime summaries for reader/verifier cost audit.

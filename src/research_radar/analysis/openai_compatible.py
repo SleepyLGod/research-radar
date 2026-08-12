@@ -25,24 +25,39 @@ class OpenAICompatibleProvider:
         api_key_secret: str,
         secrets: SecretManager,
         timeout_seconds: int = 120,
+        thinking: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         self.name = name
         self.endpoint = endpoint
         self._api_key_secret = api_key_secret
         self._secrets = secrets
         self._timeout_seconds = timeout_seconds
+        self.thinking = thinking
+        self.reasoning_effort = reasoning_effort
+        identity_parts = []
+        if thinking is not None:
+            identity_parts.append(f"thinking={thinking}")
+        if reasoning_effort is not None:
+            identity_parts.append(f"reasoning_effort={reasoning_effort}")
+        self.cache_identity = ";".join(identity_parts)
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Call a chat completions endpoint and return normalized content."""
 
-        payload = {
+        payload: dict[str, object] = {
             "model": model,
             "messages": [
                 {"role": message.role, "content": message.content}
                 for message in messages
             ],
-            "temperature": 0.2,
         }
+        if self.thinking is not None:
+            payload["thinking"] = {"type": self.thinking}
+        if self.reasoning_effort is not None:
+            payload["reasoning_effort"] = self.reasoning_effort
+        if self.thinking != "enabled" and self.reasoning_effort is None:
+            payload["temperature"] = 0.2
         request = Request(
             self.endpoint,
             data=json.dumps(payload).encode("utf-8"),
@@ -71,7 +86,12 @@ class OpenAICompatibleProvider:
         return ModelResponse(
             content=str(content),
             model=model,
-            metadata={"provider": self.name, "endpoint": self.endpoint},
+            metadata={
+                "provider": self.name,
+                "endpoint": self.endpoint,
+                "thinking": self.thinking or "inherited",
+                "reasoning_effort": self.reasoning_effort or "inherited",
+            },
         )
 
     def _transport_error(

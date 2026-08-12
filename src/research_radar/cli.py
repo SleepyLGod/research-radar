@@ -925,6 +925,7 @@ def handle_provider_list(args: argparse.Namespace) -> None:
                 "host": _provider_host(provider_config.base_url),
                 "command": provider_config.command or "",
                 "timeout_seconds": provider_config.timeout_seconds,
+                "thinking": provider_config.thinking or "",
                 "reasoning_effort": provider_config.reasoning_effort or "",
                 "secret": _provider_secret_status(provider_config.api_key_secret, manager),
             }
@@ -946,6 +947,7 @@ def handle_provider_routes(args: argparse.Namespace) -> None:
                 "provider": preview.provider_name,
                 "model": preview.model or "",
                 "kind": provider_config.kind if provider_config else "local",
+                "thinking": (provider_config.thinking if provider_config else None) or "",
                 "reasoning_effort": (
                     provider_config.reasoning_effort if provider_config else None
                 )
@@ -989,6 +991,8 @@ def handle_provider_probe(args: argparse.Namespace) -> None:
                 "model": route.model,
                 "host": _provider_host(provider_config.base_url),
                 "timeout_seconds": provider_config.timeout_seconds,
+                "thinking": provider_config.thinking or "",
+                "reasoning_effort": provider_config.reasoning_effort or "",
                 "duration_seconds": round(duration, 3),
                 "error_type": type(exc).__name__,
                 "message": redact_text(str(exc)),
@@ -1005,6 +1009,8 @@ def handle_provider_probe(args: argparse.Namespace) -> None:
         "model": route.model,
         "host": _provider_host(provider_config.base_url),
         "timeout_seconds": provider_config.timeout_seconds,
+        "thinking": provider_config.thinking or "",
+        "reasoning_effort": provider_config.reasoning_effort or "",
         "duration_seconds": round(duration, 3),
         "response_char_count": len(response.content),
         "response_excerpt": _probe_excerpt(response.content),

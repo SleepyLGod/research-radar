@@ -355,7 +355,78 @@ def test_codex_reasoning_effort_is_configurable() -> None:
     assert config.model_providers["codex"].reasoning_effort == "xhigh"
 
 
-def test_reasoning_effort_is_rejected_for_non_codex_provider() -> None:
+def test_openai_compatible_thinking_and_reasoning_effort_are_configurable() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "deepseek": {
+                    "kind": "openai_compatible",
+                    "base_url": "https://api.deepseek.com/chat/completions",
+                    "api_key_secret": "deepseek.api_key",
+                    "thinking": "enabled",
+                    "reasoning_effort": "high",
+                }
+            },
+        }
+    )
+
+    assert config.model_providers["deepseek"].thinking == "enabled"
+    assert config.model_providers["deepseek"].reasoning_effort == "high"
+
+
+def test_default_deepseek_provider_uses_flash_thinking_high() -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+
+    assert config.models.analyst == "deepseek-v4-flash"
+    assert config.model_providers["deepseek"].thinking == "enabled"
+    assert config.model_providers["deepseek"].reasoning_effort == "high"
+
+
+def test_thinking_is_rejected_for_non_openai_compatible_provider() -> None:
+    data = {
+        "project": {"name": "ResearchRadar"},
+        "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        "model_providers": {
+            "codex": {
+                "kind": "codex_cli",
+                "command": "codex",
+                "thinking": "enabled",
+            }
+        },
+    }
+
+    with pytest.raises(ConfigError, match="only valid for openai_compatible"):
+        parse_config(data)
+
+
+@pytest.mark.parametrize("effort", ["none", "minimal", "low", "medium", "high", "xhigh", "max"])
+def test_openai_compatible_accepts_common_reasoning_effort_values(effort: str) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+            "model_providers": {
+                "openai": {
+                    "kind": "openai_compatible",
+                    "base_url": "https://api.openai.com/v1/chat/completions",
+                    "api_key_secret": "openai.api_key",
+                    "reasoning_effort": effort,
+                }
+            },
+        }
+    )
+
+    assert config.model_providers["openai"].reasoning_effort == effort
+
+
+def test_openai_compatible_reasoning_effort_rejects_unknown_value() -> None:
     data = {
         "project": {"name": "ResearchRadar"},
         "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
@@ -364,12 +435,12 @@ def test_reasoning_effort_is_rejected_for_non_codex_provider() -> None:
                 "kind": "openai_compatible",
                 "base_url": "https://api.deepseek.com/chat/completions",
                 "api_key_secret": "deepseek.api_key",
-                "reasoning_effort": "high",
+                "reasoning_effort": "ultra",
             }
         },
     }
 
-    with pytest.raises(ConfigError, match="only valid for codex_cli"):
+    with pytest.raises(ConfigError, match="none, minimal, low, medium, high, xhigh, or max"):
         parse_config(data)
 
 

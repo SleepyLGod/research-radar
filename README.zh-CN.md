@@ -96,8 +96,9 @@ uv run research-radar run daily \
 
 ## 默认模型可以替换
 
-当前默认使用 DeepSeek v4 Pro 精读论文、轻量 DeepSeek 路由生成 gist 和中文表达、Tavily 补充网页召回，
-再由 Codex `gpt-5.6-terra` 以 `high` reasoning 做 verifier。默认值只是经过验证的组合，不是硬编码限制；
+当前默认使用 DeepSeek v4 Flash，并为 DeepSeek 任务显式开启 thinking 和 `high` reasoning；Tavily 补充
+网页召回，再由 Codex `gpt-5.6-terra` 以 `high` reasoning 做 verifier。默认值只是经过验证的组合，
+不是硬编码限制；
 自定义 API、本地模型和 CLI agent 的接入方式见 [Provider 配置](docs/providers.md)。
 
 ## 内容边界

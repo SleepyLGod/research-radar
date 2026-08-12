@@ -62,6 +62,7 @@ class ModelProviderConfig:
     api_key_secret: str | None = None
     command: str | None = None
     timeout_seconds: int = 120
+    thinking: str | None = None
     reasoning_effort: str | None = None
 
 
@@ -78,7 +79,7 @@ class ModelConfig:
     """Model selection configuration."""
 
     scout: str = "deepseek-v4-flash"
-    analyst: str = "deepseek-v4-pro"
+    analyst: str = "deepseek-v4-flash"
     verifier: str = "codex_or_openai_high_reasoning"
     task_routes: dict[str, TaskRouteConfig] = field(default_factory=dict)
 
@@ -366,7 +367,7 @@ def _model_config(data: dict[str, Any]) -> ModelConfig:
         raise ConfigError(f"Unknown models keys: {', '.join(unknown)}")
     return ModelConfig(
         scout=str(data.get("scout", "deepseek-v4-flash")),
-        analyst=str(data.get("analyst", "deepseek-v4-pro")),
+        analyst=str(data.get("analyst", "deepseek-v4-flash")),
         verifier=str(data.get("verifier", "codex_or_openai_high_reasoning")),
         task_routes=routes,
     )
@@ -383,14 +384,16 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             item.get("timeout_seconds", 120),
             f"model_providers.{name}.timeout_seconds",
         )
-        reasoning_effort = _reasoning_effort(
+        thinking = _thinking(item.get("thinking"), f"model_providers.{name}.thinking")
+        if thinking is not None and kind != "openai_compatible":
+            raise ConfigError(
+                f"model_providers.{name}.thinking is only valid for openai_compatible."
+            )
+        reasoning_effort = _provider_reasoning_effort(
             item.get("reasoning_effort", "high" if kind == "codex_cli" else None),
             f"model_providers.{name}.reasoning_effort",
+            kind=kind,
         )
-        if reasoning_effort is not None and kind != "codex_cli":
-            raise ConfigError(
-                f"model_providers.{name}.reasoning_effort is only valid for codex_cli."
-            )
         configs[name.strip()] = ModelProviderConfig(
             kind=kind,
             base_url=_optional_string(item.get("base_url"), f"model_providers.{name}.base_url"),
@@ -400,6 +403,7 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             ),
             command=_optional_string(item.get("command"), f"model_providers.{name}.command"),
             timeout_seconds=timeout_seconds,
+            thinking=thinking,
             reasoning_effort=reasoning_effort,
         )
     return configs
@@ -412,6 +416,8 @@ def _default_model_providers() -> dict[str, ModelProviderConfig]:
             kind="openai_compatible",
             base_url="https://api.deepseek.com/chat/completions",
             api_key_secret="deepseek.api_key",
+            thinking="enabled",
+            reasoning_effort="high",
         ),
         "xiaomi": ModelProviderConfig(
             kind="openai_compatible",
@@ -532,11 +538,28 @@ def _optional_string(value: Any, name: str) -> str | None:
     return value.strip()
 
 
-def _reasoning_effort(value: Any, name: str) -> str | None:
+def _provider_reasoning_effort(value: Any, name: str, *, kind: str) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, str) or value.strip() not in {"medium", "high", "xhigh"}:
-        raise ConfigError(f"{name} must be medium, high, or xhigh.")
+    if kind == "codex_cli":
+        allowed = ("medium", "high", "xhigh")
+    elif kind == "openai_compatible":
+        allowed = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+    else:
+        raise ConfigError(
+            f"{name} is only valid for codex_cli or openai_compatible providers."
+        )
+    if not isinstance(value, str) or value.strip() not in allowed:
+        choices = ", ".join(allowed[:-1]) + f", or {allowed[-1]}"
+        raise ConfigError(f"{name} must be {choices}.")
+    return value.strip()
+
+
+def _thinking(value: Any, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or value.strip() not in {"enabled", "disabled"}:
+        raise ConfigError(f"{name} must be enabled or disabled.")
     return value.strip()
 
 

@@ -133,6 +133,84 @@ def test_xiaomi_default_timeout_is_longer_than_deepseek() -> None:
     assert config.model_providers["deepseek"].timeout_seconds == 120
 
 
+def test_openai_compatible_sends_explicit_thinking_without_temperature(monkeypatch) -> None:
+    manager = SecretManager(InMemorySecretBackend())
+    manager.set_deepseek_api_key("fake-key")
+    provider = OpenAICompatibleProvider(
+        name="deepseek",
+        endpoint="https://api.deepseek.com/chat/completions",
+        api_key_secret="deepseek.api_key",
+        secrets=manager,
+        thinking="enabled",
+        reasoning_effort="high",
+    )
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+
+    def fake_urlopen(request, **kwargs):
+        captured["payload"] = json.loads(request.data)
+        return FakeResponse()
+
+    monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
+
+    response = provider.complete([Message(role="user", content="hello")], model="deepseek-v4-flash")
+
+    assert response.content == "ok"
+    assert captured["payload"] == {
+        "model": "deepseek-v4-flash",
+        "messages": [{"role": "user", "content": "hello"}],
+        "thinking": {"type": "enabled"},
+        "reasoning_effort": "high",
+    }
+    assert provider.cache_identity == "thinking=enabled;reasoning_effort=high"
+
+
+def test_openai_compatible_without_thinking_keeps_temperature(monkeypatch) -> None:
+    manager = SecretManager(InMemorySecretBackend())
+    manager.set_openai_api_key("fake-key")
+    provider = OpenAICompatibleProvider(
+        name="openai",
+        endpoint="https://api.example.test/chat/completions",
+        api_key_secret="openai.api_key",
+        secrets=manager,
+    )
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
+
+    def fake_urlopen(request, **kwargs):
+        captured["payload"] = json.loads(request.data)
+        return FakeResponse()
+
+    monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
+
+    provider.complete([Message(role="user", content="hello")], model="gpt-test")
+
+    assert captured["payload"] == {
+        "model": "gpt-test",
+        "messages": [{"role": "user", "content": "hello"}],
+        "temperature": 0.2,
+    }
+    assert provider.cache_identity == ""
+
+
 def test_openai_compatible_wraps_incomplete_http_reads(monkeypatch) -> None:
     manager = SecretManager(InMemorySecretBackend())
     manager.set_openai_api_key("fake-key")
@@ -452,14 +530,14 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
     assert isinstance(route.provider, CodexCliProvider)
 
 
-def test_deep_reading_route_defaults_to_deepseek_v4_pro() -> None:
+def test_deep_reading_route_defaults_to_deepseek_v4_flash() -> None:
     config = _deepseek_route_config()
     manager = SecretManager(InMemorySecretBackend())
 
     route = resolve_task_route(config, manager, "deep_reading")
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-pro"
+    assert route.model == "deepseek-v4-flash"
     assert isinstance(route.provider, OpenAICompatibleProvider)
 
 
@@ -475,7 +553,7 @@ def test_provider_override_keeps_matching_task_model() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-pro"
+    assert route.model == "deepseek-v4-flash"
 
 
 def test_model_override_wins_over_matching_task_model() -> None:
@@ -509,14 +587,14 @@ def test_source_gist_route_stays_on_lightweight_deepseek_model() -> None:
     assert route.model == "deepseek-v4-flash"
 
 
-def test_anchor_repair_route_defaults_to_deepseek_v4_pro() -> None:
+def test_anchor_repair_route_defaults_to_deepseek_v4_flash() -> None:
     config = _deepseek_route_config()
     manager = SecretManager(InMemorySecretBackend())
 
     route = resolve_task_route(config, manager, "anchor_repair")
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-pro"
+    assert route.model == "deepseek-v4-flash"
     assert isinstance(route.provider, OpenAICompatibleProvider)
 
 
@@ -579,7 +657,7 @@ def test_task_specific_provider_override_beats_deepseek_replacement() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-pro"
+    assert route.model == "deepseek-v4-flash"
 
 
 def test_global_provider_override_keeps_global_behavior() -> None:
@@ -608,11 +686,11 @@ def _deepseek_route_config() -> AppConfig:
                     "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
                     "deep_reading": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-pro",
+                        "model": "deepseek-v4-flash",
                     },
                     "anchor_repair": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-pro",
+                        "model": "deepseek-v4-flash",
                     },
                 }
             },

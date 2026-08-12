@@ -61,8 +61,8 @@ uv run research-radar secrets status --name kimi.api_key
 
 The default quality path is:
 
-- Deep reading: `deepseek/deepseek-v4-pro`
-- Source gist and report localization: lightweight DeepSeek routes
+- Deep reading: `deepseek/deepseek-v4-flash` with explicit thinking and `high` reasoning effort
+- Source gist and report localization: `deepseek-v4-flash` through the same configured DeepSeek provider
 - Verification: `codex/gpt-5.6-terra` with `high` reasoning effort
 - Web search: Tavily when the web-search secret is present
 

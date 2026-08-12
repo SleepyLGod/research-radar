@@ -98,8 +98,8 @@ See [Detailed Usage](docs/usage.md) for the exact commands and deployment steps.
 
 ## Defaults, Not Lock-In
 
-The current quality path uses DeepSeek v4 Pro for deep reading, lightweight DeepSeek routes for
-gists and localization, Tavily for web recall, and Codex `gpt-5.6-terra` with `high` reasoning for
+The current quality path uses DeepSeek v4 Flash with explicit thinking and `high` reasoning for
+DeepSeek-backed tasks, Tavily for web recall, and Codex `gpt-5.6-terra` with `high` reasoning for
 verification. Provider instances and task routes are configurable; see
 [Provider Configuration](docs/providers.md).
 

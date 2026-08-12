@@ -9,7 +9,7 @@ predictable: add a provider instance once, then route selected tasks to it.
   `claude-code`.
 - Provider kind: the wire format used by that backend, such as `openai_compatible`,
   `anthropic_messages`, `codex_cli`, `claude_code_cli`, or `local`.
-- Task route: the model used for a task, for example `deep_reading -> deepseek/deepseek-v4-pro`.
+- Task route: the model used for a task, for example `deep_reading -> deepseek/deepseek-v4-flash`.
 
 The default path remains DeepSeek reader plus Codex verifier. Extra vendors should be configured in
 local `config.yaml`, not added to the public `config.example.yaml`.
@@ -72,6 +72,24 @@ models:
 
 Kimi, Qwen, Minimax, and similar vendors fit this template when they expose an OpenAI-compatible
 endpoint. Use the vendor's current model id and endpoint from their own dashboard or docs.
+
+OpenAI-compatible providers may also declare explicit thinking controls when their endpoint supports
+the same request fields:
+
+```yaml
+model_providers:
+  deepseek:
+    kind: openai_compatible
+    base_url: https://api.deepseek.com/chat/completions
+    api_key_secret: deepseek.api_key
+    thinking: enabled
+    reasoning_effort: high
+```
+
+`thinking` accepts `enabled` or `disabled`. The configuration layer accepts the common
+OpenAI-compatible `reasoning_effort` values `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and
+`max`; each endpoint may support only a subset. Leave both fields unset unless the provider documents
+them. Configured values are included in provider diagnostics and model-cache identity.
 
 Probe before routing research work:
 

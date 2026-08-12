@@ -165,6 +165,8 @@ def _build_provider(
             api_key_secret=provider_config.api_key_secret,
             secrets=secrets,
             timeout_seconds=provider_config.timeout_seconds,
+            thinking=provider_config.thinking,
+            reasoning_effort=provider_config.reasoning_effort,
         )
     if provider_config.kind == "anthropic_messages":
         if provider_config.api_key_secret is None:

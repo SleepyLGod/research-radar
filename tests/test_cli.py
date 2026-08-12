@@ -258,6 +258,9 @@ def test_provider_list_outputs_configured_providers_without_secret_values(
     assert kimi["secret"] == "present"
     assert codex["secret"] == "not_required"
     assert codex["reasoning_effort"] == "high"
+    deepseek = next(item for item in output["providers"] if item["name"] == "deepseek")
+    assert deepseek["thinking"] == "enabled"
+    assert deepseek["reasoning_effort"] == "high"
     assert "secret-value-that-must-not-print" not in output_text
 
 
@@ -367,6 +370,8 @@ def test_provider_routes_show_task_specific_override_precedence(
     routes = {item["task"]: item for item in output["routes"]}
     assert routes["deep_reading"]["provider"] == "deepseek"
     assert routes["deep_reading"]["model"] == "deepseek-v4-pro"
+    assert routes["deep_reading"]["thinking"] == "enabled"
+    assert routes["deep_reading"]["reasoning_effort"] == "high"
     assert routes["verifier"]["provider"] == "xiaomi"
     assert routes["verifier"]["model"] == "mimo-v2.5-pro"
 

@@ -102,11 +102,18 @@ def test_model_cache_key_changes_with_provider_cache_identity(tmp_path: Path) ->
         cache_dir=tmp_path,
         task_name="verifier",
     )
+    thinking = CachedLLMProvider(
+        VariantProvider("thinking=enabled;reasoning_effort=high"),
+        cache_dir=tmp_path,
+        task_name="verifier",
+    )
 
     high_response = high.complete(messages, model="gpt-5.6-terra")
     xhigh_response = xhigh.complete(messages, model="gpt-5.6-terra")
+    thinking_response = thinking.complete(messages, model="gpt-5.6-terra")
 
     assert high_response.metadata["cache_key"] != xhigh_response.metadata["cache_key"]
+    assert high_response.metadata["cache_key"] != thinking_response.metadata["cache_key"]
 
 
 def test_cache_stats_helpers_treat_none_as_no_cache() -> None:
