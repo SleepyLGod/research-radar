@@ -98,8 +98,8 @@ public struct FoundationView: View {
         switch model.state {
         case .ready: localization.text("detail.ready")
         case .running: localization.text("detail.running")
-        case let .succeeded(version):
-            localization.text("detail.succeeded").replacingOccurrences(of: "%@", with: version)
+        case .succeeded:
+            localization.text("detail.succeeded")
         case .failed: localization.text("detail.failed")
         }
     }

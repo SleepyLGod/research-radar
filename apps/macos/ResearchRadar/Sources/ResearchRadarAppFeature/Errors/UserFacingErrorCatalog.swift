@@ -11,7 +11,7 @@ public struct UserFacingErrorCatalog {
     public func message(for code: String) -> String {
         let knownCodes = Set([
             "invalid_request", "engine_missing", "engine_busy", "engine_crashed",
-            "cancelled", "parent_lost",
+            "preflight_not_ready", "cancelled", "parent_lost",
         ])
         guard knownCodes.contains(code) else { return localization.text("error.generic") }
         let key = "error.\(code)"

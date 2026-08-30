@@ -56,22 +56,16 @@ def test_run_bridge_writes_dependency_preflight_result(tmp_path: Path) -> None:
     assert payload["schema_version"] == 1
     assert payload["request_id"] == job.name
     assert payload["status"] == "succeeded"
-    dependencies = payload["preflight"]["dependencies"]
-    assert set(dependencies) == {
-        "cryptography",
-        "keyring",
-        "PIL",
-        "pypdf",
-        "yaml",
-        "research_radar.app_bridge",
-    }
-    assert all(item["available"] for item in dependencies.values())
-    assert dependencies["keyring"]["backend"]
+    assert payload["command"] == "preflight"
+    assert payload["preflight"]["ready"] is True
+    assert payload["report"] is None
+    assert payload["topic_draft"] is None
+    assert payload["delivery"] is None
     event_payloads = [
         json.loads(line) for line in events.read_text(encoding="utf-8").splitlines()
     ]
-    assert event_payloads[0]["kind"] == "started"
-    assert event_payloads[-1]["kind"] == "completed"
+    assert event_payloads[0]["type"] == "started"
+    assert event_payloads[-1]["type"] == "completed"
     assert result.stat().st_mode & 0o777 == 0o600
 
 
@@ -125,7 +119,7 @@ def test_run_bridge_rejects_terminal_path_outside_job(tmp_path: Path) -> None:
         )
 
 
-def test_run_bridge_writes_process_identity_in_started_event(tmp_path: Path) -> None:
+def test_run_bridge_started_event_uses_frozen_public_schema(tmp_path: Path) -> None:
     _, request, events, result, error = _bridge_paths(tmp_path)
 
     exit_code = run_bridge(
@@ -139,8 +133,9 @@ def test_run_bridge_writes_process_identity_in_started_event(tmp_path: Path) -> 
 
     assert exit_code == 0
     first = json.loads(events.read_text(encoding="utf-8").splitlines()[0])
-    assert first["kind"] == "started"
-    assert first["process_id"] == os.getpid()
+    assert first["type"] == "started"
+    assert "process_id" not in first
+    assert "process_group_id" not in first
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="requires macOS kqueue")

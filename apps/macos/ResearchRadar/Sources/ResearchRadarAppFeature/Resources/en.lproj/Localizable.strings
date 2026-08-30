@@ -16,10 +16,11 @@
 "error.engine_missing" = "The bundled local engine is missing. Reinstall ResearchRadar.";
 "error.engine_busy" = "Another local engine check is already running.";
 "error.engine_crashed" = "The local engine stopped unexpectedly.";
+"error.preflight_not_ready" = "Some required checks need attention.";
 "error.cancelled" = "The check was cancelled.";
 "error.parent_lost" = "The check stopped because ResearchRadar closed.";
 "detail.ready" = "Python and required local dependencies will be checked on demand.";
 "detail.running" = "The engine exits as soon as this check finishes.";
-"detail.succeeded" = "Engine %@ loaded from the bundled application.";
+"detail.succeeded" = "The bundled engine and required dependencies are available.";
 "detail.failed" = "No research or publishing task was started.";
 "detail.idle" = "No background engine runs while ResearchRadar is idle.";

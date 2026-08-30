@@ -5,7 +5,7 @@ import ResearchRadarCore
 public enum FoundationPreflightState: Equatable, Sendable {
     case ready
     case running
-    case succeeded(String)
+    case succeeded
     case failed(String)
 }
 
@@ -39,7 +39,6 @@ public final class FoundationViewModel {
                 let paths = try FoundationJobBuilder.create(
                     appSupportRoot: FoundationJobBuilder.developmentRoot()
                 )
-                defer { try? FileManager.default.removeItem(at: paths.jobDirectory) }
                 let outcome = try await supervisor.run(
                     executable: engineURL,
                     arguments: [
@@ -70,9 +69,11 @@ public final class FoundationViewModel {
     private func finish(outcome: EngineProcessOutcome, paths: FoundationJobPaths) {
         if outcome.exitCode == 0,
            let data = try? Data(contentsOf: paths.result),
-           let result = try? EngineProtocolCodec.decodeResult(data)
+           let result = try? EngineProtocolCodec.decodeResult(data),
+           result.command == .preflight,
+           let preflight = result.preflight
         {
-            state = .succeeded(result.preflight.engineVersion)
+            state = preflight.ready ? .succeeded : .failed("preflight_not_ready")
             return
         }
         if let data = try? Data(contentsOf: paths.error),

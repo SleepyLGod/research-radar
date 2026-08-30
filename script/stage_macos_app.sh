@@ -37,6 +37,12 @@ swift build \
   --configuration release \
   -Xswiftc -DRESEARCH_RADAR_APP_BUNDLE \
   --product ResearchRadar
+swift build \
+  --disable-sandbox \
+  --package-path "$ROOT/apps/macos/ResearchRadar" \
+  --scratch-path "$RELEASE_SCRATCH" \
+  --configuration release \
+  --product ResearchRadarPDFHelper
 "$ROOT/script/build_macos_engine.sh"
 "$ROOT/script/assemble_macos_app.sh"
 

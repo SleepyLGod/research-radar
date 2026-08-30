@@ -20,6 +20,10 @@ import Testing
                 == "Another local engine check is already running."
         )
         #expect(
+            catalog.message(for: "preflight_not_ready")
+                == "Some required checks need attention."
+        )
+        #expect(
             catalog.message(for: "python traceback /private/tmp/x") == store.text("error.generic")
         )
     }

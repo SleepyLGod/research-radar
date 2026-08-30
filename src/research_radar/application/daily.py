@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from research_radar.analysis.figures import FigureExtractor
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.routing import TaskModelRoute, resolve_task_route
 from research_radar.config import AppConfig
@@ -54,6 +55,7 @@ class DailyRunOptions:
     deep_limit: int = 0
     language: str | None = None
     model_cache: bool = False
+    model_cache_limit_bytes: int | None = None
     routes: ProviderOverrides = ProviderOverrides()
 
 
@@ -65,6 +67,7 @@ def run_daily_application(
     progress_listener: ProgressListener | None = None,
     warning_listener: Callable[[str], None] | None = None,
     pipeline_runner: Callable[..., Path] = run_daily,
+    figure_extractor: FigureExtractor | None = None,
 ) -> Path:
     """Resolve dependencies and run one daily report without CLI coupling."""
 
@@ -72,6 +75,8 @@ def run_daily_application(
         raise ResearchRadarError("limit must be at least 1.")
     if options.deep_limit < 0:
         raise ResearchRadarError("deep_limit cannot be negative.")
+    if options.model_cache_limit_bytes is not None and options.model_cache_limit_bytes <= 0:
+        raise ResearchRadarError("model_cache_limit_bytes must be positive when set.")
 
     language = options.language or config.topic(options.topic_id).report_language
     connectors = build_daily_connectors(config, secret_manager, warning_listener)
@@ -87,25 +92,30 @@ def run_daily_application(
     localization = _cached(localization, options, "report_localization")
     verifier = _cached(verifier, options, "verifier")
 
+    pipeline_options: dict[str, object] = {
+        "verifier": verifier.provider,
+        "verifier_model": verifier.model,
+        "gist_provider": gist.provider,
+        "gist_model": gist.model,
+        "limit": options.limit,
+        "deep_reader": reader.provider,
+        "deep_model": reader.model,
+        "deep_limit": options.deep_limit,
+        "anchor_repair_provider": anchor.provider,
+        "anchor_repair_model": anchor.model,
+        "localizer": localization.provider,
+        "localization_model": localization.model,
+        "language": options.language,
+        "progress_listener": progress_listener,
+    }
+    if figure_extractor is not None:
+        pipeline_options["figure_extractor"] = figure_extractor
     return pipeline_runner(
         options.root,
         config,
         options.topic_id,
         connectors,
-        verifier=verifier.provider,
-        verifier_model=verifier.model,
-        gist_provider=gist.provider,
-        gist_model=gist.model,
-        limit=options.limit,
-        deep_reader=reader.provider,
-        deep_model=reader.model,
-        deep_limit=options.deep_limit,
-        anchor_repair_provider=anchor.provider,
-        anchor_repair_model=anchor.model,
-        localizer=localization.provider,
-        localization_model=localization.model,
-        language=options.language,
-        progress_listener=progress_listener,
+        **pipeline_options,
     )
 
 
@@ -190,6 +200,7 @@ def _cached(route: TaskModelRoute, options: DailyRunOptions, task: str) -> TaskM
             route.provider,
             cache_dir=options.root / "cache" / "model_calls",
             task_name=task,
+            cache_limit_bytes=options.model_cache_limit_bytes,
         ),
         model=route.model,
         provider_name=route.provider_name,

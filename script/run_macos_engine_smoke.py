@@ -76,9 +76,9 @@ def main() -> int:
             detail = "The engine did not write an error artifact."
         raise SystemExit(f"Frozen engine exited with code {result.returncode}: {detail}")
     payload = json.loads(paths["result"].read_text(encoding="utf-8"))
-    dependencies = payload["preflight"]["dependencies"]
-    if not all(item["available"] for item in dependencies.values()):
-        raise SystemExit("Frozen preflight reported a missing dependency.")
+    checks = payload["preflight"]["checks"]
+    if not payload["preflight"]["ready"] or not checks:
+        raise SystemExit("Frozen preflight reported an unavailable engine.")
     print(json.dumps({"duration_seconds": round(time.monotonic() - started, 3), **payload}))
     return 0
 

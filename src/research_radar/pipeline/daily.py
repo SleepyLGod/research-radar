@@ -7,7 +7,11 @@ from pathlib import Path
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
-from research_radar.analysis.figures import FigureExtractionError, extract_paper_figures
+from research_radar.analysis.figures import (
+    FigureExtractionError,
+    FigureExtractor,
+    extract_paper_figures,
+)
 from research_radar.analysis.localization import (
     localization_failed,
     localization_status_from_attempts,
@@ -100,6 +104,7 @@ def run_daily(
     localization_model: str | None = None,
     language: str | None = None,
     progress_listener: ProgressListener | None = None,
+    figure_extractor: FigureExtractor | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
 
@@ -526,6 +531,7 @@ def run_daily(
         deep_artifacts,
         claims,
         run_dir / "figures",
+        figure_extractor=figure_extractor or extract_paper_figures,
     )
     findings.extend(figure_findings)
     web_search_summary = _web_search_summary(
@@ -1236,6 +1242,8 @@ def _extract_deep_read_figures(
     deep_artifacts: list[Artifact],
     claims: list[Claim],
     figure_dir: Path,
+    *,
+    figure_extractor: FigureExtractor | None = None,
 ) -> tuple[dict[str, list[dict[str, object]]], list[ReviewFinding]]:
     figures_by_source_url: dict[str, list[dict[str, object]]] = {}
     findings: list[ReviewFinding] = []
@@ -1243,7 +1251,7 @@ def _extract_deep_read_figures(
         if not artifact.artifact_path:
             continue
         try:
-            figures = extract_paper_figures(artifact, figure_dir, claims)
+            figures = (figure_extractor or extract_paper_figures)(artifact, figure_dir, claims)
         except FigureExtractionError as exc:
             findings.append(
                 ReviewFinding(

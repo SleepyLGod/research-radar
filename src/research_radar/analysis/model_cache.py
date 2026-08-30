@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,14 +19,24 @@ CACHE_SCHEMA_VERSION = 2
 class CachedLLMProvider:
     """Wrap an LLM provider with a local content-addressed response cache."""
 
-    def __init__(self, provider: LLMProvider, *, cache_dir: Path, task_name: str) -> None:
+    def __init__(
+        self,
+        provider: LLMProvider,
+        *,
+        cache_dir: Path,
+        task_name: str,
+        cache_limit_bytes: int | None = None,
+    ) -> None:
         self._provider = provider
         self.name = provider.name
-        self.cache_dir = ensure_dir(cache_dir / task_name)
+        self.cache_root = ensure_dir(cache_dir)
+        self.cache_dir = ensure_dir(self.cache_root / task_name)
         self.task_name = task_name
+        self.cache_limit_bytes = cache_limit_bytes
         self.provider_cache_identity = str(getattr(provider, "cache_identity", ""))
         self.hit_count = 0
         self.miss_count = 0
+        self.maintenance_error: str | None = None
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Return a cached model response or call the wrapped provider."""
@@ -39,6 +52,8 @@ class CachedLLMProvider:
         cached = _read_cached_response(cache_path, cache_key)
         if cached is not None:
             self.hit_count += 1
+            if self.cache_limit_bytes is not None:
+                self._touch(cache_path)
             return ModelResponse(
                 content=str(cached["content"]),
                 model=str(cached["model"]),
@@ -60,6 +75,8 @@ class CachedLLMProvider:
             response=response,
             messages=messages,
         )
+        if self.cache_limit_bytes is not None:
+            self._maintain_limit()
         return ModelResponse(
             content=response.content,
             model=response.model,
@@ -70,6 +87,74 @@ class CachedLLMProvider:
                 "cache_task": self.task_name,
             },
         )
+
+    def _maintain_limit(self) -> None:
+        try:
+            enforce_model_cache_limit(self.cache_root, self.cache_limit_bytes or 0)
+            self.maintenance_error = None
+        except OSError as exc:
+            self.maintenance_error = str(exc)
+
+    def _touch(self, path: Path) -> None:
+        try:
+            os.utime(path, None, follow_symlinks=False)
+            self.maintenance_error = None
+        except OSError as exc:
+            self.maintenance_error = str(exc)
+
+
+def enforce_model_cache_limit(
+    cache_root: Path,
+    limit_bytes: int,
+    *,
+    retire: Callable[[Path], None] | None = None,
+) -> list[Path]:
+    """Retire oldest regular cache entries until the contained cache fits its limit."""
+
+    if limit_bytes <= 0:
+        raise ValueError("limit_bytes must be positive.")
+    try:
+        root = cache_root.resolve(strict=True)
+    except OSError:
+        return []
+    entries: list[tuple[int, int, Path]] = []
+    for candidate in root.rglob("*"):
+        if candidate.is_symlink() or not candidate.is_file():
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(root)
+            metadata = resolved.stat()
+        except (OSError, ValueError):
+            continue
+        entries.append((metadata.st_mtime_ns, metadata.st_size, resolved))
+    total = sum(size for _, size, _ in entries)
+    if total <= limit_bytes:
+        return []
+    retire_entry = retire or _move_cache_entry_to_trash
+    removed: list[Path] = []
+    for _, size, path in sorted(entries, key=lambda item: (item[0], str(item[2]))):
+        retire_entry(path)
+        removed.append(path)
+        total -= size
+        if total <= limit_bytes:
+            break
+    return removed
+
+
+def _move_cache_entry_to_trash(path: Path) -> None:
+    trash = Path("/usr/bin/trash")
+    if not trash.is_file():
+        raise OSError("macOS Trash command is unavailable.")
+    result = subprocess.run(
+        [str(trash), str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip() or "unknown Trash error"
+        raise OSError(f"Could not retire model cache entry: {detail}")
 
 
 def model_call_cache_key(

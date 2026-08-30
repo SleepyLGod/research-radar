@@ -59,7 +59,10 @@ def verify_bundle(source_engine: Path, app: Path) -> None:
         raise BundleVerificationError("The staged application is not an App bundle.")
     symlink_manifest(app)
     staged_engine = app / "Contents/Helpers/ResearchRadarEngine.app"
+    pdf_helper = app / "Contents/Helpers/ResearchRadarPDFHelper"
     verify_engine_copy(source_engine, staged_engine)
+    if not pdf_helper.is_file() or not os.access(pdf_helper, os.X_OK):
+        raise BundleVerificationError("The PDF helper is missing or not executable.")
     _verify_info_plist(app)
     _verify_macho_dependencies(app)
     _reject_private_build_paths(app)

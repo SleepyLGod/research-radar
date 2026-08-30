@@ -16,10 +16,11 @@
 "error.engine_missing" = "App 内置的本地引擎缺失，请重新安装 ResearchRadar。";
 "error.engine_busy" = "已有一项本地引擎检查正在运行。";
 "error.engine_crashed" = "本地引擎意外停止。";
+"error.preflight_not_ready" = "部分必要检查需要处理。";
 "error.cancelled" = "检查已取消。";
 "error.parent_lost" = "ResearchRadar 已关闭，检查随之停止。";
 "detail.ready" = "按需检查 Python 和必要的本地依赖。";
 "detail.running" = "检查完成后，本地引擎会立即退出。";
-"detail.succeeded" = "已从 App 内置引擎加载 %@。";
+"detail.succeeded" = "App 内置引擎和必要依赖均可用。";
 "detail.failed" = "没有启动研究或发布任务。";
 "detail.idle" = "ResearchRadar 空闲时不会运行后台引擎。";
