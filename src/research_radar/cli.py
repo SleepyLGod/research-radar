@@ -9,7 +9,6 @@ import os
 import shutil
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -22,34 +21,32 @@ from research_radar.analysis.routing import (
     resolve_task_route,
     resolve_task_route_preview,
 )
+from research_radar.application.daily import (
+    DailyRunOptions,
+    ProviderOverrides,
+    build_daily_connectors,
+    run_daily_application,
+)
+from research_radar.application.email import EmailDeliveryOptions, publish_email_application
+from research_radar.application.wechat import (
+    WeChatDraftOptions,
+    append_wechat_draft_source_history,
+    publish_wechat_draft,
+)
 from research_radar.compose.archive import export_archive_run
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.wechat import (
     render_wechat_html,
-    render_wechat_publish_html,
-    wechat_publish_html_issues,
 )
 from research_radar.compose.zhihu import export_zhihu_run
 from research_radar.config import AppConfig, load_config, parse_config
-from research_radar.discovery.arxiv import ArxivConnector
-from research_radar.discovery.base import DiscoveryConnector
-from research_radar.discovery.github import GitHubRepoConnector
-from research_radar.discovery.openalex import OpenAlexConnector
-from research_radar.discovery.semantic_scholar import SemanticScholarConnector
-from research_radar.discovery.web_search import (
-    TAVILY_SEARCH_ENDPOINT,
-    GenericWebSearchConnector,
-    TavilyWebSearchConnector,
-)
 from research_radar.evaluation.topic_smoke import run_topic_smoke, select_topic_specs
 from research_radar.evidence.ledger import load_claims
 from research_radar.exceptions import ConfigError, PublishError, ResearchRadarError, SecretError
 from research_radar.pipeline.daily import run_daily
 from research_radar.pipeline.paper import run_paper
 from research_radar.publishers.archive.git import publish_archive_git
-from research_radar.publishers.email.client import publish_email_run
 from research_radar.publishers.wechat.client import (
-    WeChatArticle,
     WeChatDraftClient,
 )
 from research_radar.scheduler.local import (
@@ -67,8 +64,7 @@ from research_radar.security.privacy_scan import assert_clean
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import EnvSecretBackend, KeychainSecretBackend, SecretManager
 from research_radar.storage.encrypted_store import EncryptedJsonStore
-from research_radar.storage.files import read_jsonl, write_json, write_text
-from research_radar.storage.source_history import append_source_history_outcome_records
+from research_radar.storage.files import write_json, write_text
 from research_radar.topic_bootstrap import (
     bootstrap_topic_draft,
     render_topic_draft_yaml,
@@ -1087,71 +1083,34 @@ def handle_run_daily(args: argparse.Namespace) -> None:
         _load_env_file(args.env_file)
     config = load_config(args.config)
     manager = _secret_manager(args.secret_source)
-    connectors = _daily_connectors(config, manager)
-    report_language = _report_language_for_topic(args, config)
-    gist_route = resolve_task_route(
+    run_dir = run_daily_application(
+        DailyRunOptions(
+            root=args.root,
+            topic_id=args.topic,
+            limit=args.limit,
+            deep_limit=args.deep_limit,
+            language=getattr(args, "language", None),
+            model_cache=bool(getattr(args, "model_cache", False)),
+            routes=ProviderOverrides(
+                provider=getattr(args, "provider", None),
+                model=getattr(args, "model", None),
+                deepseek_provider=getattr(args, "deepseek_provider", None),
+                gist_provider=getattr(args, "gist_provider", None),
+                gist_model=getattr(args, "gist_model", None),
+                reader_provider=getattr(args, "reader_provider", None),
+                reader_model=getattr(args, "reader_model", None),
+                verifier_provider=getattr(args, "verifier_provider", None),
+                verifier_model=getattr(args, "verifier_model", None),
+                anchor_repair_provider=getattr(args, "anchor_repair_provider", None),
+                anchor_repair_model=getattr(args, "anchor_repair_model", None),
+                localization_provider=getattr(args, "localization_provider", None),
+                localization_model=getattr(args, "localization_model", None),
+            ),
+        ),
         config,
         manager,
-        "source_gist",
-        provider_override=getattr(args, "gist_provider", None),
-        model_override=getattr(args, "gist_model", None),
-        global_provider=getattr(args, "provider", None),
-        global_model=getattr(args, "model", None),
-        provider_replacements=_deepseek_provider_replacements(args),
-        default_local=True,
-    )
-    reader_route = _resolve_daily_reader_route(args, config, manager)
-    anchor_repair_route = _resolve_anchor_repair_route(args, config, manager)
-    localization_route = _resolve_localization_route(
-        args,
-        config,
-        manager,
-        report_language=report_language,
-    )
-    verifier_route = resolve_task_route(
-        config,
-        manager,
-        "verifier",
-        provider_override=getattr(args, "verifier_provider", None),
-        model_override=getattr(args, "verifier_model", None),
-        global_provider=getattr(args, "provider", None),
-        global_model=getattr(args, "model", None),
-        provider_replacements=_deepseek_provider_replacements(args),
-        default_local=True,
-    )
-    gist_route = _maybe_cached_route(gist_route, args.root, "source_gist", args)
-    reader_route = _maybe_cached_route(reader_route, args.root, "deep_reading", args)
-    anchor_repair_route = _maybe_cached_route(
-        anchor_repair_route,
-        args.root,
-        "anchor_repair",
-        args,
-    )
-    localization_route = _maybe_cached_route(
-        localization_route,
-        args.root,
-        "report_localization",
-        args,
-    )
-    verifier_route = _maybe_cached_route(verifier_route, args.root, "verifier", args)
-    run_dir = run_daily(
-        args.root,
-        config,
-        args.topic,
-        connectors,
-        verifier=verifier_route.provider,
-        verifier_model=verifier_route.model,
-        gist_provider=gist_route.provider,
-        gist_model=gist_route.model,
-        limit=args.limit,
-        deep_reader=reader_route.provider,
-        deep_model=reader_route.model,
-        deep_limit=args.deep_limit,
-        anchor_repair_provider=anchor_repair_route.provider,
-        anchor_repair_model=anchor_repair_route.model,
-        localizer=localization_route.provider,
-        localization_model=localization_route.model,
-        language=getattr(args, "language", None),
+        warning_listener=lambda message: print(message, file=sys.stderr),
+        pipeline_runner=run_daily,
     )
     if getattr(args, "run_dir_output", None) is not None:
         write_text(args.run_dir_output, str(run_dir))
@@ -1272,7 +1231,11 @@ def handle_eval_topics(args: argparse.Namespace) -> None:
         "report_localization",
         args,
     )
-    connectors = _daily_connectors(config, manager)
+    connectors = build_daily_connectors(
+        config,
+        manager,
+        warning_listener=lambda message: print(message, file=sys.stderr),
+    )
     report = run_topic_smoke(
         args.root,
         config,
@@ -1363,75 +1326,22 @@ def handle_archive_publish_git(args: argparse.Namespace) -> None:
 def handle_publish_wechat(args: argparse.Namespace) -> None:
     """Create a WeChat draft."""
 
-    try:
-        draft = load_article_draft(args.run_dir / "article_draft.json")
-        publish_content_path = args.run_dir / "wechat_publish.html"
-        if args.dry_run:
-            content = render_wechat_publish_html(draft)
-            write_text(publish_content_path, content)
-            _assert_wechat_publish_html_safe(content, allow_missing_media=True)
-            request = _wechat_publish_request(
-                args,
-                draft_topic=draft.topic_id,
-                content_path=publish_content_path,
-            )
-            write_json(args.run_dir / "publish_wechat_draft_request.json", request)
-            result = {
-                "status": "dry_run",
-                "draft_created": False,
-                "request": request,
-            }
-            write_json(args.run_dir / "publish_wechat_draft.json", result)
-            print(f"Prepared WeChat draft dry run: {args.run_dir / 'publish_wechat_draft.json'}")
-            return
-        manager = SecretManager(KeychainSecretBackend())
-        encryptor = EnvelopeEncryptor(SecretMasterKeyProvider(manager.backend))
-        token_store = EncryptedJsonStore(args.run_dir / "wechat_token.enc.json", encryptor)
-        client = WeChatDraftClient(manager, token_store)
-        media_url_map, media_uploads = _upload_local_wechat_media(args.run_dir, draft, client)
-        content = render_wechat_publish_html(
-            draft,
-            media_url_map=media_url_map,
-        )
-        write_text(publish_content_path, content)
-        _assert_wechat_publish_html_safe(content, allow_missing_media=False)
-        request = _wechat_publish_request(
-            args,
-            draft_topic=draft.topic_id,
-            content_path=publish_content_path,
-            media_uploads=media_uploads,
-        )
-        write_json(args.run_dir / "publish_wechat_draft_request.json", request)
-        if _publish_content_requires_media_upload(content):
-            raise PublishError(
-                "WeChat draft contains local figure images that were not uploaded."
-            )
-        article = WeChatArticle(
+    result = publish_wechat_draft(
+        WeChatDraftOptions(
+            run_dir=args.run_dir,
             title=args.title,
-            author=args.author,
             digest=args.digest,
-            content=content,
             thumb_media_id=args.thumb_media_id,
-        )
-        response = client.add_draft(article)
-        source_history_outcome = _safe_append_wechat_draft_source_history(
-            args.run_dir,
-            draft,
-            title=args.title,
-        )
-        result = {
-            "status": "created",
-            "draft_created": True,
-            "request": request,
-            "response": response,
-            "media_uploads": media_uploads,
-            "source_history_outcome": source_history_outcome,
-        }
-        write_json(args.run_dir / "publish_wechat_draft.json", result)
-        print(f"Created WeChat draft: {response}")
-    except ResearchRadarError as exc:
-        _write_publish_error(args.run_dir, exc)
-        raise
+            author=args.author,
+            dry_run=bool(args.dry_run),
+        ),
+        client_factory=WeChatDraftClient,
+        history_recorder=_append_wechat_draft_source_history,
+    )
+    if result["status"] == "dry_run":
+        print(f"Prepared WeChat draft dry run: {args.run_dir / 'publish_wechat_draft.json'}")
+    else:
+        print(f"Created WeChat draft: {result['response']}")
 
 
 def handle_publish_email(args: argparse.Namespace) -> None:
@@ -1439,12 +1349,14 @@ def handle_publish_email(args: argparse.Namespace) -> None:
 
     config = load_config(args.config)
     manager = _secret_manager(config.security.secret_backend)
-    result = publish_email_run(
-        args.run_dir,
+    result = publish_email_application(
+        EmailDeliveryOptions(
+            run_dir=args.run_dir,
+            dry_run=bool(args.dry_run),
+            allow_resend=bool(args.allow_resend),
+        ),
         config.email,
         manager,
-        dry_run=bool(args.dry_run),
-        allow_resend=bool(args.allow_resend),
     )
     if result.status == "dry_run":
         print(f"Prepared email preview: {args.run_dir / 'email.html'}")
@@ -1596,197 +1508,16 @@ def handle_privacy_scan(args: argparse.Namespace) -> None:
     print("Privacy scan passed.")
 
 
-def _wechat_publish_request(
-    args: argparse.Namespace,
-    *,
-    draft_topic: str,
-    content_path: Path,
-    media_uploads: list[dict[str, str]] | None = None,
-) -> dict[str, object]:
-    return {
-        "target": "wechat_draft",
-        "draft_only": True,
-        "auto_publish": False,
-        "topic_id": draft_topic,
-        "title": args.title,
-        "author": args.author,
-        "digest": args.digest,
-        "thumb_media_id": args.thumb_media_id,
-        "article_draft_path": str(args.run_dir / "article_draft.json"),
-        "content_path": str(content_path),
-        "media_uploads": media_uploads or [],
-    }
-
-
 def _append_wechat_draft_source_history(
     run_dir: Path,
     draft: Any,
     *,
     title: str,
 ) -> dict[str, object] | None:
-    sources_path = run_dir / "sources.jsonl"
-    if not sources_path.exists():
-        return None
-    draft_source_urls = _article_draft_source_urls(draft)
-    if not draft_source_urls:
-        return None
-    sources = [
-        source
-        for source in read_jsonl(sources_path)
-        if str(source.get("url") or "") in draft_source_urls
-    ]
-    if not sources:
-        return None
-    created_at = datetime.now(UTC).isoformat()
-    outcome_by_url = {
-        str(source["url"]): {
-            "wechat_draft_status": "created",
-            "wechat_title": title,
-            "wechat_created_at": created_at,
-        }
-        for source in sources
-        if source.get("url")
-    }
-    if not outcome_by_url:
-        return None
-    return append_source_history_outcome_records(
-        _run_root_for_history(run_dir),
-        str(getattr(draft, "topic_id", "unknown")),
-        sources,
-        run_id=run_dir.name,
-        event="wechat_draft",
-        outcome_by_url=outcome_by_url,
-    )
-
-
-def _safe_append_wechat_draft_source_history(
-    run_dir: Path,
-    draft: Any,
-    *,
-    title: str,
-) -> dict[str, object] | None:
-    try:
-        return _append_wechat_draft_source_history(run_dir, draft, title=title)
-    except Exception as exc:  # Best-effort audit after the draft already exists.
-        return {
-            "status": "history_record_failed",
-            "error_type": type(exc).__name__,
-            "message": redact_text(str(exc)),
-        }
-
-
-def _article_draft_source_urls(draft: Any) -> set[str]:
-    urls: set[str] = set()
-    for section in getattr(draft, "sections", []):
-        metadata = getattr(section, "metadata", {})
-        if not isinstance(metadata, dict):
-            continue
-        for key in ("sources", "references"):
-            raw_sources = metadata.get(key, [])
-            if not isinstance(raw_sources, list):
-                continue
-            for source in raw_sources:
-                if isinstance(source, dict) and source.get("url"):
-                    urls.add(str(source["url"]))
-        for deep_read in metadata.get("deep_reads", []):
-            if not isinstance(deep_read, dict):
-                continue
-            source = deep_read.get("source")
-            if isinstance(source, dict) and source.get("url"):
-                urls.add(str(source["url"]))
-    return urls
-
-
-def _run_root_for_history(run_dir: Path) -> Path:
-    if run_dir.parent.name == "runs":
-        return run_dir.parent.parent
-    return run_dir.parent
-
-
-def _publish_content_requires_media_upload(content: str) -> bool:
-    return "Figure image requires WeChat media upload before publishing." in content
-
-
-def _assert_wechat_publish_html_safe(content: str, *, allow_missing_media: bool) -> None:
-    issues = wechat_publish_html_issues(content)
-    if allow_missing_media:
-        issues = [
-            issue for issue in issues if issue != "local figure image remains in publish HTML"
-        ]
-    if issues:
-        raise PublishError("WeChat publish HTML failed safety check: " + "; ".join(issues[:3]))
-
-
-def _upload_local_wechat_media(
-    run_dir: Path,
-    draft: object,
-    client: WeChatDraftClient,
-) -> tuple[dict[str, str], list[dict[str, str]]]:
-    local_media = _local_wechat_media_paths(run_dir, draft)
-    media_url_map: dict[str, str] = {}
-    uploads: list[dict[str, str]] = []
-    for src, path in local_media.items():
-        uploaded_url = client.upload_article_image(path)
-        media_url_map[src] = uploaded_url
-        uploads.append({"local_src": src, "uploaded_url": uploaded_url})
-    return media_url_map, uploads
-
-
-def _local_wechat_media_paths(run_dir: Path, draft: object) -> dict[str, Path]:
-    media: dict[str, Path] = {}
-    for figure in _draft_figures(draft):
-        if figure.get("renderable") is False:
-            continue
-        src = str(figure.get("relative_path") or figure.get("asset_path") or "")
-        if not src or not _is_local_media_src(src):
-            continue
-        path = Path(src)
-        if not path.is_absolute():
-            path = run_dir / src
-        if not path.exists():
-            raise PublishError(f"WeChat image upload file not found: {path}")
-        media[src] = path
-    return media
-
-
-def _draft_figures(draft: object) -> list[dict[str, Any]]:
-    figures: list[dict[str, Any]] = []
-    sections = getattr(draft, "sections", [])
-    for section in sections:
-        metadata = getattr(section, "metadata", {})
-        if not isinstance(metadata, dict) or metadata.get("kind") != "deep_reads":
-            continue
-        raw_deep_reads = metadata.get("deep_reads", [])
-        if not isinstance(raw_deep_reads, list):
-            continue
-        for deep_read in raw_deep_reads:
-            if not isinstance(deep_read, dict):
-                continue
-            raw_figures = deep_read.get("figures", [])
-            if not isinstance(raw_figures, list):
-                continue
-            figures.extend(figure for figure in raw_figures if isinstance(figure, dict))
-    return figures
-
-
-def _is_local_media_src(src: str) -> bool:
-    lowered = src.casefold()
-    return not (
-        lowered.startswith("https://")
-        or lowered.startswith("http://")
-        or lowered.startswith("data:")
-    )
-
-
-def _write_publish_error(run_dir: Path, exc: ResearchRadarError) -> None:
-    write_json(
-        run_dir / "publish_error.json",
-        {
-            "target": "wechat_draft",
-            "stage": "publish",
-            "error_type": type(exc).__name__,
-            "message": redact_text(str(exc)),
-        },
+    return append_wechat_draft_source_history(
+        run_dir,
+        draft,
+        title=title,
     )
 
 
@@ -2150,67 +1881,6 @@ def _maybe_cached_route(
         ),
         model=route.model,
         provider_name=route.provider_name,
-    )
-
-
-def _daily_connectors(
-    config: AppConfig,
-    manager: SecretManager,
-) -> list[DiscoveryConnector]:
-    connectors: list[DiscoveryConnector] = [
-        ArxivConnector(),
-        SemanticScholarConnector(manager),
-        OpenAlexConnector(),
-    ]
-    web_search = _web_search_connector(config, manager)
-    if web_search is not None:
-        connectors.append(web_search)
-    connectors.append(GitHubRepoConnector(manager))
-    return connectors
-
-
-def _web_search_connector(
-    config: AppConfig,
-    manager: SecretManager,
-) -> DiscoveryConnector | None:
-    web_search = config.discovery.web_search
-    provider = web_search.provider or ("generic" if web_search.endpoint is not None else None)
-    if provider is None:
-        return None
-    if provider == "tavily":
-        secret_name = web_search.header_secret_name or "web_search.api_key"
-        try:
-            token = manager.get_named_secret(secret_name)
-        except SecretError:
-            print(
-                "Web search disabled: missing configured Tavily API key.",
-                file=sys.stderr,
-            )
-            return None
-        return TavilyWebSearchConnector(
-            api_key=token,
-            endpoint=web_search.endpoint or TAVILY_SEARCH_ENDPOINT,
-            max_results=web_search.max_results,
-            search_depth=web_search.search_depth,
-            timeout_seconds=web_search.timeout_seconds,
-        )
-    if web_search.endpoint is None:
-        return None
-    headers: dict[str, str] = {}
-    if web_search.header_secret_name:
-        try:
-            token = manager.get_named_secret(web_search.header_secret_name)
-        except SecretError:
-            print(
-                "Web search disabled: missing configured header secret.",
-                file=sys.stderr,
-            )
-            return None
-        headers["Authorization"] = f"Bearer {token}"
-    return GenericWebSearchConnector(
-        web_search.endpoint,
-        headers=headers,
-        timeout_seconds=web_search.timeout_seconds,
     )
 
 
