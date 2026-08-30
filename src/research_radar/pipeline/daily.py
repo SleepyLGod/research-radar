@@ -7,7 +7,11 @@ from pathlib import Path
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
-from research_radar.analysis.figures import FigureExtractionError, extract_paper_figures
+from research_radar.analysis.figures import (
+    FigureExtractionError,
+    FigureExtractor,
+    extract_paper_figures,
+)
 from research_radar.analysis.localization import (
     localization_failed,
     localization_status_from_attempts,
@@ -64,7 +68,7 @@ from research_radar.models import (
     SourceType,
     dataclass_to_dict,
 )
-from research_radar.pipeline.progress import ProgressWriter
+from research_radar.pipeline.progress import ProgressListener, ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.pipeline.runtime import build_runtime_summary
@@ -99,6 +103,8 @@ def run_daily(
     localizer: LLMProvider | None = None,
     localization_model: str | None = None,
     language: str | None = None,
+    progress_listener: ProgressListener | None = None,
+    figure_extractor: FigureExtractor | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
 
@@ -109,7 +115,10 @@ def run_daily(
             "Chinese report localization requires a localization provider and model."
         )
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
-    progress = ProgressWriter(run_dir / "run_progress.jsonl")
+    progress = ProgressWriter(
+        run_dir / "run_progress.jsonl",
+        listener=progress_listener,
+    )
     progress.record("run", "created", topic_id=topic_id, mode="daily")
     findings: list[ReviewFinding] = []
     research_plan = build_research_plan(topic, trusted_domains=config.discovery.trusted_domains)
@@ -522,6 +531,7 @@ def run_daily(
         deep_artifacts,
         claims,
         run_dir / "figures",
+        figure_extractor=figure_extractor or extract_paper_figures,
     )
     findings.extend(figure_findings)
     web_search_summary = _web_search_summary(
@@ -1232,6 +1242,8 @@ def _extract_deep_read_figures(
     deep_artifacts: list[Artifact],
     claims: list[Claim],
     figure_dir: Path,
+    *,
+    figure_extractor: FigureExtractor | None = None,
 ) -> tuple[dict[str, list[dict[str, object]]], list[ReviewFinding]]:
     figures_by_source_url: dict[str, list[dict[str, object]]] = {}
     findings: list[ReviewFinding] = []
@@ -1239,7 +1251,7 @@ def _extract_deep_read_figures(
         if not artifact.artifact_path:
             continue
         try:
-            figures = extract_paper_figures(artifact, figure_dir, claims)
+            figures = (figure_extractor or extract_paper_figures)(artifact, figure_dir, claims)
         except FigureExtractionError as exc:
             findings.append(
                 ReviewFinding(

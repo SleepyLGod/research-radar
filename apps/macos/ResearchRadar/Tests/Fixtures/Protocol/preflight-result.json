@@ -1,0 +1,1 @@
+{"command":"preflight","completed_at":"2026-08-12T09:00:01Z","delivery":null,"preflight":{"checks":[{"id":"engine","message":"Bundled engine is ready.","model":null,"provider":null,"status":"ready"}],"ready":true},"report":null,"request_id":"0b5f8bc4-f934-4d86-b513-265e950fb44a","schema_version":1,"status":"succeeded","topic_draft":null}

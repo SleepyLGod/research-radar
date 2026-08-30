@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -12,13 +13,15 @@ from research_radar.storage.files import ensure_dir
 
 MAX_PROGRESS_TEXT_CHARS = 500
 MAX_PROGRESS_LIST_ITEMS = 20
+ProgressListener = Callable[[dict[str, Any]], None]
 
 
 class ProgressWriter:
     """Write redacted progress events to a JSONL artifact."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, listener: ProgressListener | None = None) -> None:
         self.path = path
+        self.listener = listener
         self._started_at = time.monotonic()
         self._active_stages: dict[str, float] = {}
         self.events: list[dict[str, Any]] = []
@@ -45,6 +48,11 @@ class ProgressWriter:
             self.events.append(event)
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+            if self.listener is not None:
+                try:
+                    self.listener(dict(event))
+                except Exception:
+                    pass
         except (OSError, TypeError, ValueError, RuntimeError):
             return
 
