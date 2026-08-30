@@ -133,7 +133,7 @@ Every row in the table above is represented by localization keys rather than sto
 - Use system typography. Suggested hierarchy: title `22 pt semibold`, report headline `17 pt semibold`, section heading `15 pt semibold`, body `13 pt regular`, metadata `11 pt regular`.
 - Keep article text at a maximum readable width of `720 pt`, left aligned. Letter spacing stays at the system default.
 - Use restrained teal for the active research state, system blue for links/actions, green only for completed delivery, amber only for attention, and red only for failure.
-- Use native controls and SF Symbols. The status item uses `scope`; buttons use familiar symbols such as `play.fill`, `pause.fill`, `stop.fill`, `arrow.clockwise`, `envelope`, and `square.and.arrow.up`.
+- Use native controls and SF Symbols. The foundation status item uses `dot.radiowaves.left.and.right`; later task buttons use familiar symbols such as `play.fill`, `pause.fill`, `stop.fill`, `arrow.clockwise`, `envelope`, and `square.and.arrow.up`.
 - Avoid decorative gradients, floating color blobs, nested cards, oversized hero text, and opaque custom backgrounds over native sidebars/toolbars.
 - macOS 26 uses system Liquid Glass only through native APIs; there is no compatibility implementation for older systems.
 - Support Light, Dark, Increase Contrast, Reduce Transparency, Reduce Motion, keyboard navigation, VoiceOver labels, and Dynamic Type-equivalent system text sizing.
@@ -165,16 +165,16 @@ Every row in the table above is represented by localization keys rather than sto
 | `apps/macos/ResearchRadar/Package.swift` | SwiftPM products, targets, resources, and macOS 26 arm64 platform contract. |
 | `Sources/ResearchRadarCore/Protocol/*.swift` | Codable mirrors of the Python v1 engine protocol. |
 | `Sources/ResearchRadarCore/Models/*.swift` | App configuration, topic, schedule, job, report, and delivery state value types. |
-| `Sources/ResearchRadarCore/Localization/AppLanguage.swift` | UI-language preference, system-language resolution, and report-language default mapping. |
 | `Sources/ResearchRadarCore/Persistence/AtomicJSONStore.swift` | Owner-only atomic JSON reads/writes with schema checking. |
 | `Sources/ResearchRadarCore/Queue/JobQueue.swift` | Pure durable queue transitions and coalescing. |
 | `Sources/ResearchRadarCore/Scheduling/ScheduleEvaluator.swift` | Pure due-job and wake catch-up decisions. |
-| `Sources/ResearchRadarExecutable/ResearchRadarMain.swift` | Thin `@main` executable that constructs the app feature scene. |
+| `Sources/ResearchRadarExecutable/ResearchRadarMain.swift` | Thin `@main` executable that enters the AppKit application function. |
 | `Sources/ResearchRadarAppFeature/App/*.swift` | AppKit delegate, singleton-window coordination, and dependency container. |
 | `Sources/ResearchRadarAppFeature/Stores/AppStore.swift` | Main-actor observable source of UI truth. |
-| `Sources/ResearchRadarAppFeature/Localization/LocalizationStore.swift` | One observable source for SwiftUI and AppKit localized strings. |
-| `Sources/ResearchRadarAppFeature/Localization/UserFacingErrorCatalog.swift` | Stable engine-error code to actionable English/Simplified Chinese copy. |
-| `Sources/ResearchRadarAppFeature/Services/EngineProcessSupervisor.swift` | One process at a time, event tailing, cancellation, and crash reconciliation. |
+| `Sources/ResearchRadarAppFeature/Localization/AppLanguage.swift` | UI-language preference, system-language resolution, and one observable localized-string source shared by SwiftUI and AppKit. |
+| `Sources/ResearchRadarAppFeature/Errors/UserFacingErrorCatalog.swift` | Stable engine-error code to actionable English/Simplified Chinese copy. |
+| `Sources/ResearchRadarAppFeature/Engine/EngineProcessSupervisor.swift` | One low-level engine process at a time, started-event handshake, bounded streams, and cancellation. |
+| `Sources/ResearchRadarAppFeature/Engine/EngineJobCoordinator.swift` | Task 2 typed request/result and durable terminal reconciliation around the proven low-level supervisor. |
 | `Sources/ResearchRadarAppFeature/Services/KeychainStore.swift` | Generic-password writes/presence checks under service `ResearchRadar`. |
 | `Sources/ResearchRadarAppFeature/Services/LoginItemService.swift` | `SMAppService.mainApp` registration state and errors. |
 | `Sources/ResearchRadarAppFeature/Services/LegacyStateMigrationService.swift` | Detect old launchd schedules and explicitly copy source-history JSONL into an empty App workspace. |
@@ -186,7 +186,7 @@ Every row in the table above is represented by localization keys rather than sto
 | `Sources/ResearchRadarAppFeature/Resources/zh-Hans.lproj/Localizable.strings` | Simplified Chinese App UI string table. |
 | `Sources/ResearchRadarPDFCore/PDFOperations.swift` | Testable PDFKit word-bbox extraction and point-based PNG crop rendering. |
 | `Sources/ResearchRadarPDFHelper/PDFHelperMain.swift` | Thin native helper executable that decodes a request and calls `ResearchRadarPDFCore`. |
-| `Tests/ResearchRadarAppFeatureTests/Fixtures/ProcessTreeFixture.swift` | Test-only engine/child/grandchild process fixture; never included in the App bundle. |
+| `Tests/ResearchRadarAppFeatureTests/Fixtures/process_fixture.py` | Test-only engine/child/grandchild process fixture; never included in the App bundle. |
 
 ### Build and packaging boundary
 
@@ -1067,52 +1067,54 @@ This is a vertical product slice, not a packaging-only spike. It deliberately ex
 - Modify: `uv.lock`
 - Create: `apps/macos/ResearchRadar/Package.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Protocol/EngineProtocol.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Localization/AppLanguage.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarExecutable/ResearchRadarMain.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/ResearchRadarScene.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/AppDelegate.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/AppContainer.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/ResearchRadarApplication.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/FoundationView.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/FoundationViewModel.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/StatusItemController.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/WindowCoordinator.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/LocalizationStore.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/UserFacingErrorCatalog.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/EngineProcessSupervisor.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/EventTailer.swift`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views/FoundationPreflightView.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/AppLanguage.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Errors/UserFacingErrorCatalog.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Engine/EngineProcessSupervisor.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Engine/FoundationJobBuilder.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Resources/en.lproj/Localizable.strings`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Resources/zh-Hans.lproj/Localizable.strings`
-- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarProcessFixture/ProcessTreeFixture.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/EngineProtocolTests.swift`
-- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/AppLanguageTests.swift`
+- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppLanguageTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/EngineProcessSupervisorTests.swift`
-- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/FoundationWindowTests.swift`
-- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/LocalizationStoreTests.swift`
+- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppShellTests.swift`
+- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/UserFacingErrorCatalogTests.swift`
+- Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/Fixtures/process_fixture.py`
 - Create: `packaging/macos/research-radar-engine.spec`
+- Create: `packaging/macos/engine_entry.py`
 - Create: `packaging/macos/Info.plist`
+- Create: `script/swift_test.sh`
 - Create: `script/build_macos_engine.sh`
 - Create: `script/assemble_macos_app.sh`
+- Create: `script/sign_macos_bundle.py`
 - Create: `script/stage_macos_app.sh`
 - Create: `script/verify_macos_bundle.py`
+- Create: `script/run_macos_engine_smoke.py`
+- Create: `script/measure_macos_resources.py`
+- Create: `tests/test_macos_bundle_signer.py`
 - Create: `tests/test_macos_bundle_verifier.py`
+- Create: `tests/test_macos_resource_report.py`
 
 **Interfaces:**
 - Produces the common request/event/result/error envelope and only the `preflight` payload. Task 2 adds and freezes bootstrap, daily, and delivery payloads before beta distribution.
-- Produces `EngineProcessSupervisor.run(request:)`, `cancel()`, and `reconcileTerminalArtifacts()` with the final process-group semantics used by later tasks.
+- Produces a low-level `EngineProcessSupervisor.run(executable:arguments:eventsURL:)` and `cancel()` process boundary with the final process-group semantics used by later tasks. Task 2 adds the typed request/result and durable reconciliation layer.
 - Produces one `LocalizationStore` shared by AppKit and SwiftUI, one `WindowCoordinator`, and deterministic bundle verification scripts reused by Tasks 2 and 3.
 - Does not consume `AppConfig`, Keychain provider secrets, topic YAML, or any publisher.
 
 ```swift
 public actor EngineProcessSupervisor {
     public func run(
-        request: EngineRequestV1,
-        jobDirectory: URL
-    ) async throws -> EngineResultV1
+        executable: URL,
+        arguments: [String],
+        eventsURL: URL
+    ) async throws -> EngineProcessOutcome
 
-    public func cancel(requestID: UUID) async throws
-
-    public func reconcileTerminalArtifacts(
-        requestID: UUID,
-        jobDirectory: URL
-    ) async throws -> ReconciledEngineTerminalState?
+    public func cancel() async
 }
 ```
 
@@ -1136,7 +1138,7 @@ class EngineRequestV1:
 
 Task 1 does not implement placeholder payloads or decoders for future commands. Task 2 adds the remaining Section 3.2 commands and freezes schema v1 before any local beta leaves development.
 
-Start the Swift package with `defaultLocalization: "en"`, macOS 26, arm64 products, `ResearchRadarCore`, `ResearchRadarAppFeature`, `ResearchRadarExecutable`, and the test-only `ResearchRadarProcessFixture`. The assembler later copies only an explicit allowlist and must never copy the fixture executable.
+Start the Swift package with `defaultLocalization: "en"`, macOS 26, arm64 products, `ResearchRadarCore`, `ResearchRadarAppFeature`, and `ResearchRadarExecutable`. Keep the process fixture as a test-resource Python executable; the assembler copies only an explicit production allowlist and must never copy the fixture.
 
 Run:
 
@@ -1159,7 +1161,7 @@ Run:
 
 ```bash
 swift test --package-path apps/macos/ResearchRadar --filter AppLanguageTests
-swift test --package-path apps/macos/ResearchRadar --filter LocalizationStoreTests
+./script/swift_test.sh --filter AppLanguageTests
 ```
 
 Expected: PASS without changing any report language field.
@@ -1172,7 +1174,7 @@ The executable sequence is fixed:
 
 1. parse and validate request paths and immediately capture the native App parent PID with `os.getppid()`; if it is already reparented or cannot be registered with `kqueue`, treat that as `parent_lost`;
 2. install signal handling and arm a macOS `kqueue` `EVFILT_PROC`/`NOTE_EXIT` watcher for that parent;
-3. call `os.setsid()`;
+3. call `os.setsid()`; when Foundation `Process` has already created an isolated process group and `setsid()` returns `EPERM`, accept it only when `getpgrp() == getpid()`;
 4. atomically append and `fsync` the first `started` event;
 5. only then permit a handler to create child processes;
 6. write exactly one atomic `result.json` or `error.json`.
@@ -1185,7 +1187,7 @@ Expected: PASS for successful preflight, crash before `started`, cancellation, r
 
 - [ ] **Step 4: Write process-tree supervision tests before implementing the supervisor**
 
-The test fixture accepts explicit modes: `normal`, `crash-before-session`, `wait`, `ignore-term-child`, and `parent-exit`. In process-tree modes it launches a child and grandchild, writes their PIDs to a test artifact, and never enters an App bundle allowlist. The parent-exit fixture uses a disposable proxy parent so the test can simulate an App crash without terminating the Swift test process.
+The Python test fixture bundled only as a Swift test resource accepts explicit modes: `normal`, `crash-before-started`, `wait-before-started`, `term-process-tree`, and `ignore-term-process-tree`. In process-tree modes it launches a child and grandchild, writes their PIDs to a test artifact, and never enters an App bundle allowlist. A separate Python proxy-parent fixture simulates an App crash without terminating the test process.
 
 Add tests:
 
@@ -1206,9 +1208,9 @@ Expected: FAIL because the supervisor does not exist.
 
 - [ ] **Step 5: Implement the final PID/process-group cancellation contract**
 
-Launch the engine directly with `Process`, never through a shell. Save the engine PID immediately. `EventTailer` marks session establishment only after reading the fsynced `started` event; then verify `getpgid(pid) == pid`.
+Launch the engine directly with `Process`, never through a shell. Save the engine PID immediately. A job-scoped started-event handshake marks session establishment only after reading the fsynced `started` event; then verify `getpgid(pid) == pid`.
 
-Before `started`, cancellation sends TERM to the engine PID. This is safe because the bridge contract forbids child creation before the started event is durable. After `started`, cancellation signals `-pgid`. Wait five seconds, escalate to KILL, reap the engine, then probe the former process group with signal 0 until it is absent. Do not release the supervisor slot while a descendant survives. The Python parent watcher provides the same process-group cleanup when the Swift App cannot send Cancel because it crashed or was killed. Task 2 reconciles a `parent_lost` terminal error as `interrupted`; it never automatically reruns research or creates delivery jobs. Create `EventTailer` when a run starts and release it immediately after terminal reconciliation; no tailer exists between jobs.
+Before `started`, cancellation sends TERM to the engine PID and waits for that PID to disappear. This is safe because the bridge contract forbids child creation before the started event is durable. After `started`, cancellation signals `-pgid` and waits for the entire process group to disappear; disappearance of the leader PID alone is not completion. Wait up to five seconds for the relevant target, otherwise escalate to KILL, reap the engine, then probe the former process group with signal 0 until it is absent. Do not release the supervisor slot while a descendant survives. The Python parent watcher provides the same process-group cleanup when the Swift App cannot send Cancel because it crashed or was killed. Task 2 reconciles a `parent_lost` terminal error as `interrupted`; it never automatically reruns research or creates delivery jobs. The started-event reader exists only inside an active supervisor run; no tailer or polling task exists between jobs.
 
 Continuously drain stdout and stderr to avoid pipe backpressure. Keep only the newest 1 MiB from each stream, redact before persistence, and never show these bytes in the foundation window.
 
@@ -1218,13 +1220,13 @@ Expected: PASS, including the ignored-TERM fixture and a second run after cancel
 
 - [ ] **Step 6: Build the minimal NSStatusItem App and singleton window**
 
-`AppDelegate` sets activation policy `.accessory`, owns one `NSStatusItem`, and receives `LocalizationStore`, `EngineProcessSupervisor`, and `WindowCoordinator` from `AppContainer`. The status button uses SF Symbol `scope` and a dynamic localized tooltip.
+`AppDelegate` sets activation policy `.accessory`, owns one `NSStatusItem`, and receives `LocalizationStore`, `EngineProcessSupervisor`, and `WindowCoordinator` from `AppContainer`. The status button uses SF Symbol `dot.radiowaves.left.and.right` and a dynamic localized tooltip.
 
 Use `sendAction(on: [.leftMouseUp, .rightMouseUp])`: left click calls `WindowCoordinator.show()`; right click builds a native menu from current localized strings. The foundation menu contains Open and Quit only. Task 2 adds Run Now and Pause All when those actions exist. This precise click split is why v1 uses `NSStatusItem` rather than `MenuBarExtra`.
 
 The singleton window contains one preflight action, progress, Cancel while running, and localized result/error copy. Closing hides the window and leaves the status item running; a second left click reuses the same `NSWindow` object.
 
-Run: `swift test --package-path apps/macos/ResearchRadar --filter FoundationWindowTests`
+Run: `./script/swift_test.sh --filter AppShellTests`
 
 Expected: PASS for left/right click dispatch, singleton reuse, tooltip refresh, and no raw engine message in an alert.
 
@@ -1242,7 +1244,7 @@ Add `.build/`, `.swiftpm/`, and `*.xcresult` to `.gitignore`. Create a new `app-
 6. reject `/opt/homebrew`, `/usr/local`, `.venv`, the source checkout, `/private/tmp`, missing targets, and unresolved tokenized dependencies;
 7. reject the test fixture executable and secret/private-path fixture strings.
 
-Ad-hoc sign nested Mach-O files deepest-first, then the outer App, without Hardened Runtime for this local foundation build. A test-only resource sampler writes ignored `dist/macos-resource-report.json`; the App itself never samples resources in the background. The report records:
+Wrap the PyInstaller `onedir` in the standard nested helper bundle `ResearchRadarEngine.app`, place it at `Contents/Helpers/ResearchRadarEngine.app`, and keep data files inside that nested bundle rather than loose under the outer App's code-only `Contents/Helpers` level. Ad-hoc sign nested Mach-O files deepest-first, then the nested helper App, then the outer App, without Hardened Runtime for this local foundation build. A test-only resource sampler writes ignored `dist/macos-resource-report.json`; the App itself never samples resources in the background. The report records:
 
 - macOS, architecture, Swift, SDK, Python patch version, and PyInstaller version;
 - logical sizes for Swift `.build/`, PyInstaller work output, the frozen engine, and the final `.app`;
@@ -1258,7 +1260,7 @@ These are measured baselines, not invented release limits. The report distinguis
 ```bash
 codesign --verify --deep --strict --verbose=2 dist/ResearchRadar.app
 PATH=/usr/bin:/bin ./script/verify_macos_bundle.py \
-  --source-engine dist/macos-engine/research-radar-engine \
+  --source-engine dist/macos-engine/ResearchRadarEngine.app \
   --app dist/ResearchRadar.app
 ```
 
@@ -1266,17 +1268,15 @@ Tests create synthetic safe/escaping symlink trees and mocked `otool` output. Ru
 
 - [ ] **Step 8: Run the staged foundation App on the macOS 26 arm64 development machine**
 
-`stage_macos_app.sh` builds release Swift products, freezes the engine, assembles with `ditto`, verifies, signs, and writes `dist/ResearchRadar.app`. Foundation tests use temporary roots; the manual App launch uses `~/Library/Application Support/ResearchRadar-Dev/`. Launch from Finder semantics with `/usr/bin/open -n`, trigger preflight from the window, cancel one long fixture run, force the proxy App parent to exit once, and confirm no fixture PID survives. The staged preflight must prove every required dependency import resolves from the frozen bundle, not the project environment.
+`stage_macos_app.sh` builds release Swift products, freezes the engine, assembles with `ditto`, verifies, signs, runs a sanitized frozen-engine smoke, and writes `dist/ResearchRadar.app`. Foundation tests use temporary roots; the manual App launch uses `~/Library/Application Support/ResearchRadar-Dev/`. Launch from Finder semantics with `/usr/bin/open -n`, trigger preflight from the window, and confirm the localized result. Automated Swift and Python fixtures cover long-running cancellation and proxy-parent loss without relying on UI automation permissions. The staged preflight must prove every required dependency import resolves from the frozen bundle, not the project environment.
 
 Run:
 
 ```bash
 ./script/stage_macos_app.sh
-PATH=/usr/bin:/bin dist/ResearchRadar.app/Contents/Helpers/research-radar-engine/research-radar-engine \
-  --request /private/tmp/rr-foundation/request.json \
-  --events /private/tmp/rr-foundation/progress.jsonl \
-  --result /private/tmp/rr-foundation/result.json \
-  --error /private/tmp/rr-foundation/error.json
+PATH=/usr/bin:/bin .venv/bin/python script/run_macos_engine_smoke.py \
+  --engine dist/ResearchRadar.app/Contents/Helpers/ResearchRadarEngine.app/Contents/MacOS/research-radar-engine \
+  --root .build/frozen-engine-smoke
 /usr/bin/open -n dist/ResearchRadar.app
 ```
 
@@ -1286,18 +1286,18 @@ Expected: the App starts without the repository on `PATH`, the window displays l
 
 ```bash
 .venv/bin/pytest tests/test_app_bridge_protocol.py tests/test_app_bridge_events.py \
-  tests/test_app_bridge_runner.py tests/test_macos_bundle_verifier.py
-swift test --package-path apps/macos/ResearchRadar
+  tests/test_app_bridge_runner.py tests/test_macos_bundle_signer.py \
+  tests/test_macos_bundle_verifier.py tests/test_macos_resource_report.py
+./script/swift_test.sh
 ./script/stage_macos_app.sh
-.venv/bin/ruff check src tests
+.venv/bin/ruff check src tests script packaging/macos/engine_entry.py
 .venv/bin/research-radar privacy scan
 git diff --check
 git add .gitignore pyproject.toml uv.lock src/research_radar/app_bridge \
-  tests/test_app_bridge_protocol.py tests/test_app_bridge_events.py \
-  tests/test_app_bridge_runner.py tests/test_macos_bundle_verifier.py \
-  apps/macos/ResearchRadar packaging/macos script/build_macos_engine.sh \
-  script/assemble_macos_app.sh script/stage_macos_app.sh \
-  script/verify_macos_bundle.py
+  tests/test_app_bridge_protocol.py tests/test_app_bridge_events.py tests/test_app_bridge_runner.py \
+  tests/test_macos_bundle_signer.py tests/test_macos_bundle_verifier.py \
+  tests/test_macos_resource_report.py tests/fixtures/app_bridge_parent_fixture.py \
+  apps/macos/ResearchRadar packaging/macos script
 git diff --cached --check
 git commit -s -m "[feat] Add lightweight macOS app foundation"
 ```
@@ -1691,7 +1691,7 @@ Expected: PASS; helper and CLI fallback produce equivalent point-space crop requ
 
 - [ ] **Step 14: Re-freeze the expanded engine and preserve the Task 1 bundle contract**
 
-Update the existing PyInstaller spec for the full bridge and PDF adapter, rebuild the complete `onedir`, and run the same symlink, Mach-O, private-path, and sanitized-`PATH` verification introduced in Task 1. Stage `ResearchRadarPDFHelper` under `Contents/Helpers/` and never replace `ditto` with a symlink-flattening copy.
+Update the existing PyInstaller spec for the full bridge and PDF adapter, rebuild the complete `onedir` inside `ResearchRadarEngine.app`, and run the same symlink, Mach-O, private-path, and sanitized-`PATH` verification introduced in Task 1. Stage `ResearchRadarPDFHelper` and the nested engine App under `Contents/Helpers/`; never replace `ditto` with a symlink-flattening copy.
 
 Update `dist/macos-resource-report.json` after staging the expanded engine. Record the change from the Task 1 baseline and name the added engine/PDF functionality responsible for package-size or process changes; do not introduce a guessed hard limit.
 
@@ -1699,7 +1699,7 @@ Run:
 
 ```bash
 ./script/build_macos_engine.sh
-PATH=/usr/bin:/bin dist/macos-engine/research-radar-engine/research-radar-engine \
+PATH=/usr/bin:/bin dist/macos-engine/ResearchRadarEngine.app/Contents/MacOS/research-radar-engine \
   --request /private/tmp/rr-app-smoke/request.json \
   --events /private/tmp/rr-app-smoke/progress.jsonl \
   --result /private/tmp/rr-app-smoke/result.json \
@@ -1731,7 +1731,7 @@ Expected: PASS. Do not create an intermediate commit; Task 2 is reviewed and com
 
 **Files:**
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Models/AppConfiguration.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Localization/AppLanguage.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/AppLanguage.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Models/AppRuntimeState.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Models/JobRecord.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Models/ReportRecord.swift`
@@ -1741,15 +1741,15 @@ Expected: PASS. Do not create an intermediate commit; Task 2 is reviewed and com
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Queue/JobQueue.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarCore/Scheduling/ScheduleEvaluator.swift`
 - Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarExecutable/ResearchRadarMain.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/ResearchRadarScene.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/AppDelegate.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/AppContainer.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/ResearchRadarApplication.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/FoundationView.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/FoundationViewModel.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/StatusItemController.swift`
 - Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/App/WindowCoordinator.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Stores/AppStore.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/LocalizationStore.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/UserFacingErrorCatalog.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/EngineProcessSupervisor.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/EventTailer.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Errors/UserFacingErrorCatalog.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Engine/EngineProcessSupervisor.swift`
+- Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Engine/EngineJobCoordinator.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/KeychainStore.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/LoginItemService.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/LegacyStateMigrationService.swift`
@@ -1761,7 +1761,7 @@ Expected: PASS. Do not create an intermediate commit; Task 2 is reviewed and com
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views/Onboarding/ProviderPreflightView.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views/Onboarding/TopicReviewView.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/AtomicJSONStoreTests.swift`
-- Modify: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/AppLanguageTests.swift`
+- Modify: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppLanguageTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/DurableStateTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/JobQueueTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarCoreTests/ScheduleEvaluatorTests.swift`
@@ -1771,11 +1771,11 @@ Expected: PASS. Do not create an intermediate commit; Task 2 is reviewed and com
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/LegacyStateMigrationServiceTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/ScheduleCoordinatorTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/StorageUsageServiceTests.swift`
-- Modify: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/FoundationWindowTests.swift`
+- Modify: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppShellTests.swift`
 - Modify: `apps/macos/ResearchRadar/Package.swift`
 
 **Interfaces:**
-- Consumes: Task 1's `EngineRequestV1`, `EngineEventV1`, `EngineResultV1`, `EngineErrorV1`, bundled engine path, process supervisor, localization store, and singleton status-item/window shell; Phase 2A's full command handlers and native PDF helper.
+- Consumes: Task 1's request/result/error envelope, fsynced started-event handshake, bundled engine path, low-level process supervisor, localization store, and singleton status-item/window shell; Phase 2A's full command handlers and native PDF helper.
 - Produces: `AppStore`, `JobQueue`, `ScheduleEvaluator`, durable supervisor integration, Keychain/Login Item services, reviewed-topic onboarding, on-demand storage usage/cache cleanup, and the report index used by Task 3 views.
 
 Extend `Package.swift` with these product and target entries before adding app sources:
@@ -1789,7 +1789,7 @@ Extend `Package.swift` with these product and target entries before adding app s
 .testTarget(name: "ResearchRadarAppFeatureTests", dependencies: ["ResearchRadarAppFeature"]),
 ```
 
-`ResearchRadarMain.swift` contains only `@main` and returns `ResearchRadarScene` from the feature library. All stateful/tested code stays outside the executable target.
+`ResearchRadarMain.swift` contains only `@main` and calls the AppKit application entrypoint from the feature library. All stateful/tested code stays outside the executable target.
 
 The cross-service interfaces used by this task are fixed before view work begins:
 
@@ -1927,25 +1927,27 @@ func testSuccessfulDailyUpsertsReportBeforeDeliveryJobs() async throws
 func testFailedDailyEnqueuesNoDelivery() async throws
 ```
 
-Run: `swift test --package-path apps/macos/ResearchRadar --filter EngineProcessSupervisorTests`
+Run: `./script/swift_test.sh --filter EngineJobCoordinatorTests`
 
-Expected before implementation: FAIL because `EngineProcessSupervisor` is missing.
+Expected before implementation: FAIL because the durable coordinator and reconciliation layer are missing.
 
 - [ ] **Step 6: Integrate the proven supervisor with durable jobs and report recovery**
 
 ```swift
-public actor EngineProcessSupervisor {
+public actor EngineJobCoordinator {
+    private let supervisor: EngineProcessSupervisor
+
     public func run(request: EngineRequestV1, jobDirectory: URL) async throws -> EngineResultV1
     public func cancel(requestID: UUID) async throws
     public func reconcileTerminalArtifacts(requestID: UUID, jobDirectory: URL) async throws -> ReconciledEngineTerminalState?
 }
 ```
 
-Launch `Contents/Helpers/research-radar-engine/research-radar-engine` directly with an argument array. Set only required environment keys (`HOME`, `LANG`, and `TMPDIR`). The absolute Codex executable remains a typed configuration field, not an environment variable; do not invoke `/bin/sh`, `zsh`, `env`, or inherit an interactive `PATH` for provider discovery.
+Launch `Contents/Helpers/ResearchRadarEngine.app/Contents/MacOS/research-radar-engine` directly with an argument array. The nested helper App is a standard signed container for the PyInstaller `onedir`; this keeps Python data out of the outer App's code-only `Contents/Helpers` level. Set only required environment keys (`HOME`, `LANG`, and `TMPDIR`). The absolute Codex executable remains a typed configuration field, not an environment variable; do not invoke `/bin/sh`, `zsh`, `env`, or inherit an interactive `PATH` for provider discovery.
 
-Retain Task 1's session handshake, TERM/KILL escalation, descendant check, stream draining, and slot-release rules unchanged. Add event-to-job stage updates, terminal-artifact reconciliation, and report-index upsert. A successful daily result is persisted before channel jobs are enqueued; a missing or invalid `article_draft.json` keeps the research job failed and enqueues no delivery. After successful reconciliation, discard stdout/stderr and retain only small terminal metadata. For failures, retain bounded streams only for the newest failure of the same `(topic, job kind)`.
+Retain Task 1's low-level supervisor, session handshake, TERM/KILL escalation, descendant check, stream draining, and slot-release rules unchanged. The coordinator adds typed requests, event-to-job stage updates, terminal-artifact reconciliation, and report-index upsert without moving queue ownership into the process supervisor. A successful daily result is persisted before channel jobs are enqueued; a missing or invalid `article_draft.json` keeps the research job failed and enqueues no delivery. After successful reconciliation, discard stdout/stderr and retain only small terminal metadata. For failures, retain bounded streams only for the newest failure of the same `(topic, job kind)`.
 
-Run: `swift test --package-path apps/macos/ResearchRadar --filter EngineProcessSupervisorTests`
+Run: `./script/swift_test.sh --filter EngineJobCoordinatorTests`
 
 Expected: PASS with durable state recovered from terminal artifacts and no duplicate delivery job.
 
@@ -2065,7 +2067,7 @@ Keep the Task 1 `NSStatusItem`, click handling, localization store, and singleto
 
 `WindowCoordinator` stores a weak reference supplied by a tiny `NSViewRepresentable` window accessor. Closing the window hides it but leaves the menu-bar app running. `Cmd-Q` and Quit use the active-run confirmation: Keep App Open or Cancel Run and Quit. There is no second settings or report window.
 
-Run: `swift test --package-path apps/macos/ResearchRadar --filter FoundationWindowTests`
+Run: `./script/swift_test.sh --filter AppShellTests`
 
 Expected: PASS for singleton reuse and status copy mapping.
 
@@ -2127,15 +2129,15 @@ Before the commit, compare `dist/macos-resource-report.json` with Task 1. The ga
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views/Full/DiagnosticsView.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views/Components/StatusBadge.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views/Components/EmptyStateView.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/LocalizationStore.swift`
-- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/UserFacingErrorCatalog.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Localization/AppLanguage.swift`
+- Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Errors/UserFacingErrorCatalog.swift`
 - Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Resources/en.lproj/Localizable.strings`
 - Modify: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Resources/zh-Hans.lproj/Localizable.strings`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/ReportReaderPolicy.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/NotificationService.swift`
 - Create: `apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Support/VisualTokens.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppStorePresentationTests.swift`
-- Modify: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/LocalizationStoreTests.swift`
+- Modify: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppLanguageTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/LocalizationCatalogTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/ReportReaderPolicyTests.swift`
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/DeliveryRecoveryTests.swift`
@@ -2309,7 +2311,7 @@ The assembler alone performs:
 
 1. validate `ResearchRadar`, `ResearchRadarPDFHelper`, and `research-radar-engine` architectures are `arm64` and target macOS 26;
 2. stage `Contents/MacOS/ResearchRadar`;
-3. stage `ResearchRadarPDFHelper` and the complete PyInstaller `onedir` directory under `Contents/Helpers/`, using `/usr/bin/ditto` for the engine;
+3. stage `ResearchRadarPDFHelper` and the complete PyInstaller `onedir` wrapped as `ResearchRadarEngine.app` under `Contents/Helpers/`, using `/usr/bin/ditto` for the engine;
 4. copy `Info.plist`, icon, and `ResearchRadar_ResearchRadarAppFeature.bundle` into `Contents/Resources/`, then verify English and Simplified Chinese catalog lookup from the staged App;
 5. set executable permissions;
 6. compare the source/staged engine symlink manifests and reject any link that escapes the engine root;
@@ -2447,7 +2449,7 @@ git add apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Views \
   apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Services/NotificationService.swift \
   apps/macos/ResearchRadar/Sources/ResearchRadarAppFeature/Support/VisualTokens.swift \
   apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppStorePresentationTests.swift \
-  apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/LocalizationStoreTests.swift \
+  apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/AppLanguageTests.swift \
   apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/LocalizationCatalogTests.swift \
   apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/ReportReaderPolicyTests.swift \
   apps/macos/ResearchRadar/Tests/ResearchRadarAppFeatureTests/DeliveryRecoveryTests.swift \

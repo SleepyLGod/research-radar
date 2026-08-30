@@ -9,7 +9,9 @@ from pathlib import Path
 from research_radar.exceptions import PrivacyScanError
 
 SKIP_DIRS = {
+    ".build",
     ".git",
+    ".swiftpm",
     ".venv",
     ".uv-cache",
     "__pycache__",
@@ -18,6 +20,8 @@ SKIP_DIRS = {
     "runs",
     "data",
     "cache",
+    "build",
+    "dist",
     "secrets",
 }
 
