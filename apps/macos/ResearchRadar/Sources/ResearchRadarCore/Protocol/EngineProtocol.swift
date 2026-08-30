@@ -309,6 +309,10 @@ public struct RedactedEngineErrorV1: Codable, Equatable, Sendable {
     public let code: String
     public let message: String
     public let retryable: Bool
+
+    public init(code: String, message: String, retryable: Bool) {
+        self.code = code; self.message = message; self.retryable = retryable
+    }
 }
 
 public struct EngineEventV1: Codable, Equatable, Sendable {
@@ -405,6 +409,22 @@ public struct TopicDraftV1: Codable, Equatable, Sendable {
     public let reportLanguage: ReportLanguageV1
     public let warnings: [String]
 
+    public init(
+        id: String, displayName: String, researchFocus: String, queries: [String],
+        paperQueries: [String], webQueries: [String] = [], exclusionTerms: [String] = [],
+        requiredPhrases: [String] = [], conceptGroups: [String: [String]] = [:],
+        negativePhrases: [String] = [], prioritySources: [String] = [],
+        sourceIntent: String = "research_brief", reportLanguage: ReportLanguageV1,
+        warnings: [String] = []
+    ) {
+        self.id = id; self.displayName = displayName; self.researchFocus = researchFocus
+        self.queries = queries; self.paperQueries = paperQueries; self.webQueries = webQueries
+        self.exclusionTerms = exclusionTerms; self.requiredPhrases = requiredPhrases
+        self.conceptGroups = conceptGroups; self.negativePhrases = negativePhrases
+        self.prioritySources = prioritySources; self.sourceIntent = sourceIntent
+        self.reportLanguage = reportLanguage; self.warnings = warnings
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case displayName = "display_name"
@@ -435,6 +455,18 @@ public struct DeliveryResultV1: Codable, Equatable, Sendable {
     public let status: DeliveryResultStatus
     public let completedAt: Date
 
+    public init(
+        runDirectory: String,
+        channel: DeliveryChannel,
+        status: DeliveryResultStatus,
+        completedAt: Date
+    ) {
+        self.runDirectory = runDirectory
+        self.channel = channel
+        self.status = status
+        self.completedAt = completedAt
+    }
+
     private enum CodingKeys: String, CodingKey {
         case runDirectory = "run_dir"
         case status
@@ -453,6 +485,17 @@ public struct EngineReportSummaryV1: Codable, Equatable, Sendable {
     public let sourceCount: Int
     public let deepReadCount: Int
     public let publishableClaimCount: Int
+
+    public init(
+        runDirectory: String, reportDate: String, articleDraftPath: String,
+        reportHTMLPath: String, title: String, summary: String, sourceCount: Int,
+        deepReadCount: Int, publishableClaimCount: Int
+    ) {
+        self.runDirectory = runDirectory; self.reportDate = reportDate
+        self.articleDraftPath = articleDraftPath; self.reportHTMLPath = reportHTMLPath
+        self.title = title; self.summary = summary; self.sourceCount = sourceCount
+        self.deepReadCount = deepReadCount; self.publishableClaimCount = publishableClaimCount
+    }
 
     private enum CodingKeys: String, CodingKey {
         case runDirectory = "run_dir"
@@ -477,6 +520,17 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
     public let preflight: PreflightSummaryV1?
     public let topicDraft: TopicDraftV1?
     public let delivery: DeliveryResultV1?
+
+    public init(
+        schemaVersion: Int = 1, requestID: UUID, command: EngineCommand,
+        status: EngineResultStatus, completedAt: Date, report: EngineReportSummaryV1? = nil,
+        preflight: PreflightSummaryV1? = nil, topicDraft: TopicDraftV1? = nil,
+        delivery: DeliveryResultV1? = nil
+    ) {
+        self.schemaVersion = schemaVersion; self.requestID = requestID; self.command = command
+        self.status = status; self.completedAt = completedAt; self.report = report
+        self.preflight = preflight; self.topicDraft = topicDraft; self.delivery = delivery
+    }
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"

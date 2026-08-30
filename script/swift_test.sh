@@ -16,6 +16,7 @@ export CLANG_MODULE_CACHE_PATH="$MODULE_CACHE"
 export SWIFTPM_MODULECACHE_OVERRIDE="$MODULE_CACHE"
 
 exec swift test \
+  --no-parallel \
   --disable-sandbox \
   --enable-swift-testing \
   --disable-xctest \

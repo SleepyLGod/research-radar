@@ -1,4 +1,5 @@
 import SwiftUI
+import ResearchRadarCore
 
 public struct FoundationView: View {
     @Bindable private var model: FoundationViewModel

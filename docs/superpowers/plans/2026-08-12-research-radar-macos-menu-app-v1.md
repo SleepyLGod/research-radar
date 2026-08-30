@@ -1313,6 +1313,9 @@ Stop if the minimal macOS 26 arm64 App cannot pass its local foundation gates, c
 
 ### Task 2: Add Durable Research Workflow
 
+**Status:** Completed in `[feat] Add macOS research engine bridge` and
+`[feat] Add durable macOS research workflow`.
+
 #### Phase 2A: Complete Engine Bridge And Native PDF Foundation
 
 **Status:** The typed daily, WeChat, and Email application services and sanitized progress
@@ -1361,7 +1364,7 @@ or a second orchestration layer under the older illustrative names below.
   all four production command handlers, and `PDFHelperClient.page_bbox()/render_crop()`.
   This phase completes and freezes schema v1 before beta use.
 
-- [ ] **Step 1: Complete and freeze protocol fixtures for every production command**
+- [x] **Step 1: Complete and freeze protocol fixtures for every production command**
 
 Keep the common envelope and preflight types created in Task 1. Add the `bootstrap_topic`, `run_daily`, and `retry_delivery` command/payload types plus one canonical request/result fixture for each and the rejection cases below. Schema v1 becomes frozen at the end of this phase.
 
@@ -1380,13 +1383,13 @@ def test_request_rejects_secret_values(tmp_path: Path) -> None:
         parse_engine_request(path)
 ```
 
-- [ ] **Step 2: Run protocol tests before enabling production handlers**
+- [x] **Step 2: Run protocol tests before enabling production handlers**
 
 Run: `uv run --extra dev pytest tests/test_app_bridge_protocol.py -q`
 
 Expected: Task 1 envelope/preflight cases remain PASS. The new command parsing fixtures PASS, while dispatch integration tests remain RED with `command_unavailable` until the production handlers in the following steps are connected.
 
-- [ ] **Step 3: Complete command-specific payload validation and freeze schema v1**
+- [x] **Step 3: Complete command-specific payload validation and freeze schema v1**
 
 ```python
 ENGINE_SCHEMA_VERSION = 1
@@ -1413,7 +1416,7 @@ def parse_engine_request(path: Path) -> EngineRequestV1:
 
 Retain the explicit Task 1 parsers. Require a non-null, contained `config_path` for bootstrap, daily, delivery retry, and `preflight(live_probe=true)`. Do not use permissive `**mapping` construction and do not silently coerce strings to booleans or integers. `RunDailyPayloadV1.model_cache_limit_bytes` accepts null or a positive integer only.
 
-- [ ] **Step 4: Add PDF targets and complete Swift round-trip fixtures**
+- [x] **Step 4: Add PDF targets and complete Swift round-trip fixtures**
 
 Extend the existing Task 1 package with PDF targets:
 
@@ -1462,7 +1465,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter EngineProtocol
 
 Expected: PASS for all four final command payloads and snake-case keys.
 
-- [ ] **Step 5: Extend event coverage to the full public stage mapping**
+- [x] **Step 5: Extend event coverage to the full public stage mapping**
 
 ```python
 def test_event_writer_redacts_and_sequences(tmp_path: Path) -> None:
@@ -1573,7 +1576,7 @@ Run: `uv run --extra dev pytest tests/test_progress.py tests/test_application_da
 
 Expected: PASS.
 
-- [ ] **Step 9: Implement App configuration conversion and preflight**
+- [x] **Step 9: Implement App configuration conversion and preflight**
 
 `configuration.py` validates `app-config.json`, resolves every path under Application Support, and returns `LoadedAppConfigurationV1`. It may translate `providers[]` and `routes[]` into the keyed mapping expected by existing `parse_config()`, but it must not maintain a second research configuration model in Python.
 
@@ -1595,7 +1598,7 @@ Run: `uv run --extra dev pytest tests/test_app_bridge_protocol.py tests/test_app
 
 Expected: PASS and no secret values in serialized results.
 
-- [ ] **Step 10: Implement the four-command bridge dispatcher**
+- [x] **Step 10: Implement the four-command bridge dispatcher**
 
 ```python
 @dataclass(frozen=True)
@@ -1661,7 +1664,7 @@ Run: `uv run --extra dev pytest tests/test_app_bridge_runner.py -q`
 
 Expected: all four fake commands PASS; retry delivery invokes exactly one requested channel.
 
-- [ ] **Step 11: Write PDFKit helper tests before implementing the helper**
+- [x] **Step 11: Write PDFKit helper tests before implementing the helper**
 
 Generate a two-column test PDF in XCTest using CoreGraphics. Assert:
 
@@ -1676,7 +1679,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter ResearchRadarP
 
 Expected: FAIL because `PDFOperations` is missing.
 
-- [ ] **Step 12: Implement PDFKit bbox extraction and crop rendering**
+- [x] **Step 12: Implement PDFKit bbox extraction and crop rendering**
 
 For each token range in `PDFPage.string`, use `selection(for:)` and `bounds(for:)`. Convert PDFKit bottom-left bounds to the top-left point convention exactly once:
 
@@ -1691,7 +1694,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter ResearchRadarP
 
 Expected: PASS.
 
-- [ ] **Step 13: Add the Python PDF helper adapter and preserve CLI fallback**
+- [x] **Step 13: Add the Python PDF helper adapter and preserve CLI fallback**
 
 ```python
 class PDFHelperClient:
@@ -1705,7 +1708,7 @@ Run: `uv run --extra dev pytest tests/test_app_bridge_pdf_helper.py tests/test_f
 
 Expected: PASS; helper and CLI fallback produce equivalent point-space crop requests.
 
-- [ ] **Step 14: Re-freeze the expanded engine and preserve the Task 1 bundle contract**
+- [x] **Step 14: Re-freeze the expanded engine and preserve the Task 1 bundle contract**
 
 Update the existing PyInstaller spec for the full bridge and PDF adapter, rebuild the complete `onedir` inside `ResearchRadarEngine.app`, and run the same symlink, Mach-O, private-path, and sanitized-`PATH` verification introduced in Task 1. Stage `ResearchRadarPDFHelper` and the nested engine App under `Contents/Helpers/`; never replace `ditto` with a symlink-flattening copy.
 
@@ -1725,7 +1728,7 @@ PATH=/usr/bin:/bin dist/macos-engine/ResearchRadarEngine.app/Contents/MacOS/rese
 
 Expected: all four fixture commands succeed with no import from the source checkout and no Homebrew/Poppler lookup.
 
-- [ ] **Step 15: Run the Phase 2A gate before adding durable UI state**
+- [x] **Step 15: Run the Phase 2A gate before adding durable UI state**
 
 ```bash
 uv run --extra dev pytest tests/test_application_daily.py tests/test_application_wechat.py \
@@ -1839,7 +1842,7 @@ public final class WindowCoordinator {
 
 `AppContainer` constructs exactly one localization store, persistent store, queue, report index, process supervisor, schedule coordinator, storage usage service, Keychain store, login-item service, migration service, and window coordinator. Task 3 adds one notification service. Views receive these instances through `AppStore`; they never construct services or perform persistence directly.
 
-- [ ] **Step 1: Define durable Swift value models and legal transitions in tests**
+- [x] **Step 1: Define durable Swift value models and legal transitions in tests**
 
 ```swift
 public struct JobRecordV1: Codable, Equatable, Identifiable, Sendable {
@@ -1868,7 +1871,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter ResearchRadarC
 
 Expected before implementation: FAIL because the models do not exist.
 
-- [ ] **Step 2: Implement owner-only atomic JSON persistence**
+- [x] **Step 2: Implement owner-only atomic JSON persistence**
 
 ```swift
 public actor AtomicJSONStore {
@@ -1883,7 +1886,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter AtomicJSONStor
 
 Expected: PASS for atomic replacement, permission bits, and corrupted-file preservation.
 
-- [ ] **Step 3: Implement the pure queue reducer and coalescing tests**
+- [x] **Step 3: Implement the pure queue reducer and coalescing tests**
 
 ```swift
 public actor JobQueue {
@@ -1909,7 +1912,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter JobQueueTests`
 
 Expected: PASS.
 
-- [ ] **Step 4: Implement deterministic daily schedule evaluation**
+- [x] **Step 4: Implement deterministic daily schedule evaluation**
 
 ```swift
 public struct ScheduleEvaluator: Sendable {
@@ -1930,7 +1933,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter ScheduleEvalua
 
 Expected: PASS.
 
-- [ ] **Step 5: Write durable supervisor-integration tests using Task 1's fixture**
+- [x] **Step 5: Write durable supervisor-integration tests using Task 1's fixture**
 
 Reuse the Task 1 fixture and already-proven TERM/KILL behavior. This phase tests durable queue/report integration rather than reimplementing process control:
 
@@ -1947,7 +1950,7 @@ Run: `./script/swift_test.sh --filter EngineJobCoordinatorTests`
 
 Expected before implementation: FAIL because the durable coordinator and reconciliation layer are missing.
 
-- [ ] **Step 6: Integrate the proven supervisor with durable jobs and report recovery**
+- [x] **Step 6: Integrate the proven supervisor with durable jobs and report recovery**
 
 ```swift
 public actor EngineJobCoordinator {
@@ -1967,7 +1970,7 @@ Run: `./script/swift_test.sh --filter EngineJobCoordinatorTests`
 
 Expected: PASS with durable state recovered from terminal artifacts and no duplicate delivery job.
 
-- [ ] **Step 7: Implement Keychain storage and cross-runtime compatibility**
+- [x] **Step 7: Implement Keychain storage and cross-runtime compatibility**
 
 ```swift
 public protocol SecretStoring: Sendable {
@@ -1987,7 +1990,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter KeychainStoreT
 
 Expected: PASS.
 
-- [ ] **Step 8: Implement explicit Codex detection and fallback policy**
+- [x] **Step 8: Implement explicit Codex detection and fallback policy**
 
 Candidate order is:
 
@@ -2002,7 +2005,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter OnboardingTest
 
 Expected: PASS for detection precedence and explicit fallback.
 
-- [ ] **Step 9: Implement onboarding as a state machine, not view-driven side effects**
+- [x] **Step 9: Implement onboarding as a state machine, not view-driven side effects**
 
 Use the durable `OnboardingStep` and snapshot types from Section 3.7:
 
@@ -2028,7 +2031,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter OnboardingTest
 
 Expected: PASS for forward/back/cancel, UI/report-language independence, no-secret serialization, and preflight blocking rules.
 
-- [ ] **Step 10: Add explicit legacy history import and duplicate-scheduler detection**
+- [x] **Step 10: Add explicit legacy history import and duplicate-scheduler detection**
 
 ```swift
 struct ImportSummary: Equatable, Sendable {
@@ -2050,7 +2053,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter LegacyStateMig
 
 Expected: PASS.
 
-- [ ] **Step 11: Implement on-demand storage usage and explicit model-cache cleanup**
+- [x] **Step 11: Implement on-demand storage usage and explicit model-cache cleanup**
 
 `StorageUsageService` accepts the resolved App Support root and computes a snapshot only when called. It separately totals regular contained files under model cache, reports/runs, and retained job diagnostics; symlinks, path escapes, and unknown roots fail closed. It never runs a timer or file-system observer.
 
@@ -2060,7 +2063,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter StorageUsageSe
 
 Expected: PASS for on-demand totals, empty/missing cache, contained cleanup, path-escape rejection, and byte-identical durable data.
 
-- [ ] **Step 12: Implement login-item and one-shot schedule coordination**
+- [x] **Step 12: Implement login-item and one-shot schedule coordination**
 
 Wrap `SMAppService.mainApp` behind:
 
@@ -2077,7 +2080,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter ScheduleCoordi
 
 Expected: PASS with a fake login service and deterministic clock, including exactly one timer for the nearest due schedule, no timer when disabled, and correct replacement after clock/time-zone/wake changes.
 
-- [ ] **Step 13: Upgrade the foundation shell with operational actions**
+- [x] **Step 13: Upgrade the foundation shell with operational actions**
 
 Keep the Task 1 `NSStatusItem`, click handling, localization store, and singleton `NSWindow`. Replace the foundation-only view model with `AppStore`; extend the native right-click menu with Run Now and Pause All only after those actions exist. The tooltip receives localized one-line status from the current AppStore presentation.
 
@@ -2087,7 +2090,7 @@ Run: `./script/swift_test.sh --filter AppShellTests`
 
 Expected: PASS for singleton reuse and status copy mapping.
 
-- [ ] **Step 14: Run the complete Task 2 gate and create the second signed-off commit**
+- [x] **Step 14: Run the complete Task 2 gate and create the second signed-off commit**
 
 ```bash
 swift test --package-path apps/macos/ResearchRadar
