@@ -65,3 +65,15 @@ def test_privacy_scan_skips_local_only_secret_files(tmp_path: Path) -> None:
     config_path.write_text(f"secret: '{fake_secret}'\n", encoding="utf-8")
 
     assert_clean(tmp_path)
+
+
+@pytest.mark.parametrize("directory", [".build", ".swiftpm", "build", "dist"])
+def test_privacy_scan_skips_rebuildable_output_directories(
+    tmp_path: Path, directory: str
+) -> None:
+    output = tmp_path / directory
+    output.mkdir()
+    local_path = "/" + "Users/private/generated"
+    (output / "generated.txt").write_text(local_path, encoding="utf-8")
+
+    assert_clean(tmp_path)
