@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import ResearchRadarAppFeature
+import ResearchRadarCore
 
 @MainActor
 private final class PreferredLanguagesBox {

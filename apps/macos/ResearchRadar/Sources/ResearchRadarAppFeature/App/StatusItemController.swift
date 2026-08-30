@@ -4,16 +4,25 @@ import AppKit
 final class StatusItemController: NSObject {
     private let localization: LocalizationStore
     private let showWindow: () -> Void
+    private let runNow: () -> Void
+    private let pauseSchedules: () -> Void
+    private let schedulesPaused: () -> Bool
     private let quit: () -> Void
     private let statusItem: NSStatusItem
 
     init(
         localization: LocalizationStore,
         showWindow: @escaping () -> Void,
+        runNow: @escaping () -> Void = {},
+        pauseSchedules: @escaping () -> Void = {},
+        schedulesPaused: @escaping () -> Bool = { false },
         quit: @escaping () -> Void
     ) {
         self.localization = localization
         self.showWindow = showWindow
+        self.runNow = runNow
+        self.pauseSchedules = pauseSchedules
+        self.schedulesPaused = schedulesPaused
         self.quit = quit
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -51,6 +60,18 @@ final class StatusItemController: NSObject {
         )
         open.target = self
         menu.addItem(open)
+        let run = NSMenuItem(
+            title: localization.text("action.run_now"), action: #selector(runSelectedTopic), keyEquivalent: "r"
+        )
+        run.target = self; menu.addItem(run)
+        let pause = NSMenuItem(
+            title: localization.text(
+                schedulesPaused() ? "action.resume_schedules" : "action.pause_schedules"
+            ),
+            action: #selector(toggleSchedules),
+            keyEquivalent: ""
+        )
+        pause.target = self; menu.addItem(pause)
         menu.addItem(.separator())
         let quit = NSMenuItem(
             title: localization.text("action.quit"),
@@ -63,5 +84,7 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func openWindow() { showWindow() }
+    @objc private func runSelectedTopic() { runNow() }
+    @objc private func toggleSchedules() { pauseSchedules() }
     @objc private func quitApplication() { quit() }
 }

@@ -59,6 +59,13 @@ _SMTP_PASSWORD_REFERENCE = re.compile(
     flags=re.IGNORECASE,
 )
 
+_NAMED_SECRET_REFERENCE = re.compile(
+    r"(?i)(?:api_key_secret|apiKeySecret|webSearchSecret|appIDSecret|"
+    r"appSecretSecret|passwordSecret)\s*[:=]\s*['\"]"
+    r"[a-z0-9_]+(?:\.[a-z0-9_]+)*\.(?:api_key|app_id|app_secret|smtp_password)"
+    r"['\"]"
+)
+
 
 def scan_path(path: Path) -> list[PrivacyFinding]:
     """Scan a file or directory for privacy-sensitive strings."""
@@ -94,8 +101,9 @@ def _scan_file(path: Path) -> list[PrivacyFinding]:
     for index, line in enumerate(text.splitlines(), start=1):
         if _is_allowed_example_line(line):
             continue
+        scan_line = _NAMED_SECRET_REFERENCE.sub("named-secret-reference", line)
         for kind, pattern in PATTERNS:
-            if pattern.search(line):
+            if pattern.search(scan_line):
                 findings.append(PrivacyFinding(path=path, line_number=index, kind=kind, line=line))
     return findings
 

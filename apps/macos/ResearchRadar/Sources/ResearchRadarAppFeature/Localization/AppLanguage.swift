@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ResearchRadarCore
 
 private final class NotificationObserver: @unchecked Sendable {
     let token: NSObjectProtocol
@@ -11,17 +12,6 @@ private final class NotificationObserver: @unchecked Sendable {
     deinit {
         NotificationCenter.default.removeObserver(token)
     }
-}
-
-public enum AppLanguagePreference: String, CaseIterable, Codable, Sendable {
-    case system
-    case simplifiedChinese = "zh-Hans"
-    case english = "en"
-}
-
-public enum ResolvedAppLanguage: String, Codable, Sendable {
-    case simplifiedChinese = "zh-Hans"
-    case english = "en"
 }
 
 public enum AppLanguageResolver {

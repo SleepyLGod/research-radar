@@ -7,7 +7,7 @@ public final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     public init(content: () -> AnyView) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 620),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false

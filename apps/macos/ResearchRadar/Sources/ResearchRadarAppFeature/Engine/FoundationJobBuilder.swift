@@ -36,6 +36,22 @@ public enum FoundationJobBuilder {
         return paths
     }
 
+    public static func create(
+        request: EngineRequestV1,
+        jobDirectory: URL
+    ) throws -> FoundationJobPaths {
+        try createPrivateDirectory(jobDirectory, fileManager: .default)
+        let paths = FoundationJobPaths(
+            jobDirectory: jobDirectory,
+            request: jobDirectory.appending(path: "request.json"),
+            events: jobDirectory.appending(path: "events.jsonl"),
+            result: jobDirectory.appending(path: "result.json"),
+            error: jobDirectory.appending(path: "error.json")
+        )
+        try writePrivate(EngineProtocolCodec.encode(request), to: paths.request)
+        return paths
+    }
+
     public static func developmentRoot() throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
