@@ -64,7 +64,7 @@ from research_radar.models import (
     SourceType,
     dataclass_to_dict,
 )
-from research_radar.pipeline.progress import ProgressWriter
+from research_radar.pipeline.progress import ProgressListener, ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.pipeline.runtime import build_runtime_summary
@@ -99,6 +99,7 @@ def run_daily(
     localizer: LLMProvider | None = None,
     localization_model: str | None = None,
     language: str | None = None,
+    progress_listener: ProgressListener | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
 
@@ -109,7 +110,10 @@ def run_daily(
             "Chinese report localization requires a localization provider and model."
         )
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
-    progress = ProgressWriter(run_dir / "run_progress.jsonl")
+    progress = ProgressWriter(
+        run_dir / "run_progress.jsonl",
+        listener=progress_listener,
+    )
     progress.record("run", "created", topic_id=topic_id, mode="daily")
     findings: list[ReviewFinding] = []
     research_plan = build_research_plan(topic, trusted_domains=config.discovery.trusted_domains)

@@ -9,6 +9,7 @@ from research_radar.analysis.cli_providers import CodexCliProvider
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse
+from research_radar.application.wechat import article_draft_source_urls
 from research_radar.compose.draft import build_daily_draft
 from research_radar.config import parse_config
 from research_radar.exceptions import (
@@ -1767,7 +1768,7 @@ def test_article_draft_source_urls_include_reference_urls() -> None:
         ]
     )
 
-    assert cli._article_draft_source_urls(draft) == {"https://example.com/reference"}
+    assert article_draft_source_urls(draft) == {"https://example.com/reference"}
 
 
 def test_publish_wechat_draft_writes_failure_artifact(
