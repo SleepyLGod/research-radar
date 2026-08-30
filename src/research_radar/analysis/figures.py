@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tarfile
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -148,12 +149,19 @@ class PdfCropBox:
     height: int
 
 
+PdfPageBboxReader = Callable[[Path, int], PdfPageBbox | None]
+PdfCropRenderer = Callable[[Path, int, PdfCropBox, Path], bool]
+FigureExtractor = Callable[[Artifact, Path, list[Claim]], list[PaperFigure]]
+
+
 def extract_paper_figures(
     artifact: Artifact,
     output_dir: Path,
     claims: list[Claim],
     *,
     max_figures: int = 3,
+    pdf_page_bbox_reader: PdfPageBboxReader | None = None,
+    pdf_crop_renderer: PdfCropRenderer | None = None,
 ) -> list[PaperFigure]:
     """Download arXiv source and extract selected figure assets."""
 
@@ -167,6 +175,8 @@ def extract_paper_figures(
             ensure_dir(figure_root),
             claims,
             max_figures=max_figures,
+            page_bbox_reader=pdf_page_bbox_reader,
+            crop_renderer=pdf_crop_renderer,
         )
     work_dir = ensure_dir(output_dir / _safe_name(arxiv_id))
     source_dir = ensure_dir(work_dir / "source")
@@ -186,6 +196,8 @@ def extract_paper_figures(
             image_dir,
             claims,
             max_figures=max_figures,
+            page_bbox_reader=pdf_page_bbox_reader,
+            crop_renderer=pdf_crop_renderer,
         )
 
 
@@ -195,6 +207,8 @@ def extract_pdf_cropped_figures(
     claims: list[Claim],
     *,
     max_figures: int = 3,
+    page_bbox_reader: PdfPageBboxReader | None = None,
+    crop_renderer: PdfCropRenderer | None = None,
 ) -> list[PaperFigure]:
     """Crop selected PDF figure regions when source figures are unavailable."""
 
@@ -219,7 +233,11 @@ def extract_pdf_cropped_figures(
         matched_claim = _best_matching_claim(candidate.caption, claims, source=artifact.source)
         if matched_claim is None:
             continue
-        crop_box = _pdf_caption_crop_box(pdf_path, candidate)
+        crop_box = _pdf_caption_crop_box(
+            pdf_path,
+            candidate,
+            page_bbox_reader=page_bbox_reader,
+        )
         if crop_box is None:
             continue
         destination = (
@@ -227,7 +245,8 @@ def extract_pdf_cropped_figures(
             / f"{len(figures) + 1:02d}-figure-{candidate.figure_number}-page-"
             f"{candidate.page_number}.png"
         )
-        if not _render_pdf_crop(pdf_path, candidate.page_number, crop_box, destination):
+        renderer = crop_renderer or _render_pdf_crop
+        if not renderer(pdf_path, candidate.page_number, crop_box, destination):
             continue
         if not _rendered_crop_is_publishable(destination):
             continue
@@ -574,8 +593,10 @@ def _pdf_pages(text: str) -> list[tuple[int, str]]:
 def _pdf_caption_crop_box(
     pdf_path: Path,
     candidate: PdfFigureCandidate,
+    *,
+    page_bbox_reader: PdfPageBboxReader | None = None,
 ) -> PdfCropBox | None:
-    page = _pdf_page_bbox(pdf_path, candidate.page_number)
+    page = (page_bbox_reader or _pdf_page_bbox)(pdf_path, candidate.page_number)
     if page is None:
         return _pypdf_caption_crop_box(pdf_path, candidate)
     crop_box = _pdf_caption_crop_box_from_bbox(page, candidate)

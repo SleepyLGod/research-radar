@@ -201,8 +201,11 @@ def _wait_for_process_group(process: subprocess.Popen[Any], events: Path) -> int
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if event.get("kind") == "started":
-                    return int(event["process_group_id"])
+                if event.get("type") == "started":
+                    process_group = process.pid
+                    if os.getpgid(process.pid) != process_group:
+                        raise RuntimeError("Engine started without its isolated process group.")
+                    return process_group
         if process.poll() is not None:
             raise RuntimeError("Engine exited before its started event.")
         time.sleep(0.005)

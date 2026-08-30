@@ -1,7 +1,11 @@
+import os
 from pathlib import Path
+
+import pytest
 
 from research_radar.analysis.model_cache import (
     CachedLLMProvider,
+    enforce_model_cache_limit,
     model_call_cache_key,
     provider_cache_delta,
     provider_cache_stats,
@@ -124,3 +128,158 @@ def test_cache_stats_helpers_treat_none_as_no_cache() -> None:
         "cache_hit_count": 0,
         "cache_miss_count": 0,
     }
+
+
+def test_unbounded_cache_hit_does_not_change_entry_timestamp(tmp_path: Path) -> None:
+    messages = [Message(role="user", content="same prompt")]
+    cached = CachedLLMProvider(CountingProvider(), cache_dir=tmp_path, task_name="reader")
+    cached.complete(messages, model="model")
+    entry = next((tmp_path / "reader").glob("*.json"))
+    os.utime(entry, (10, 10))
+
+    cached.complete(messages, model="model")
+
+    assert entry.stat().st_mtime == 10
+
+
+def test_bounded_cache_hit_updates_only_cache_entry_timestamp(tmp_path: Path) -> None:
+    cache_root = tmp_path / "cache"
+    report = tmp_path / "runs" / "report.json"
+    report.parent.mkdir(parents=True)
+    report.write_text("report", encoding="utf-8")
+    messages = [Message(role="user", content="same prompt")]
+    cached = CachedLLMProvider(
+        CountingProvider(),
+        cache_dir=cache_root,
+        task_name="reader",
+        cache_limit_bytes=10_000,
+    )
+    cached.complete(messages, model="model")
+    entry = next((cache_root / "reader").glob("*.json"))
+    os.utime(entry, (10, 10))
+    os.utime(report, (20, 20))
+
+    cached.complete(messages, model="model")
+
+    assert entry.stat().st_mtime > 10
+    assert report.stat().st_mtime == 20
+    assert report.read_text(encoding="utf-8") == "report"
+
+
+def test_bounded_cache_hit_does_not_rescan_cache_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    messages = [Message(role="user", content="same prompt")]
+    cached = CachedLLMProvider(
+        CountingProvider(),
+        cache_dir=tmp_path,
+        task_name="reader",
+        cache_limit_bytes=10_000,
+    )
+    cached.complete(messages, model="model")
+
+    monkeypatch.setattr(
+        "research_radar.analysis.model_cache.enforce_model_cache_limit",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("cache hit must not rescan the cache root")
+        ),
+    )
+
+    response = cached.complete(messages, model="model")
+
+    assert response.metadata["cache_hit"] is True
+
+
+def test_cache_limit_removes_oldest_contained_entries_only(tmp_path: Path) -> None:
+    cache_root = tmp_path / "cache" / "model_calls"
+    first = cache_root / "reader" / "first.json"
+    second = cache_root / "verifier" / "second.json"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_bytes(b"a" * 20)
+    second.write_bytes(b"b" * 20)
+    os.utime(first, (10, 10))
+    os.utime(second, (20, 20))
+    outside = tmp_path / "runs" / "article_draft.json"
+    outside.parent.mkdir(parents=True)
+    outside.write_text("keep", encoding="utf-8")
+
+    retired = tmp_path / "retired"
+    retired.mkdir()
+    removed = enforce_model_cache_limit(
+        cache_root,
+        20,
+        retire=lambda path: path.rename(retired / path.name),
+    )
+
+    assert removed == [first]
+    assert not first.exists()
+    assert second.exists()
+    assert outside.read_text(encoding="utf-8") == "keep"
+
+
+def test_cache_limit_does_not_follow_symlinks(tmp_path: Path) -> None:
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep", encoding="utf-8")
+    (cache_root / "linked.json").symlink_to(outside)
+
+    removed = enforce_model_cache_limit(
+        cache_root,
+        1,
+        retire=lambda path: path.rename(tmp_path / f"retired-{path.name}"),
+    )
+
+    assert removed == []
+    assert outside.read_text(encoding="utf-8") == "keep"
+
+
+def test_cache_maintenance_failure_does_not_fail_model_response(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_maintenance(cache_root: Path, limit_bytes: int) -> list[Path]:
+        raise OSError("Trash unavailable")
+
+    monkeypatch.setattr(
+        "research_radar.analysis.model_cache.enforce_model_cache_limit",
+        fail_maintenance,
+    )
+    cached = CachedLLMProvider(
+        CountingProvider(),
+        cache_dir=tmp_path,
+        task_name="reader",
+        cache_limit_bytes=10,
+    )
+
+    response = cached.complete([Message(role="user", content="prompt")], model="model")
+
+    assert response.content == "cached response"
+    assert cached.maintenance_error == "Trash unavailable"
+
+
+def test_cache_hit_timestamp_failure_does_not_fail_model_response(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    messages = [Message(role="user", content="same prompt")]
+    cached = CachedLLMProvider(
+        CountingProvider(),
+        cache_dir=tmp_path,
+        task_name="reader",
+        cache_limit_bytes=10_000,
+    )
+    cached.complete(messages, model="model")
+
+    def fail_timestamp(*args, **kwargs) -> None:
+        raise OSError("read-only cache")
+
+    monkeypatch.setattr("research_radar.analysis.model_cache.os.utime", fail_timestamp)
+
+    response = cached.complete(messages, model="model")
+
+    assert response.content == "cached response"
+    assert response.metadata["cache_hit"] is True
+    assert cached.maintenance_error == "read-only cache"

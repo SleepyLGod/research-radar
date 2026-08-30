@@ -4,7 +4,13 @@ from uuid import uuid4
 
 import pytest
 
-from research_radar.app_bridge.protocol import ProtocolError, load_request
+from research_radar.app_bridge.protocol import (
+    BootstrapTopicPayloadV1,
+    ProtocolError,
+    RetryDeliveryPayloadV1,
+    RunDailyPayloadV1,
+    load_request,
+)
 
 
 def _write_request(job_dir: Path, **overrides: object) -> Path:
@@ -49,9 +55,9 @@ def test_load_request_accepts_local_preflight(tmp_path: Path) -> None:
     ("override", "message"),
     [
         ({"schema_version": 2}, "Unsupported schema version"),
-        ({"command": "run_daily"}, "Unsupported command"),
+        ({"command": "run_daily"}, "Command and payload do not match"),
         ({"request_id": str(uuid4())}, "must match the job directory"),
-        ({"payload": {"live_probe": True}}, "must not perform a live probe"),
+        ({"payload": {"live_probe": True}}, "config_path is required"),
         ({"unexpected": True}, "Unknown request field"),
     ],
 )
@@ -114,3 +120,113 @@ def test_load_request_rejects_non_writable_job_directory(tmp_path: Path) -> None
 
     with pytest.raises(ProtocolError, match="must be writable"):
         load_request(request_path, job_dir=job_dir)
+
+
+@pytest.mark.parametrize(
+    ("command", "payload", "payload_type"),
+    [
+        (
+            "bootstrap_topic",
+            {"description": "LLM inference systems", "language": "zh"},
+            BootstrapTopicPayloadV1,
+        ),
+        (
+            "run_daily",
+            {
+                "topic_id": "llm-inference",
+                "report_date": "2026-08-30",
+                "limit": 5,
+                "deep_limit": 2,
+                "language": "zh",
+                "model_cache": True,
+                "model_cache_limit_bytes": None,
+            },
+            RunDailyPayloadV1,
+        ),
+        (
+            "retry_delivery",
+            {
+                "run_dir": "__RUN_DIR__",
+                "channel": "email",
+                "allow_resend": False,
+                "acknowledge_unknown_outcome": True,
+            },
+            RetryDeliveryPayloadV1,
+        ),
+    ],
+)
+def test_load_request_accepts_production_commands(
+    tmp_path: Path,
+    command: str,
+    payload: dict[str, object],
+    payload_type: type[object],
+) -> None:
+    job_dir = _private_job(tmp_path)
+    root = job_dir.parent.parent
+    config = root / "config.json"
+    config.write_text("{}", encoding="utf-8")
+    run_dir = root / "workspace" / "runs" / "attempt"
+    run_dir.mkdir(parents=True)
+    if payload.get("run_dir") == "__RUN_DIR__":
+        payload = {**payload, "run_dir": str(run_dir)}
+
+    request = load_request(
+        _write_request(job_dir, command=command, config_path=str(config), payload=payload),
+        job_dir=job_dir,
+    )
+
+    assert isinstance(request.payload, payload_type)
+    assert request.command == command
+
+
+def test_load_request_requires_config_for_live_and_production_commands(tmp_path: Path) -> None:
+    job_dir = _private_job(tmp_path)
+
+    for command, payload in [
+        ("preflight", {"live_probe": True}),
+        ("bootstrap_topic", {"description": "topic", "language": "en"}),
+    ]:
+        with pytest.raises(ProtocolError, match="config_path is required"):
+            load_request(_write_request(job_dir, command=command, payload=payload), job_dir=job_dir)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "topic_id": "topic",
+            "report_date": "2026-08-30",
+            "limit": 0,
+            "deep_limit": 1,
+            "language": "en",
+            "model_cache": False,
+            "model_cache_limit_bytes": None,
+        },
+        {
+            "topic_id": "topic",
+            "report_date": "2026-08-30",
+            "limit": 1,
+            "deep_limit": 1,
+            "language": "en",
+            "model_cache": False,
+            "model_cache_limit_bytes": 0,
+        },
+    ],
+)
+def test_load_request_rejects_invalid_daily_numbers(
+    tmp_path: Path, payload: dict[str, object]
+) -> None:
+    job_dir = _private_job(tmp_path)
+    config = job_dir.parent.parent / "config.json"
+    config.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ProtocolError, match="positive|at least"):
+        load_request(
+            _write_request(
+                job_dir,
+                command="run_daily",
+                config_path=str(config),
+                payload=payload,
+            ),
+            job_dir=job_dir,
+        )

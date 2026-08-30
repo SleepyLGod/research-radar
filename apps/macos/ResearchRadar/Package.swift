@@ -8,11 +8,18 @@ let package = Package(
     platforms: [.macOS("26.0")],
     products: [
         .library(name: "ResearchRadarCore", targets: ["ResearchRadarCore"]),
+        .library(name: "ResearchRadarPDFCore", targets: ["ResearchRadarPDFCore"]),
         .library(name: "ResearchRadarAppFeature", targets: ["ResearchRadarAppFeature"]),
         .executable(name: "ResearchRadar", targets: ["ResearchRadarExecutable"]),
+        .executable(name: "ResearchRadarPDFHelper", targets: ["ResearchRadarPDFHelper"]),
     ],
     targets: [
         .target(name: "ResearchRadarCore"),
+        .target(name: "ResearchRadarPDFCore"),
+        .executableTarget(
+            name: "ResearchRadarPDFHelper",
+            dependencies: ["ResearchRadarPDFCore"]
+        ),
         .target(
             name: "ResearchRadarAppFeature",
             dependencies: ["ResearchRadarCore"],
@@ -25,6 +32,14 @@ let package = Package(
         .testTarget(
             name: "ResearchRadarCoreTests",
             dependencies: ["ResearchRadarCore"]
+        ),
+        .testTarget(
+            name: "ResearchRadarPDFCoreTests",
+            dependencies: ["ResearchRadarPDFCore"]
+        ),
+        .testTarget(
+            name: "ResearchRadarPDFHelperTests",
+            dependencies: ["ResearchRadarPDFHelper", "ResearchRadarPDFCore"]
         ),
         .testTarget(
             name: "ResearchRadarAppFeatureTests",

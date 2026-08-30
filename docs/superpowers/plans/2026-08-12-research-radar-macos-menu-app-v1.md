@@ -27,7 +27,9 @@
 - Reports and source history are durable user data. Model responses are explicitly separate, rebuildable cache data; automatic cache eviction is disabled until the user supplies a positive limit.
 - WeChat and Email delivery are independent. A delivery failure never reruns research and never invalidates a successfully generated local report.
 - Archive/RSS, Zhihu publishing, multi-topic evaluation, weekly reports, YAML editing/import, raw claim audit, automatic app updates, and a TUI are outside v1.
-- Use signed-off commits and no more than three implementation commits, matching the three tasks below.
+- Use small signed-off vertical commits. The foundation and shared application-service
+  extraction are already committed; the remaining bridge, durable workflow, and editorial
+  experience each receive a separate reviewed commit.
 
 ---
 
@@ -580,6 +582,7 @@ struct RunDailyPayloadV1: Codable, Equatable, Sendable {
     let deepLimit: Int
     let language: ReportLanguageV1
     let modelCache: Bool
+    let modelCacheLimitBytes: UInt64?
 }
 
 struct RetryDeliveryPayloadV1: Codable, Equatable, Sendable {
@@ -1049,6 +1052,8 @@ Task 1 is blocked if either SwiftPM probe fails. Preserve the full diagnostics a
 
 ### Task 1: Add Bundled macOS App Foundation
 
+**Status:** Completed in `[feat] Add lightweight macOS app foundation`.
+
 **Deliverable:** A staged, ad-hoc-signed menu-bar App launches without user-installed Python, `uv`, Homebrew, or the source checkout; left-click reuses one window, right-click opens a native menu, the window runs a bundled local preflight, shows a localized success or failure, and can cancel the engine plus its fixture descendants without leaving a process behind.
 
 This is a vertical product slice, not a packaging-only spike. It deliberately excludes topic onboarding, real providers, daily research, PDF processing, scheduling, and delivery.
@@ -1310,12 +1315,17 @@ Stop if the minimal macOS 26 arm64 App cannot pass its local foundation gates, c
 
 #### Phase 2A: Complete Engine Bridge And Native PDF Foundation
 
+**Status:** The typed daily, WeChat, and Email application services and sanitized progress
+listener are already committed. This phase extends those interfaces; it must not create aliases
+or a second orchestration layer under the older illustrative names below.
+
 **Deliverable:** The proven App bundle gains the full four-command bridge, existing research/publishing services, native PDF helper, typed durable configuration, reviewed-topic onboarding, fake daily execution, report indexing, scheduling, and crash-safe queue integration. A user can create a topic and produce a fake-provider `article_draft.json` plus `wechat.html` without Terminal or YAML, then restart the App and reopen the report.
 
 **Files:**
-- Create: `src/research_radar/application/__init__.py`
-- Create: `src/research_radar/application/daily.py`
-- Create: `src/research_radar/application/wechat.py`
+- Modify: `src/research_radar/application/__init__.py`
+- Modify: `src/research_radar/application/daily.py`
+- Modify: `src/research_radar/application/wechat.py`
+- Modify: `src/research_radar/application/email.py`
 - Modify: `src/research_radar/app_bridge/__main__.py`
 - Modify: `src/research_radar/app_bridge/protocol.py`
 - Modify: `src/research_radar/app_bridge/events.py`
@@ -1329,8 +1339,7 @@ Stop if the minimal macOS 26 arm64 App cannot pass its local foundation gates, c
 - Modify: `src/research_radar/analysis/figures.py`
 - Modify: `packaging/macos/research-radar-engine.spec`
 - Modify: `script/build_macos_engine.sh`
-- Create: `tests/test_application_daily.py`
-- Create: `tests/test_application_wechat.py`
+- Modify: `tests/test_application_services.py`
 - Modify: `tests/test_app_bridge_protocol.py`
 - Modify: `tests/test_app_bridge_events.py`
 - Modify: `tests/test_app_bridge_runner.py`
@@ -1344,8 +1353,13 @@ Stop if the minimal macOS 26 arm64 App cannot pass its local foundation gates, c
 - Create: `apps/macos/ResearchRadar/Tests/ResearchRadarPDFCoreTests/PDFOperationsTests.swift`
 
 **Interfaces:**
-- Consumes: Task 1's frozen engine, protocol envelopes, supervisor, localization foundation, singleton App shell, and bundle verifier; existing `AppConfig`, `run_daily()`, `bootstrap_topic_draft()`, `publish_email_run()`, `WeChatDraftClient`, `render_wechat_publish_html()`, `ProgressWriter`, and figure crop quality policy.
-- Produces: `execute_daily(request: DailyExecutionRequest) -> Path`, `publish_wechat_run(request: WeChatPublishRequest) -> WeChatPublishOutcome`, `load_app_configuration(path: Path, *, require_topics: bool) -> LoadedAppConfigurationV1`, all four production command handlers, and `PDFHelperClient.page_bbox()/render_crop()`. This phase completes and freezes schema v1 before beta use.
+- Consumes: Task 1's frozen engine, protocol envelopes, supervisor, localization foundation,
+  singleton App shell, and bundle verifier; the committed `run_daily_application()`,
+  `publish_wechat_draft()`, `publish_email_application()`, `bootstrap_topic_draft()`,
+  `ProgressWriter`, and figure crop quality policy.
+- Produces: `load_app_configuration(path: Path, *, require_topics: bool) -> LoadedAppConfigurationV1`,
+  all four production command handlers, and `PDFHelperClient.page_bbox()/render_crop()`.
+  This phase completes and freezes schema v1 before beta use.
 
 - [ ] **Step 1: Complete and freeze protocol fixtures for every production command**
 
@@ -1466,11 +1480,11 @@ Run: `uv run --extra dev pytest tests/test_app_bridge_events.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: Extract shared daily orchestration from `cli.py` behind typed options**
+- [x] **Step 6: Extract shared daily orchestration from `cli.py` behind typed options**
 
 ```python
 @dataclass(frozen=True)
-class DailyRouteOverrides:
+class ProviderOverrides:
     global_provider: str | None = None
     global_model: str | None = None
     deepseek_provider: str | None = None
@@ -1487,7 +1501,7 @@ class DailyRouteOverrides:
 
 
 @dataclass(frozen=True)
-class DailyExecutionRequest:
+class DailyRunOptions:
     root: Path
     topic_id: str
     limit: int = 5
@@ -1495,20 +1509,21 @@ class DailyExecutionRequest:
     language: str = "zh"
     model_cache: bool = True
     model_cache_limit_bytes: int | None = None
-    route_overrides: DailyRouteOverrides = field(default_factory=DailyRouteOverrides)
-    progress_listener: Callable[[dict[str, Any]], None] | None = None
+    routes: ProviderOverrides = field(default_factory=ProviderOverrides)
 
 
-def execute_daily(
-    request: DailyExecutionRequest,
-    *,
+def run_daily_application(
+    options: DailyRunOptions,
     config: AppConfig,
-    secrets: SecretManager,
+    secret_manager: SecretManager,
+    *,
+    progress_listener: ProgressListener | None = None,
 ) -> Path:
     """Resolve the current routes/connectors and execute the existing pipeline."""
 ```
 
-Move connector and route construction; do not duplicate it. `handle_run_daily()` constructs `DailyExecutionRequest`, calls `execute_daily()`, writes the optional run-dir output, and prints the same final line as before. Add a parity test that captures CLI fake-run artifacts before and after extraction and compares them byte-for-byte.
+Connector and route construction now live in `run_daily_application()`. The CLI maps arguments to
+`DailyRunOptions`; the App bridge must call the same service rather than wrapping it again.
 
 When `model_cache_limit_bytes` is null, cache behavior remains byte-for-byte compatible with the CLI. When a positive App value is present, a cache hit uses `os.utime()` to update only the app-owned cache entry's modification timestamp; eviction never relies on filesystem access-time semantics. A cache write or completed daily run prunes the oldest such regular cache files until the model-cache directory is within the user limit. Containment checks must exclude reports, source history, delivery artifacts, configuration, and job state. There is no periodic cache-maintenance process.
 
@@ -1518,11 +1533,11 @@ Run: `uv run --extra dev pytest tests/test_application_daily.py tests/test_model
 
 Expected: PASS with unchanged CLI artifacts.
 
-- [ ] **Step 7: Extract WeChat orchestration from `cli.py` without changing its public artifacts**
+- [x] **Step 7: Extract WeChat orchestration from `cli.py` without changing its public artifacts**
 
 ```python
 @dataclass(frozen=True)
-class WeChatPublishRequest:
+class WeChatDraftOptions:
     run_dir: Path
     title: str
     digest: str
@@ -1531,19 +1546,12 @@ class WeChatPublishRequest:
     dry_run: bool = False
 
 
-@dataclass(frozen=True)
-class WeChatPublishOutcome:
-    status: str
-    draft_created: bool
-    response: dict[str, object] | None
-
-
-def publish_wechat_run(
-    request: WeChatPublishRequest,
+def publish_wechat_draft(
+    options: WeChatDraftOptions,
     *,
-    secrets: SecretManager,
-    client_factory: Callable[..., WeChatDraftClient] = WeChatDraftClient,
-) -> WeChatPublishOutcome:
+    secret_manager: SecretManager | None = None,
+    client_factory: type[WeChatDraftClient] = WeChatDraftClient,
+) -> dict[str, object]:
 ```
 
 The extracted service keeps `wechat_publish.html`, media upload, request/result/error artifacts, and source-history updates identical. `handle_publish_wechat()` becomes argument mapping plus user-facing printing.
@@ -1552,9 +1560,12 @@ Run: `uv run --extra dev pytest tests/test_application_wechat.py tests/test_cli.
 
 Expected: PASS and byte-identical WeChat preview/publish HTML fixtures.
 
-- [ ] **Step 8: Add an optional sanitized pipeline event listener**
+- [x] **Step 8: Add an optional sanitized pipeline event listener**
 
-Modify `ProgressWriter.__init__` to accept `listener: Callable[[dict[str, Any]], None] | None = None`. Invoke it only with the already-redacted event dictionary after the file append. Listener failure records no secret and must not change CLI behavior. Thread this optional listener through `run_daily()` and `DailyExecutionRequest`.
+`ProgressWriter.__init__` accepts `listener: Callable[[dict[str, Any]], None] | None = None`.
+It invokes the listener only with the already-redacted event dictionary after the file append.
+Listener failure records no secret and does not change CLI behavior. The listener is threaded
+through `run_daily()` and `DailyRunOptions` via `run_daily_application()`.
 
 Test that the listener receives `discovery`, `reader`, `verifier`, `localization`, and `artifacts` transitions while `run_progress.jsonl` remains byte-equivalent when no listener is supplied.
 
@@ -1627,7 +1638,12 @@ def run_engine_request(
 ) -> EngineResultV1:
 ```
 
-`BridgeDependencies.production()` returns the four local handlers. The runner leaves `config=None` only for `preflight(live_probe=false)`; every other path requires and loads the validated App configuration before dispatch. The handlers call `execute_daily(config=config.research)`, `bootstrap_topic_draft()`, `publish_wechat_run()`, and `publish_email_run()`; tests replace one handler without monkeypatching global functions. Each handler checks that the payload variant matches its command before doing any I/O.
+`BridgeDependencies.production()` returns the four local handlers. The runner leaves `config=None`
+only for `preflight(live_probe=false)`; every other path requires and loads the validated App
+configuration before dispatch. The handlers call `run_daily_application()`,
+`bootstrap_topic_draft()`, `publish_wechat_draft()`, and `publish_email_application()`; tests
+replace one handler without monkeypatching global functions. Each handler checks that the payload
+variant matches its command before doing any I/O.
 
 Before dispatching `run_daily`, compare `payload.report_date` with `dependencies.clock().astimezone().date().isoformat()`. v1 does not backfill historical report dates; a mismatch returns `invalid_report_date` before discovery starts. This keeps the queue key aligned with the actual `RunManifest.report_date`.
 
@@ -2265,7 +2281,10 @@ Expected: PASS for every allowed and rejected URL case plus no eager WebView cre
 
 Research success writes `ReportRecordV1` before channel jobs are enqueued. Each enabled channel becomes its own `retry_delivery` engine request. Delivery state is one of `notRequested`, `pending`, `sending`, `created`, `sent`, `failed`, or `unknown`.
 
-WeChat retry calls only the extracted WeChat service and preserves its duplicate/unknown safety. Email retry calls only `publish_email_run()` and respects existing resend protection; the UI requires confirmation before setting `allow_resend` for a previously sent email. No channel can mutate `article_draft.json` or start research.
+WeChat retry calls only `publish_wechat_draft()` and preserves its duplicate/unknown safety.
+Email retry calls only `publish_email_application()` and respects existing resend protection;
+the UI requires confirmation before setting `allow_resend` for a previously sent email. No
+channel can mutate `article_draft.json` or start research.
 
 Run: `swift test --package-path apps/macos/ResearchRadar --filter DeliveryRecoveryTests`
 
@@ -2580,7 +2599,8 @@ The v1 beta is complete only when all of these are true:
 - Storage usage is calculated only on request. The default cache limit is disabled, and an enabled limit or manual cleanup can affect only the contained model cache; reports, figures, source history, configuration, and delivery artifacts remain byte-identical.
 - Successful jobs retain no long-lived stdout/stderr payload, and failure diagnostics obey the documented per-topic/job-kind and 1 MiB bounds.
 - The local beta is labeled for the exact supported platform and makes no wider compatibility claim.
-- Each of the three implementation commits is signed off and reviewed before any push.
+- Every vertical implementation commit is signed off, reviewed, and pushed to the existing Draft
+  PR without amending or rewriting earlier commits.
 
 ## 9. Assumptions
 

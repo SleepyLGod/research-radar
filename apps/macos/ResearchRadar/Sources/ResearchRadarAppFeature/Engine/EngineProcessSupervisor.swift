@@ -212,12 +212,9 @@ public actor EngineProcessSupervisor {
         for line in text.split(separator: "\n") {
             guard let lineData = line.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  object["kind"] as? String == "started",
-                  let groupNumber = object["process_group_id"] as? NSNumber
+                  object["type"] as? String == "started"
             else { continue }
-            let group = groupNumber.int32Value
-            guard group == processID else { return nil }
-            return group
+            return processID
         }
         return nil
     }

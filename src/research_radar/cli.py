@@ -8,13 +8,11 @@ import json
 import os
 import shutil
 import sys
-import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from research_radar.analysis.model_cache import CachedLLMProvider
-from research_radar.analysis.providers import Message
 from research_radar.analysis.routing import (
     TaskModelRoute,
     TaskRoutePreview,
@@ -28,6 +26,7 @@ from research_radar.application.daily import (
     run_daily_application,
 )
 from research_radar.application.email import EmailDeliveryOptions, publish_email_application
+from research_radar.application.provider_probe import probe_excerpt, probe_provider
 from research_radar.application.wechat import (
     WeChatDraftOptions,
     append_wechat_draft_source_history,
@@ -971,14 +970,9 @@ def handle_provider_probe(args: argparse.Namespace) -> None:
     if route.provider is None or route.model is None:
         raise ResearchRadarError("Provider probe requires a non-local model provider.")
     provider_config = config.model_providers[route.provider_name]
-    started = time.perf_counter()
     try:
-        response = route.provider.complete(
-            [Message(role="user", content=_provider_probe_prompt(args.probe))],
-            model=route.model,
-        )
+        probe_result = probe_provider(route, probe=args.probe)
     except ResearchRadarError as exc:
-        duration = time.perf_counter() - started
         _print_probe_result(
             {
                 "status": "failed",
@@ -989,7 +983,7 @@ def handle_provider_probe(args: argparse.Namespace) -> None:
                 "timeout_seconds": provider_config.timeout_seconds,
                 "thinking": provider_config.thinking or "",
                 "reasoning_effort": provider_config.reasoning_effort or "",
-                "duration_seconds": round(duration, 3),
+                "duration_seconds": None,
                 "error_type": type(exc).__name__,
                 "message": redact_text(str(exc)),
                 "diagnostics": _probe_diagnostics(exc),
@@ -997,37 +991,21 @@ def handle_provider_probe(args: argparse.Namespace) -> None:
         )
         raise
 
-    duration = time.perf_counter() - started
     result: dict[str, object] = {
         "status": "succeeded",
-        "probe": args.probe,
-        "provider": route.provider_name,
-        "model": route.model,
+        "probe": probe_result.probe,
+        "provider": probe_result.provider,
+        "model": probe_result.model,
         "host": _provider_host(provider_config.base_url),
         "timeout_seconds": provider_config.timeout_seconds,
         "thinking": provider_config.thinking or "",
         "reasoning_effort": provider_config.reasoning_effort or "",
-        "duration_seconds": round(duration, 3),
-        "response_char_count": len(response.content),
-        "response_excerpt": _probe_excerpt(response.content),
+        "duration_seconds": probe_result.duration_seconds,
+        "response_char_count": probe_result.response_char_count,
+        "response_excerpt": probe_result.response_excerpt,
     }
-    if args.probe == "json":
-        try:
-            _load_probe_json(response.content)
-        except json.JSONDecodeError as exc:
-            result.update(
-                {
-                    "status": "failed",
-                    "json_valid": False,
-                    "error_type": type(exc).__name__,
-                    "message": "Provider probe failed: JSON response was not parseable.",
-                }
-            )
-            _print_probe_result(result)
-            raise ResearchRadarError(
-                "Provider probe failed: JSON response was not parseable."
-            ) from exc
-        result["json_valid"] = True
+    if probe_result.json_valid is not None:
+        result["json_valid"] = probe_result.json_valid
     _print_probe_result(result)
 
 
@@ -1550,24 +1528,6 @@ def _known_secret_names() -> list[str]:
     ]
 
 
-def _provider_probe_prompt(probe: str) -> str:
-    if probe == "small":
-        return "Reply with exactly this text: ResearchRadar provider probe ok."
-    if probe == "json":
-        return (
-            "Return only valid JSON, with no Markdown fences and no extra text. "
-            'Use exactly this shape: {"status":"ok","provider_test":true,'
-            '"items":["alpha","beta"],"count":2}.'
-        )
-    if probe == "long":
-        return (
-            "Write a structured LLM API transport stress-test response of about 1800 "
-            "English words. "
-            "Use short paragraphs, include numbered sections, and do not use Markdown tables."
-        )
-    raise ResearchRadarError(f"Unsupported provider probe: {probe}")
-
-
 def _provider_host(endpoint: str | None) -> str:
     if endpoint is None:
         return ""
@@ -1677,13 +1637,6 @@ def _route_override_attrs(task_name: str) -> tuple[str, str]:
         raise ResearchRadarError(f"Unsupported routed task: {task_name}") from exc
 
 
-def _probe_excerpt(value: str, *, limit: int = 500) -> str:
-    text = redact_text(value).replace("\n", "\\n")
-    if len(text) <= limit:
-        return text
-    return text[:limit].rstrip() + "..."
-
-
 def _probe_diagnostics(exc: ResearchRadarError) -> dict[str, object]:
     diagnostics = getattr(exc, "diagnostics", {})
     if not isinstance(diagnostics, dict):
@@ -1691,54 +1644,12 @@ def _probe_diagnostics(exc: ResearchRadarError) -> dict[str, object]:
     safe: dict[str, object] = {}
     for key, value in diagnostics.items():
         if key == "response_excerpt" and isinstance(value, str):
-            safe[key] = _probe_excerpt(value)
+            safe[key] = probe_excerpt(value)
         elif isinstance(value, str):
             safe[key] = redact_text(value)
         else:
             safe[key] = value
     return safe
-
-
-def _load_probe_json(value: str) -> dict[str, object]:
-    text = value.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(line for line in lines if not line.strip().startswith("```")).strip()
-    payload = json.loads(_extract_json_object_text(text))
-    if not isinstance(payload, dict):
-        raise json.JSONDecodeError("JSON payload must be an object", text, 0)
-    return payload
-
-
-def _extract_json_object_text(text: str) -> str:
-    if text.startswith("{"):
-        return text
-    start = text.find("{")
-    if start < 0:
-        return text
-    depth = 0
-    in_string = False
-    escaped = False
-    for index in range(start, len(text)):
-        char = text[index]
-        if escaped:
-            escaped = False
-            continue
-        if char == "\\" and in_string:
-            escaped = True
-            continue
-        if char == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : index + 1]
-    return text
 
 
 def _print_probe_result(result: dict[str, object]) -> None:

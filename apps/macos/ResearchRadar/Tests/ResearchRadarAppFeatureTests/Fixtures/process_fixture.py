@@ -29,7 +29,7 @@ except OSError as exc:
         raise
 write_atomic(
     events_path,
-    json.dumps({"kind": "started", "process_group_id": os.getpgrp()}) + "\n",
+    json.dumps({"type": "started"}) + "\n",
 )
 
 if mode == "normal":

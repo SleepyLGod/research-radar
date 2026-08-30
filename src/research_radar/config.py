@@ -155,13 +155,13 @@ def load_config(path: Path) -> AppConfig:
     return parse_config(data)
 
 
-def parse_config(data: dict[str, Any]) -> AppConfig:
-    """Parse an already-loaded configuration mapping."""
+def parse_config(data: dict[str, Any], *, require_topics: bool = True) -> AppConfig:
+    """Parse a configuration mapping, optionally allowing onboarding without topics."""
 
     _reject_removed_settings(data)
     project_data = _mapping(data.get("project", {}), "project")
     topics_data = data.get("topics")
-    if not isinstance(topics_data, list) or not topics_data:
+    if not isinstance(topics_data, list) or (require_topics and not topics_data):
         raise ConfigError("Config must contain at least one topic.")
 
     topics = []

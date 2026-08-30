@@ -81,6 +81,33 @@ def test_daily_application_builds_routes_and_calls_pipeline(tmp_path: Path) -> N
     assert captured["kwargs"]["deep_limit"] == 0
 
 
+def test_daily_application_forwards_optional_figure_extractor(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "project": {"name": "ResearchRadar"},
+            "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
+        }
+    )
+    expected = tmp_path / "runs" / "result"
+    extractor = object()
+    captured: dict[str, object] = {}
+
+    def fake_run_daily(*args, **kwargs):
+        captured.update(kwargs)
+        return expected
+
+    result = run_daily_application(
+        DailyRunOptions(root=tmp_path, topic_id="agent-memory"),
+        config,
+        SecretManager(EnvSecretBackend()),
+        pipeline_runner=fake_run_daily,
+        figure_extractor=extractor,
+    )
+
+    assert result == expected
+    assert captured["figure_extractor"] is extractor
+
+
 @pytest.mark.parametrize(
     ("options", "message"),
     [
@@ -88,6 +115,10 @@ def test_daily_application_builds_routes_and_calls_pipeline(tmp_path: Path) -> N
         (
             DailyRunOptions(root=Path("."), topic_id="topic", deep_limit=-1),
             "deep_limit cannot",
+        ),
+        (
+            DailyRunOptions(root=Path("."), topic_id="topic", model_cache_limit_bytes=0),
+            "model_cache_limit_bytes must",
         ),
     ],
 )
