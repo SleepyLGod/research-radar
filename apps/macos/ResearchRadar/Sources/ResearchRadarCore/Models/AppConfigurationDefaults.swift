@@ -1,6 +1,16 @@
 import Foundation
 
 public enum AppConfigurationDefaults {
+    /// Updates only the former built-in DeepSeek model name, preserving user routes.
+    public static func updatingLegacyFlashRoutes(_ configuration: AppConfigurationV1) -> AppConfigurationV1 {
+        var updated = configuration
+        for index in updated.routes.indices where updated.routes[index].providerID == "deepseek"
+            && updated.routes[index].model == "deepseek-v4-flash" {
+            updated.routes[index].model = "deepseek-flash"
+        }
+        return updated
+    }
+
     /// Creates the supported v1 route set without storing any secret values.
     public static func make(workspaceRoot: URL, codexExecutable: URL?) -> AppConfigurationV1 {
         let deepSeek = ProviderRecordV1(
@@ -18,7 +28,7 @@ public enum AppConfigurationDefaults {
             "report_localization",
         ]
         let routes = deepSeekTasks.map {
-            RouteRecordV1(task: $0, providerID: "deepseek", model: "deepseek-v4-flash")
+            RouteRecordV1(task: $0, providerID: "deepseek", model: "deepseek-flash")
         } + [RouteRecordV1(task: "verifier", providerID: "codex", model: "gpt-5.6-terra")]
         return AppConfigurationV1(
             workspaceRoot: workspaceRoot.path,
@@ -35,7 +45,7 @@ public enum AppConfigurationDefaults {
         var updated = configuration
         if let index = updated.routes.firstIndex(where: { $0.task == "verifier" }) {
             updated.routes[index].providerID = "deepseek"
-            updated.routes[index].model = "deepseek-v4-flash"
+            updated.routes[index].model = "deepseek-flash"
         }
         return updated
     }

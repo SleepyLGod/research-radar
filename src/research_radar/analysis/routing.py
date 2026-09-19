@@ -199,7 +199,7 @@ def _build_provider(
 
 def _default_model(provider_name: str) -> str | None:
     defaults = {
-        "deepseek": "deepseek-v4-flash",
+        "deepseek": "deepseek-flash",
         "xiaomi": "mimo-v2.5-pro",
         "openai": "gpt-5.4",
         "anthropic": "claude-sonnet-4-5",

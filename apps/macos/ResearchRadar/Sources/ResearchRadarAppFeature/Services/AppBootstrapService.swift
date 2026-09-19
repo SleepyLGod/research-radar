@@ -18,7 +18,13 @@ public struct AppBootstrapService: Sendable {
         let configPath = "config/app-config.json"
         let configuration: AppConfigurationV1
         if exists(configPath) {
-            configuration = try store.read(AppConfigurationV1.self, from: configPath)
+            let saved = try store.read(AppConfigurationV1.self, from: configPath)
+            let updated = AppConfigurationDefaults.updatingLegacyFlashRoutes(saved)
+            if updated != saved {
+                try updated.validate()
+                try store.write(updated, to: configPath)
+            }
+            configuration = updated
         } else {
             let codex = CodexExecutableResolver().resolve(
                 savedPath: nil,

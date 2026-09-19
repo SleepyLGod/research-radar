@@ -18,7 +18,7 @@ class _Provider:
 
 
 def test_configured_route_checks_call_shared_provider_probe(monkeypatch) -> None:
-    route = SimpleNamespace(provider="deepseek", model="deepseek-v4-flash")
+    route = SimpleNamespace(provider="deepseek", model="deepseek-flash")
     research = SimpleNamespace(
         models=SimpleNamespace(
             task_routes={"anchor_repair": route, "deep_reading": route}
@@ -27,7 +27,7 @@ def test_configured_route_checks_call_shared_provider_probe(monkeypatch) -> None
     config = SimpleNamespace(research=research)
     resolved = TaskModelRoute(
         provider=_Provider(),
-        model="deepseek-v4-flash",
+        model="deepseek-flash",
         provider_name="deepseek",
     )
     calls: list[str] = []
@@ -47,14 +47,14 @@ def test_configured_route_checks_call_shared_provider_probe(monkeypatch) -> None
             "status": "ready",
             "message": "Provider route is ready.",
             "provider": "deepseek",
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-flash",
         },
         {
             "id": "deep_reading",
             "status": "ready",
             "message": "Provider route is ready.",
             "provider": "deepseek",
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-flash",
         }
     ]
 

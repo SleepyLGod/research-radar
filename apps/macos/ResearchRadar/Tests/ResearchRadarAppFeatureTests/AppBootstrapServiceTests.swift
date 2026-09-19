@@ -4,6 +4,25 @@ import ResearchRadarCore
 @testable import ResearchRadarAppFeature
 
 @MainActor @Suite struct AppBootstrapServiceTests {
+    @Test func existingConfigurationMigratesOnlyLegacyFlashRoutesOnDisk() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "app-bootstrap-\(UUID().uuidString)")
+        defer { try? trashBootstrapRoot(root) }
+        let persistence = AtomicJSONStore(root: root)
+        var saved = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        saved.routes[0].model = "deepseek-v4-flash"
+        saved.routes[1].model = "custom-model"
+        try persistence.write(saved, to: "config/app-config.json")
+        let service = AppBootstrapService(appSupportRoot: root)
+        let loaded = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
+        #expect(loaded.configuration.routes[0].model == "deepseek-flash")
+        #expect(loaded.configuration.routes[1].model == "custom-model")
+        let stored = try persistence.read(AppConfigurationV1.self, from: "config/app-config.json")
+        #expect(stored == loaded.configuration)
+        let bytes = try Data(contentsOf: root.appending(path: "config/app-config.json"))
+        _ = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
+        #expect(try Data(contentsOf: root.appending(path: "config/app-config.json")) == bytes)
+    }
+
     @Test func firstLaunchCreatesTypedPrivateStateAndSecondLaunchReusesIt() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "app-bootstrap-\(UUID().uuidString)")
         defer { try? trashBootstrapRoot(root) }

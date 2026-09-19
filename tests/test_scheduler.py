@@ -89,11 +89,11 @@ def test_daily_draft_runner_passes_route_overrides(tmp_path: Path) -> None:
         reader_provider="deepseek",
         reader_model="deepseek-v4-pro",
         verifier_provider="deepseek",
-        verifier_model="deepseek-v4-flash",
+        verifier_model="deepseek-flash",
         anchor_repair_provider="xiaomi",
         anchor_repair_model="mimo-v2.5-pro",
         localization_provider="deepseek",
-        localization_model="deepseek-v4-flash",
+        localization_model="deepseek-flash",
         gist_provider="xiaomi",
         gist_model="mimo-v2.5-pro",
     )
@@ -106,11 +106,11 @@ def test_daily_draft_runner_passes_route_overrides(tmp_path: Path) -> None:
     assert "--reader-provider deepseek" in daily_command
     assert "--reader-model deepseek-v4-pro" in daily_command
     assert "--verifier-provider deepseek" in daily_command
-    assert "--verifier-model deepseek-v4-flash" in daily_command
+    assert "--verifier-model deepseek-flash" in daily_command
     assert "--anchor-repair-provider xiaomi" in daily_command
     assert "--anchor-repair-model mimo-v2.5-pro" in daily_command
     assert "--localization-provider deepseek" in daily_command
-    assert "--localization-model deepseek-v4-flash" in daily_command
+    assert "--localization-model deepseek-flash" in daily_command
     assert "--gist-provider xiaomi" in daily_command
     assert "--gist-model mimo-v2.5-pro" in daily_command
 

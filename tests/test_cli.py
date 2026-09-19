@@ -279,12 +279,12 @@ def test_provider_routes_show_daily_defaults_and_deepseek_replacement(
             },
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-flash"},
                     "deep_reading": {"provider": "deepseek", "model": "deepseek-v4-pro"},
                     "anchor_repair": {"provider": "deepseek", "model": "deepseek-v4-pro"},
                     "report_localization": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-flash",
+                        "model": "deepseek-flash",
                     },
                     "verifier": {"provider": "codex", "model": "gpt-5.5"},
                 }
@@ -1006,11 +1006,11 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
 
     assert isinstance(captured["verifier"], OpenAICompatibleProvider)
     assert captured["verifier"].name == "deepseek"
-    assert captured["verifier_model"] == "deepseek-v4-flash"
+    assert captured["verifier_model"] == "deepseek-flash"
     assert captured["limit"] == 3
     assert isinstance(captured["deep_reader"], OpenAICompatibleProvider)
     assert captured["deep_reader"].name == "deepseek"
-    assert captured["deep_model"] == "deepseek-v4-flash"
+    assert captured["deep_model"] == "deepseek-flash"
     assert captured["deep_limit"] == 1
     assert captured["language"] == "zh"
 
@@ -1025,7 +1025,7 @@ def test_run_daily_deepseek_provider_replacement_uses_xiaomi(
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-flash"},
                     "deep_reading": {
                         "provider": "deepseek",
                         "model": "deepseek-v4-pro",
@@ -1294,7 +1294,7 @@ def test_run_daily_supports_task_specific_provider_routes(
             root=tmp_path,
             topic="agent-memory",
             provider="deepseek",
-            model="deepseek-v4-flash",
+            model="deepseek-flash",
             gist_provider="openai",
             gist_model="gpt-5.4",
             reader_provider=None,
@@ -1312,7 +1312,7 @@ def test_run_daily_supports_task_specific_provider_routes(
     assert captured["gist_provider"].name == "openai"
     assert captured["gist_model"] == "gpt-5.4"
     assert captured["deep_reader"].name == "deepseek"
-    assert captured["deep_model"] == "deepseek-v4-flash"
+    assert captured["deep_model"] == "deepseek-flash"
     assert isinstance(captured["verifier"], CodexCliProvider)
     assert captured["verifier_model"] == "gpt-5.4"
 
