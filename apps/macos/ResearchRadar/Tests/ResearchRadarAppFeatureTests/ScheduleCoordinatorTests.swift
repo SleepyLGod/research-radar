@@ -113,11 +113,12 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
         #expect(await recorder.count == 1)
     }
 
-    @Test func timerFailureArmsABoundedRetryInsteadOfSilentlyStopping() async throws {
+    @Test func timerFailureStopsAndReportsImmediately() async throws {
         let root = try scheduleRoot(); defer { try? trashScheduleRoot(root) }
         let queue = JobQueue(store: AtomicJSONStore(root: root), jobsRoot: root.appending(path: "jobs"))
         let timer = FakeTimerDriver()
         let failure = ScheduleFailureSwitch()
+        let recorder = DueJobRecorder()
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let topic = TopicRecordV1(
             id: "memory", displayName: "Memory", researchFocus: "Memory",
@@ -135,6 +136,7 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
                     schedules: [schedule], topics: [topic], reports: [], paused: false
                 )
             },
+            onFailure: { await recorder.record() },
             now: { now },
             calendar: {
                 var calendar = Calendar(identifier: .gregorian)
@@ -147,8 +149,49 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
         failure.shouldFail = true
         await timer.fire()
 
-        #expect(await timer.replacementCount == 2)
-        #expect(await timer.fireAt == now.addingTimeInterval(60))
+        #expect(await timer.replacementCount == 1)
+        #expect(await timer.fireAt == nil)
+        #expect(await recorder.count == 1)
+        failure.shouldFail = false
+        try await coordinator.refresh()
+        #expect(await timer.fireAt == nil)
+    }
+
+    @Test func stopDuringInputsAwaitPreventsEnqueueAndRearming() async throws {
+        let root = try scheduleRoot(); defer { try? trashScheduleRoot(root) }
+        let queue = JobQueue(store: AtomicJSONStore(root: root), jobsRoot: root.appending(path: "jobs"))
+        let timer = FakeTimerDriver()
+        let suspended = SuspendedScheduleInputs()
+        let coordinator = ScheduleCoordinator(queue: queue, timer: timer, inputs: { await suspended.read() })
+        let refresh = Task { try await coordinator.refresh() }
+        await suspended.waitUntilReading()
+        await coordinator.stop()
+        await suspended.resume()
+        try await refresh.value
+        #expect(await queue.jobs().isEmpty)
+        #expect(await timer.replacementCount == 0)
+        try await coordinator.refresh()
+        #expect(await timer.replacementCount == 0)
+    }
+}
+
+private actor SuspendedScheduleInputs {
+    private var continuation: CheckedContinuation<ScheduleInputs, Never>?
+    private var reader: CheckedContinuation<Void, Never>?
+    func read() async -> ScheduleInputs {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            reader?.resume(); reader = nil
+        }
+    }
+    func waitUntilReading() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { reader = $0 }
+    }
+    func resume() {
+        let topic = TopicRecordV1(id: "memory", displayName: "Memory", researchFocus: "Memory", queries: ["memory"], paperQueries: ["memory"], reportLanguage: .english)
+        continuation?.resume(returning: ScheduleInputs(schedules: [DailyScheduleV1(topicID: "memory", hour: 0, minute: 0)], topics: [topic], reports: [], paused: false))
+        continuation = nil
     }
 }
 

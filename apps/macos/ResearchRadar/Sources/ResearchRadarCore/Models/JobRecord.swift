@@ -5,6 +5,7 @@ public enum JobRecordError: Error, Equatable, Sendable {
     case deliveryChannelRequired
     case deliveryChannelNotAllowed
     case unknownDeliveryRequiresAcknowledgement
+    case successfulDeliveryRequiresResend
     case invalidTransition(JobState, JobState)
 }
 
@@ -87,12 +88,18 @@ public struct JobRecordV1: Codable, Equatable, Identifiable, Sendable {
         error newError: RedactedEngineErrorV1? = nil,
         at date: Date
     ) throws {
+        if state == newState {
+            if let newStage { stage = newStage }
+            if state != .succeeded && state != .partialSuccess, let newError { error = newError }
+            return
+        }
         guard Self.allowedTransitions[state, default: []].contains(newState) else {
             throw JobRecordError.invalidTransition(state, newState)
         }
         state = newState
         if let newStage { stage = newStage }
         if let newError { error = newError }
+        if newState == .succeeded || newState == .partialSuccess { error = nil }
         if newState == .running { startedAt = date }
         if Self.terminalStates.contains(newState) { completedAt = date }
     }
@@ -104,7 +111,9 @@ public struct JobRecordV1: Codable, Equatable, Identifiable, Sendable {
     private static let allowedTransitions: [JobState: Set<JobState>] = [
         .pending: [.running, .cancelled],
         .running: [.cancelling, .succeeded, .partialSuccess, .failed, .cancelled, .interrupted, .deliveryUnknown],
-        .cancelling: [.cancelled, .failed, .interrupted, .deliveryUnknown],
+        .cancelling: [.succeeded, .partialSuccess, .cancelled, .failed, .interrupted, .deliveryUnknown],
+        .interrupted: [.succeeded, .partialSuccess],
+        .deliveryUnknown: [.succeeded],
     ]
 }
 

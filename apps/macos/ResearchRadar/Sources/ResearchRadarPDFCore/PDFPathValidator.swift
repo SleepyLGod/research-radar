@@ -11,9 +11,9 @@ public enum PDFPathError: Error, Equatable {
 
 public enum PDFPathValidator {
     public static func existingFile(_ path: URL, allowedRoot: URL) throws -> URL {
-        let lexicalRoot = allowedRoot.standardizedFileURL
-        let root = try validatedRoot(lexicalRoot)
-        let standardized = path.standardizedFileURL
+        let root = try validatedRoot(allowedRoot)
+        let standardized = try normalizedPath(path, root: root)
+        let lexicalRoot = root
         try requireContained(standardized, in: lexicalRoot)
         try rejectSymbolicLinks(from: lexicalRoot, through: standardized, includeLeaf: true)
         let resolved = standardized.resolvingSymlinksInPath()
@@ -35,9 +35,9 @@ public enum PDFPathValidator {
     }
 
     public static func outputFile(_ path: URL, allowedRoot: URL) throws -> URL {
-        let lexicalRoot = allowedRoot.standardizedFileURL
-        let root = try validatedRoot(lexicalRoot)
-        let standardized = path.standardizedFileURL
+        let root = try validatedRoot(allowedRoot)
+        let standardized = try normalizedPath(path, root: root)
+        let lexicalRoot = root
         try requireContained(standardized, in: lexicalRoot)
         let parent = standardized.deletingLastPathComponent()
         try rejectSymbolicLinks(from: lexicalRoot, through: parent, includeLeaf: true)
@@ -73,6 +73,31 @@ public enum PDFPathValidator {
             throw PDFPathError.invalidAllowedRoot
         }
         return resolved
+    }
+
+    // Resolve aliases above the allowed root, never symbolic links below it.
+    // Foundation can normalize existing /private/tmp paths differently from new files.
+    private static func normalizedPath(_ path: URL, root: URL) throws -> URL {
+        var current = URL(fileURLWithPath: "/", isDirectory: true)
+        var suffix: [String] = []
+        var reachedRoot = false
+        for component in path.pathComponents.dropFirst() {
+            guard component != "..", component != "." else {
+                throw PDFPathError.outsideAllowedRoot
+            }
+            current.append(path: component)
+            if reachedRoot {
+                var info = stat()
+                if lstat(current.path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFLNK {
+                    throw PDFPathError.symbolicLink
+                }
+                suffix.append(component)
+            } else if current.resolvingSymlinksInPath().path == root.path {
+                reachedRoot = true
+            }
+        }
+        guard reachedRoot else { throw PDFPathError.outsideAllowedRoot }
+        return suffix.reduce(root) { $0.appending(path: $1) }
     }
 
     private static func requireContained(_ path: URL, in root: URL) throws {

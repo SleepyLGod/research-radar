@@ -14,16 +14,76 @@ import Testing
             label: "com.example.unrelated",
             to: root.appending(path: "com.example.unrelated.plist")
         )
-        try writePlist(
-            label: "ai.research-radar.daily-draft.wrong-label",
-            to: root.appending(path: "ai.research-radar.daily-draft.llm-inference.plist")
-        )
+        try Data("not a plist".utf8).write(to: root.appending(path: "com.example.broken.plist"))
 
         let topics = try LegacyStateMigrationService().legacyScheduleTopics(
             launchAgentsDirectory: root
         )
 
         #expect(topics == ["agent-memory"])
+    }
+
+    @Test func missingLaunchAgentsDirectoryIsNotAConflict() throws {
+        let root = try testDirectory()
+        defer { try? trash(root) }
+        #expect(try LegacyStateMigrationService().legacyScheduleTopics(
+            launchAgentsDirectory: root.appending(path: "missing")
+        ).isEmpty)
+    }
+
+    @Test func unreadableLaunchAgentsDirectoryFailsInspection() throws {
+        let root = try testDirectory()
+        defer { try? trash(root) }
+        let directory = root.appending(path: "LaunchAgents")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+        #expect(throws: LegacyStateMigrationError.scheduleInspectionFailed(directory)) {
+            try LegacyStateMigrationService().legacyScheduleTopics(launchAgentsDirectory: directory)
+        }
+    }
+
+    @Test func nonDirectoryLaunchAgentsPathFailsInspection() throws {
+        let root = try testDirectory()
+        defer { try? trash(root) }
+        let path = root.appending(path: "LaunchAgents")
+        try Data().write(to: path)
+        #expect(throws: LegacyStateMigrationError.scheduleInspectionFailed(path)) {
+            try LegacyStateMigrationService().legacyScheduleTopics(launchAgentsDirectory: path)
+        }
+    }
+
+    @Test(arguments: ["malformed", "mismatched", "unreadable", "directory", "symlink"])
+    func matchingCandidateCannotBeSilentlyIgnored(kind: String) throws {
+        let root = try testDirectory()
+        defer { try? trash(root) }
+        let label = "ai.research-radar.daily-draft.agent-memory"
+        let candidate = root.appending(
+            path: label + ".plist", directoryHint: kind == "directory" ? .isDirectory : .notDirectory
+        )
+        switch kind {
+        case "malformed": try Data("broken".utf8).write(to: candidate)
+        case "mismatched": try writePlist(label: "ai.research-radar.daily-draft.other", to: candidate)
+        case "directory": try FileManager.default.createDirectory(at: candidate, withIntermediateDirectories: false)
+        case "symlink":
+            try FileManager.default.createSymbolicLink(at: candidate, withDestinationURL: root.appending(path: "missing"))
+        default:
+            try writePlist(label: label, to: candidate)
+            try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: candidate.path)
+        }
+        defer {
+            if kind == "unreadable" {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: candidate.path)
+            }
+        }
+        do {
+            _ = try LegacyStateMigrationService().legacyScheduleTopics(launchAgentsDirectory: root)
+            Issue.record("Invalid matching scheduler plist was accepted")
+        } catch LegacyStateMigrationError.scheduleInspectionFailed(let actual) {
+            #expect(actual.lastPathComponent == candidate.lastPathComponent)
+            #expect(actual.deletingLastPathComponent().resolvingSymlinksInPath().path
+                == candidate.deletingLastPathComponent().resolvingSymlinksInPath().path)
+        }
     }
 
     @Test func importsOnlyValidatedSourceHistoryWithoutMutatingSource() throws {
@@ -144,6 +204,7 @@ private func migrationRoots() throws -> (
 
 private func testDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
+        .resolvingSymlinksInPath()
         .appending(path: "research-radar-service-tests-\(UUID().uuidString)")
     try FileManager.default.createDirectory(
         at: url,

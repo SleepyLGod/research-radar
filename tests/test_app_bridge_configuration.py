@@ -153,3 +153,86 @@ def test_load_app_configuration_rejects_app_support_as_workspace(tmp_path: Path)
 
     with pytest.raises(AppConfigurationError, match="inside App Support"):
         load_app_configuration(_write_config(root, value), require_topics=False)
+
+
+def test_load_actual_swift_config_with_omitted_nil_fields(tmp_path: Path) -> None:
+    # Captured from the native Codable encoder; only workspace_root is relocated.
+    fixture = (
+        Path(__file__).parent / "fixtures/offline_frozen/swift-app-config-omitted-optionals.json"
+    )
+    value = json.loads(fixture.read_text())
+    value["workspace_root"] = str(tmp_path / "workspace")
+    path = _write_config(tmp_path, value)
+    omitted = load_app_configuration(path)
+    value["discovery"].update(
+        {
+            "web_search_provider": None,
+            "web_search_secret": None,
+            "web_search_endpoint": None,
+        }
+    )
+    value["storage"]["model_cache_limit_bytes"] = None
+    path.write_text(json.dumps(value))
+    assert load_app_configuration(path) == omitted
+    assert omitted.research.topic("memory").report_language == "en"
+    assert omitted.email_enabled and omitted.wechat.enabled
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "base_url",
+        "api_key_secret",
+        "command_path",
+        "thinking",
+        "reasoning_effort",
+    ],
+)
+def test_provider_missing_optional_equals_explicit_null(tmp_path: Path, field: str) -> None:
+    value = _app_config(tmp_path)
+    value["providers"][0][field] = None
+    path = _write_config(tmp_path, value)
+    explicit = load_app_configuration(path, require_topics=False)
+    del value["providers"][0][field]
+    path.write_text(json.dumps(value))
+    assert load_app_configuration(path, require_topics=False) == explicit
+
+
+@pytest.mark.parametrize(
+    "section,field",
+    [
+        ("root", "storage"),
+        ("provider", "id"),
+        ("provider", "kind"),
+        ("provider", "timeout_seconds"),
+        ("discovery", "trusted_domains"),
+        ("discovery", "web_search_max_results"),
+        ("discovery", "web_search_depth"),
+        ("discovery", "web_search_timeout_seconds"),
+        ("wechat", "author"),
+        ("email", "smtp_host"),
+    ],
+)
+def test_nullable_values_do_not_make_required_keys_optional(
+    tmp_path: Path, section: str, field: str
+) -> None:
+    value = _app_config(tmp_path)
+    target = {
+        "root": value,
+        "provider": value["providers"][0],
+        "discovery": value["discovery"],
+        "wechat": value["delivery"]["wechat"],
+        "email": value["delivery"]["email"],
+    }[section]
+    del target[field]
+    with pytest.raises(AppConfigurationError, match=f"missing {field}"):
+        load_app_configuration(_write_config(tmp_path, value), require_topics=False)
+
+
+@pytest.mark.parametrize("section", ["provider", "discovery", "storage"])
+def test_optional_sections_still_reject_unknown_keys(tmp_path: Path, section: str) -> None:
+    value = _app_config(tmp_path)
+    target = value["providers"][0] if section == "provider" else value[section]
+    target["unexpected"] = None
+    with pytest.raises(AppConfigurationError, match="unknown unexpected"):
+        load_app_configuration(_write_config(tmp_path, value), require_topics=False)

@@ -7,15 +7,18 @@ public actor EngineCommandClient {
     private let engineURL: URL
     private let appSupportRoot: URL
     private let clock: @Sendable () -> Date
+    private let gate: EngineExecutionGate
 
     public init(
         runner: any EngineProcessRunning,
         engineURL: URL,
         appSupportRoot: URL,
+        gate: EngineExecutionGate = .shared,
         clock: @escaping @Sendable () -> Date = Date.init
     ) {
         self.runner = runner; self.engineURL = engineURL
         self.appSupportRoot = appSupportRoot; self.clock = clock
+        self.gate = gate
     }
 
     public func bootstrapTopic(
@@ -53,25 +56,41 @@ public actor EngineCommandClient {
         return summary
     }
 
-    public func cancel() async { await runner.cancel() }
+    public func cancel() async { await gate.cancel() }
 
     private func execute(_ request: EngineRequestV1) async throws -> EngineResultV1 {
+        let lease = try gate.acquire()
+        defer { gate.release(lease) }
         let job = appSupportRoot.appending(
             path: "jobs/\(request.requestID.uuidString.lowercased())", directoryHint: .isDirectory
         )
         let paths = try FoundationJobBuilder.create(request: request, jobDirectory: job)
-        let outcome = try await runner.run(
-            executable: engineURL,
-            arguments: [
-                "--request", paths.request.path, "--events", paths.events.path,
-                "--result", paths.result.path, "--error", paths.error.path,
-            ], eventsURL: paths.events
-        )
-        guard outcome.exitCode == 0,
-              let data = try? Data(contentsOf: paths.result),
-              let result = try? EngineProtocolCodec.decodeResult(data),
-              result.requestID == request.requestID
-        else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
-        return result
+        do {
+            _ = try await gate.run(
+                lease: lease, runner: runner,
+                executable: engineURL,
+                arguments: [
+                    "--request", paths.request.path, "--events", paths.events.path,
+                    "--result", paths.result.path, "--error", paths.error.path,
+                ], eventsURL: paths.events
+            )
+        } catch {
+            if let terminal = try? EngineTerminalResolver.resolve(
+                directory: job, requestID: request.requestID, command: request.command
+            ), case .success(let result) = terminal { return result }
+            throw error
+        }
+        switch try EngineTerminalResolver.resolve(
+            directory: job, requestID: request.requestID, command: request.command
+        ) {
+        case .success(let result): return result
+        case .failure(_, let error, let stage):
+            throw EngineCommandFailure(error: error, stage: stage)
+        }
     }
+}
+
+public struct EngineCommandFailure: Error, Sendable {
+    public let error: RedactedEngineErrorV1
+    public let stage: EngineStage?
 }

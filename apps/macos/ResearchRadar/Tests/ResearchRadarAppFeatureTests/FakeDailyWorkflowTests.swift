@@ -53,9 +53,12 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
             )
         }
 
+        guard case .runDaily(let payload) = request.payload else {
+            throw EngineProtocolError.commandPayloadMismatch
+        }
         let appRoot = URL(fileURLWithPath: request.appSupportRoot)
         let run = appRoot.appending(
-            path: "workspace/runs/2026-08-30-090000000000-memory",
+            path: "workspace/runs/\(payload.reportDate)-\(request.requestID.uuidString.lowercased())-\(payload.topicID)",
             directoryHint: .isDirectory
         )
         try FileManager.default.createDirectory(
@@ -65,7 +68,9 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
         )
         let draft = run.appending(path: "article_draft.json")
         let html = run.appending(path: "wechat.html")
-        try Data(#"{"schema_version":1,"title":"Fixture report"}"#.utf8).write(to: draft)
+        try JSONSerialization.data(withJSONObject: [
+            "schema_version": 1, "topic_id": payload.topicID, "title": "Fixture report",
+        ]).write(to: draft)
         try Data("<html><body>Fixture report</body></html>".utf8).write(to: html)
         let result = EngineResultV1(
             requestID: request.requestID,
@@ -74,7 +79,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
             completedAt: Date(timeIntervalSince1970: 1_800_000_000),
             report: EngineReportSummaryV1(
                 runDirectory: run.path,
-                reportDate: "2026-08-30",
+                reportDate: payload.reportDate,
                 articleDraftPath: draft.path,
                 reportHTMLPath: html.path,
                 title: "Fixture report",
@@ -144,7 +149,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
         #expect(restarted.jobs.first?.state == .succeeded)
     }
 
-    @Test func oneFailedDeliveryDoesNotBlockTheOtherChannel() async throws {
+    @Test func oneUnconfirmedDeliveryDoesNotBlockTheOtherChannel() async throws {
         let root = try fakeWorkflowRoot()
         defer { try? trashFakeWorkflowRoot(root) }
         var configuration = AppConfigurationDefaults.make(
@@ -179,10 +184,10 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
         await store.runNow(topicID: "memory", reportDate: "2026-08-30")
 
         let deliveryJobs = store.jobs.filter { $0.kind == .delivery }
-        #expect(deliveryJobs.first { $0.deliveryChannel == .wechat }?.state == .failed)
+        #expect(deliveryJobs.first { $0.deliveryChannel == .wechat }?.state == .deliveryUnknown)
         #expect(deliveryJobs.first { $0.deliveryChannel == .email }?.state == .succeeded)
         let report = try #require(store.reports.first)
-        #expect(report.deliveries.first { $0.channel == .wechat }?.state == .failed)
+        #expect(report.deliveries.first { $0.channel == .wechat }?.state == .unknown)
         #expect(report.deliveries.first { $0.channel == .email }?.state == .sent)
     }
 }

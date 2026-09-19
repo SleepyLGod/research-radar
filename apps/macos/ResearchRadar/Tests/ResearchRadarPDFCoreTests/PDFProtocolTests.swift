@@ -27,6 +27,17 @@ import Testing
         #expect(throws: PDFPathError.symbolicLink) {
             try PDFPathValidator.existingFile(link, allowedRoot: root.url)
         }
+        let up = root.url.appending(path: "up")
+        try FileManager.default.createSymbolicLink(
+            at: up, withDestinationURL: root.url.deletingLastPathComponent()
+        )
+        let reentered = up.appending(path: root.url.lastPathComponent)
+        #expect(throws: PDFPathError.symbolicLink) {
+            try PDFPathValidator.existingFile(reentered.appending(path: "paper.pdf"), allowedRoot: root.url)
+        }
+        #expect(throws: PDFPathError.symbolicLink) {
+            try PDFPathValidator.outputFile(reentered.appending(path: "new.png"), allowedRoot: root.url)
+        }
     }
 
     @Test func requestDecoderRejectsUnknownFields() throws {
@@ -34,6 +45,23 @@ import Testing
 
         #expect(throws: PDFProtocolError.unexpectedFields) {
             try PDFProtocolCodec.decodeRequest(request)
+        }
+    }
+
+    @Test func newOutputAcceptsEquivalentSystemTemporaryRootSpellings() throws {
+        let name = "radar-pdf-path-\(UUID().uuidString)"
+        let root = URL(fileURLWithPath: "/private/tmp/\(name)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { try? trash(root) }
+        let alias = URL(fileURLWithPath: "/tmp/\(name)", isDirectory: true)
+        for inputRoot in [root, alias] {
+            for outputRoot in [root, alias] {
+                let path = try PDFPathValidator.outputFile(
+                    outputRoot.appending(path: "new.png"), allowedRoot: inputRoot
+                )
+                #expect(path.lastPathComponent == "new.png")
+                #expect(path.deletingLastPathComponent().resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().path)
+            }
         }
     }
 }

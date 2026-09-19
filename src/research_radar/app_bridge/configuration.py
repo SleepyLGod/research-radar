@@ -33,6 +33,13 @@ _PROVIDER_FIELDS = {
     "thinking",
     "reasoning_effort",
 }
+_PROVIDER_OPTIONAL_FIELDS = {
+    "base_url",
+    "api_key_secret",
+    "command_path",
+    "thinking",
+    "reasoning_effort",
+}
 _ROUTE_FIELDS = {"task", "provider_id", "model"}
 _DISCOVERY_FIELDS = {
     "trusted_domains",
@@ -42,6 +49,11 @@ _DISCOVERY_FIELDS = {
     "web_search_max_results",
     "web_search_depth",
     "web_search_timeout_seconds",
+}
+_DISCOVERY_OPTIONAL_FIELDS = {
+    "web_search_provider",
+    "web_search_secret",
+    "web_search_endpoint",
 }
 _DELIVERY_FIELDS = {"wechat", "email"}
 _WECHAT_FIELDS = {
@@ -134,7 +146,7 @@ def load_app_configuration(
     wechat = _wechat(delivery.get("wechat"))
     email_enabled, email = _email(delivery.get("email"))
     storage = _mapping(root.get("storage"), "storage")
-    _exact_keys(storage, _STORAGE_FIELDS, "storage")
+    _exact_keys(storage, _STORAGE_FIELDS, "storage", optional=_STORAGE_FIELDS)
     cache_limit = storage.get("model_cache_limit_bytes")
     if cache_limit is not None:
         cache_limit = _positive_integer(cache_limit, "storage.model_cache_limit_bytes")
@@ -166,7 +178,9 @@ def _providers(value: Any) -> dict[str, dict[str, object]]:
     result: dict[str, dict[str, object]] = {}
     for index, item in enumerate(items):
         provider = _mapping(item, f"providers[{index}]")
-        _exact_keys(provider, _PROVIDER_FIELDS, f"providers[{index}]")
+        _exact_keys(
+            provider, _PROVIDER_FIELDS, f"providers[{index}]", optional=_PROVIDER_OPTIONAL_FIELDS
+        )
         provider_id = _string(provider.get("id"), f"providers[{index}].id")
         if provider_id in result:
             raise AppConfigurationError(f"Duplicate provider id: {provider_id}")
@@ -205,7 +219,7 @@ def _routes(value: Any, providers: set[str]) -> dict[str, dict[str, str]]:
 
 def _discovery(value: Any) -> dict[str, object]:
     discovery = _mapping(value, "discovery")
-    _exact_keys(discovery, _DISCOVERY_FIELDS, "discovery")
+    _exact_keys(discovery, _DISCOVERY_FIELDS, "discovery", optional=_DISCOVERY_OPTIONAL_FIELDS)
     return {
         "trusted_domains": discovery.get("trusted_domains"),
         "web_search": {
@@ -226,12 +240,9 @@ def _wechat(value: Any) -> AppWeChatConfigV1:
         enabled=_boolean(settings.get("enabled"), "delivery.wechat.enabled"),
         author=_optional_string(settings.get("author"), "delivery.wechat.author") or "",
         thumb_media_id=(
-            _optional_string(settings.get("thumb_media_id"), "delivery.wechat.thumb_media_id")
-            or ""
+            _optional_string(settings.get("thumb_media_id"), "delivery.wechat.thumb_media_id") or ""
         ),
-        app_id_secret=_string(
-            settings.get("app_id_secret"), "delivery.wechat.app_id_secret"
-        ),
+        app_id_secret=_string(settings.get("app_id_secret"), "delivery.wechat.app_id_secret"),
         app_secret_secret=_string(
             settings.get("app_secret_secret"), "delivery.wechat.app_secret_secret"
         ),
@@ -277,10 +288,13 @@ def _reject_secret_values(value: Any) -> None:
             _reject_secret_values(item)
 
 
-def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
-    if set(value) != expected:
-        unknown = sorted(set(value) - expected)
-        missing = sorted(expected - set(value))
+def _exact_keys(
+    value: dict[str, Any], expected: set[str], label: str, *, optional: set[str] | None = None
+) -> None:
+    # Swift's synthesized Codable omits nil optionals; .get() preserves null semantics.
+    unknown = sorted(set(value) - expected)
+    missing = sorted(expected - set(value) - (optional or set()))
+    if unknown or missing:
         detail = f"unknown {unknown[0]}" if unknown else f"missing {missing[0]}"
         raise AppConfigurationError(f"{label} has {detail}.")
 

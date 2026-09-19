@@ -11,6 +11,15 @@ public struct EngineProcessOutcome: Sendable {
 public enum EngineSupervisorError: Error, Sendable {
     case alreadyRunning
     case executableMissing
+    case launchFailed
+    case processGroupStillRunning
+
+    var isPrelaunchFailure: Bool {
+        switch self {
+        case .alreadyRunning, .executableMissing, .launchFailed: true
+        case .processGroupStillRunning: false
+        }
+    }
 }
 
 private final class ProcessBox: @unchecked Sendable {
@@ -19,6 +28,8 @@ private final class ProcessBox: @unchecked Sendable {
     let stderr = BoundedBuffer(limit: 1_048_576)
     let eventsURL: URL
     var processGroup: Int32?
+    var cleanupTask: Task<Bool, Never>?
+    var cleanupProcessGroup: Int32?
 
     init(process: Process, eventsURL: URL) {
         self.process = process
@@ -64,6 +75,13 @@ public actor EngineProcessSupervisor {
         arguments: [String],
         eventsURL: URL
     ) async throws -> EngineProcessOutcome {
+        try await run(executable: executable, arguments: arguments, eventsURL: eventsURL, shouldCancel: { false })
+    }
+
+    public func run(
+        executable: URL, arguments: [String], eventsURL: URL,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) async throws -> EngineProcessOutcome {
         guard running == nil else { throw EngineSupervisorError.alreadyRunning }
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
             throw EngineSupervisorError.executableMissing
@@ -105,6 +123,7 @@ public actor EngineProcessSupervisor {
         }
 
         do {
+            guard !shouldCancel() else { throw EngineExecutionGateError.cancelled }
             try process.run()
             try? outputPipe.fileHandleForWriting.close()
             try? errorPipe.fileHandleForWriting.close()
@@ -112,7 +131,8 @@ public actor EngineProcessSupervisor {
             Self.close(pipe: outputPipe)
             Self.close(pipe: errorPipe)
             running = nil
-            throw error
+            if error is EngineExecutionGateError { throw error }
+            throw EngineSupervisorError.launchFailed
         }
 
         let processGroupTask = Task { [eventsURL] in
@@ -126,6 +146,9 @@ public actor EngineProcessSupervisor {
         let detectedGroup = await processGroupTask.value
             ?? Self.declaredProcessGroup(eventsURL: eventsURL, processID: process.processIdentifier)
         box.processGroup = detectedGroup
+        // The leader can exit while its descendants still hold pipes or perform sends.
+        let cleaned = await cleanup(box)
+        guard cleaned else { throw EngineSupervisorError.processGroupStillRunning }
         Self.finishReading(outputPipe.fileHandleForReading, into: box.stdout)
         Self.finishReading(errorPipe.fileHandleForReading, into: box.stderr)
         running = nil
@@ -139,26 +162,39 @@ public actor EngineProcessSupervisor {
 
     public func cancel() async {
         guard let box = running else { return }
+        _ = await cleanup(box)
+    }
+
+    private func cleanup(_ box: ProcessBox) async -> Bool {
+        if let task = box.cleanupTask { _ = await task.value }
         let pid = box.process.processIdentifier
-        let processGroup = Self.startedProcessGroup(eventsURL: box.eventsURL, processID: pid)
+        let processGroup = box.processGroup
+            ?? Self.declaredProcessGroup(eventsURL: box.eventsURL, processID: pid)
         box.processGroup = processGroup
-        if let processGroup {
-            Darwin.kill(-processGroup, SIGTERM)
-            if await Self.waitForProcessGroupExit(processGroup, timeout: terminationGrace) {
-                return
+        // A PID-only cancellation may itself cause the late started event to arrive.
+        if let task = box.cleanupTask, box.cleanupProcessGroup == processGroup {
+            let cleaned = await task.value
+            return cleaned && (processGroup.map { !Self.processGroupExists($0) } ?? !box.process.isRunning)
+        }
+        let grace = terminationGrace
+        let task = Task {
+            if let processGroup {
+                if !Self.processGroupExists(processGroup) { return true }
+                Darwin.kill(-processGroup, SIGTERM)
+                if await Self.waitForProcessGroupExit(processGroup, timeout: grace) { return true }
+                Darwin.kill(-processGroup, SIGKILL)
+                return await Self.waitForProcessGroupExit(processGroup, timeout: .seconds(2))
             }
-        } else {
+            if !box.process.isRunning { return true }
             Darwin.kill(pid, SIGTERM)
-            if await Self.waitForProcessExit(box.process, timeout: terminationGrace) {
-                return
-            }
-        }
-        if let processGroup {
-            Darwin.kill(-processGroup, SIGKILL)
-            _ = await Self.waitForProcessGroupExit(processGroup, timeout: .seconds(2))
-        } else if box.process.isRunning {
+            if await Self.waitForProcessExit(box.process, timeout: grace) { return true }
             Darwin.kill(pid, SIGKILL)
+            return await Self.waitForProcessExit(box.process, timeout: .seconds(2))
         }
+        box.cleanupTask = task
+        box.cleanupProcessGroup = processGroup
+        _ = await task.value
+        return await cleanup(box)
     }
 
     private nonisolated static func waitForStartedProcessGroup(

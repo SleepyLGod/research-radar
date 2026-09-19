@@ -28,6 +28,11 @@ import Testing
         let image = try #require(NSImage(contentsOf: output))
         #expect(image.size.width == 600)
         #expect(image.size.height == 400)
+        let bitmap = try #require(NSBitmapImageRep(data: Data(contentsOf: output)))
+        let color = try #require(bitmap.colorAt(x: 300, y: 200)?.usingColorSpace(.deviceRGB))
+        #expect(color.redComponent > 0.8)
+        #expect(color.greenComponent < 0.2)
+        #expect(color.blueComponent < 0.2)
     }
 }
 
@@ -45,6 +50,8 @@ private final class PDFFixture {
         let consumer = try #require(CGDataConsumer(data: data as CFMutableData))
         let context = try #require(CGContext(consumer: consumer, mediaBox: &mediaBox, nil))
         context.beginPDFPage(nil)
+        context.setFillColor(NSColor.red.cgColor)
+        context.fill(CGRect(x: 120, y: 280, width: 60, height: 40))
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
         NSString(string: "Hello PDF").draw(
