@@ -78,7 +78,7 @@ def test_chinese_readme_and_usage_doc_exist() -> None:
     assert "--config config.yaml" in chinese
     assert "--config config.example.yaml" not in chinese
     assert "# ResearchRadar Usage Guide" in usage
-    assert "Deep reading: `deepseek/deepseek-v4-flash`" in usage
+    assert "Deep reading: `deepseek/deepseek-flash`" in usage
     assert "Verification: `codex/gpt-5.6-terra`" in usage
     assert "--deepseek-provider xiaomi" in usage
     assert "[Provider Configuration](providers.md)" in usage
@@ -125,7 +125,7 @@ def test_example_config_uses_codex_terra_high_verifier() -> None:
     config = Path("config.example.yaml").read_text(encoding="utf-8")
 
     assert "thinking: enabled" in config
-    assert "analyst: deepseek-v4-flash" in config
+    assert "analyst: deepseek-flash" in config
     assert "deepseek-v4-pro" not in config
     assert "reasoning_effort: high" in config
     assert "verifier:\n      provider: codex\n      model: gpt-5.6-terra" in config

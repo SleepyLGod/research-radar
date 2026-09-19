@@ -49,25 +49,25 @@ model_providers:
     kind: local
 
 models:
-  scout: deepseek-v4-flash
-  analyst: deepseek-v4-flash
+  scout: deepseek-flash
+  analyst: deepseek-flash
   verifier: codex_or_openai_high_reasoning
   task_routes:
     topic_bootstrap:
       provider: deepseek
-      model: deepseek-v4-flash
+      model: deepseek-flash
     source_gist:
       provider: deepseek
-      model: deepseek-v4-flash
+      model: deepseek-flash
     deep_reading:
       provider: deepseek
-      model: deepseek-v4-flash
+      model: deepseek-flash
     anchor_repair:
       provider: deepseek
-      model: deepseek-v4-flash
+      model: deepseek-flash
     report_localization:
       provider: deepseek
-      model: deepseek-v4-flash
+      model: deepseek-flash
     verifier:
       provider: codex
       model: gpt-5.6-terra

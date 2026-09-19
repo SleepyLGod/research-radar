@@ -38,7 +38,7 @@ def _app_config(root: Path, *, topics: list[dict[str, object]] | None = None) ->
             },
         ],
         "routes": [
-            {"task": "deep_reading", "provider_id": "deepseek", "model": "deepseek-v4-flash"},
+            {"task": "deep_reading", "provider_id": "deepseek", "model": "deepseek-flash"},
             {"task": "verifier", "provider_id": "codex", "model": "gpt-5.6-terra"},
         ],
         "topics": topics or [],

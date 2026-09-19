@@ -78,8 +78,8 @@ class TaskRouteConfig:
 class ModelConfig:
     """Model selection configuration."""
 
-    scout: str = "deepseek-v4-flash"
-    analyst: str = "deepseek-v4-flash"
+    scout: str = "deepseek-flash"
+    analyst: str = "deepseek-flash"
     verifier: str = "codex_or_openai_high_reasoning"
     task_routes: dict[str, TaskRouteConfig] = field(default_factory=dict)
 
@@ -366,8 +366,8 @@ def _model_config(data: dict[str, Any]) -> ModelConfig:
     if unknown:
         raise ConfigError(f"Unknown models keys: {', '.join(unknown)}")
     return ModelConfig(
-        scout=str(data.get("scout", "deepseek-v4-flash")),
-        analyst=str(data.get("analyst", "deepseek-v4-flash")),
+        scout=str(data.get("scout", "deepseek-flash")),
+        analyst=str(data.get("analyst", "deepseek-flash")),
         verifier=str(data.get("verifier", "codex_or_openai_high_reasoning")),
         task_routes=routes,
     )

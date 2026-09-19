@@ -396,7 +396,7 @@ def test_default_deepseek_provider_uses_flash_thinking_high() -> None:
         }
     )
 
-    assert config.models.analyst == "deepseek-v4-flash"
+    assert config.models.analyst == "deepseek-flash"
     assert config.model_providers["deepseek"].thinking == "enabled"
     assert config.model_providers["deepseek"].reasoning_effort == "high"
 
