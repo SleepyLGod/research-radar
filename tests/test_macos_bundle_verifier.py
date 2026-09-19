@@ -1,4 +1,5 @@
 import importlib.util
+import plistlib
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,24 @@ BundleVerificationError = _VERIFIER.BundleVerificationError
 symlink_manifest = _VERIFIER.symlink_manifest
 verify_engine_copy = _VERIFIER.verify_engine_copy
 _otool_install_name = _VERIFIER._otool_install_name
+
+
+@pytest.mark.parametrize("development", [True, False])
+def test_bundle_identity_matches_storage_mode(tmp_path: Path, development: bool) -> None:
+    content = tmp_path / "Contents"
+    content.mkdir()
+    value = plistlib.loads(Path("packaging/macos/Info.plist").read_bytes())
+    value["ResearchRadarDevelopmentBuild"] = development
+    value["CFBundleIdentifier"] = (
+        "ai.research-radar.macos.dev" if development else "ai.research-radar.macos"
+    )
+    path = content / "Info.plist"
+    path.write_bytes(plistlib.dumps(value))
+    _VERIFIER._verify_info_plist(tmp_path)
+    value["ResearchRadarDevelopmentBuild"] = not development
+    path.write_bytes(plistlib.dumps(value))
+    with pytest.raises(BundleVerificationError, match="identity"):
+        _VERIFIER._verify_info_plist(tmp_path)
 
 
 def test_symlink_manifest_records_internal_relative_target(tmp_path: Path) -> None:

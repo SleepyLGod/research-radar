@@ -28,6 +28,7 @@ import Testing
         #expect(before.modelCacheBytes == 15)
         #expect(before.reportsBytes == 20)
         #expect(before.jobDiagnosticsBytes == 40)
+        #expect(before.totalBytes == 105)
 
         let after = try service.clearModelCache()
         #expect(after.modelCacheBytes == 0)
@@ -49,6 +50,26 @@ import Testing
         #expect(throws: StorageUsageError.self) {
             _ = try StorageUsageService(appSupportRoot: root).snapshot()
         }
+    }
+
+    @Test func clearPreservesTaskDirectoriesAndRejectsUnsafeEntriesBeforeMovingFiles() throws {
+        let root = try temporaryRoot()
+        let outside = try temporaryRoot()
+        defer { try? trashRoot(root); try? trashRoot(outside) }
+        let task = root.appending(path: "workspace/cache/model_calls/reader")
+        try FileManager.default.createDirectory(at: task, withIntermediateDirectories: true)
+        let entry = task.appending(path: "entry.json")
+        try Data("cache".utf8).write(to: entry)
+        try FileManager.default.createSymbolicLink(
+            at: task.appending(path: "unsafe"), withDestinationURL: outside
+        )
+        let service = StorageUsageService(appSupportRoot: root)
+        #expect(throws: StorageUsageError.self) { _ = try service.clearModelCache() }
+        #expect(try Data(contentsOf: entry) == Data("cache".utf8))
+        try trashRoot(task.appending(path: "unsafe"))
+        _ = try service.clearModelCache()
+        #expect(FileManager.default.fileExists(atPath: task.path))
+        #expect(!FileManager.default.fileExists(atPath: entry.path))
     }
 }
 

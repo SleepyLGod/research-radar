@@ -85,6 +85,10 @@ def _verify_info_plist(app: Path) -> None:
     for key, expected in required.items():
         if value.get(key) != expected:
             raise BundleVerificationError(f"Info.plist has an invalid {key} value.")
+    development = value.get("ResearchRadarDevelopmentBuild")
+    expected_id = "ai.research-radar.macos.dev" if development else "ai.research-radar.macos"
+    if not isinstance(development, bool) or value.get("CFBundleIdentifier") != expected_id:
+        raise BundleVerificationError("Bundle identity does not match its storage mode.")
 
 
 def _reject_private_build_paths(root: Path) -> None:

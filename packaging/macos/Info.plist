@@ -7,7 +7,9 @@
     <key>CFBundleExecutable</key>
     <string>ResearchRadar</string>
     <key>CFBundleIdentifier</key>
-    <string>ai.research-radar.macos</string>
+    <string>ai.research-radar.macos.dev</string>
+    <key>ResearchRadarDevelopmentBuild</key>
+    <true/>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

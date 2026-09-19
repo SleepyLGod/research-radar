@@ -35,6 +35,53 @@
 
 ## 0. Sequencing Rationale
 
+### Task 2 Repair Checkpoint
+
+Foundation, shared application services, the engine bridge, and the initial durable workflow
+are implemented. Earlier checked implementation steps below are not a claim of complete App
+acceptance. The current checkpoint adds the following requirements before Task 3:
+
+- A shared terminal resolver validates request/command/run/channel identity in both normal
+  completion and restart recovery. Preserve successful delivery artifacts even when the next
+  state write fails. Ambiguous delivery becomes `delivery_unknown`, never an automatic retry.
+- Preflight, bootstrap, research, and delivery share engine admission. One consumer drains the
+  durable queue; shutdown stops admission and scheduling before cancelling its current job.
+- Settings follow candidate validation, atomic persistence, then in-memory adoption. Pending
+  jobs block behavioral edits. UI language remains independently editable.
+- Same-day Run Now opens an existing successful report. A confirmed regeneration creates a
+  new attempt. Delivery failure never removes that report.
+- Basic topic add/select/edit/pause, reusable credential settings, explicit verifier selection,
+  UI/report language selection, and optional cache limits belong to Task 2, not Task 3.
+- Default staging uses the development bundle identity and `ResearchRadar-Dev`. Production
+  storage is opt-in at assembly; tests use temporary roots and fake secret names.
+- Frozen offline acceptance must traverse production handlers, services, pipeline, and renderers.
+  Fake external I/O is test-only and absent from the delivered bundle. Queue-only fake runner
+  tests retain their narrower label. Public network calls must fail during the offline run.
+- Optional App configuration fields accept omitted or explicit null values, matching Swift's
+  synthesized Codable behavior. Required and unknown fields remain strictly validated.
+- App report counts come from the canonical report summary, not a presumed top-level runtime
+  counter. Native PDF tests verify actual colored pixels as well as crop dimensions, and reject
+  symlink re-entry while accepting equivalent system temporary-directory aliases.
+- Resource reports record measurement time, commit, and whether the worktree was modified.
+  User-triggered real App model/delivery checks remain pending for Task 3.
+
+Complete this checkpoint in at most three signed-off commits (model naming, reliability, basic
+entry/offline acceptance), pushing the same Draft PR without rewriting history or merging. Stop
+for user review after Task 2; do not add the report reader, cover upload, final delivery UI,
+notifications, or DMG in this checkpoint.
+
+Offline checkpoint evidence (2026-09-19): the separate frozen engine produced a complete
+report with six publishable claims and one safe crop. The native AppStore/supervisor test
+verified the durable index and channel outcomes. A separately signed test App then ran the
+scheduled workflow and reopened with unchanged report/index content, three jobs, and no idle
+children. External discovery, model, secret, and delivery dependencies were fake and network
+access was blocked; none of this replaces Task 3's user-triggered real-service acceptance.
+The production bundle excludes the fixture engine. Resource sampling recorded approximately
+49 MB bundle, 0.73-second first window, and 74 MB RSS at five minutes. Twenty standalone engine
+check/cancel cycles left no process groups; native queue execution was tested separately.
+The restricted `leaks` report contains framework allocations and does not establish leak-free
+operation. Final report reading, cover upload, notifications, and DMG remain unimplemented.
+
 The implementation order is risk-driven:
 
 1. Prove that a real native App can launch a self-contained Python engine, localize a result, and stop the entire process tree.
@@ -51,7 +98,7 @@ PyInstaller packaging is a real risk, but the current project does not depend on
 
 ### 1.1 Daily user flow
 
-1. On first launch, ResearchRadar opens the main window and checks local storage, required model credentials, the optional Codex executable, and enabled delivery services.
+1. On first launch, ResearchRadar opens the main window and checks local storage, required model credentials, and the optional Codex executable. Provider preflight lists its actual checks; it does not claim that WeChat or SMTP delivery has been verified.
 2. If the user already ran the CLI, the app may copy only `data/source_history/*.jsonl` from a user-selected legacy root into the empty App workspace. It never imports YAML, secrets, schedules, cache, or run artifacts, and never removes the legacy files.
 3. The user describes a research topic in plain language. The Python engine generates a reviewable topic profile; the app shows its focus, search phrases, paper phrases, inclusion concepts, and exclusions without exposing YAML.
 4. The user confirms the topic, chooses a daily local time, chooses zero or more delivery channels, and optionally enables Start at Login.
@@ -363,7 +410,7 @@ This section describes the final schema frozen in Task 2. Task 1 implements only
     }
   ],
   "routes": [
-    {"task": "deep_reading", "provider_id": "deepseek", "model": "deepseek-v4-flash"},
+    {"task": "deep_reading", "provider_id": "deepseek", "model": "deepseek-flash"},
     {"task": "verifier", "provider_id": "codex", "model": "gpt-5.6-terra"}
   ],
   "topics": [],
@@ -1999,7 +2046,7 @@ Candidate order is:
 3. `/opt/homebrew/bin/codex`, `/usr/local/bin/codex`, and `$HOME/.local/bin/codex`;
 4. `NSOpenPanel` selection initiated by the user.
 
-Resolve symlinks, require a regular executable file, and store the absolute path. Do not silently replace a missing Codex verifier. The onboarding screen offers either Fix Codex Path or Use DeepSeek as Verifier. The fallback explicitly changes only the `verifier` route to `deepseek/deepseek-v4-flash` with the configured thinking/high provider settings and displays: `Reader and verifier will use the same provider, so review diversity is reduced.`
+Resolve symlinks, require a regular executable file, and store the absolute path. Do not silently replace a missing Codex verifier. The onboarding screen offers either Fix Codex Path or Use DeepSeek as Verifier. The fallback explicitly changes only the `verifier` route to `deepseek/deepseek-flash` with the configured thinking/high provider settings and displays: `Reader and verifier will use the same provider, so review diversity is reduced.`
 
 Run: `swift test --package-path apps/macos/ResearchRadar --filter OnboardingTests`
 
@@ -2090,7 +2137,14 @@ Run: `./script/swift_test.sh --filter AppShellTests`
 
 Expected: PASS for singleton reuse and status copy mapping.
 
-- [x] **Step 14: Run the complete Task 2 gate and create the second signed-off commit**
+- [x] **Step 14: Re-run the complete Task 2 repair gate and record offline acceptance**
+
+Repair checkpoint: 688 Python tests passed (two opt-in tests skipped in the ordinary suite),
+122 Swift tests passed, and the opt-in frozen native workflow passed separately. Signed test
+App scheduling/restart, production bundle checks, Ruff, privacy, diff checks, and scoped
+read-only review passed. Remaining real-service and final UI acceptance belongs to Task 3.
+The commands below describe the original workflow implementation; the repair uses the three
+commit split specified in section 0, not another duplicate workflow commit.
 
 ```bash
 swift test --package-path apps/macos/ResearchRadar

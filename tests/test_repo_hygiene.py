@@ -48,7 +48,7 @@ def test_readme_is_concise_project_entrypoint() -> None:
     assert "[RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml)" in readme
     assert "[Detailed Usage](docs/usage.md)" in readme
     assert "[Provider Configuration](docs/providers.md)" in readme
-    assert "DeepSeek v4 Flash" in readme
+    assert "deepseek-flash" in readme
     assert "explicit thinking" in readme
     assert "Codex `gpt-5.6-terra`" in readme
     assert "`Evidence-gated`" in readme

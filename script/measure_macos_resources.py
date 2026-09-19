@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure the staged Task 1 App without adding runtime instrumentation."""
+"""Measure native App idle resources and standalone frozen-engine lifecycle cycles."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -58,6 +59,9 @@ def main() -> int:
     )
     report = {
         "schema_version": 1,
+        "measured_at": datetime.now(UTC).isoformat(),
+        "revision": _run(["git", "rev-parse", "HEAD"]),
+        "working_tree_modified": bool(_run(["git", "status", "--porcelain"])),
         "platform": _platform_report(),
         "sizes": {
             "swift_build": directory_size(Path(".build")),
@@ -66,6 +70,7 @@ def main() -> int:
             "staged_app": directory_size(app),
         },
         "engine_cycles": {
+            "driver": "standalone_frozen_engine_not_app_queue",
             "count": len(cycles),
             "successful": sum(item["status"] == "succeeded" for item in cycles),
             "cancelled": sum(item["status"] == "cancelled" for item in cycles),
@@ -238,6 +243,7 @@ def _measure_app(
     process = subprocess.Popen(
         [str(executable)],
         env={
+            "RESEARCH_RADAR_DEV_ROOT": str(root / "app-data"),
             "HOME": str(root),
             "LANG": "en_US.UTF-8",
             "PATH": "/usr/bin:/bin",
@@ -280,6 +286,7 @@ def _measure_app(
         leaks = _leaks_summary(process.pid)
         return (
             {
+                "measurement_scope": "idle_native_app_alongside_standalone_engine_cycles",
                 "first_window_observed_seconds": first_window,
                 "window_id": observed["window_id"],
                 "quiescent_rss_after_cycles_bytes": quiescent_rss,
