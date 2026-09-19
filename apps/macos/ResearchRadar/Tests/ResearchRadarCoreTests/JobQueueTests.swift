@@ -102,6 +102,55 @@ import Testing
         #expect(await fixture.queue.jobs().first(where: { $0.id == retryID })?.acknowledgeUnknownOutcome == true)
     }
 
+    @Test func successfulDeliveryRequiresResendEvenWithDifferentTopicAndDate() async throws {
+        let fixture = try QueueFixture()
+        defer { try? trash(fixture.root) }
+        let run = fixture.root.appending(path: "runs/report")
+        _ = try await fixture.queue.enqueueDelivery(
+            runDirectory: run, topicID: "memory", reportDate: "2026-08-30", channel: .email
+        )
+        let active = try #require(try await fixture.queue.nextPending())
+        try await fixture.queue.transition(jobID: active.id, to: .succeeded)
+        await #expect(throws: JobRecordError.successfulDeliveryRequiresResend) {
+            _ = try await fixture.queue.enqueueDelivery(
+                runDirectory: run, topicID: "other", reportDate: "2026-08-31", channel: .email
+            )
+        }
+        _ = try await fixture.queue.enqueueDelivery(
+            runDirectory: run, topicID: "memory", reportDate: "2026-08-30", channel: .email,
+            allowResend: true
+        )
+        #expect(await fixture.queue.jobs().last?.attemptCount == 2)
+    }
+
+    @Test func successWinsCancellationRaceAndCannotBeOverwritten() async throws {
+        let fixture = try QueueFixture()
+        defer { try? trash(fixture.root) }
+        _ = try await fixture.queue.enqueueResearch(topicID: "memory", reportDate: "2026-08-30", trigger: .runNow)
+        let active = try #require(try await fixture.queue.nextPending())
+        try await fixture.queue.transition(jobID: active.id, to: .cancelling)
+        try await fixture.queue.transition(jobID: active.id, to: .succeeded, stage: .complete)
+        try await fixture.queue.transition(jobID: active.id, to: .succeeded, stage: .complete)
+        await #expect(throws: JobRecordError.invalidTransition(.succeeded, .failed)) {
+            try await fixture.queue.transition(jobID: active.id, to: .failed)
+        }
+        #expect(await fixture.queue.jobs().first?.state == .succeeded)
+    }
+
+    @Test func sameDeliveryIdentityCoalescesAcrossTopicMetadata() async throws {
+        let fixture = try QueueFixture()
+        defer { try? trash(fixture.root) }
+        let run = fixture.root.appending(path: "runs/report")
+        let first = try await fixture.queue.enqueueDelivery(
+            runDirectory: run, topicID: "memory", reportDate: "2026-08-30", channel: .email
+        )
+        guard case .enqueued(let id) = first else { Issue.record("Expected enqueue"); return }
+        let second = try await fixture.queue.enqueueDelivery(
+            runDirectory: run, topicID: "other", reportDate: "2026-08-31", channel: .email
+        )
+        #expect(second == .coalesced(id))
+    }
+
 }
 
 private func trash(_ url: URL) throws {

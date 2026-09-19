@@ -6,6 +6,7 @@ public enum LegacyStateMigrationError: Error, Equatable, Sendable {
     case invalidHistoryFile(URL)
     case invalidHistoryRow(URL, Int)
     case copyFailed
+    case scheduleInspectionFailed(URL)
 }
 
 public struct ImportSummary: Equatable, Sendable {
@@ -24,11 +25,20 @@ public struct LegacyStateMigrationService: Sendable {
     public init() {}
 
     public func legacyScheduleTopics(launchAgentsDirectory: URL) throws -> Set<String> {
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: launchAgentsDirectory,
-            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
-        ) else { return [] }
-        return Set(files.compactMap(validatedScheduleTopic))
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(
+                at: launchAgentsDirectory,
+                includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+            )
+        } catch let error as CocoaError where
+            (error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile)
+                && !isSymbolicLink(launchAgentsDirectory) {
+            return []
+        } catch {
+            throw LegacyStateMigrationError.scheduleInspectionFailed(launchAgentsDirectory)
+        }
+        return Set(try files.compactMap(validatedScheduleTopic))
     }
 
     public func importSourceHistory(
@@ -123,18 +133,26 @@ public struct LegacyStateMigrationService: Sendable {
         )
     }
 
-    private func validatedScheduleTopic(_ url: URL) -> String? {
-        guard url.pathExtension == "plist", !isSymbolicLink(url), isRegularFile(url),
-              let data = try? Data(contentsOf: url),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
-              let values = plist as? [String: Any],
+    private func validatedScheduleTopic(_ url: URL) throws -> String? {
+        guard url.pathExtension == "plist", url.lastPathComponent.hasPrefix(Self.labelPrefix) else { return nil }
+        guard !isSymbolicLink(url), isRegularFile(url) else {
+            throw LegacyStateMigrationError.scheduleInspectionFailed(url)
+        }
+        let plist: Any
+        do {
+            let data = try Data(contentsOf: url)
+            plist = try PropertyListSerialization.propertyList(from: data, format: nil)
+        } catch {
+            throw LegacyStateMigrationError.scheduleInspectionFailed(url)
+        }
+        guard let values = plist as? [String: Any],
               let label = values["Label"] as? String,
               label.hasPrefix(Self.labelPrefix)
-        else { return nil }
+        else { throw LegacyStateMigrationError.scheduleInspectionFailed(url) }
         let topic = String(label.dropFirst(Self.labelPrefix.count))
         guard url.deletingPathExtension().lastPathComponent == label,
               topic.range(of: #"^[a-z0-9]+(?:-[a-z0-9]+)*$"#, options: .regularExpression) != nil
-        else { return nil }
+        else { throw LegacyStateMigrationError.scheduleInspectionFailed(url) }
         return topic
     }
 

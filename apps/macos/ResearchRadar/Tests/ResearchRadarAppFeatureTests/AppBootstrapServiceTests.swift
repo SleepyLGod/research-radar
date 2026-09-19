@@ -12,7 +12,7 @@ import ResearchRadarCore
         saved.routes[0].model = "deepseek-v4-flash"
         saved.routes[1].model = "custom-model"
         try persistence.write(saved, to: "config/app-config.json")
-        let service = AppBootstrapService(appSupportRoot: root)
+        let service = AppBootstrapService(appSupportRoot: root, launchAgentsDirectory: root.appending(path: "missing-LaunchAgents"))
         let loaded = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
         #expect(loaded.configuration.routes[0].model == "deepseek-flash")
         #expect(loaded.configuration.routes[1].model == "custom-model")
@@ -26,9 +26,10 @@ import ResearchRadarCore
     @Test func firstLaunchCreatesTypedPrivateStateAndSecondLaunchReusesIt() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "app-bootstrap-\(UUID().uuidString)")
         defer { try? trashBootstrapRoot(root) }
-        let service = AppBootstrapService(appSupportRoot: root)
+        let service = AppBootstrapService(appSupportRoot: root, launchAgentsDirectory: root.appending(path: "missing-LaunchAgents"))
 
         let first = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
+        #expect(first.legacyScheduleTopics.isEmpty)
         try first.setUILanguage(.simplifiedChinese)
         let second = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
 
@@ -42,7 +43,7 @@ import ResearchRadarCore
     @Test func corruptStateStopsBootstrapWithoutOverwritingBytes() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "app-bootstrap-\(UUID().uuidString)")
         defer { try? trashBootstrapRoot(root) }
-        let service = AppBootstrapService(appSupportRoot: root)
+        let service = AppBootstrapService(appSupportRoot: root, launchAgentsDirectory: root.appending(path: "missing-LaunchAgents"))
         _ = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
         let state = root.appending(path: "state/queue.json")
         let corrupt = Data("broken".utf8); try corrupt.write(to: state)
@@ -51,6 +52,47 @@ import ResearchRadarCore
             _ = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
         }
         #expect(try Data(contentsOf: state) == corrupt)
+    }
+
+    @Test(arguments: [false, true])
+    func inconclusiveLegacyInspectionStopsBootstrapWithoutWritingState(unreadable: Bool) throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appending(path: "app-bootstrap-\(UUID().uuidString)")
+        defer { try? trashBootstrapRoot(root) }
+        let launchAgents = root.appending(path: "LaunchAgents")
+        let appRoot = root.appending(path: "AppSupport")
+        try FileManager.default.createDirectory(at: launchAgents, withIntermediateDirectories: true)
+        let candidate = launchAgents.appending(path: "ai.research-radar.daily-draft.memory.plist")
+        let bytes = Data("malformed plist".utf8)
+        try bytes.write(to: candidate)
+        if unreadable {
+            try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: launchAgents.path)
+        }
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launchAgents.path) }
+        let service = AppBootstrapService(appSupportRoot: appRoot, launchAgentsDirectory: launchAgents)
+        do {
+            _ = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
+            Issue.record("Bootstrap continued despite inconclusive scheduler inspection")
+        } catch LegacyStateMigrationError.scheduleInspectionFailed(let actual) {
+            let expected = unreadable ? launchAgents : candidate
+            #expect(actual.resolvingSymlinksInPath().path == expected.resolvingSymlinksInPath().path)
+        }
+        #expect(!FileManager.default.fileExists(atPath: appRoot.path))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launchAgents.path)
+        #expect(try Data(contentsOf: candidate) == bytes)
+    }
+
+    @Test func validatedLegacyConflictReachesAppStore() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "app-bootstrap-\(UUID().uuidString)")
+        defer { try? trashBootstrapRoot(root) }
+        let launchAgents = root.appending(path: "LaunchAgents")
+        try FileManager.default.createDirectory(at: launchAgents, withIntermediateDirectories: true)
+        let label = "ai.research-radar.daily-draft.memory"
+        try PropertyListSerialization.data(fromPropertyList: ["Label": label], format: .xml, options: 0)
+            .write(to: launchAgents.appending(path: label + ".plist"))
+        let service = AppBootstrapService(appSupportRoot: root.appending(path: "AppSupport"), launchAgentsDirectory: launchAgents)
+        let store = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
+        #expect(store.legacyScheduleTopics == ["memory"])
     }
 }
 

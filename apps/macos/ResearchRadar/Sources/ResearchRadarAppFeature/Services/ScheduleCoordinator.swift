@@ -56,10 +56,11 @@ public actor ScheduleCoordinator {
     private let inputs: @Sendable () async throws -> ScheduleInputs
     private let onJobsEnqueued: @Sendable () async -> Void
     private let onFailure: @Sendable () async -> Void
+    private let onAdmissionChange: @Sendable (Bool) async -> Void
     private let now: @Sendable () -> Date
     private let calendar: @Sendable () -> Calendar
     private let evaluator = ScheduleEvaluator()
-    private var timerRetryCount = 0
+    private var stopped = false
     private var timerGeneration = 0
 
     public init(
@@ -68,21 +69,37 @@ public actor ScheduleCoordinator {
         inputs: @escaping @Sendable () async throws -> ScheduleInputs,
         onJobsEnqueued: @escaping @Sendable () async -> Void = {},
         onFailure: @escaping @Sendable () async -> Void = {},
+        onAdmissionChange: @escaping @Sendable (Bool) async -> Void = { _ in },
         now: @escaping @Sendable () -> Date = Date.init,
         calendar: @escaping @Sendable () -> Calendar = { Calendar.autoupdatingCurrent }
     ) {
         self.queue = queue; self.timer = timer; self.inputs = inputs
         self.onJobsEnqueued = onJobsEnqueued
         self.onFailure = onFailure
+        self.onAdmissionChange = onAdmissionChange
         self.now = now; self.calendar = calendar
     }
 
     public func refresh() async throws {
+        await onAdmissionChange(true)
+        do {
+            try await refreshAdmitted()
+        } catch {
+            await onAdmissionChange(false)
+            throw error
+        }
+        await onAdmissionChange(false)
+    }
+
+    private func refreshAdmitted() async throws {
+        guard !stopped else { return }
         timerGeneration += 1
         let generation = timerGeneration
         let snapshot = try await inputs()
+        guard !stopped, generation == timerGeneration else { return }
         let current = now(); let activeCalendar = calendar()
         let jobs = await queue.jobs()
+        guard !stopped, generation == timerGeneration else { return }
         var enqueuedJob = false
         if !snapshot.paused {
             for due in evaluator.dueResearchJobs(
@@ -90,6 +107,7 @@ public actor ScheduleCoordinator {
                 reports: snapshot.reports, queuedJobs: jobs,
                 now: current, calendar: activeCalendar
             ) {
+                guard !stopped, generation == timerGeneration else { return }
                 let result = try await queue.enqueueResearch(
                     topicID: due.topicID,
                     reportDate: due.reportDate,
@@ -99,18 +117,21 @@ public actor ScheduleCoordinator {
                 if case .enqueued = result { enqueuedJob = true }
             }
         }
+        guard !stopped, generation == timerGeneration else { return }
         if enqueuedJob { await onJobsEnqueued() }
         let next = snapshot.paused ? nil : evaluator.nextFireDate(
             schedules: snapshot.schedules, topics: snapshot.topics,
             after: current, calendar: activeCalendar
         )
-        guard generation == timerGeneration else { return }
-        timerRetryCount = 0
+        guard !stopped, generation == timerGeneration else { return }
         await armTimer(at: next)
     }
 
     public func stop() async {
+        stopped = true
         timerGeneration += 1
+        // Wait behind any queue operation already admitted by this coordinator.
+        _ = await queue.jobs()
         await timer.cancel()
     }
 
@@ -124,13 +145,8 @@ public actor ScheduleCoordinator {
         do {
             try await refresh()
         } catch {
-            timerRetryCount += 1
-            guard timerRetryCount <= 3 else {
-                await onFailure()
-                await timer.cancel()
-                return
-            }
-            await armTimer(at: now().addingTimeInterval(60))
+            await stop()
+            await onFailure()
         }
     }
 }

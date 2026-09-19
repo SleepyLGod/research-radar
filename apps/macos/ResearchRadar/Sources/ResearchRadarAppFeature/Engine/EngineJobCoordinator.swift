@@ -4,6 +4,20 @@ import ResearchRadarCore
 public protocol EngineProcessRunning: Sendable {
     func run(executable: URL, arguments: [String], eventsURL: URL) async throws -> EngineProcessOutcome
     func cancel() async
+    func run(
+        executable: URL, arguments: [String], eventsURL: URL,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) async throws -> EngineProcessOutcome
+}
+
+public extension EngineProcessRunning {
+    func run(
+        executable: URL, arguments: [String], eventsURL: URL,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) async throws -> EngineProcessOutcome {
+        guard !shouldCancel() else { throw EngineExecutionGateError.cancelled }
+        return try await run(executable: executable, arguments: arguments, eventsURL: eventsURL)
+    }
 }
 
 extension EngineProcessSupervisor: EngineProcessRunning {}
@@ -15,14 +29,21 @@ public enum EngineJobCoordinatorError: Error, Equatable, Sendable {
     case unknownTopic(String)
 }
 
+/// Stop draining and reconcile artifacts before admitting any more engine work.
+public enum EnginePersistenceError: Error, Equatable, Sendable {
+    case reconciliationRequired(jobID: UUID?)
+}
+
 /// Connects the durable queue to the typed engine protocol without duplicating research logic.
 public actor EngineJobCoordinator {
     private let runner: any EngineProcessRunning
     private let engineURL: URL
+    private let pdfHelperURL: URL?
     private let appSupportRoot: URL
     private let queue: JobQueue
     private let reports: ReportIndexStore
     private let clock: @Sendable () -> Date
+    private let gate: EngineExecutionGate
 
     public init(
         runner: any EngineProcessRunning,
@@ -30,88 +51,148 @@ public actor EngineJobCoordinator {
         appSupportRoot: URL,
         queue: JobQueue,
         reports: ReportIndexStore,
+        pdfHelperURL: URL? = nil,
+        gate: EngineExecutionGate = .shared,
         clock: @escaping @Sendable () -> Date = Date.init
     ) {
         self.runner = runner; self.engineURL = engineURL
+        self.pdfHelperURL = pdfHelperURL
         self.appSupportRoot = appSupportRoot.standardizedFileURL
         self.queue = queue; self.reports = reports; self.clock = clock
+        self.gate = gate
     }
 
     public func executeNext(configuration: AppConfigurationV1) async throws -> EngineResultV1? {
-        guard let job = try await queue.nextPending() else { return nil }
+        let lease = try gate.acquire()
+        defer { gate.release(lease) }
+        let next: JobRecordV1?
         do {
+            next = try await queue.nextPending()
+        } catch {
+            gate.requireReconciliation()
+            throw EnginePersistenceError.reconciliationRequired(jobID: nil)
+        }
+        guard let job = next else { return nil }
+        var launched = false
+        let resolution: EngineTerminalResolution
+        do {
+            try await validateDeliveryAdmission(job)
             let request = try request(for: job, configuration: configuration)
             let paths = try FoundationJobBuilder.create(
                 request: request, jobDirectory: URL(fileURLWithPath: job.jobDirectory)
             )
-            let outcome = try await runner.run(
+            var arguments = [
+                "--request", paths.request.path, "--events", paths.events.path,
+                "--result", paths.result.path, "--error", paths.error.path,
+            ]
+            if let pdfHelperURL { arguments += ["--pdf-helper", pdfHelperURL.path] }
+            launched = true
+            _ = try await gate.run(
+                lease: lease, runner: runner,
                 executable: engineURL,
-                arguments: [
-                    "--request", paths.request.path, "--events", paths.events.path,
-                    "--result", paths.result.path, "--error", paths.error.path,
-                ],
+                arguments: arguments,
                 eventsURL: paths.events
             )
-            let result = try terminalResult(outcome: outcome, paths: paths, requestID: job.id)
-            try await complete(
-                job: job,
-                result: result
-            )
-            return result
+            resolution = try await resolve(job: job)
         } catch {
-            let redacted = RedactedEngineErrorV1(
-                code: "engine_failed", message: "The engine job did not complete.", retryable: true
-            )
-            try? await queue.transition(jobID: job.id, to: .failed, error: redacted)
-            if let channel = job.deliveryChannel, let runDirectory = job.runDirectory {
-                try? await reports.updateDelivery(
-                    runDirectory: runDirectory, channel: channel, state: .failed,
-                    error: redacted, at: clock()
-                )
+            // Only known setup/launch failures prove that no external effect occurred.
+            if let supervisorError = error as? EngineSupervisorError,
+               case .alreadyRunning = supervisorError {
+                do { try await queue.releaseUnstarted(jobID: job.id) }
+                catch {
+                    gate.requireReconciliation()
+                    throw EnginePersistenceError.reconciliationRequired(jobID: job.id)
+                }
+                throw EngineExecutionGateError.busy
             }
+            let prelaunch = !launched || error is EngineExecutionGateError
+                || (error as? EngineSupervisorError)?.isPrelaunchFailure == true
+            // A runner can report cleanup failure after it wrote a valid result.
+            if launched, let recovered = try? await resolve(job: job), case .success = recovered {
+                try await persist(job: job, resolution: recovered)
+                if case .success(let result) = recovered { return result }
+            }
+            let redacted = RedactedEngineErrorV1(
+                code: prelaunch ? "engine_launch_failed" : "terminal_invalid",
+                message: prelaunch ? "The engine could not start." : "The terminal artifact could not be confirmed.",
+                retryable: job.kind == .research || prelaunch
+            )
+            let cancelled = error as? EngineExecutionGateError == .cancelled
+            let state: JobState = cancelled ? .cancelled : prelaunch ? .failed
+                : job.kind == .delivery ? .deliveryUnknown : .interrupted
+            try await persist(job: job, resolution: .failure(state, redacted, nil))
             throw error
+        }
+        try await persist(job: job, resolution: resolution)
+        switch resolution {
+        case .success(let result): return result
+        case .failure(_, let error, let stage): throw EngineCommandFailure(error: error, stage: stage)
         }
     }
 
-    public func cancel() async { await runner.cancel() }
+    public func cancel() async { await gate.cancel() }
 
     /// Restores jobs whose engine reached a terminal artifact before the App stopped.
     public func reconcileAfterLaunch() async throws {
+        let lease = try gate.acquire(reconciling: true)
+        defer { gate.release(lease) }
         let active = await queue.jobs().filter {
             $0.state == .running || $0.state == .cancelling
+                || $0.state == .succeeded || $0.state == .partialSuccess
+                || $0.state == .interrupted || $0.state == .deliveryUnknown
         }
         for job in active {
+            // Retain rejected artifacts for diagnostics without retrying them on every boot.
+            if JobRecordV1.terminalStates.contains(job.state), job.error?.code == "terminal_invalid" { continue }
+            let resultExists = FileManager.default.fileExists(
+                atPath: URL(fileURLWithPath: job.jobDirectory).appending(path: "result.json").path
+            )
+            if JobRecordV1.terminalStates.contains(job.state), !resultExists { continue }
+            let resolution: EngineTerminalResolution
             do {
-                let directory = URL(fileURLWithPath: job.jobDirectory)
-                let resultURL = directory.appending(path: "result.json")
-                if FileManager.default.fileExists(atPath: resultURL.path) {
-                    let result = try EngineProtocolCodec.decodeResult(Data(contentsOf: resultURL))
-                    guard result.requestID == job.id else {
-                        throw EngineJobCoordinatorError.requestMismatch
-                    }
-                    try await complete(job: job, result: result)
-                    continue
-                }
-
-                let errorURL = directory.appending(path: "error.json")
-                if FileManager.default.fileExists(atPath: errorURL.path) {
-                    let error = try EngineProtocolCodec.decodeError(Data(contentsOf: errorURL))
-                    guard error.requestID == job.id else {
-                        throw EngineJobCoordinatorError.requestMismatch
-                    }
-                    if error.code == "cancelled", job.kind == .research {
-                        try await queue.transition(jobID: job.id, to: .cancelled)
-                    } else {
-                        try await markInterrupted(job)
-                    }
-                } else {
-                    try await markInterrupted(job)
-                }
+                resolution = try await resolve(job: job)
             } catch {
-                try? await markInterrupted(job)
+                if job.state == .succeeded || job.state == .partialSuccess { continue }
+                resolution = invalidTerminalResolution(job)
+            }
+            try await persist(job: job, resolution: resolution)
+        }
+        do {
+            try await restoreMissingDeliveryJobs()
+        } catch {
+            gate.requireReconciliation()
+            throw EnginePersistenceError.reconciliationRequired(jobID: nil)
+        }
+        gate.didReconcile()
+    }
+
+    private func resolve(job: JobRecordV1) async throws -> EngineTerminalResolution {
+        let resolution = try EngineTerminalResolver.resolve(
+            directory: URL(fileURLWithPath: job.jobDirectory), requestID: job.id,
+            command: job.kind == .research ? .runDaily : .retryDelivery,
+            runDirectory: job.runDirectory, channel: job.deliveryChannel, reportDate: job.reportDate,
+            topicID: job.topicID, appSupportRoot: appSupportRoot
+        )
+        if case .success(let result) = resolution, let summary = result.report {
+            let run = try containedDirectory(summary.runDirectory)
+            try requireRegularFile(summary.articleDraftPath, inside: run)
+            try requireRegularFile(summary.reportHTMLPath, inside: run)
+            let existing = await reports.reports().first { $0.runDirectory == summary.runDirectory }
+            if let existing, existing.topicID != job.topicID || existing.reportDate != summary.reportDate {
+                throw EngineJobCoordinatorError.requestMismatch
             }
         }
-        try await restoreMissingDeliveryJobs()
+        return resolution
+    }
+
+    private func invalidTerminalResolution(_ job: JobRecordV1) -> EngineTerminalResolution {
+        .failure(
+            job.kind == .delivery ? .deliveryUnknown : .interrupted,
+            RedactedEngineErrorV1(
+                code: "terminal_invalid", message: "The terminal artifact could not be confirmed.",
+                retryable: job.kind == .research
+            ), job.stage
+        )
     }
 
     private func request(for job: JobRecordV1, configuration: AppConfigurationV1) throws -> EngineRequestV1 {
@@ -146,22 +227,57 @@ public actor EngineJobCoordinator {
         )
     }
 
-    private func markInterrupted(_ job: JobRecordV1) async throws {
-        let state: JobState = job.kind == .delivery ? .deliveryUnknown : .interrupted
-        try await queue.transition(jobID: job.id, to: state)
-        if let channel = job.deliveryChannel, let runDirectory = job.runDirectory {
-            try await reports.updateDelivery(
-                runDirectory: runDirectory,
-                channel: channel,
-                state: .unknown,
-                error: RedactedEngineErrorV1(
-                    code: "delivery_interrupted",
-                    message: "The delivery result is unknown.",
-                    retryable: false
-                ),
-                at: clock()
-            )
+    private func validateDeliveryAdmission(_ job: JobRecordV1) async throws {
+        guard job.kind == .delivery else { return }
+        guard let report = await reports.reports().first(where: { $0.runDirectory == job.runDirectory }),
+              report.topicID == job.topicID, report.reportDate == job.reportDate,
+              let delivery = report.deliveries.first(where: { $0.channel == job.deliveryChannel }) else {
+            throw EngineJobCoordinatorError.requestMismatch
         }
+        if delivery.state == .unknown && !job.acknowledgeUnknownOutcome {
+            throw JobRecordError.unknownDeliveryRequiresAcknowledgement
+        }
+        if (delivery.state == .sent || delivery.state == .created) && !job.allowResend {
+            throw JobRecordError.successfulDeliveryRequiresResend
+        }
+    }
+
+    private func persist(job: JobRecordV1, resolution: EngineTerminalResolution) async throws {
+        do {
+            switch resolution {
+            case .success(let result): try await complete(job: job, result: result)
+            case .failure(let state, let error, let stage):
+                guard job.state != .succeeded && job.state != .partialSuccess else { return }
+                if let channel = job.deliveryChannel, let runDirectory = job.runDirectory {
+                    let prior = await reports.reports().first { $0.runDirectory == runDirectory }?
+                        .deliveries.first { $0.channel == channel }
+                    let protectsPreviousSuccess = (prior?.state == .created || prior?.state == .sent) && !job.allowResend
+                    let protectsPreviousUnknown = prior?.state == .unknown && !job.acknowledgeUnknownOutcome
+                    if await isLatestDeliveryAttempt(job), !protectsPreviousSuccess, !protectsPreviousUnknown {
+                        try await reports.updateDelivery(
+                            runDirectory: runDirectory, channel: channel,
+                            state: state == .deliveryUnknown ? .unknown : .failed,
+                            error: error, at: clock()
+                        )
+                    }
+                }
+                try await queue.transition(jobID: job.id, to: state, stage: stage, error: error)
+            }
+        } catch {
+            gate.requireReconciliation()
+            throw EnginePersistenceError.reconciliationRequired(jobID: job.id)
+        }
+    }
+
+    private func isLatestDeliveryAttempt(_ job: JobRecordV1) async -> Bool {
+        let latest = await queue.jobs().filter {
+            $0.kind == .delivery && $0.runDirectory == job.runDirectory && $0.deliveryChannel == job.deliveryChannel
+        }.max {
+            if $0.attemptCount != $1.attemptCount { return $0.attemptCount < $1.attemptCount }
+            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+        return latest?.id == job.id
     }
 
     private func restoreMissingDeliveryJobs() async throws {
@@ -172,7 +288,6 @@ public actor EngineJobCoordinator {
                     $0.kind == .delivery
                         && $0.runDirectory == report.runDirectory
                         && $0.deliveryChannel == delivery.channel
-                        && !JobRecordV1.terminalStates.contains($0.state)
                 }
                 if !alreadyRecorded {
                     _ = try await queue.enqueueDelivery(
@@ -187,19 +302,6 @@ public actor EngineJobCoordinator {
         }
     }
 
-    private func terminalResult(
-        outcome: EngineProcessOutcome,
-        paths: FoundationJobPaths,
-        requestID: UUID
-    ) throws -> EngineResultV1 {
-        guard outcome.exitCode == 0,
-              let data = try? Data(contentsOf: paths.result),
-              let result = try? EngineProtocolCodec.decodeResult(data)
-        else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
-        guard result.requestID == requestID else { throw EngineJobCoordinatorError.requestMismatch }
-        return result
-    }
-
     private func complete(
         job: JobRecordV1,
         result: EngineResultV1
@@ -208,13 +310,13 @@ public actor EngineJobCoordinator {
             guard let summary = result.report else {
                 throw EngineJobCoordinatorError.invalidTerminalArtifact
             }
-            let run = try containedDirectory(summary.runDirectory)
-            try requireRegularFile(summary.articleDraftPath, inside: run)
-            try requireRegularFile(summary.reportHTMLPath, inside: run)
-            let deliveryRecords = job.requestedDeliveryChannels.map {
-                DeliveryRecordV1(channel: $0, state: .pending)
+            let existing = await reports.reports().first { $0.runDirectory == summary.runDirectory }
+            var deliveryRecords = existing?.deliveries ?? []
+            for channel in job.requestedDeliveryChannels where !deliveryRecords.contains(where: { $0.channel == channel }) {
+                deliveryRecords.append(DeliveryRecordV1(channel: channel, state: .pending))
             }
             let report = ReportRecordV1(
+                id: existing?.id ?? job.id,
                 topicID: job.topicID, reportDate: summary.reportDate,
                 runDirectory: summary.runDirectory, articleDraftPath: summary.articleDraftPath,
                 reportHTMLPath: summary.reportHTMLPath, title: summary.title,
@@ -224,22 +326,22 @@ public actor EngineJobCoordinator {
                 deliveries: deliveryRecords, createdAt: result.completedAt
             )
             try await reports.upsert(report)
-            try await queue.transition(jobID: job.id, to: .succeeded, stage: .complete)
-            for channel in job.requestedDeliveryChannels {
-                _ = try await queue.enqueueDelivery(
-                    runDirectory: run, topicID: job.topicID, reportDate: job.reportDate,
-                    channel: channel, trigger: .schedule
-                )
-            }
+            try await queue.transition(
+                jobID: job.id, to: result.status == .partialSuccess ? .partialSuccess : .succeeded,
+                stage: .complete
+            )
+            try await restoreMissingDeliveryJobs()
         } else {
             guard let delivery = result.delivery else {
                 throw EngineJobCoordinatorError.invalidTerminalArtifact
             }
             let state: DeliveryState = delivery.status == .created ? .created : .sent
-            try await reports.updateDelivery(
-                runDirectory: delivery.runDirectory, channel: delivery.channel,
-                state: state, error: nil, at: delivery.completedAt
-            )
+            if await isLatestDeliveryAttempt(job) {
+                try await reports.updateDelivery(
+                    runDirectory: delivery.runDirectory, channel: delivery.channel,
+                    state: state, error: nil, at: delivery.completedAt
+                )
+            }
             try await queue.transition(jobID: job.id, to: .succeeded, stage: .complete)
         }
     }

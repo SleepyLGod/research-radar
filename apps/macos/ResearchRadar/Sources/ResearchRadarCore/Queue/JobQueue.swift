@@ -79,12 +79,14 @@ public actor JobQueue {
             return .coalesced(existing.id)
         }
         let prior = snapshot.jobs.filter {
-            $0.kind == .delivery && $0.topicID == topicID
-                && $0.reportDate == reportDate && $0.deliveryChannel == channel
+            $0.kind == .delivery && $0.deliveryChannel == channel
                 && $0.runDirectory == runDirectory.path
         }
         if prior.contains(where: { $0.state == .deliveryUnknown }), !acknowledgeUnknownOutcome {
             throw JobRecordError.unknownDeliveryRequiresAcknowledgement
+        }
+        if prior.contains(where: { $0.state == .succeeded }), !allowResend {
+            throw JobRecordError.successfulDeliveryRequiresResend
         }
         let attempts = prior.map(\.attemptCount)
         let id = UUID()
@@ -133,6 +135,17 @@ public actor JobQueue {
         snapshot = updated
     }
 
+    /// Returns a claim only when the supervisor proves it never launched this job.
+    public func releaseUnstarted(jobID: UUID) throws {
+        guard let index = snapshot.jobs.firstIndex(where: { $0.id == jobID }),
+              snapshot.jobs[index].state == .running else { return }
+        var updated = snapshot
+        updated.jobs[index].state = .pending
+        updated.jobs[index].startedAt = nil
+        try persist(updated)
+        snapshot = updated
+    }
+
     private func activeJob(
         kind: JobKind,
         topicID: String,
@@ -141,7 +154,7 @@ public actor JobQueue {
         runDirectory: String?
     ) -> JobRecordV1? {
         snapshot.jobs.first {
-            $0.kind == kind && $0.topicID == topicID && $0.reportDate == reportDate
+            $0.kind == kind && (kind == .delivery || ($0.topicID == topicID && $0.reportDate == reportDate))
                 && $0.deliveryChannel == channel && $0.runDirectory == runDirectory
                 && [.pending, .running, .cancelling].contains($0.state)
         }

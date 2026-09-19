@@ -14,7 +14,8 @@ public struct PDFDocumentService {
     public init() {}
 
     public func pageText(input: URL, pageIndex: Int) throws -> PDFPageTextV1 {
-        let page = try loadPage(input: input, pageIndex: pageIndex)
+        let (document, page) = try loadPage(input: input, pageIndex: pageIndex)
+        defer { withExtendedLifetime(document) {} }
         let pageBounds = page.bounds(for: .mediaBox)
         let pageBox = PDFBoxV1(x: 0, y: 0, width: pageBounds.width, height: pageBounds.height)
         guard let text = page.string else {
@@ -50,7 +51,8 @@ public struct PDFDocumentService {
         crop: PDFBoxV1,
         scale: Double
     ) throws {
-        let page = try loadPage(input: input, pageIndex: pageIndex)
+        let (document, page) = try loadPage(input: input, pageIndex: pageIndex)
+        defer { withExtendedLifetime(document) {} }
         let pageBounds = page.bounds(for: .mediaBox)
         let pageBox = PDFBoxV1(x: 0, y: 0, width: pageBounds.width, height: pageBounds.height)
         guard crop.isContained(in: pageBox), scale > 0, scale <= 4 else {
@@ -86,7 +88,7 @@ public struct PDFDocumentService {
         try png.write(to: output, options: .atomic)
     }
 
-    private func loadPage(input: URL, pageIndex: Int) throws -> PDFPage {
+    private func loadPage(input: URL, pageIndex: Int) throws -> (PDFDocument, PDFPage) {
         guard let document = PDFDocument(url: input) else {
             throw PDFDocumentServiceError.unreadableDocument
         }
@@ -95,6 +97,6 @@ public struct PDFDocumentService {
         else {
             throw PDFDocumentServiceError.invalidPage
         }
-        return page
+        return (document, page)
     }
 }

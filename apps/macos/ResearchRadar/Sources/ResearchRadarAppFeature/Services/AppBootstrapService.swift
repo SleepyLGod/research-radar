@@ -8,11 +8,19 @@ public enum AppBootstrapError: Error, Sendable {
 /// Loads the App's typed durable state, creating only missing first-run files.
 public struct AppBootstrapService: Sendable {
     private let appSupportRoot: URL
+    private let launchAgentsDirectory: URL
 
-    public init(appSupportRoot: URL) { self.appSupportRoot = appSupportRoot.standardizedFileURL }
+    public init(appSupportRoot: URL, launchAgentsDirectory: URL? = nil) {
+        self.appSupportRoot = appSupportRoot.standardizedFileURL
+        self.launchAgentsDirectory = launchAgentsDirectory ?? FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/LaunchAgents", directoryHint: .isDirectory)
+    }
 
     @MainActor
-    public func load(engineURL: URL) throws -> AppStore {
+    public func load(engineURL: URL, pdfHelperURL: URL? = nil) throws -> AppStore {
+        let legacyScheduleTopics = try LegacyStateMigrationService().legacyScheduleTopics(
+            launchAgentsDirectory: launchAgentsDirectory
+        )
         try prepareRoot()
         let store = AtomicJSONStore(root: appSupportRoot)
         let configPath = "config/app-config.json"
@@ -53,15 +61,11 @@ public struct AppBootstrapService: Sendable {
             ReportIndexV1.self, path: "state/report-index.json", store: store,
             fallback: ReportIndexV1()
         )
-        let launchAgents = FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/LaunchAgents", directoryHint: .isDirectory)
-        let legacyScheduleTopics = (try? LegacyStateMigrationService().legacyScheduleTopics(
-            launchAgentsDirectory: launchAgents
-        )) ?? []
         return AppStore(
             configuration: configuration, queueSnapshot: queue,
             scheduleSnapshot: schedules, reportSnapshot: reports, runtime: runtime,
             appSupportRoot: appSupportRoot, engineURL: engineURL,
+            pdfHelperURL: pdfHelperURL,
             legacyScheduleTopics: legacyScheduleTopics
         )
     }

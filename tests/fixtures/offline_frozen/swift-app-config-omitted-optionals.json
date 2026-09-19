@@ -1,0 +1,30 @@
+{
+  "delivery": {
+    "email": {
+      "enabled": true, "from_address": "offline@example.com",
+      "password_secret": "email.smtp_password", "security": "tls",
+      "smtp_host": "smtp.invalid", "smtp_port": 465, "timeout_seconds": 30,
+      "to_address": "offline@example.com", "username": "offline@example.com"
+    },
+    "wechat": {
+      "app_id_secret": "wechat.app_id", "app_secret_secret": "wechat.app_secret",
+      "author": "Offline Fixture", "enabled": true, "thumb_media_id": "offline-thumb"
+    }
+  },
+  "discovery": {
+    "trusted_domains": [], "web_search_depth": "advanced",
+    "web_search_max_results": 5, "web_search_timeout_seconds": 30
+  },
+  "project_name": "ResearchRadar", "providers": [], "routes": [],
+  "schema_version": 1, "start_at_login": false, "storage": {},
+  "topics": [{
+    "concept_groups": {}, "deep_read_limit": 1, "display_name": "Agent Memory",
+    "exclusion_terms": [], "id": "memory", "is_paused": false,
+    "model_cache_enabled": false, "negative_phrases": [],
+    "paper_queries": ["agent memory benchmark"], "priority_sources": [],
+    "queries": ["agent memory"], "report_language": "en", "required_phrases": [],
+    "research_focus": "Agent memory evidence", "source_intent": "research_brief",
+    "source_limit": 1, "web_queries": []
+  }],
+  "ui_language": "en", "workspace_root": "/swift-fixture/workspace"
+}
