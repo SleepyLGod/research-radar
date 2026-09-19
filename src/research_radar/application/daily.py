@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,6 +68,8 @@ def run_daily_application(
     warning_listener: Callable[[str], None] | None = None,
     pipeline_runner: Callable[..., Path] = run_daily,
     figure_extractor: FigureExtractor | None = None,
+    connectors: list[DiscoveryConnector] | None = None,
+    task_routes: Mapping[str, TaskModelRoute] | None = None,
 ) -> Path:
     """Resolve dependencies and run one daily report without CLI coupling."""
 
@@ -79,12 +81,29 @@ def run_daily_application(
         raise ResearchRadarError("model_cache_limit_bytes must be positive when set.")
 
     language = options.language or config.topic(options.topic_id).report_language
-    connectors = build_daily_connectors(config, secret_manager, warning_listener)
-    gist = _resolve_route(config, secret_manager, "source_gist", options)
-    reader = _reader_route(config, secret_manager, options)
-    anchor = _optional_route(config, secret_manager, "anchor_repair", options)
-    localization = _localization_route(config, secret_manager, options, language)
-    verifier = _resolve_route(config, secret_manager, "verifier", options)
+    if connectors is None:
+        connectors = build_daily_connectors(config, secret_manager, warning_listener)
+    if task_routes is None:
+        gist = _resolve_route(config, secret_manager, "source_gist", options)
+        reader = _reader_route(config, secret_manager, options)
+        anchor = _optional_route(config, secret_manager, "anchor_repair", options)
+        localization = _localization_route(config, secret_manager, options, language)
+        verifier = _resolve_route(config, secret_manager, "verifier", options)
+    else:
+        required = {
+            "source_gist",
+            "deep_reading",
+            "anchor_repair",
+            "report_localization",
+            "verifier",
+        }
+        if required - task_routes.keys():
+            raise ConfigError("Injected task routes must specify every daily task.")
+        gist = task_routes["source_gist"]
+        reader = task_routes["deep_reading"]
+        anchor = task_routes["anchor_repair"]
+        localization = task_routes["report_localization"]
+        verifier = task_routes["verifier"]
 
     gist = _cached(gist, options, "source_gist")
     reader = _cached(reader, options, "deep_reading")

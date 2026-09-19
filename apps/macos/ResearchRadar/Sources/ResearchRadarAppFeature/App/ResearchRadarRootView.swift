@@ -18,6 +18,9 @@ public struct ResearchRadarRootView: View {
                 ResearchWorkspaceView(store: store, localization: localization)
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            AppActionErrorView(store: store, localization: localization).padding(8)
+        }
         .frame(minWidth: 720, minHeight: 520)
         .background(Color(nsColor: .windowBackgroundColor))
     }
@@ -26,23 +29,32 @@ public struct ResearchRadarRootView: View {
 private struct TopicOnboardingView: View {
     @Bindable var store: AppStore
     @Bindable var localization: LocalizationStore
-    @State private var deepSeekKey = ""
-    @State private var searchKey = ""
     @State private var description = ""
     @State private var reportLanguage: ReportLanguageV1 = .chinese
-    @State private var savedSecrets = false
+    @State private var languageInitialized = false
+    @State private var reportLanguageEdited = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 header
+                AppLanguagePicker(store: store, localization: localization)
                 Divider()
-                providerSetup
+                ProviderSettingsView(store: store, localization: localization)
                 Divider()
                 topicSetup
             }
             .frame(maxWidth: 680, alignment: .leading)
             .padding(32)
+        }
+        .onAppear {
+            if !languageInitialized {
+                reportLanguage = TopicEditorInput.reportLanguage(for: localization.resolvedLanguage)
+                languageInitialized = true
+            }
+        }
+        .onChange(of: localization.resolvedLanguage) { _, language in
+            if !reportLanguageEdited { reportLanguage = TopicEditorInput.reportLanguage(for: language) }
         }
     }
 
@@ -52,33 +64,6 @@ private struct TopicOnboardingView: View {
                 .font(.title2.weight(.semibold))
             Text(localization.text("onboarding.subtitle"))
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    private var providerSetup: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localization.text("onboarding.providers")).font(.headline)
-            Text(localization.text("onboarding.providers_detail"))
-                .font(.callout).foregroundStyle(.secondary)
-            SecureField("DeepSeek API key", text: $deepSeekKey)
-            SecureField("Tavily API key", text: $searchKey)
-            HStack {
-                Button(localization.text("action.save_secrets")) { saveSecrets() }
-                    .disabled(deepSeekKey.isEmpty || searchKey.isEmpty)
-                Button(localization.text("action.test_connections")) {
-                    Task { await store.testConnections() }
-                }
-                .disabled(!savedSecrets && !secretsAlreadyPresent)
-                if store.isEngineRunning { ProgressView().controlSize(.small) }
-                if store.preflight?.ready == true {
-                    Label(localization.text("status.connections_ready"), systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else if shouldOfferDeepSeekVerifier {
-                    Button(localization.text("action.use_deepseek_verifier")) {
-                        Task { await store.selectDeepSeekVerifierFallback() }
-                    }
-                }
-            }
         }
     }
 
@@ -93,7 +78,10 @@ private struct TopicOnboardingView: View {
                 .padding(8)
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
                 .overlay { RoundedRectangle(cornerRadius: 6).stroke(.separator) }
-            Picker(localization.text("label.report_language"), selection: $reportLanguage) {
+            Picker(localization.text("label.report_language"), selection: Binding(
+                get: { reportLanguage },
+                set: { reportLanguage = $0; reportLanguageEdited = true }
+            )) {
                 Text("中文").tag(ReportLanguageV1.chinese)
                 Text("English").tag(ReportLanguageV1.english)
             }
@@ -107,25 +95,23 @@ private struct TopicOnboardingView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isEngineRunning)
             }
-            if let code = store.lastErrorCode {
-                Label(UserFacingErrorCatalog(localization: localization).message(for: code), systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-            }
         }
     }
 
     private func topicReview(_ draft: TopicDraftV1) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(draft.displayName).font(.title3.weight(.semibold))
-            Text(draft.researchFocus).foregroundStyle(.secondary)
-            LabeledContent(localization.text("label.search_queries"), value: draft.queries.joined(separator: " · "))
-            LabeledContent(localization.text("label.paper_queries"), value: draft.paperQueries.joined(separator: " · "))
+            TopicEditorView(store: store, localization: localization, topic: TopicRecordV1(
+                id: draft.id, displayName: draft.displayName, researchFocus: draft.researchFocus,
+                queries: draft.queries, paperQueries: draft.paperQueries, webQueries: draft.webQueries,
+                exclusionTerms: draft.exclusionTerms, requiredPhrases: draft.requiredPhrases,
+                conceptGroups: draft.conceptGroups, negativePhrases: draft.negativePhrases,
+                prioritySources: draft.prioritySources, sourceIntent: draft.sourceIntent,
+                reportLanguage: draft.reportLanguage
+            ), creating: true).id(store.topicDraftRevision).frame(minHeight: 580)
             if !draft.warnings.isEmpty {
                 Text(draft.warnings.joined(separator: "\n")).font(.callout).foregroundStyle(.orange)
             }
             HStack {
-                Button(localization.text("action.approve_topic")) { try? store.approveTopic(draft) }
-                    .buttonStyle(.borderedProminent)
                 Button(localization.text("action.regenerate")) {
                     Task { await store.bootstrapTopic(description: description, language: reportLanguage) }
                 }
@@ -134,27 +120,10 @@ private struct TopicOnboardingView: View {
         .padding(.top, 8)
     }
 
-    private var secretsAlreadyPresent: Bool {
-        store.secretIsPresent(name: "deepseek.api_key") && store.secretIsPresent(name: "web_search.api_key")
-    }
-
-    private var shouldOfferDeepSeekVerifier: Bool {
-        store.preflight?.checks.contains {
-            $0.id == "verifier" && $0.provider == "codex" && $0.status == .actionRequired
-        } == true
-    }
-
-    private func saveSecrets() {
-        do {
-            try store.saveSecret(name: "deepseek.api_key", value: deepSeekKey)
-            try store.saveSecret(name: "web_search.api_key", value: searchKey)
-            deepSeekKey = ""; searchKey = ""; savedSecrets = true
-        } catch { savedSecrets = false }
-    }
 }
 
 private enum WorkspaceSection: String, CaseIterable, Identifiable {
-    case overview, reports, settings, diagnostics
+    case overview, topics, reports, settings, diagnostics
     var id: String { rawValue }
 }
 
@@ -163,6 +132,7 @@ private struct ResearchWorkspaceView: View {
     @Bindable var localization: LocalizationStore
     @State private var section: WorkspaceSection = .overview
     @State private var showClearCacheConfirmation = false
+    @State private var showRunAgainConfirmation = false
 
     var body: some View {
         NavigationSplitView {
@@ -173,11 +143,22 @@ private struct ResearchWorkspaceView: View {
         } detail: {
             switch section {
             case .overview: overview
+            case .topics: TopicsView(store: store, localization: localization)
             case .reports: reportList
             case .settings: settings
             case .diagnostics: diagnostics
             }
         }
+        .onChange(of: store.selectedReportID) { _, id in
+            if id != nil { section = .reports }
+        }
+        .confirmationDialog(localization.text("confirm.run_again"), isPresented: $showRunAgainConfirmation) {
+            Button(localization.text("action.run_again")) {
+                if let topic = selectedTopic {
+                    Task { await store.runAgain(topicID: topic.id, reportDate: Self.today(), confirmed: true) }
+                }
+            }
+        } message: { Text(localization.text("confirm.run_again_detail")) }
         .confirmationDialog(
             localization.text("confirm.clear_cache"),
             isPresented: $showClearCacheConfirmation
@@ -203,12 +184,17 @@ private struct ResearchWorkspaceView: View {
                     } label: {
                         Label(localization.text("action.run_now"), systemImage: "play.fill")
                     }
-                    .buttonStyle(.borderedProminent).disabled(store.isEngineRunning)
+                    .buttonStyle(.borderedProminent).disabled(store.isShuttingDown || topic.isPaused)
+                    if store.reports.contains(where: { $0.topicID == topic.id && $0.reportDate == Self.today() }) {
+                        Button(localization.text("action.run_again")) { showRunAgainConfirmation = true }
+                            .disabled(store.behaviorChangesBlocked || topic.isPaused)
+                    }
                     if store.isEngineRunning {
                         ProgressView().controlSize(.small)
                         Button(localization.text("action.cancel")) {
                             Task { await store.cancelActiveJob() }
                         }
+                        .disabled(store.cancellationRequested)
                     }
                 }
             }
@@ -226,7 +212,7 @@ private struct ResearchWorkspaceView: View {
     }
 
     private var reportList: some View {
-        List(store.reports) { report in
+        List(store.reports, selection: Binding(get: { store.selectedReportID }, set: { store.selectReport($0) })) { report in
             VStack(alignment: .leading, spacing: 4) {
                 Text(report.title).font(.headline)
                 Text(report.reportDate).font(.caption).foregroundStyle(.secondary)
@@ -248,22 +234,23 @@ private struct ResearchWorkspaceView: View {
 
     private var settings: some View {
         ScrollView { Form {
-            Picker(localization.text("language.picker_label"), selection: $localization.preference) {
-                Text(localization.text("language.system")).tag(AppLanguagePreference.system)
-                Text("简体中文").tag(AppLanguagePreference.simplifiedChinese)
-                Text("English").tag(AppLanguagePreference.english)
-            }
+            AppLanguagePicker(store: store, localization: localization)
+            ProviderSettingsView(store: store, localization: localization)
             Toggle(localization.text("setting.pause_schedules"), isOn: Binding(
                 get: { store.runtime.schedulesPaused },
-                set: { try? store.setSchedulesPaused($0) }
+                set: { value in store.performAction { try store.setSchedulesPaused(value) } }
             ))
+            .disabled(store.behaviorChangesBlocked)
             Toggle(localization.text("setting.start_at_login"), isOn: Binding(
                 get: { store.configuration.startAtLogin },
                 set: { value in Task { await store.setStartAtLogin(value) } }
             ))
+            .disabled(store.behaviorChangesBlocked)
             DeliveryConfigurationView(store: store, localization: localization)
+                .disabled(store.behaviorChangesBlocked)
             ScheduleEditorView(store: store, localization: localization)
                 .id(selectedTopic?.id)
+                .disabled(store.behaviorChangesBlocked)
             Section(localization.text("setting.legacy_history")) {
                 Text(localization.text("setting.legacy_history_detail"))
                     .font(.callout)
@@ -277,8 +264,10 @@ private struct ResearchWorkspaceView: View {
                         store.importLegacySourceHistory(from: directory)
                     }
                 }
+                .disabled(store.behaviorChangesBlocked)
             }
             Section(localization.text("setting.storage")) {
+                CacheLimitView(store: store, localization: localization)
                 if let usage = store.storageUsage {
                     LabeledContent(
                         localization.text("label.model_cache"),
@@ -298,6 +287,7 @@ private struct ResearchWorkspaceView: View {
                     Button(localization.text("action.clear_cache"), role: .destructive) {
                         showClearCacheConfirmation = true
                     }
+                    .disabled(store.behaviorChangesBlocked)
                 }
             }
         }.formStyle(.grouped).padding(20) }
@@ -325,6 +315,7 @@ private struct ResearchWorkspaceView: View {
     private func icon(_ section: WorkspaceSection) -> String {
         switch section {
         case .overview: "gauge"
+        case .topics: "list.bullet"
         case .reports: "doc.text"
         case .settings: "gearshape"
         case .diagnostics: "stethoscope"
@@ -372,10 +363,10 @@ private struct DeliveryConfigurationView: View {
             SecureField("WeChat App ID", text: $appID)
             SecureField("WeChat App Secret", text: $appSecret)
             Button(localization.text("action.save_wechat")) {
-                try? store.configureWeChat(
+                if store.performAction({ try store.configureWeChat(
                     enabled: wechatEnabled, author: author, thumbMediaID: thumbMediaID,
                     appID: appID, appSecret: appSecret
-                ); appID = ""; appSecret = ""
+                ) }) { appID = ""; appSecret = "" }
             }
         }
         Section(localization.text("setting.email")) {
@@ -387,11 +378,11 @@ private struct DeliveryConfigurationView: View {
             TextField(localization.text("label.from"), text: $fromAddress)
             TextField(localization.text("label.to"), text: $toAddress)
             Button(localization.text("action.save_email")) {
-                try? store.configureEmail(
+                if store.performAction({ try store.configureEmail(
                     enabled: emailEnabled, host: smtpHost, port: smtpPort, security: .tls,
                     username: emailUsername, password: emailPassword,
                     from: fromAddress, to: toAddress
-                ); emailPassword = ""
+                ) }) { emailPassword = "" }
             }
         }
     }

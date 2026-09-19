@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -25,6 +26,7 @@ from research_radar.application.provider_probe import probe_provider
 from research_radar.application.wechat import WeChatDraftOptions, publish_wechat_draft
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.exceptions import ResearchRadarError
+from research_radar.publishers.wechat.client import WeChatDraftClient
 from research_radar.security.secrets import SecretBackend, SecretManager
 from research_radar.storage.files import read_json
 from research_radar.topic_bootstrap import bootstrap_topic_draft, lint_topic_draft
@@ -108,6 +110,7 @@ def handle_run_daily(
     secrets: object,
     events: EventWriter,
     pdf_helper_path: Path | None,
+    daily_runner: Callable[..., Path] = run_daily_application,
 ) -> dict[str, object]:
     """Run the existing daily application service and summarize its public result."""
 
@@ -120,7 +123,7 @@ def handle_run_daily(
         or not pdf_helper_path.stat().st_mode & 0o111
     ):
         raise ValueError("run_daily requires an executable PDF helper.")
-    run_dir = run_daily_application(
+    run_dir = daily_runner(
         DailyRunOptions(
             root=config.workspace_root,
             topic_id=payload.topic_id,
@@ -139,7 +142,7 @@ def handle_run_daily(
         ),
     )
     draft = load_article_draft(run_dir / "article_draft.json")
-    runtime = _optional_json(run_dir / "runtime_summary.json")
+    summary = _optional_json(run_dir / "summary.json")
     return {
         "run_dir": str(run_dir),
         "report_date": payload.report_date,
@@ -149,7 +152,7 @@ def handle_run_daily(
         "summary": draft.lede,
         "source_count": _metadata_count(draft.metadata, "source_count"),
         "deep_read_count": _metadata_count(draft.metadata, "deep_read_count"),
-        "publishable_claim_count": _metadata_count(runtime, "publishable_claim_count"),
+        "publishable_claim_count": _metadata_count(summary, "publishable_claim_count"),
     }
 
 
@@ -160,6 +163,7 @@ def handle_retry_delivery(
     secrets: object,
     events: EventWriter,
     pdf_helper_path: Path | None,
+    wechat_client_factory: type[WeChatDraftClient] = WeChatDraftClient,
 ) -> dict[str, object]:
     """Retry exactly one configured delivery channel."""
 
@@ -180,6 +184,7 @@ def handle_retry_delivery(
                 author=config.wechat.author or "ResearchRadar",
             ),
             secret_manager=_wechat_secret_manager(manager, config),
+            client_factory=wechat_client_factory,
         )
         status = "created"
     else:

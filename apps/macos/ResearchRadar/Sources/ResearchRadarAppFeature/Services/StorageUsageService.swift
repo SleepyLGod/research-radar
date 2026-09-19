@@ -27,7 +27,7 @@ public struct StorageUsageService: Sendable {
             modelCacheBytes: cache,
             reportsBytes: reports,
             jobDiagnosticsBytes: diagnostics,
-            totalBytes: cache + reports + diagnostics,
+            totalBytes: try bytes(in: ""),
             measuredAt: clock()
         )
     }
@@ -35,18 +35,16 @@ public struct StorageUsageService: Sendable {
     public func clearModelCache() throws -> StorageUsageSnapshot {
         let cacheRoot = try containedDirectory("workspace/cache/model_calls", allowMissing: true)
         if FileManager.default.fileExists(atPath: cacheRoot.path) {
-            let children = try FileManager.default.contentsOfDirectory(
-                at: cacheRoot,
-                includingPropertiesForKeys: [.isSymbolicLinkKey],
-                options: []
-            )
+            // Validate the entire tree before moving any entry. Never trash task directories.
+            let children = try regularFiles(in: cacheRoot)
             guard FileManager.default.isExecutableFile(atPath: "/usr/bin/trash") else {
                 throw StorageUsageError.trashUnavailable
             }
             for child in children {
                 try requireContained(child, in: cacheRoot)
-                let values = try child.resourceValues(forKeys: [.isSymbolicLinkKey])
+                let values = try child.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
                 guard values.isSymbolicLink != true else { throw StorageUsageError.symbolicLink(child) }
+                guard values.isRegularFile == true else { throw StorageUsageError.unsupportedFile(child) }
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: "/usr/bin/trash")
                 process.arguments = [child.path]
@@ -63,25 +61,32 @@ public struct StorageUsageService: Sendable {
     private func bytes(in relativePath: String) throws -> UInt64 {
         let directory = try containedDirectory(relativePath, allowMissing: true)
         guard FileManager.default.fileExists(atPath: directory.path) else { return 0 }
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey],
-            options: []
-        ) else { return 0 }
         var total: UInt64 = 0
-        for case let item as URL in enumerator {
-            try requireContained(item, in: directory)
-            let values = try item.resourceValues(forKeys: [
-                .isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey,
-            ])
-            if values.isSymbolicLink == true { throw StorageUsageError.symbolicLink(item) }
-            if values.isRegularFile == true {
-                total += UInt64(values.fileSize ?? 0)
-            } else if values.isDirectory != true {
-                throw StorageUsageError.unsupportedFile(item)
-            }
+        for item in try regularFiles(in: directory) {
+            let values = try item.resourceValues(forKeys: [.fileSizeKey])
+            total += UInt64(values.fileSize ?? 0)
         }
         return total
+    }
+
+    private func regularFiles(in root: URL) throws -> [URL] {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey]
+        var pending = [root]
+        var files: [URL] = []
+        while let directory = pending.popLast() {
+            let children = try FileManager.default.contentsOfDirectory(
+                at: directory, includingPropertiesForKeys: Array(keys), options: []
+            )
+            for item in children {
+                try requireContained(item, in: root)
+                let values = try item.resourceValues(forKeys: keys)
+                if values.isSymbolicLink == true { throw StorageUsageError.symbolicLink(item) }
+                if values.isRegularFile == true { files.append(item) }
+                else if values.isDirectory == true { pending.append(item) }
+                else { throw StorageUsageError.unsupportedFile(item) }
+            }
+        }
+        return files
     }
 
     private func containedDirectory(_ relativePath: String, allowMissing: Bool) throws -> URL {

@@ -31,7 +31,7 @@ drive the research model.
 - Table-aware evidence windows for experiment and result claims.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
 - Source centrality reranking and curated public daily source lists.
-- DeepSeek v4 Flash with explicit thinking and `high` reasoning effort as the default reader route.
+- DeepSeek `deepseek-flash` with explicit thinking and `high` reasoning effort as the default reader route.
 - Codex `gpt-5.6-terra` with `high` reasoning effort as the default verifier route; other
   command-backed providers remain optional.
 - Opt-in model call cache and runtime summaries for reader/verifier cost audit.
@@ -107,6 +107,34 @@ drive the research model.
     real source asset or conservative crop; full PDF pages must not be used as figures.
 
 ## Prioritized TODO
+
+### macOS App Checkpoint
+
+The macOS 26 Apple Silicon App remains in a Draft PR, not a released replacement for the CLI.
+The bundled engine, application services, queue, scheduling, and basic onboarding exist. Task 2
+has passed the frozen offline workflow and native App restart checks. A Swift fake-runner test
+alone is not treated as proof that the frozen research engine can produce a report.
+
+- Implemented: terminal recovery, unknown delivery protection, serialized engine access,
+  atomic settings, editable multiple topics, persistent credential/settings entry points,
+  optional cache limits, and an isolated `ResearchRadar-Dev` workspace.
+- Offline acceptance: the production protocol, application service, pipeline, and renderer
+  produced a loadable `ArticleDraft`, six publishable claims, a safe PDF crop, and a persistent
+  report index with fake external inputs. A separate signed test App ran the scheduled workflow
+  and reopened without duplicating jobs. No real model or delivery service was called.
+- The deliberate fake WeChat failure remains `unknown`; independent fake email succeeds.
+  This verifies recovery behavior, not a successful real WeChat or SMTP connection.
+- Resource sample: approximately 49 MB App, 0.73-second first window, and 74 MB RSS at the end
+  of five minutes with the basic window open. No idle descendants or residual groups after
+  20 standalone engine check/cancel cycles. These cycles are not 20 native queue runs; the
+  native frozen workflow was checked separately. Restricted `leaks` diagnostics are not a
+  leak-free certification.
+- Task 3 remains separate: the embedded report reader, cover upload, final delivery UI,
+  notifications, DMG, and user-triggered real App research/WeChat/email acceptance.
+- Stop after Task 2's reviewed offline checkpoint. Existing CLI delivery validation does not
+  substitute for real App acceptance.
+
+### Research And CLI Follow-up
 
 1. Continue figure and diagram quality from real failures.
    - Improve TeX-source extraction and difficult PDF crops only when real papers expose gaps.

@@ -9,14 +9,12 @@ private final class AppContainer {
     private var scheduleEventObserver: ScheduleEventObserver?
 
     init() {
-        let root = (try? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true
-        ))?.appending(path: "ResearchRadar", directoryHint: .isDirectory)
+        let root = try? AppDataLocation.root()
         if let root {
             do {
                 let loaded = try AppBootstrapService(appSupportRoot: root).load(
-                    engineURL: EngineLocation.bundledFoundationEngine()
+                    engineURL: EngineLocation.bundledFoundationEngine(),
+                    pdfHelperURL: EngineLocation.bundledPDFHelper()
                 )
                 store = loaded; launchError = nil
                 localization = LocalizationStore(preference: loaded.configuration.uiLanguage)
@@ -45,15 +43,14 @@ private final class AppContainer {
         },
         pauseSchedules: { [weak self] in
             guard let store = self?.store else { return }
-            try? store.setSchedulesPaused(!store.runtime.schedulesPaused)
+            store.performAction { try store.setSchedulesPaused(!store.runtime.schedulesPaused) }
         },
         schedulesPaused: { [weak self] in self?.store?.runtime.schedulesPaused ?? false },
         quit: { [weak self] in
             guard let self else { return }
             Task { @MainActor in
-                await self.store?.cancelActiveJob()
-                await self.store?.stopScheduling()
                 self.scheduleEventObserver?.stop()
+                await self.store?.shutdown()
                 NSApp.terminate(nil)
             }
         }
@@ -63,7 +60,6 @@ private final class AppContainer {
         _ = statusItem
         localization.onChange = { [weak self] in
             guard let self else { return }
-            try? self.store?.setUILanguage(self.localization.preference)
             self.statusItem.refresh()
         }
         window.show()

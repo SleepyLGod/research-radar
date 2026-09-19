@@ -87,6 +87,10 @@ public final class FoundationViewModel {
 }
 
 public enum EngineLocation {
+    public static func bundledPDFHelper(bundle: Bundle = .main) -> URL {
+        bundle.bundleURL.appending(path: "Contents/Helpers/ResearchRadarPDFHelper")
+    }
+
     public static func bundledFoundationEngine(bundle: Bundle = .main) -> URL {
         bundle.bundleURL
             .appending(path: "Contents/Helpers/ResearchRadarEngine.app", directoryHint: .isDirectory)
