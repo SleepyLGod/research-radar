@@ -110,7 +110,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
         defer { try? trashFakeWorkflowRoot(root) }
         var configuration = AppConfigurationDefaults.make(
             workspaceRoot: root.appending(path: "workspace"),
-            codexExecutable: nil
+            codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
         configuration.topics = [TopicRecordV1(
             id: "memory",
@@ -133,7 +133,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
             runtime: runtime,
             appSupportRoot: root,
             engineURL: URL(fileURLWithPath: "/fixture/engine"),
-            runner: FakeDailyWorkflowRunner()
+            runner: FakeDailyWorkflowRunner(), secretStore: AdmissionSecrets()
         )
 
         await store.runNow(topicID: "memory", reportDate: "2026-08-30")
@@ -154,7 +154,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
         defer { try? trashFakeWorkflowRoot(root) }
         var configuration = AppConfigurationDefaults.make(
             workspaceRoot: root.appending(path: "workspace"),
-            codexExecutable: nil
+            codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
         configuration.topics = [TopicRecordV1(
             id: "memory",
@@ -166,6 +166,9 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
         )]
         configuration.delivery.wechat.enabled = true
         configuration.delivery.email.enabled = true
+        configuration.delivery.email.smtpHost = "smtp.invalid"
+        configuration.delivery.email.fromAddress = "from@example.invalid"
+        configuration.delivery.email.toAddress = "to@example.invalid"
         let persistence = AtomicJSONStore(root: root)
         try persistence.write(configuration, to: "config/app-config.json")
         let runtime = AppRuntimeStateV1(
@@ -178,7 +181,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
             runtime: runtime,
             appSupportRoot: root,
             engineURL: URL(fileURLWithPath: "/fixture/engine"),
-            runner: FakeDailyWorkflowRunner(failingChannel: .wechat)
+            runner: FakeDailyWorkflowRunner(failingChannel: .wechat), secretStore: AdmissionSecrets()
         )
 
         await store.runNow(topicID: "memory", reportDate: "2026-08-30")

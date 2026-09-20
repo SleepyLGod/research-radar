@@ -60,7 +60,8 @@ public actor ScheduleCoordinator {
     private let now: @Sendable () -> Date
     private let calendar: @Sendable () -> Calendar
     private let evaluator = ScheduleEvaluator()
-    private var stopped = false
+    private enum Lifecycle { case active, blocked, stopped }
+    private var lifecycle = Lifecycle.active
     private var timerGeneration = 0
 
     public init(
@@ -85,6 +86,7 @@ public actor ScheduleCoordinator {
         do {
             try await refreshAdmitted()
         } catch {
+            await block()
             await onAdmissionChange(false)
             throw error
         }
@@ -92,14 +94,14 @@ public actor ScheduleCoordinator {
     }
 
     private func refreshAdmitted() async throws {
-        guard !stopped else { return }
+        guard lifecycle == .active else { return }
         timerGeneration += 1
         let generation = timerGeneration
         let snapshot = try await inputs()
-        guard !stopped, generation == timerGeneration else { return }
+        guard lifecycle == .active, generation == timerGeneration else { return }
         let current = now(); let activeCalendar = calendar()
         let jobs = await queue.jobs()
-        guard !stopped, generation == timerGeneration else { return }
+        guard lifecycle == .active, generation == timerGeneration else { return }
         var enqueuedJob = false
         if !snapshot.paused {
             for due in evaluator.dueResearchJobs(
@@ -107,7 +109,7 @@ public actor ScheduleCoordinator {
                 reports: snapshot.reports, queuedJobs: jobs,
                 now: current, calendar: activeCalendar
             ) {
-                guard !stopped, generation == timerGeneration else { return }
+                guard lifecycle == .active, generation == timerGeneration else { return }
                 let result = try await queue.enqueueResearch(
                     topicID: due.topicID,
                     reportDate: due.reportDate,
@@ -117,22 +119,37 @@ public actor ScheduleCoordinator {
                 if case .enqueued = result { enqueuedJob = true }
             }
         }
-        guard !stopped, generation == timerGeneration else { return }
+        guard lifecycle == .active, generation == timerGeneration else { return }
         if enqueuedJob { await onJobsEnqueued() }
         let next = snapshot.paused ? nil : evaluator.nextFireDate(
             schedules: snapshot.schedules, topics: snapshot.topics,
             after: current, calendar: activeCalendar
         )
-        guard !stopped, generation == timerGeneration else { return }
+        guard lifecycle == .active, generation == timerGeneration else { return }
         await armTimer(at: next)
     }
 
     public func stop() async {
-        stopped = true
+        lifecycle = .stopped
         timerGeneration += 1
         // Wait behind any queue operation already admitted by this coordinator.
         _ = await queue.jobs()
         await timer.cancel()
+    }
+
+    /// A fault is recoverable only by an explicit, validated user action.
+    public func block() async {
+        guard lifecycle != .stopped else { return }
+        lifecycle = .blocked
+        timerGeneration += 1
+        _ = await queue.jobs()
+        await timer.cancel()
+    }
+
+    public func recover() async throws {
+        guard lifecycle != .stopped else { return }
+        lifecycle = .active
+        try await refresh()
     }
 
     private func armTimer(at date: Date?) async {
@@ -145,7 +162,6 @@ public actor ScheduleCoordinator {
         do {
             try await refresh()
         } catch {
-            await stop()
             await onFailure()
         }
     }

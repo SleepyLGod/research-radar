@@ -9,6 +9,7 @@ final class StatusItemController: NSObject {
     private let schedulesPaused: () -> Bool
     private let quit: () -> Void
     private let statusItem: NSStatusItem
+    var button: NSStatusBarButton? { statusItem.button }
 
     init(
         localization: LocalizationStore,
@@ -37,8 +38,9 @@ final class StatusItemController: NSObject {
         refresh()
     }
 
-    func refresh() {
-        statusItem.button?.toolTip = "ResearchRadar · \(localization.text("status.ready"))"
+    func refresh(status: String? = nil, topic: String? = nil) {
+        statusItem.button?.toolTip = ["ResearchRadar", topic, status ?? localization.text("status.ready")]
+            .compactMap { $0 }.joined(separator: " · ")
     }
 
     @objc private func handleClick() {

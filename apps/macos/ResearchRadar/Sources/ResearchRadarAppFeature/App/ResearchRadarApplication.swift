@@ -1,11 +1,14 @@
 import AppKit
 import SwiftUI
+import Observation
+import ResearchRadarCore
 
 @MainActor
 private final class AppContainer {
     let localization: LocalizationStore
     let store: AppStore?
     let launchError: String?
+    let presentation = WindowPresentationState()
     private var scheduleEventObserver: ScheduleEventObserver?
 
     init() {
@@ -30,13 +33,13 @@ private final class AppContainer {
 
     lazy var window = WindowCoordinator {
         if let store {
-            return AnyView(ResearchRadarRootView(store: store, localization: localization))
+            return AnyView(ResearchRadarRootView(store: store, localization: localization, presentation: presentation))
         }
         return AnyView(LaunchFailureView(localization: localization, code: launchError ?? "engine_crashed"))
     }
     lazy var statusItem = StatusItemController(
         localization: localization,
-        showWindow: { [weak self] in self?.window.show() },
+        showWindow: { [weak self] in self?.window.toggle() },
         runNow: { [weak self] in
             guard let store = self?.store else { return }
             Task { await store.runSelectedTopicNow() }
@@ -58,10 +61,9 @@ private final class AppContainer {
 
     func start() {
         _ = statusItem
-        localization.onChange = { [weak self] in
-            guard let self else { return }
-            self.statusItem.refresh()
-        }
+        if let button = statusItem.button { window.attach(to: button) }
+        window.onVisibilityChange = { [weak self] visible in self?.presentation.isVisible = visible }
+        observePresentation()
         window.show()
         if let store {
             scheduleEventObserver = ScheduleEventObserver { [weak store] in
@@ -74,6 +76,28 @@ private final class AppContainer {
             }
         }
     }
+
+    private func observePresentation() {
+        withObservationTracking {
+            guard let store else { return }
+            let mode = store.requiresOnboarding ? WindowMode.full : store.runtime.windowMode
+            window.setAppearance(store.configuration.uiAppearance)
+            window.present(mode: mode, animated: window.popover.isShown)
+            let today = store.todayPresentation
+            let active = store.engineStatusPresentation
+            let state: String
+            if let active {
+                state = active.job.state == .cancelling ? "today.cancelling"
+                    : active.job.stage.map { "stage.\($0.rawValue)" }
+                    ?? (active.job.kind == .delivery ? "today.delivering" : "today.running")
+            } else {
+                state = store.isEngineRunning ? "today.checking" : today.statusKey
+            }
+            statusItem.refresh(status: localization.text(state), topic: active?.topic?.displayName ?? store.selectedTopic?.displayName)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.observePresentation() }
+        }
+    }
 }
 
 private struct LaunchFailureView: View {
@@ -84,8 +108,8 @@ private struct LaunchFailureView: View {
             Label(localization.text("error.state_unavailable"), systemImage: "exclamationmark.triangle.fill")
                 .font(.title3.weight(.semibold)).foregroundStyle(.orange)
             Text(localization.text("error.state_unavailable_detail")).foregroundStyle(.secondary)
-            Text(code).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-        }.padding(28).frame(minWidth: 520, minHeight: 260)
+            Text(code).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+        }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

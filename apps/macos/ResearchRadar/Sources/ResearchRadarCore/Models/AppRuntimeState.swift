@@ -10,6 +10,7 @@ public enum OnboardingStep: String, Codable, Sendable {
 public struct AppRuntimeStateV1: Codable, Equatable, Sendable, VersionedDurableState {
     public let schemaVersion: Int
     public var onboardingStep: OnboardingStep
+    public var onboardingInProgress: Bool?
     public var windowMode: WindowMode
     public var selectedTopicID: String?
     public var schedulesPaused: Bool
@@ -18,11 +19,13 @@ public struct AppRuntimeStateV1: Codable, Equatable, Sendable, VersionedDurableS
 
     public init(
         schemaVersion: Int = 1, onboardingStep: OnboardingStep = .storage,
+        onboardingInProgress: Bool? = nil,
         windowMode: WindowMode = .compact, selectedTopicID: String? = nil,
         schedulesPaused: Bool = false, legacyHistoryImportedAt: Date? = nil,
         updatedAt: Date
     ) {
         self.schemaVersion = schemaVersion; self.onboardingStep = onboardingStep
+        self.onboardingInProgress = onboardingInProgress
         self.windowMode = windowMode; self.selectedTopicID = selectedTopicID
         self.schedulesPaused = schedulesPaused
         self.legacyHistoryImportedAt = legacyHistoryImportedAt; self.updatedAt = updatedAt

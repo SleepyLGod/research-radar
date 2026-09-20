@@ -39,6 +39,7 @@ struct TopicEditorInput {
     }
 
     func candidate() throws -> TopicRecordV1 {
+        guard !hasInvalidAdvancedFields else { throw AppStoreError.invalidTopic }
         var result = topic
         result.displayName = result.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         result.researchFocus = result.researchFocus.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,17 +50,30 @@ struct TopicEditorInput {
             ? topic.negativePhrases : Self.lines(negativePhrases)
         result.conceptGroups = [:]
         for group in conceptGroups {
-            guard !group.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  result.conceptGroups[group.name] == nil,
-                  !group.phraseValues.isEmpty else { throw AppStoreError.invalidTopic }
             result.conceptGroups[group.name] = group.phraseValues
         }
-        guard !result.displayName.isEmpty, !result.researchFocus.isEmpty,
-              !result.queries.isEmpty, !result.paperQueries.isEmpty,
-              result.conceptGroups.allSatisfy({ !$0.key.isEmpty && !$0.value.isEmpty && $0.value.allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }) else {
+        guard !result.displayName.isEmpty, !result.researchFocus.isEmpty else {
             throw AppStoreError.invalidTopic
         }
         return result
+    }
+
+    var hasInvalidAdvancedFields: Bool {
+        guard !Self.lines(queries).isEmpty, !Self.lines(paperQueries).isEmpty else { return true }
+        var names = Set<String>()
+        for group in conceptGroups {
+            if group.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !names.insert(group.name).inserted || group.phraseValues.isEmpty
+                || group.phraseValues.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    var advancedCounts: [Int] {
+        [Self.lines(queries).count, Self.lines(paperQueries).count, conceptGroups.count,
+         Self.lines(exclusions).count, Self.lines(negativePhrases).count]
     }
 
     static func lines(_ value: String) -> [String] {
@@ -77,6 +91,7 @@ struct TopicEditorView: View {
     let creating: Bool
     let onSaved: () -> Void
     @State private var input: TopicEditorInput
+    @State private var advancedExpanded = false
 
     init(store: AppStore, localization: LocalizationStore, topic: TopicRecordV1, creating: Bool = false, onSaved: @escaping () -> Void = {}) {
         self.store = store; self.localization = localization; self.creating = creating; self.onSaved = onSaved
@@ -85,41 +100,54 @@ struct TopicEditorView: View {
 
     var body: some View {
         Form {
-            LabeledContent(localization.text("label.topic_id"), value: input.topic.id)
-            TextField(localization.text("label.topic_name"), text: $input.topic.displayName)
-            TextField(localization.text("label.research_focus"), text: $input.topic.researchFocus, axis: .vertical)
-            multiline("label.search_queries", text: $input.queries)
-            multiline("label.paper_queries", text: $input.paperQueries)
-            multiline("label.exclusions", text: $input.exclusions)
-            multiline("label.negative_phrases", text: $input.negativePhrases)
-            Section(localization.text("label.concept_groups")) {
-                ForEach($input.conceptGroups) { $group in
+            Section(localization.text("topic.basic")) {
+                TextField(localization.text("label.topic_name"), text: $input.topic.displayName)
+                TextField(localization.text("label.research_focus"), text: $input.topic.researchFocus, axis: .vertical)
+                Picker(localization.text("label.report_language"), selection: $input.topic.reportLanguage) {
+                    Text("中文").tag(ReportLanguageV1.chinese)
+                    Text("English").tag(ReportLanguageV1.english)
+                }
+                Toggle(localization.text("setting.pause_topic"), isOn: $input.topic.isPaused)
+            }
+            Section {
+                DisclosureGroup(localization.text("topic.advanced"), isExpanded: $advancedExpanded) {
+                    LabeledContent(localization.text("label.topic_id"), value: input.topic.id)
+                    multiline("label.search_queries", text: $input.queries)
+                    multiline("label.paper_queries", text: $input.paperQueries)
+                    multiline("label.exclusions", text: $input.exclusions)
+                    multiline("label.negative_phrases", text: $input.negativePhrases)
                     VStack(alignment: .leading) {
-                        HStack {
-                            TextField(localization.text("label.group_name"), text: $group.name)
-                            Button {
-                                input.conceptGroups.removeAll { $0.id == group.id }
-                            } label: { Image(systemName: "minus.circle") }
-                                .help(localization.text("action.remove_group"))
-                                .accessibilityLabel(localization.text("action.remove_group"))
+                        Text(localization.text("label.concept_groups")).font(.headline)
+                        ForEach($input.conceptGroups) { $group in
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    TextField(localization.text("label.group_name"), text: $group.name)
+                                    Button {
+                                        input.conceptGroups.removeAll { $0.id == group.id }
+                                    } label: { Image(systemName: "minus.circle") }
+                                        .help(localization.text("action.remove_group"))
+                                        .accessibilityLabel(localization.text("action.remove_group"))
+                                }
+                                multiline("label.group_phrases", text: $group.phrases)
+                            }
                         }
-                        multiline("label.group_phrases", text: $group.phrases)
+                        Button {
+                            input.conceptGroups.append(ConceptGroupInput())
+                        } label: { Label(localization.text("action.add_group"), systemImage: "plus") }
                     }
                 }
-                Button {
-                    input.conceptGroups.append(ConceptGroupInput())
-                } label: { Label(localization.text("action.add_group"), systemImage: "plus") }
             }
-            Picker(localization.text("label.report_language"), selection: $input.topic.reportLanguage) {
-                Text("中文").tag(ReportLanguageV1.chinese)
-                Text("English").tag(ReportLanguageV1.english)
+            Section(localization.text("topic.review")) {
+                ForEach(Array(zip(["label.search_queries", "label.paper_queries", "label.concept_groups", "label.exclusions", "label.negative_phrases"], input.advancedCounts)), id: \.0) { key, count in
+                    LabeledContent(localization.text(key), value: String(count))
+                }
+                Button(localization.text("action.save")) {
+                    if input.hasInvalidAdvancedFields { advancedExpanded = true }
+                    if store.performAction({ try store.saveTopic(input.candidate(), creating: creating) }) { onSaved() }
+                }
+                .disabled(store.behaviorChangesBlocked)
+                AppActionErrorView(store: store, localization: localization)
             }
-            Toggle(localization.text("setting.pause_topic"), isOn: $input.topic.isPaused)
-            Button(localization.text("action.save")) {
-                if store.performAction({ try store.saveTopic(input.candidate(), creating: creating) }) { onSaved() }
-            }
-            .disabled(store.behaviorChangesBlocked)
-            AppActionErrorView(store: store, localization: localization)
         }
         .formStyle(.grouped)
     }
@@ -155,16 +183,8 @@ struct TopicsView: View {
                 } label: { Label(localization.text("action.new_topic"), systemImage: "plus") }
                     .disabled(store.behaviorChangesBlocked)
             }.padding()
-            HSplitView {
-                List(store.configuration.topics, selection: Binding(
-                    get: { store.selectedTopic?.id },
-                    set: { id in if let id { store.performAction { try store.selectTopic(id) } } }
-                )) { topic in
-                    Label(topic.displayName, systemImage: topic.isPaused ? "pause.circle" : "text.magnifyingglass")
-                }.frame(minWidth: 130, idealWidth: 170, maxWidth: 230)
-                if let topic = store.selectedTopic {
-                    TopicEditorView(store: store, localization: localization, topic: topic).id(topic.id)
-                }
+            if let topic = store.selectedTopic {
+                TopicEditorView(store: store, localization: localization, topic: topic).id(topic.id)
             }
         }
         .sheet(item: $newTopic) { topic in
