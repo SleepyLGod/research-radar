@@ -10,6 +10,181 @@
 
 ## Global Constraints
 
+### Deep Eligibility and Research Outcome Contract (2026-09-20)
+
+This follow-up separates source listing, useful deep reading, process completion and delivery.
+It does not close Task 3A manual acceptance or authorize live services or delivery.
+
+**Code contract:** `is_reportable_source` and the existing `seen` classification remain unchanged.
+The pipeline applies relevance separately and uses `is_deep_read_eligible(source)` after history
+annotation. A listed/seen paper remains eligible when full-text acquisition or reading failed,
+or when reading produced no publishable claims. Suppression requires the same paper family and
+version to have a recorded `deep_reading_status=succeeded` with positive
+`publishable_claim_count` in the same outcome. Preserve that success across later listing,
+failure, delivery and alias-bridge rows using a derived in-memory version index; do not rewrite
+historical JSONL or infer success from incomplete legacy fields. An older or unknown-version
+success must not satisfy a newer version. Check the derived success flag before status-based
+eligibility: after v2 succeeds, a delayed v1 outcome can leave rediscovered v2 labelled
+`version_update`, but must not make v2 eligible for another deep read. This does not change
+report-listing eligibility or the existing latest-version fold.
+
+The additive `research_outcome` object carries `status` and `reasons` through research artifacts
+and the App bridge/report record. `ready` requires a deep read and positive publishable claims;
+`no_new_content` means no eligible papers without a discovery failure; `incomplete` describes
+an attempt without a useful deep result. Reasons distinguish discovery failure, unavailable
+full text, reading failure and insufficient evidence. Use `verification_no_public_claims` only
+when verification actually reviewed claims, not merely because the final count is zero.
+Missing legacy outcome metadata remains unknown rather than an invented failure stage.
+
+App automatic delivery requires positive deep-read and publishable-claim counts and, when
+present, a `ready` outcome. This gate applies both when completing research and when restoring
+pending delivery jobs. Empty or incomplete attempts may retain local artifacts and diagnostics,
+but must not automatically enqueue WeChat/email delivery or replace the last useful report as
+if new publishable content existed. Legacy records without an outcome use their recorded counts
+for delivery admission; compatibility is not evidence of a newly verified outcome.
+
+Optional GitHub/Semantic Scholar credentials resolve once per connector in the current task,
+including success, missing and denied access. Repeated queries reuse that decision; missing or
+inaccessible credentials allow anonymous discovery, with a fixed redacted warning for access
+failure. A new task creates fresh connector state. Do not turn this into global negative caching:
+required backend reads still fail explicitly and remain retryable, while successful Keychain
+reads are cached in the job-owned backend. This is not a promise of one native dialog per task
+or authorization surviving a rebuild.
+
+**Offline evidence (2026-09-20):** Python: 824 passed, 2 skipped. Swift: 224 tests in 43 suites
+passed. Coverage includes source-history eligibility, production pipeline runs with fake external
+IO, bridge/outcome propagation, optional-credential resolution, normal/recovery delivery admission,
+same-day retries and localized result explanations. Ruff, privacy scan, diff checks, signed bundle
+verification and frozen-engine preflight passed. Read-only review found and resolved the delayed-v1
+eligibility regression; the final Swift integration review found no actionable issue. These checks
+do not establish native authorization behavior or real-provider quality.
+
+The final development bundle occupies approximately 48 MiB on disk. The isolated outcome
+fixture produced 24 English/Chinese, light/dark, compact/full screenshots; representative empty,
+incomplete-with-retained-report and partial-ready views were visually inspected. The fixture
+App exited and existing copied report artifacts remained byte-identical. Evidence is local:
+`.build/task3a-visual/3529216578d6440f9fb2475c00c22d81/acceptance.json`. This is a production-view
+fixture, not production startup or live delivery acceptance; no new idle-resource claim is made.
+
+**Manual acceptance remains open:** native Keychain Allow/deny interactions, fresh-task prompts,
+localized empty/incomplete-result presentation, preservation of the previous useful report and
+absence of automatic delivery must be checked in the staged App. Offline fixtures do not prove
+physical UI behavior, real provider quality or successful delivery. No live calls, Git staging,
+commit or push are part of this follow-up; earlier checkpoint counts below are historical only.
+
+### Task 3A Appearance and First-run Setup (2026-09-20)
+
+Add an App-owned `ui_appearance` preference (`system`, `light`, `dark`), defaulting to
+`system` when absent in existing configurations. Apply it to the anchored popover and
+native/SwiftUI controls without changing the macOS setting or rewriting report HTML.
+Appearance is independent of UI language, report language, and research configuration.
+
+First-run setup has four steps: appearance/language, research services, reviewed topic,
+and check/start. Reuse AppStore and the saved configuration, not a second configuration
+store. Closing the popover retains in-memory drafts; restart restores saved settings,
+never an unsubmitted secret. Existing users are not forced through setup again.
+Saving a first topic must still allow reviewing the final check/start step. A failed first
+run uses the normal research failure/retry view rather than restarting onboarding.
+
+DeepSeek and Tavily credentials have independent save actions and clear purposes. API keys
+are service credentials, not account passwords; checks and research can incur provider
+charges. Codex remains the recommended verifier, with detected executables requiring
+confirmation and the existing explicit DeepSeek fallback. Delivery and scheduling are
+optional later settings, not prerequisites for generating a local report.
+
+Only an explicit connection-check action starts live probes. The existing preflight command
+reports model routes and a separate `web_search` check. The shared search probe reuses the
+Tavily connector for one basic query with at most one result, without saving candidates,
+source history, or reports. No usable result is inconclusive, not proof of a bad API key.
+Disabled or non-Tavily search is explicitly not checked, rather than falsely reported as
+a failed Tavily connection. Existing discovery configuration remains unchanged.
+Saved, configured, and connection-checked are distinct states; configuration/credential
+changes invalidate prior checks. These checks do not validate WeChat or SMTP.
+
+Implementation verification uses isolated data, fake credentials and offline network
+responses. Native screenshots are a separate acceptance step. No real model/search/send,
+Git stage, commit or push is authorized for this checkpoint; Task 3B remains deferred.
+
+Code verification: Python 747 passed / 2 skipped; Swift reported 208 tests across 42 suites
+passed (one conditional frozen-workflow test skipped). Ruff, privacy, diff, bundle and
+signature checks passed. Separate frozen local preflight succeeded in 0.746 seconds without
+contacting providers/search; the development App remains approximately 48 MiB. Read-only
+review findings about concurrent login-item/appearance saves and non-Tavily checks were
+reproduced and fixed. These results do not claim real service or complete physical UI acceptance.
+
+Native snapshots completed all 16 page/language/appearance combinations before the final
+wording correction. The final build's bounded recapture reached the first three Chinese/light
+pages and then lost popover focus; this final matrix did not pass. The captured pages were
+visually inspected, report bytes stayed unchanged, and the isolated test App exited. Real
+keyboard, VoiceOver, multi-screen and the previous interaction gates remain pending.
+
+### Task 3A Failure Presentation and Transport Recovery (2026-09-20)
+
+Keep the latest research attempt separate from the latest successful report. A failed attempt
+shows its own time, known stage and localized error; the previous report retains its own counts
+and delivery state. Legacy generic failures do not imply a precise stage. Retry uses the existing
+confirmed new-attempt path, including the existing enabled-channel behavior, not resume or a
+publisher retry. No Task 3B controls are included.
+
+The shared OpenAI-compatible provider retries a typed connection interruption at most once,
+after one second. It does not retry HTTP errors, timeouts, certificate failures or invalid JSON.
+The retry receives only the remaining original request budget; urllib socket timeouts are not
+a replacement for the existing process watchdog. An interrupted request may still be billed.
+Successful responses and redacted failure diagnostics record attempt count; failures are not cached.
+The App passes its existing cancellation event through application services and routing. Waiting
+is interruptible; cancellation cannot start a second request and remains a cancelled terminal.
+
+The bridge forwards existing source-gist/acquisition stages and uses the latest stage for terminal
+errors. Stable model transport codes use the existing error envelope, without inspecting English
+error messages or changing protocol version. Historical artifacts and renderer bytes stay unchanged.
+
+Offline tests cover recovery/exhaustion/cancellation through the production bridge and daily
+pipeline with fake external IO, plus report/attempt presentation. Native fixture captures are
+separate from real service acceptance; manual interaction gates remain open. This checkpoint
+does not authorize live calls, delivery, staging Git changes, commit or push.
+
+Verification: Python 724 passed / 2 skipped; Swift 195 tests passed in 40 suites. Ruff,
+privacy, diff, bundle and signature checks passed. Frozen preflight took 0.774 seconds;
+the development bundle occupies approximately 48 MiB. Read-only review found an unconfirmed
+queue path during another topic's run and unreliable legacy terminal-stage presentation;
+both are fixed and covered by regression tests. Final English/light native failure snapshots
+were inspected. The extended snapshot run lost popover focus; the subsequent Chinese-first
+run failed its status-anchor/screen-size check. Chinese/dark final captures and physical
+interaction acceptance remain open. These captures are isolated fixture UI, not real services.
+
+### Codex and Schedule Follow-up Contract (2026-09-20)
+
+Shared Python configuration defaults to `gpt-5.6-luna/xhigh`; the bridge reuses
+`probe_provider()` and returns bounded, redacted failure detail through the existing check
+`message`. No new transport, wire command, model stage or renderer behavior is introduced.
+App settings offer high/xhigh and invalidate prior checks after a route, executable or effort
+change. Detection is not connection verification. Details belong in Diagnostics, not guesses
+based on English exception text. The global Codex configuration is not modified.
+
+Only the old built-in App Codex verifier Terra/high combination migrates, using the existing
+validated atomic save. Custom routes and a selected DeepSeek verifier remain unchanged. CLI YAML
+is explicit user configuration; newly generated defaults change, installed snapshots do not.
+
+Schedule lifecycle distinguishes active, fault-blocked and stopped-for-Quit. Fault recovery is
+explicit, validates disk state against current snapshots, and reconciles terminal artifacts
+before allowing work when required. Invalid or changed files remain untouched and blocked.
+Quit cannot be undone by delayed callbacks. A single one-shot timer and existing queue remain
+authoritative. Today's missed time can run today; at 08:00, a 09:00 schedule waits even if
+yesterday was missed. Failed/cancelled attempts need manual retry. Saving a plan does not
+implicitly unpause all schedules. Home and settings share one read-only status projection.
+
+Offline acceptance covers migration, persisted selections, rejected saves, stale checks,
+diagnostic redaction, explicit recovery/failure, Quit, and day boundaries. The earlier real
+bundled-engine Luna/xhigh short probe passed in about 11 seconds, not a full research run.
+Physical UI selection/reopen/check acceptance remains separate. No further live calls,
+deliveries, stage, commit or push are part of this checkpoint.
+
+Follow-up evidence: Python 702 passed / 2 skipped; Swift 185 tests. Independent read-only review
+found recovery could leave an active-but-never-started coordinator without a timer; the added
+test failed first and passed after the fix. Native navigation automation still cannot locate
+the compact expand control through Accessibility. Selection/save/reopen/check is therefore
+covered at the AppStore/service boundary, not yet accepted as a physical UI flow.
+
 - Target macOS 26 on Apple Silicon arm64 only. v1 makes no compatibility claim outside that exact platform.
 - The native app must not require the user to install Python, `uv`, Homebrew, Poppler, or a shell environment.
 - The existing CLI, `ArticleDraft`, evidence policy, WeChat HTML, Archive/RSS, Email renderer, Zhihu renderer, and source-history semantics remain authoritative.
@@ -17,7 +192,7 @@
 - The app does not add a model stage, generate claims, weaken anchors, or modify renderer content.
 - Secrets remain in macOS Keychain service `ResearchRadar`; JSON requests, state, logs, notifications, and UI contain secret names or presence only, never values.
 - All app-owned directories are mode `0700`; state/request/result files are mode `0600`, written through temporary files followed by atomic rename.
-- The app is menu-bar-only by default (`LSUIElement=true`), with one singleton main window. Sheets are allowed only for file selection, secret entry, and destructive/cancellation confirmation.
+- The app is menu-bar-only by default (`LSUIElement=true`). The revised Task 3A surface is one native `NSPopover` anchored to the status item, with compact and expanded modes, not a detached main window. Sheets are allowed only for file selection, explicit secret entry, and destructive/cancellation confirmation.
 - App UI language and report language are independent. UI supports `system`, Simplified Chinese, and English; each topic retains its own existing `en | zh` report language.
 - The app owns daily scheduling while it is running and may register itself at login only after explicit user consent. Explicit Quit stops future schedules and leaves no hidden scheduler helper.
 - The global queue runs one engine process at a time across every topic and delivery channel.
@@ -80,7 +255,119 @@ The production bundle excludes the fixture engine. Resource sampling recorded ap
 49 MB bundle, 0.73-second first window, and 74 MB RSS at five minutes. Twenty standalone engine
 check/cancel cycles left no process groups; native queue execution was tested separately.
 The restricted `leaks` report contains framework allocations and does not establish leak-free
-operation. Final report reading, cover upload, notifications, and DMG remain unimplemented.
+operation. At that checkpoint, report reading, cover upload, notifications, and DMG were not implemented.
+
+Earlier window-based Task 3A implementation checkpoint (2026-09-20, uncommitted):
+
+The evidence below is retained for that earlier implementation. It does not establish
+implementation or acceptance of the revised anchored-popover contract below.
+
+- Compact/full native views, current-topic presentation, active-job stage observation,
+  grouped settings and the restricted reader are implemented. Existing research services,
+  wire commands and channel renderers are unchanged.
+- Reader access starts from the configured workspace, uses no-follow descriptor traversal,
+  and blocks automatic network resources. Repeated preparation/cancellation and actual
+  local-image/anchor loads have regression coverage.
+- Integrated checks passed: 688 Python tests (2 skipped), 161 Swift tests, Ruff, privacy,
+  diff, bundle validation and ad-hoc signing. These are offline checks, not live provider
+  or delivery acceptance.
+- `dist/macos-task3a-resource-report.json` measures the actual staged production entrypoint
+  with an empty isolated configuration: 49.7 MB logical bundle, 0.386-second first window,
+  79.1 MB RSS and 0.1% sampled CPU after 300 seconds, with no descendants. The reader's
+  repeated-open test is separate; restricted `leaks` output is not a leak-free certificate.
+- Native visual fixtures link the same production modules into a separate test App. They
+  do not ship in the development App, contact providers, or send deliveries. Screenshot
+  and reader-lifecycle evidence is retained under the ignored `.build/task3a-visual/`.
+- The native matrix captured 96 English/Chinese, light/dark and default/minimum-size
+  windows, including synthetic and unchanged engine-rendered reports. A separate run
+  completed 20 reader open/close cycles with zero retained WebViews after each close.
+  This measures App ownership, not immediate termination of system WebKit XPC processes.
+- Remaining visual acceptance gaps: native sidebar automation did not complete its
+  settings/edit-confirmation path; keyboard/VoiceOver and OS accessibility-display
+  combinations still need manual inspection. Running-state screenshots use snapshots,
+  not a live engine; event/queue behavior is covered by separate integration tests.
+- User visual approval remains pending. Do not commit or continue to Task 3B at this point.
+
+### Revised Task 3A Contract (2026-09-20)
+
+**Implementation reported; native visual acceptance IN PROGRESS.** The main agent reports
+the revised popover, mixed system typography, configuration admission, metadata-only Keychain
+presence, and Codex confirmation implemented. This contract supersedes the
+earlier detached-window dimensions, window-resize experiments, and discard-on-compact
+behavior. Earlier Task 1/2 window implementation details and evidence remain historical.
+
+Current verification reported by the main agent:
+
+- 177 Swift tests and 696 Python tests passed, with 2 Python tests skipped. Ruff, privacy,
+  and diff checks passed. Swift coverage includes the new schedule-recovery tests.
+- The latest staged, signed bundle passed frozen preflight in `0.829 s`.
+- Both P2 findings from the read-only review, same-report reopening and schedule rearming,
+  were fixed.
+- 24 actual anchored-popover captures cover English/Chinese and Light/Dark states. The main
+  agent visually reviewed compact, full, and missing-configuration views with no overlap.
+  A current compositor screenshot confirms backdrop blur, not merely alpha-isolated output.
+- Full AX controls remain unavailable. The reader lost focus and dismissed before the
+  cycle run: `0/20` completed, NOT accepted; no full-reader resource result is available.
+- Independent dismissed-idle sampling of the final release completed: `300.05 s`, 61 samples.
+  RSS first/last/min/max: `74,629,120 / 50,200,576 / 46,989,312 / 91,504,640` bytes
+  (about 50 MB last, 47-92 MB range). Sampled `ps` CPU averaged `1.03%`, maximum `16.8%`,
+  including an early transient; this is not an energy measurement. App termination succeeded.
+  This isolated offline-root snapshot does not cover production startup, research, or full-reader
+  resources and establishes neither zero CPU nor leak freedom. Reader cycles and full AX remain
+  NOT passed.
+- Stop for user visual approval before committing or continuing to Task 3B.
+
+- Use a native `NSPopover` anchored to the menu-bar status item. Compact content is
+  `400 x 480 pt`; expanded content is `900 x 660 pt`. Clamp either mode to the current
+  screen's available frame while preserving the anchor and keeping controls reachable.
+- Outside click and Escape dismiss the popover, not the app or an active job. Reopening
+  restores form drafts, navigation, and topic/report selection. Compact/expanded changes
+  also retain that state; dismissal or collapse is not an implicit discard or cancellation.
+- Keep the sidebar toggle fixed at the leading edge and the expand/collapse control at
+  the trailing edge. Both remain reachable when the sidebar is hidden and after reopening.
+- Use native system glass and materials, without whole-surface opacity changes, custom
+  blur layers, or transparency hacks. Tuneful, Dato, and OpenUsage are visual/interaction
+  references, not dependencies or claims of feature parity.
+- Use public system font APIs: proportional UI text `13-14 pt`, headers `17-20 pt`, and
+  auxiliary labels at least `12 pt`. Reserve system monospaced text for technical information.
+  Do not bundle, download, or select external font families.
+- Credential presence is metadata-only and noninteractive. Appearance, reopening, and
+  settings navigation must not read secret values, prompt for Keychain access, or run live
+  checks. An unavailable metadata lookup means unknown/unavailable, not confirmed missing.
+- Existing English/Chinese credential help (`status.saved_not_verified`) distinguishes saved
+  credentials from read authorization and verified connections. Allow authorizes the current
+  access; Always Allow remembers permission for that requester and item. Approve either only
+  for a trusted ResearchRadar requester and the correct item. Different keys or jobs may prompt
+  separately, and ad-hoc rebuilds may prompt again. Do not advise broad Keychain ACL changes
+  or promise prompt-free access. Keep the inline help to three short sentences; repeat-prompt
+  details belong here. Test Connections checks only the listed model routes, not SMTP or
+  delivery. Native prompt behavior and the revised help layout still
+  require manual acceptance; this copy change does not close the visual approval gate.
+- Explicit live checks are separate actions: model/search checks do not verify delivery;
+  delivery checks do not imply successful model/search access. Show each action's actual
+  scope and result. Existing no-send boundaries remain in force without explicit authorization.
+- Codex autodetection proposes a validated executable candidate for user confirmation;
+  finding a path is not proof of authentication or working configuration. Keep confirmation
+  and an explicit run-configuration check available. Do not launch Codex on appearance,
+  silently change verifier routes, or conflate a local config check with a live model check.
+
+Revised implementation and remaining acceptance:
+
+- [x] Implement the revised anchored popover, system typography, configuration admission,
+  metadata-only credential presence, and Codex confirmation, as reported by the main agent.
+- [ ] Verify compact/expanded/reopen transitions preserve drafts and selection; outside/Escape
+  dismissal leaves background jobs and scheduling unchanged.
+- [x] Capture the actual anchored popover in English/Chinese and Light/Dark; review compact,
+  full, and missing-configuration layouts and confirm backdrop blur in compositor output,
+  as reported by the main agent. This is not full native visual acceptance.
+- [ ] Complete manual physical clicks, keyboard/VoiceOver, multi-display movement, file-picker,
+  smaller-screen, and supported accessibility-display checks in the production staged app.
+- [ ] Verify appearance performs no secret-value reads, Keychain prompts, live checks, or
+  Codex execution; exercise model/search and delivery checks only through explicit actions.
+- [ ] Verify Codex candidate confirmation and run-configuration checks independently of
+  credential presence and live provider success.
+- [ ] Complete native AX action inspection, visual checks, and revised cycle/resource evidence,
+  then obtain user visual acceptance. The reported test/preflight results do not close this gate.
 
 The implementation order is risk-driven:
 
@@ -90,7 +377,7 @@ The implementation order is risk-driven:
 
 PyInstaller packaging is a real risk, but the current project does not depend on NumPy or PyTorch. The concrete frozen inputs exercised in Task 1 are the Python runtime, `cryptography`, `keyring` with macOS backend discovery, Pillow, `pypdf`, PyYAML, the foundation bridge, and their transitive libraries. Verification imports those dependencies from the frozen engine and inspects the actual tree rather than declaring success from an empty bridge executable. App Sandbox remains off for the local beta; that is separate from Hardened Runtime. Static, JavaScript-disabled ResearchRadar reports are an intentional, demand-loaded `WKWebView` fit, not a temporary browser implementation. The plan does not invent package-size, RSS, or cache limits before measuring a real Task 1 bundle.
 
-`NSStatusItem` is intentional. The product requires a dynamic tooltip, distinct left/right click behavior, a native contextual menu, and one explicitly coordinated window. `MenuBarExtra` is not introduced unless those requirements change.
+`NSStatusItem` is intentional. The product requires a dynamic tooltip, distinct left/right click behavior, a native contextual menu, and one explicitly coordinated anchored popover. `MenuBarExtra` is not introduced unless those requirements change.
 
 ---
 
@@ -98,11 +385,11 @@ PyInstaller packaging is a real risk, but the current project does not depend on
 
 ### 1.1 Daily user flow
 
-1. On first launch, ResearchRadar opens the main window and checks local storage, required model credentials, and the optional Codex executable. Provider preflight lists its actual checks; it does not claim that WeChat or SMTP delivery has been verified.
+1. On first launch, ResearchRadar presents the anchored popover and local setup state. Credential indicators use metadata-only presence without secret-value reads or prompts on appearance. Codex discovery proposes a candidate for confirmation; run-configuration and live model/search checks are explicit actions, separate from delivery checks.
 2. If the user already ran the CLI, the app may copy only `data/source_history/*.jsonl` from a user-selected legacy root into the empty App workspace. It never imports YAML, secrets, schedules, cache, or run artifacts, and never removes the legacy files.
 3. The user describes a research topic in plain language. The Python engine generates a reviewable topic profile; the app shows its focus, search phrases, paper phrases, inclusion concepts, and exclusions without exposing YAML.
 4. The user confirms the topic, chooses a daily local time, chooses zero or more delivery channels, and optionally enables Start at Login.
-5. The menu-bar icon remains available. Hovering shows one concise status line. Left-click opens the same main window; right-click exposes Open, Run Now, Pause All, and Quit.
+5. The menu-bar icon remains available. Hovering shows one concise status line. Left-click opens the same anchored popover; right-click exposes Open, Run Now, Pause All, and Quit. Outside click or Escape dismisses the surface while retaining drafts, selection, and background jobs.
 6. At the due time, or after Run Now, one queue item starts. The window shows Discover, Read & Verify, Prepare report, and Deliver as an expandable operational timeline.
 7. A successful research run always creates the existing local report artifacts first. Enabled WeChat and Email deliveries then run as separate queue jobs against that fixed report.
 8. The user reads the report inside a restricted `WKWebView`, opens it in the default browser when desired, or reviews the WeChat draft in WeChat.
@@ -142,7 +429,7 @@ Report language remains topic-owned:
 
 ### 1.3 Status language
 
-| State | Menu-bar tooltip | Compact window primary message |
+| State | Menu-bar tooltip | Compact popover primary message |
 | --- | --- | --- |
 | Idle with schedule | `Next: agent-memory at 09:00` | `Next report tomorrow at 09:00` |
 | Queued | `agent-memory is queued` | `Waiting for the current job to finish` |
@@ -165,7 +452,7 @@ Every row in the table above is represented by localization keys rather than sto
 - A schedule is daily local wall-clock time for one reviewed topic. Weekly and arbitrary cron syntax are not exposed.
 - Before enabling an App schedule, inspect `~/Library/LaunchAgents/ai.research-radar.daily-draft.*.plist`. If a legacy CLI schedule exists for that topic, block the App schedule and show migration instructions; never run two schedulers for the same topic and never unload the old job without explicit user action.
 - `Calendar.autoupdatingCurrent` defines the report date and due time so travel follows the user's current local time.
-- On launch or wake, schedule evaluation enqueues only the latest missed report date. It never creates a multi-day backlog.
+- On launch or wake, schedule evaluation enqueues only today's task if today's time has passed and no attempt exists. It never catches up a previous date: opening at 08:00 waits for today's 09:00 even if yesterday was missed. Failed and cancelled attempts require manual retry.
 - Scheduling uses one one-shot timer for the nearest enabled schedule. Topic or schedule edits, pause/resume, clock or time-zone changes, and sleep/wake invalidate that timer and compute a replacement. With no enabled schedule, no timer exists.
 - The coalescing key is `(job kind, topic_id, report_date, delivery_channel)`. A queued or running key cannot be inserted twice.
 - A successful research job for the same topic and report date opens the existing report instead of silently generating a duplicate. An explicit `Run Again` confirmation may create a new attempt only from the full diagnostics view.
@@ -176,15 +463,20 @@ Every row in the table above is represented by localization keys rather than sto
 
 ### 1.5 Visual contract
 
+- Revised Task 3A is the current visual acceptance checkpoint: an anchored compact/expanded popover, live public stages, restricted report reading, and settings/topic presentation. Implementation is reported; native visual acceptance remains IN PROGRESS, with AX action inspection blocked. Use isolated offline fixtures for development checks. Stop with an uncommitted development App, screenshots, and resource evidence for user review; cover upload, delivery actions, notifications, and DMG remain Task 3B.
 - Use the approved Editorial Radar plus Operational Timeline direction: an editorial report surface, not an operations dashboard and not a wall of cards.
-- Compact window: `440 x 580 pt`, with a minimum of `400 x 500 pt`. Full window: default `1040 x 760 pt`, minimum `820 x 620 pt`.
-- The same `NSWindow` animates between compact and full frames; it is never duplicated.
-- Use system typography. Suggested hierarchy: title `22 pt semibold`, report headline `17 pt semibold`, section heading `15 pt semibold`, body `13 pt regular`, metadata `11 pt regular`.
+- Use one native `NSPopover`, anchored to the status item: compact `400 x 480 pt`, expanded `900 x 660 pt`, each clamped to the current screen's available frame. Keep the sidebar toggle fixed leading and expand/collapse trailing.
+- Outside click and Escape dismiss the popover without losing form drafts, navigation, or topic/report selection and without cancelling background work. Reopening and mode changes reuse that state.
+- Use proportional system UI typography at `13-14 pt`, headers at `17-20 pt`, and auxiliary labels at least `12 pt`. Use system monospaced fonts only for technical information, through public APIs; no external fonts.
+- Reference Tuneful, Dato, and OpenUsage for the accepted native menu-bar interaction and visual direction, without copying unrelated features.
 - Keep article text at a maximum readable width of `720 pt`, left aligned. Letter spacing stays at the system default.
 - Use restrained teal for the active research state, system blue for links/actions, green only for completed delivery, amber only for attention, and red only for failure.
 - Use native controls and SF Symbols. The foundation status item uses `dot.radiowaves.left.and.right`; later task buttons use familiar symbols such as `play.fill`, `pause.fill`, `stop.fill`, `arrow.clockwise`, `envelope`, and `square.and.arrow.up`.
 - Avoid decorative gradients, floating color blobs, nested cards, oversized hero text, and opaque custom backgrounds over native sidebars/toolbars.
 - macOS 26 uses system Liquid Glass only through native APIs; there is no compatibility implementation for older systems.
+- Native sidebar, toolbar, and action controls own the glass treatment. Reading and long forms use stable content backgrounds; do not apply glass to every row or lower whole-window opacity. There is no custom transparency slider, blur renderer, shader, or continuous effect timer.
+- Show provider names rather than Keychain account identifiers, an explicit verifier picker, and an optional MB/GB cache limit. Topic queries/concepts/exclusions are editable in advanced disclosures with a review summary; invalid fields reveal their disclosure without discarding input.
+- Credential indicators are metadata-only; appearance must not read secrets, prompt, or run checks. Model/search and delivery checks are separate explicit actions. Codex autodetection requires candidate confirmation and an explicit run-configuration check, not an inferred ready state.
 - Support Light, Dark, Increase Contrast, Reduce Transparency, Reduce Motion, keyboard navigation, VoiceOver labels, and Dynamic Type-equivalent system text sizing.
 
 ---
@@ -386,6 +678,7 @@ This section describes the final schema frozen in Task 2. Task 1 implements only
   "schema_version": 1,
   "project_name": "ResearchRadar",
   "ui_language": "system",
+  "ui_appearance": "system",
   "workspace_root": "/Users/example/Library/Application Support/ResearchRadar/workspace",
   "providers": [
     {
@@ -406,12 +699,12 @@ This section describes the final schema frozen in Task 2. Task 1 implements only
       "command_path": "/absolute/path/to/codex",
       "timeout_seconds": 900,
       "thinking": null,
-      "reasoning_effort": "high"
+      "reasoning_effort": "xhigh"
     }
   ],
   "routes": [
     {"task": "deep_reading", "provider_id": "deepseek", "model": "deepseek-flash"},
-    {"task": "verifier", "provider_id": "codex", "model": "gpt-5.6-terra"}
+    {"task": "verifier", "provider_id": "codex", "model": "gpt-5.6-luna"}
   ],
   "topics": [],
   "discovery": {
@@ -436,7 +729,10 @@ This section describes the final schema frozen in Task 2. Task 1 implements only
 
 The onboarding preset also creates routes for `source_gist`, `anchor_repair`, `report_localization`, and `topic_bootstrap` using the current defaults. The app UI exposes the default DeepSeek plus Codex path and the explicit DeepSeek-verifier fallback; arbitrary custom provider editing remains a CLI feature in v1.
 
-`ui_language` is consumed only by the Swift app. `configuration.py` removes it before converting the remaining research settings into `AppConfig`; it cannot alter topic language or a model prompt. Missing `ui_language` in a pre-release fixture defaults to `system`, but persisted v1 App configuration always writes the field explicitly.
+`ui_language` and `ui_appearance` are consumed only by the Swift app. `configuration.py`
+validates them but does not forward them into `AppConfig`; neither can alter topic language
+or a model prompt. `ui_language` remains required. Existing configurations without
+`ui_appearance` use `system`; new saves write it explicitly.
 
 `storage.model_cache_limit_bytes` is App-owned policy. Swift copies it into `RunDailyPayloadV1`; the Python bridge passes it to the existing cache wrapper without adding it to public CLI configuration. The value defaults to null, is never inferred from disk size, and does not apply to reports, source history, delivery artifacts, configuration, or job state.
 
@@ -939,6 +1235,7 @@ struct AppConfigurationV1: Codable, Equatable, Sendable {
     let schemaVersion: Int
     var projectName: String
     var uiLanguage: AppLanguagePreference
+    var uiAppearance: AppAppearancePreference
     var workspaceRoot: String
     var providers: [ProviderRecordV1]
     var routes: [RouteRecordV1]
@@ -963,6 +1260,7 @@ enum OnboardingStep: String, Codable, Sendable {
 struct AppRuntimeStateV1: Codable, Equatable, Sendable {
     let schemaVersion: Int
     var onboardingStep: OnboardingStep
+    var onboardingInProgress: Bool?
     var windowMode: WindowMode
     var selectedTopicID: String?
     var schedulesPaused: Bool
@@ -2072,7 +2370,18 @@ final class AppStore {
 
 The topic review form exposes display name, generated research focus, search queries, paper queries, included concepts, exclusions, and an independent `中文 / English` report-language selector. A new draft starts from `AppLanguageResolver.defaultReportLanguage(for: localizationStore.resolvedLanguage)`, but the user may change it before approval. Approve writes the typed topic into `app-config.json`; Back preserves the generated draft; Cancel discards it. Changing UI language after approval does not mutate the topic. The form never writes or displays YAML.
 
-Provider preflight first checks secret presence locally. `Test Connections` explicitly runs `preflight` with `live_probe=true`. Enabled WeChat requires app id, app secret, and an existing thumb media id. The v1 form explains where that value comes from and accepts it as a setup prerequisite; uploading a new permanent thumbnail is outside the App v1. Enabled Email requires TLS/STARTTLS settings and its named password.
+The revised four-step setup uses the existing runtime snapshot only for navigation and an
+optional `onboardingInProgress` marker. Missing markers in old user state do not force setup
+when topics already exist. Configuration remains authoritative for saved providers/topics;
+the marker keeps the final review page open after saving the first topic. No API-key draft
+is serialized. Completing setup without running is allowed; starting research is explicit.
+
+Provider preflight first checks secret presence locally. `Test Connections` explicitly runs
+`preflight` with `live_probe=true`, including model routes and a minimal Tavily request. It
+does not test delivery. WeChat and Email setup is optional and deferred until after the local
+report path is configured. Enabled WeChat requires app id, app secret, and an existing thumb
+media id; cover upload remains Task 3B. Enabled Email requires TLS/STARTTLS settings and its
+named password.
 
 Run: `swift test --package-path apps/macos/ResearchRadar --filter OnboardingTests`
 
@@ -2188,6 +2497,8 @@ Before the commit, compare `dist/macos-resource-report.json` with Task 1. The ga
 
 ### Task 3: Add Localized Editorial Experience
 
+**Current checkpoint (revised Task 3A):** The main agent reports the revised implementation and passing Python/Swift and staged frozen-preflight checks; see Section 0 for the evidence and fixed review findings. Native visual acceptance remains IN PROGRESS despite the captured layouts and confirmed compositor backdrop blur: full AX controls remain unavailable and reader cycles are `0/20` and NOT accepted. Separate dismissed-idle sampling is complete only for the isolated offline root, not production startup or research. Manual acceptance and full-reader resource evidence remain pending. Retain delivery configuration and status, with separate explicit model/search versus delivery check entry points; this does not authorize live checks or sends during development. Do not implement Steps 5-8 or 10 as part of this checkpoint. Keep changes uncommitted until user visual approval. This checkpoint supersedes the full Task 3 commit instruction below.
+
 **Deliverable:** The App presents the approved immediately switchable English/Simplified Chinese compact/full experience, reads real local reports safely, exposes channel-specific recovery and localized diagnostics, ships as a macOS 26 arm64 local beta DMG, and passes final local resource/lifecycle gates without changing any existing report renderer.
 
 **Files:**
@@ -2232,7 +2543,7 @@ Before the commit, compare `dist/macos-resource-report.json` with Task 1. The ga
 - Modify: `docs/todo.md`
 
 **Interfaces:**
-- Consumes: Task 2's `AppStore`, queue, schedule coordinator, supervisor, report index, typed App/Report language settings, status item, and singleton window.
+- Consumes: Task 2's `AppStore`, queue, schedule coordinator, supervisor, report index, typed App/Report language settings, and status item. Revised Task 3A replaces the earlier singleton-window presentation with the anchored popover while retaining application services and state.
 - Produces: the complete localized reader-facing app, independent WeChat/Email recovery, local beta bundle/scripts, final macOS 26 arm64 resource/lifecycle report, and user documentation.
 
 ```swift
@@ -2249,7 +2560,7 @@ protocol NotificationScheduling: Sendable {
 }
 ```
 
-`ReportReaderPolicy` is a pure URL decision object used by the `WKNavigationDelegate`; `NotificationService` is the only type that talks to `UNUserNotificationCenter`. Neither type reads raw engine logs or article text.
+`ReportReaderPolicy` validates navigation and pins the configured workspace directory for descriptor-relative resource reads. The read-only scheme handler serves the existing report bytes; neither reads raw engine logs. `NotificationService`, deferred to Task 3B, is the only type that talks to `UNUserNotificationCenter`.
 
 - [ ] **Step 1: Write full localization and presentation-state tests before building views**
 
@@ -2295,38 +2606,52 @@ The timeline has stable row heights and does not resize when a step changes stat
 
 Every label/action/status comes from `LocalizationStore`; paper titles and report summaries remain in their report language. Use `withAnimation` only when Reduce Motion is off. Use native macOS 26 system materials and Liquid Glass without adding an older-system visual compatibility path.
 
+Host this content in the anchored `400 x 480 pt` compact popover, expanding to `900 x 660 pt`
+within the current screen's available frame. Do not recreate the store or discard drafts on
+mode change, outside click, or Escape. The leading sidebar and trailing expand/collapse
+controls must remain accessible independently of sidebar visibility. Apply the typography
+and no-opacity-hack rules in Section 1.5.
+
 Run: `swift test --package-path apps/macos/ResearchRadar --filter AppStorePresentationTests`
 
 Expected: PASS.
 
 - [ ] **Step 3: Implement full workspace without a card wall**
 
-Use a `NavigationSplitView` with a light native topic/history sidebar and one open detail surface. The detail toolbar contains compact/full toggle, Run Now, Cancel when running, Open in Browser, and a menu for topic settings and diagnostics.
+Use native Today, Topics, Reports, Settings, and Diagnostics navigation and one open detail surface inside the expanded popover. The sidebar toggle stays leading and expand/collapse stays trailing; Today owns Run Now and Cancel. Task 3A reads reports inside the same popover and does not add an Open in Browser or delivery-action toolbar. Mode changes, outside click, and Escape retain unsaved topic/settings input; they do not trigger discard confirmation merely to hide the surface. Explicit discard remains a separate action.
 
-The report pane is dominant. Settings and diagnostics replace the detail pane; they do not open new persistent windows. Sidebar rows contain one icon, one title, and at most one secondary status line. Settings exposes `Follow System / 简体中文 / English`; selecting an option persists `AppConfigurationV1.uiLanguage` and updates the existing store immediately without recreating the process supervisor, queue, window, selected report, or topic records.
+The report pane is dominant. Settings and diagnostics replace the detail pane; they do not open new persistent windows. Sidebar rows contain one icon, one title, and at most one secondary status line. Settings exposes `Follow System / 简体中文 / English`; selecting an option persists `AppConfigurationV1.uiLanguage` and updates the existing store immediately without recreating the process supervisor, queue, popover state, selected report, or topic records.
+
+Opening settings only displays credential presence metadata; it must not fetch secret values,
+trigger a Keychain prompt, or start a provider/Codex process. Model/search checks and delivery
+checks have distinct explicit actions and results. Codex autodetection shows a candidate for
+confirmation and offers an explicit run-configuration check. Discovery, saved configuration,
+credential presence, and successful live execution are separate states, not interchangeable
+readiness claims.
 
 Settings requests `StorageUsageService.snapshot()` only when the storage section becomes visible or the user presses Refresh. It displays model cache, reports, retained job diagnostics, and total App data separately. The model-cache limit is disabled by default; the user may enable it and enter any positive value through a localized size field. Clear Model Cache requires confirmation, runs only through `StorageUsageService`, refreshes the snapshot afterward, and states that reports and source history are unaffected.
 
-Verify at `820 x 620`, `1040 x 760`, and `1440 x 900 pt` with long English paper titles and Chinese topic names. Text must wrap rather than overlap controls.
+Verify compact `400 x 480 pt`, expanded `900 x 660 pt`, and screen-clamped variants with long English paper titles and Chinese topic names. Verify both leading/trailing controls through real native action labels and clicks. Text must wrap rather than overlap controls; auxiliary labels must remain at least `12 pt`.
 
 - [ ] **Step 4: Implement a restricted local report reader**
 
-`ReportReaderView` wraps `WKWebView` through `NSViewRepresentable` and calls:
+`ReportReaderView` wraps `WKWebView` through `NSViewRepresentable`. Task 3A uses a private `radar-report://run/` scheme instead of granting WebKit file-directory access:
 
 ```swift
-webView.loadFileURL(reportURL, allowingReadAccessTo: runDirectoryURL)
+webView.load(URLRequest(url: validatedPolicy.entryURL))
 ```
 
 `ReportReaderPolicy` rules:
 
-- allow the initial `file:` URL only when it resolves under the selected run directory;
+- require the independently configured workspace root; do not treat a report's run path as its own trust boundary;
+- map the initial HTML and relative resources to the selected run through a read-only scheme handler; validate each access from a pinned workspace descriptor with no-symlink traversal, without changing source HTML bytes;
 - disable content JavaScript through navigation preferences;
 - allow same-run image and stylesheet files;
-- cancel `http` and `https` navigation and open it with `NSWorkspace.shared.open`;
+- cancel `http` and `https` navigation and open only explicit user-activated safe links with `NSWorkspace.shared.open`; block automatic network subresources;
 - reject `javascript:`, `data:`, `ftp:`, paths outside the run, and symlink escapes;
 - do not persist website data or grant camera, microphone, location, or download access.
 
-The reader is demand-loaded. Compact mode and any detail surface other than a selected report hold no `WKWebView`. One visible report reuses one WebView while compact/full presentation changes. Switching away from the report, hiding or closing the window, or receiving memory pressure clears the navigation delegate, stops loading, removes the view, and releases the App's strong reference. Use `WKWebsiteDataStore.nonPersistent()` and no shared persistent process pool. WebKit may retire its system content process asynchronously; the App must not keep the WebView alive to force instant reopening.
+The reader is demand-loaded. Compact mode and any detail surface other than a selected report hold no `WKWebView`. One visible report uses one WebView. Entering compact mode, switching away from the report, hiding or closing the window, or receiving memory pressure clears the navigation delegate, stops loading, removes the view, and releases the App's strong reference. Keep the selected report when releasing the WebView, and reload on explicit reopening. Use `WKWebsiteDataStore.nonPersistent()` and no shared persistent process pool. Block automatic network subresources; only explicit safe external-link actions open the system browser. WebKit may retire its system content process asynchronously; the App must not keep the WebView alive to force instant reopening.
 
 Add a real fixture report containing a local PNG, table-of-contents anchors, the existing static formula markup, and an external paper link. The WebView smoke must render the image, jump to the anchor, preserve the formula text, and hand the HTTP(S) link to `NSWorkspace` while content JavaScript remains disabled. JavaScript charts, video, and interactive web content are intentionally unsupported; Open in Browser is the future escape hatch for such content.
 
@@ -2432,9 +2757,14 @@ Acceptance checklist:
 
 - menu icon is crisp at standard and Retina scales;
 - hover status is one line and updates with the job;
-- left-click always reuses the same window;
-- compact/full transition preserves selection and does not jump content;
-- no text truncates controls at the minimum window size;
+- left-click reopens the same anchored popover with retained drafts, navigation, and selection;
+- compact/expanded transitions and screen clamping keep content and controls reachable;
+- outside click and Escape dismiss without discarding forms or cancelling background jobs;
+- leading sidebar and trailing expand/collapse controls work through actual native actions;
+- no text truncates controls in either target size or screen-clamped variants;
+- typography uses public system APIs, proportional UI `13-14 pt`, headers `17-20 pt`, auxiliary labels at least `12 pt`, and monospaced technical information only;
+- opening/reopening settings causes no secret-value reads, credential prompts, live checks, or Codex execution;
+- explicit model/search checks, delivery checks, and Codex confirmation/configuration checks report their own scope without implying unrelated readiness;
 - no nested-card wall or decorative glass appears;
 - timeline state is obvious without relying only on color;
 - keyboard reaches every action in logical order;
@@ -2447,7 +2777,7 @@ Save approved screenshots under `docs/assets/macos-app/` only after checking tha
 
 - [ ] **Step 10: Add local beta signing and DMG packaging**
 
-`script/package_macos_beta.sh` stages the app, signs nested code deepest-first with ad-hoc identity `-`, signs the outer app last with hardened-runtime option disabled for the local-only beta, then runs:
+`script/package_macos_beta.sh` stages the app and reuses `sign_macos_bundle.py` identity selection: explicit CLI identity, environment, gitignored local configuration, then ad-hoc only when no identity was selected. It must not override an opted-in certificate with `-`. Sign nested code deepest-first and the outer app last, with hardened-runtime disabled for the local-only beta, then run:
 
 ```bash
 codesign --verify --deep --strict --verbose=2 dist/ResearchRadar.app
@@ -2456,6 +2786,8 @@ hdiutil create -volname ResearchRadar -srcfolder dist/ResearchRadar.app \
 ```
 
 Do not use `codesign --deep` to perform signing. There is currently no Developer ID identity, so the script must label the artifact local beta and must not claim Gatekeeper/notarization readiness.
+
+A user-approved local self-signed identity is now available for development. It stabilizes the designated requirement but did not preserve noninteractive Keychain access across changed builds in the two-version acceptance test. Keep repeated authorization as an unresolved limitation; never relax credential ACLs or claim that local signing solves it.
 
 Public distribution is a separate release gate: obtain a Developer ID Application identity, enable hardened runtime, sign every nested binary and library deepest-first, sign the app, submit with `notarytool`, staple with `stapler`, and verify Gatekeeper. Do not add blanket JIT or unsigned-memory entitlements without a reproduced runtime failure and a security review.
 
@@ -2584,7 +2916,7 @@ Do not push until the user has reviewed the local beta UI and the real delivery 
 - Logs and diagnostics use allowlists plus existing redaction and size bounds.
 - Successful jobs retain only terminal metadata; each topic/job kind keeps at most the newest bounded failure diagnostic.
 - Raw engine messages and tracebacks never bypass `UserFacingErrorCatalog` into normal UI or notifications.
-- WKWebView is created only for a visible report, uses a non-persistent data store, disables JavaScript, grants only run-directory read access, delegates external links to the system browser, and is released when the report is no longer visible or memory pressure occurs.
+- WKWebView is created only for a visible report, uses a non-persistent data store, disables JavaScript, reads only validated run resources through the private scheme, delegates explicit safe external links to the system browser, and is released when the report is no longer visible or memory pressure occurs.
 - The app does not use an embedded HTTP server.
 - The local beta is not App Sandbox enabled because it must spawn the bundled engine and optional Codex executable; this tradeoff is documented and command/path allowlists remain mandatory. Hardened Runtime is tracked separately and requires a repeated process-tree gate when enabled.
 - Start at Login is opt-in; explicit Quit leaves no hidden helper.
@@ -2607,7 +2939,7 @@ Do not push until the user has reviewed the local beta UI and the real delivery 
 | Menu-bar icon with hover status | Task 1, Step 6; Task 2 Phase 2B, Step 13 | foundation window tests plus visual QA |
 | App UI follows system or uses explicit Chinese/English | Task 1, Step 2; Task 3, Steps 1-3 and 6 | resolver, catalog, immediate-refresh, menu/notification tests |
 | UI language is independent from topic report language | Task 2, Steps 1 and 9; Task 3, Step 1 | persistence and onboarding tests |
-| One compact/full singleton window | Task 1, Step 6; Task 3, Steps 2-3 | singleton and presentation tests |
+| One anchored compact/expanded popover with retained state | Revised Task 3A contract; Task 3, Steps 2-3 | screen-clamping, outside/Escape, draft/selection retention, background-job continuity, and native-control tests; acceptance pending |
 | Editorial Radar plus timeline visual direction | Task 3, Steps 1-3 and 9 | deterministic states and design audit |
 | Natural-language topic onboarding with review | Task 2 Phase 2A command handlers; Phase 2B, Step 9 | bridge and onboarding tests |
 | Provider preflight and Codex fallback | Task 2 Phase 2A, Step 9; Phase 2B, Steps 7-9 | preflight/Keychain/onboarding tests |
@@ -2644,7 +2976,9 @@ The v1 beta is complete only when all of these are true:
 - A process-group cancellation leaves no engine/provider child.
 - An App crash during active work produces `parent_lost`, leaves no engine/provider descendant, and never starts an automatic retry or delivery.
 - System, Simplified Chinese, and English UI modes pass immediate-refresh tests without mutating any topic report language.
-- The five deterministic UI states pass Light/Dark/accessibility review at compact and minimum full sizes.
+- The five deterministic UI states pass Light/Dark/accessibility review in the anchored compact `400 x 480 pt` and expanded `900 x 660 pt` popover, including screen-clamped variants and the specified system typography.
+- Outside click, Escape, mode changes, and reopening retain form drafts and selection without interrupting background jobs; fixed leading/trailing controls pass native action checks.
+- Appearance uses credential presence metadata only, with no secret-value reads or prompts. Explicit model/search, delivery, and Codex confirmation/run-configuration checks have separately verified scopes.
 - A real report is readable in the restricted WebView and byte-equivalent WeChat HTML is preserved.
 - WeChat and Email can independently succeed/fail/retry without rerunning research.
 - Start at Login is explicit, and Quit leaves no schedule or engine running.
