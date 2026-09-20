@@ -30,10 +30,88 @@ private actor BootstrapRunner: EngineProcessRunning {
 }
 
 @MainActor @Suite struct AppStoreTests {
+    @Test(arguments: [false, true]) func sameDayEmptyReportDoesNotBlockRunNow(priorUseful: Bool) async throws {
+        let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        config.topics = [testTopic()]
+        let report = ReportRecordV1(topicID: "memory", reportDate: "2026-09-19", runDirectory: "/fake/empty", articleDraftPath: "/fake/empty/a", reportHTMLPath: "/fake/empty/h", title: "Empty", summary: "", sourceCount: 1, deepReadCount: 0, publishableClaimCount: 0, deliveries: [], createdAt: Date())
+        let useful = ReportRecordV1(topicID: "memory", reportDate: report.reportDate, runDirectory: "/fake/useful", articleDraftPath: "/fake/useful/a", reportHTMLPath: "/fake/useful/h", title: "Useful", summary: "", sourceCount: 2, deepReadCount: 1, publishableClaimCount: 1, deliveries: [], createdAt: Date(timeIntervalSince1970: 1))
+        let store = AppStore(configuration: config, reportSnapshot: .init(reports: priorUseful ? [report, useful] : [report]), runtime: .init(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
+        await store.enqueueRunNow(topicID: "memory", reportDate: report.reportDate)
+        #expect(store.jobs.count == 1)
+        #expect(store.jobs.first?.state == .pending)
+        #expect(store.reports.count == (priorUseful ? 2 : 1))
+    }
+
+    @Test func connectionResultIsInvalidatedByEffortProviderAndPathChanges() async throws {
+        let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
+        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root,
+            engineURL: URL(fileURLWithPath: "/fake/engine"), runner: SettingsProbeRunner())
+        await store.testConnections()
+        #expect(store.preflight?.ready == true)
+        try store.setCodexReasoningEffort("high")
+        #expect(store.preflight == nil)
+        await store.testConnections()
+        #expect(store.preflight != nil)
+        try store.useDeepSeekVerifier()
+        #expect(store.preflight == nil)
+        try store.useCodexVerifier()
+        await store.testConnections()
+        #expect(store.preflight != nil)
+        try store.setCodexExecutable("/usr/bin/true")
+        #expect(store.preflight == nil)
+    }
+    @Test func codexSelectionAndEffortSurviveReloadAndFailedSave() throws {
+        let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
+        let original = AppConfigurationDefaults.useDeepSeekVerifier(AppConfigurationDefaults.make(
+            workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true")))
+        let store = AppStore(configuration: original, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root)
+        try store.useCodexVerifier()
+        try store.setCodexReasoningEffort("high")
+        let saved = try AtomicJSONStore(root: root).read(AppConfigurationV1.self, from: "config/app-config.json")
+        #expect(saved == store.configuration)
+        #expect(saved.routes.first(where: { $0.task == "verifier" })?.model == "gpt-5.6-luna")
+        #expect(saved.providers.first(where: { $0.id == "codex" })?.reasoningEffort == "high")
+        #expect(throws: (any Error).self) { try store.setCodexReasoningEffort("invalid") }
+        #expect(store.configuration == saved)
+        try FileManager.default.moveItem(at: root.appending(path: "config"), to: root.appending(path: "saved-config"))
+        try Data("blocked".utf8).write(to: root.appending(path: "config"))
+        #expect(throws: (any Error).self) { try store.setCodexReasoningEffort("xhigh") }
+        #expect(store.configuration == saved)
+    }
+
+    @Test func scheduleRecoveryValidatesDiskAndCannotUndoQuit() async throws {
+        let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
+        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        let disk = AtomicJSONStore(root: root)
+        try disk.write(config, to: "config/app-config.json")
+        try disk.write(ScheduleSnapshotV1(), to: "state/schedules.json")
+        try disk.write(JobQueueSnapshotV1(), to: "state/queue.json")
+        try disk.write(ReportIndexV1(), to: "state/report-index.json")
+        try disk.write(AppRuntimeStateV1(updatedAt: Date()), to: "state/app-state.json")
+        let runtime = try disk.read(AppRuntimeStateV1.self, from: "state/app-state.json")
+        let store = AppStore(configuration: config, runtime: runtime, appSupportRoot: root, secretStore: AdmissionSecrets())
+        await store.stopScheduling()
+        #expect(store.scheduleFaulted)
+        await store.recoverScheduling()
+        #expect(!store.scheduleFaulted)
+        await store.stopScheduling()
+        let corrupt = Data("broken".utf8)
+        try corrupt.write(to: root.appending(path: "state/queue.json"))
+        await store.recoverScheduling()
+        #expect(store.scheduleFaulted)
+        #expect(store.lastErrorCode == "schedule_recovery_failed")
+        #expect(try Data(contentsOf: root.appending(path: "state/queue.json")) == corrupt)
+        await store.shutdown()
+        await store.recoverScheduling()
+        #expect(store.isShuttingDown)
+        #expect(store.scheduleFaulted)
+    }
     @Test(arguments: ["delivery_failed", "cancelled"])
     func terminalDeliveryFailureDoesNotBlockIndependentEmail(code: String) async throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
         let run = root.appending(path: "workspace/run")
         let report = ReportRecordV1(topicID: "memory", reportDate: "2026-09-19", runDirectory: run.path,
@@ -49,7 +127,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         let runner = IndependentDeliveryRunner(firstErrorCode: code)
         let store = AppStore(configuration: config, queueSnapshot: JobQueueSnapshotV1(jobs: jobs),
             reportSnapshot: ReportIndexV1(reports: [report]), runtime: AppRuntimeStateV1(updatedAt: Date()),
-            appSupportRoot: root, engineURL: URL(fileURLWithPath: "/fake/engine"), runner: runner)
+            appSupportRoot: root, engineURL: URL(fileURLWithPath: "/fake/engine"), runner: runner, secretStore: AdmissionSecrets())
         await store.runNow(topicID: "memory", reportDate: "2026-09-19")
         #expect(await runner.channels == [.wechat, .email])
         #expect(store.jobs[0].state == .deliveryUnknown)
@@ -60,7 +138,7 @@ private actor BootstrapRunner: EngineProcessRunning {
 
     @Test func keychainFailureIsNotReportedAsMissing() throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: DeniedSecrets())
         store.refreshSecretPresence()
         #expect(store.secretPresence["deepseek.api_key"] == nil)
@@ -69,10 +147,10 @@ private actor BootstrapRunner: EngineProcessRunning {
 
     @Test func commandKeepsQueuedJobPendingAndShutdownCancelsOnlyOnce() async throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
         let runner = SuspendedAppRunner()
-        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, engineURL: URL(fileURLWithPath: "/fake/engine"), runner: runner)
+        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, engineURL: URL(fileURLWithPath: "/fake/engine"), runner: runner, secretStore: AdmissionSecrets())
         let command = Task { await store.testConnections() }
         await runner.waitForStart()
         await store.runNow(topicID: "memory", reportDate: "2026-09-19")
@@ -90,9 +168,9 @@ private actor BootstrapRunner: EngineProcessRunning {
 
     @Test func failedConfigurationAndRuntimeWritesLeaveMemoryUntouched() throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         let runtime = AppRuntimeStateV1(updatedAt: Date())
-        let store = AppStore(configuration: config, runtime: runtime, appSupportRoot: root)
+        let store = AppStore(configuration: config, runtime: runtime, appSupportRoot: root, secretStore: AdmissionSecrets())
         try Data("blocked".utf8).write(to: root.appending(path: "config"))
         #expect(throws: (any Error).self) { try store.setUILanguage(.english) }
         #expect(store.configuration == config)
@@ -101,22 +179,24 @@ private actor BootstrapRunner: EngineProcessRunning {
         #expect(store.runtime == runtime)
     }
 
-    @Test func approvalDoesNotRequireRuntimeFileWrite() throws {
+    @Test func existingUserTopicApprovalDoesNotRequireRuntimeFileWrite() throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
-        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root)
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        config.topics = [testTopic()]
+        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
         try Data("blocked".utf8).write(to: root.appending(path: "state"))
         try store.approveTopic(TopicDraftV1(id: "one", displayName: "One", researchFocus: "Focus", queries: ["one"], paperQueries: ["paper"], reportLanguage: .english))
-        #expect(store.selectedTopic?.id == "one")
-        #expect(try AtomicJSONStore(root: root).read(AppConfigurationV1.self, from: "config/app-config.json").topics.count == 1)
+        #expect(store.configuration.topics.contains { $0.id == "one" })
+        #expect(!store.requiresOnboarding)
+        #expect(try AtomicJSONStore(root: root).read(AppConfigurationV1.self, from: "config/app-config.json").topics.count == 2)
     }
 
     @Test func failedScheduleWriteLeavesPreviousScheduleInMemory() throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
         let original = DailyScheduleV1(topicID: "memory", hour: 9, minute: 0)
-        let store = AppStore(configuration: config, scheduleSnapshot: ScheduleSnapshotV1(schedules: [original]), runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root)
+        let store = AppStore(configuration: config, scheduleSnapshot: ScheduleSnapshotV1(schedules: [original]), runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
         try Data("blocked".utf8).write(to: root.appending(path: "state"))
         #expect(throws: (any Error).self) { try store.setDailySchedule(topicID: "memory", hour: 11, minute: 0, enabled: false, deliveryChannels: []) }
         #expect(store.schedules == [original])
@@ -124,9 +204,9 @@ private actor BootstrapRunner: EngineProcessRunning {
 
     @Test func pendingJobsBlockBehaviorButAllowUILanguage() async throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
-        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root)
+        let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
         await store.enqueueRunNow(topicID: "memory", reportDate: "2026-09-19")
         #expect(store.behaviorChangesBlocked)
         #expect(throws: AppStoreError.busy) { try store.saveSecret(name: "test", value: "fake") }
@@ -141,10 +221,10 @@ private actor BootstrapRunner: EngineProcessRunning {
 
     @Test func runNowSelectsExistingReportAndRunAgainRequiresConfirmation() async throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil)
+        var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
         let report = ReportRecordV1(topicID: "memory", reportDate: "2026-09-19", runDirectory: "/fake/run", articleDraftPath: "/fake/run/a", reportHTMLPath: "/fake/run/h", title: "Report", summary: "", sourceCount: 1, deepReadCount: 1, publishableClaimCount: 1, deliveries: [], createdAt: Date())
-        let store = AppStore(configuration: config, reportSnapshot: ReportIndexV1(reports: [report]), runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root)
+        let store = AppStore(configuration: config, reportSnapshot: ReportIndexV1(reports: [report]), runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
         await store.enqueueRunNow(topicID: "memory", reportDate: "2026-09-19")
         #expect(store.selectedReportID == report.id)
         #expect(store.jobs.isEmpty)
@@ -196,10 +276,10 @@ private actor BootstrapRunner: EngineProcessRunning {
     @Test func approvingTopicPersistsTypedProfileWithoutChangingUILanguage() throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         let config = AppConfigurationDefaults.make(
-            workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil
+            workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
         let runtime = AppRuntimeStateV1(updatedAt: Date(timeIntervalSince1970: 1))
-        let store = AppStore(configuration: config, runtime: runtime, appSupportRoot: root)
+        let store = AppStore(configuration: config, runtime: runtime, appSupportRoot: root, secretStore: AdmissionSecrets())
         let draft = TopicDraftV1(
             id: "llm-inference", displayName: "LLM Inference",
             researchFocus: "Serving systems", queries: ["LLM inference"],
@@ -219,12 +299,12 @@ private actor BootstrapRunner: EngineProcessRunning {
     @Test func bootstrapUsesTypedBridgeAndRequiresApprovalBeforePersistingTopic() async throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         let config = AppConfigurationDefaults.make(
-            workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil
+            workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
         let store = AppStore(
             configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()),
             appSupportRoot: root, engineURL: URL(fileURLWithPath: "/fake/engine"),
-            runner: BootstrapRunner()
+            runner: BootstrapRunner(), secretStore: AdmissionSecrets()
         )
 
         await store.bootstrapTopic(description: "robot foundation models", language: .english)
@@ -238,7 +318,7 @@ private actor BootstrapRunner: EngineProcessRunning {
     @Test func legacyLaunchdConflictBlocksAppSchedule() throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         var config = AppConfigurationDefaults.make(
-            workspaceRoot: root.appending(path: "workspace"), codexExecutable: nil
+            workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
         config.topics = [TopicRecordV1(
             id: "memory", displayName: "Memory", researchFocus: "Memory",
@@ -248,7 +328,7 @@ private actor BootstrapRunner: EngineProcessRunning {
             configuration: config,
             runtime: AppRuntimeStateV1(updatedAt: Date()),
             appSupportRoot: root,
-            legacyScheduleTopics: ["memory"]
+            secretStore: AdmissionSecrets(), legacyScheduleTopics: ["memory"]
         )
 
         #expect(throws: AppStoreError.legacyScheduleConflict("memory")) {
@@ -259,6 +339,20 @@ private actor BootstrapRunner: EngineProcessRunning {
         }
         #expect(store.schedules.isEmpty)
     }
+}
+
+private actor SettingsProbeRunner: EngineProcessRunning {
+    func run(executable: URL, arguments: [String], eventsURL: URL) async throws -> EngineProcessOutcome {
+        let input = try #require(arguments.firstIndex(of: "--request"))
+        let output = try #require(arguments.firstIndex(of: "--result"))
+        let request = try EngineProtocolCodec.decodeRequest(Data(contentsOf: URL(fileURLWithPath: arguments[input + 1])))
+        let summary = try JSONDecoder().decode(PreflightSummaryV1.self, from: Data(#"{"ready":true,"checks":[]}"#.utf8))
+        let result = EngineResultV1(requestID: request.requestID, command: .preflight, status: .succeeded,
+            completedAt: Date(), preflight: summary)
+        try EngineProtocolCodec.encode(result).write(to: URL(fileURLWithPath: arguments[output + 1]))
+        return EngineProcessOutcome(exitCode: 0, startedProcessGroup: nil, standardOutput: Data(), standardError: Data())
+    }
+    func cancel() async {}
 }
 
 private struct DeniedSecrets: SecretStoring {

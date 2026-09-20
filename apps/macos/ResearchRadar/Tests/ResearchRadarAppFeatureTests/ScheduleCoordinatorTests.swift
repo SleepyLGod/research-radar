@@ -28,6 +28,22 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
 }
 
 @Suite struct ScheduleCoordinatorTests {
+    @Test func validatedRecoveryArmsAnActiveCoordinatorThatNeverStarted() async throws {
+        let root = try scheduleRoot(); defer { try? trashScheduleRoot(root) }
+        let queue = JobQueue(store: AtomicJSONStore(root: root), jobsRoot: root.appending(path: "jobs"))
+        let timer = FakeTimerDriver()
+        let topic = TopicRecordV1(id: "memory", displayName: "Memory", researchFocus: "Memory",
+            queries: ["memory"], paperQueries: ["memory"], reportLanguage: .english)
+        let coordinator = ScheduleCoordinator(queue: queue, timer: timer, inputs: {
+            ScheduleInputs(schedules: [DailyScheduleV1(topicID: "memory", hour: 9, minute: 0)],
+                topics: [topic], reports: [], paused: false)
+        })
+        try await coordinator.recover()
+        #expect(await timer.fireAt != nil)
+        await coordinator.stop()
+        try await coordinator.recover()
+        #expect(await timer.fireAt == nil)
+    }
     @Test func enqueuesOnlyTodaysDueJobAndArmsOneNextTimer() async throws {
         let root = try scheduleRoot(); defer { try? trashScheduleRoot(root) }
         let queue = JobQueue(store: AtomicJSONStore(root: root), jobsRoot: root.appending(path: "jobs"))
@@ -154,6 +170,15 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
         #expect(await recorder.count == 1)
         failure.shouldFail = false
         try await coordinator.refresh()
+        #expect(await timer.fireAt == nil)
+        failure.shouldFail = true
+        await #expect(throws: ScheduleTestError.self) { try await coordinator.recover() }
+        #expect(await timer.fireAt == nil)
+        failure.shouldFail = false
+        try await coordinator.recover()
+        #expect(await timer.fireAt != nil)
+        await coordinator.stop()
+        try await coordinator.recover()
         #expect(await timer.fireAt == nil)
     }
 

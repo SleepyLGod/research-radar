@@ -27,21 +27,18 @@ public struct AppBootstrapService: Sendable {
         let configuration: AppConfigurationV1
         if exists(configPath) {
             let saved = try store.read(AppConfigurationV1.self, from: configPath)
-            let updated = AppConfigurationDefaults.updatingLegacyFlashRoutes(saved)
+            let updated = AppConfigurationDefaults.updatingLegacyCodexDefaults(
+                AppConfigurationDefaults.updatingLegacyFlashRoutes(saved)
+            )
             if updated != saved {
                 try updated.validate()
                 try store.write(updated, to: configPath)
             }
             configuration = updated
         } else {
-            let codex = CodexExecutableResolver().resolve(
-                savedPath: nil,
-                environmentPath: ProcessInfo.processInfo.environment["PATH"],
-                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
-            )
             configuration = AppConfigurationDefaults.make(
                 workspaceRoot: appSupportRoot.appending(path: "workspace"),
-                codexExecutable: codex
+                codexExecutable: nil
             )
             try store.write(configuration, to: configPath)
         }

@@ -30,10 +30,25 @@ import ResearchRadarCore
 
         let first = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
         #expect(first.legacyScheduleTopics.isEmpty)
+        #expect(first.configuration.providers.first { $0.id == "codex" }?.commandPath == nil)
+        let configURL = root.appending(path: "config/app-config.json")
+        let initialBytes = try Data(contentsOf: configURL)
+        let initialConfig = try AtomicJSONStore(root: root).read(AppConfigurationV1.self, from: "config/app-config.json")
+        #expect(initialConfig.providers.first { $0.id == "codex" }?.commandPath == nil)
+        let candidate = root.appending(path: "codex")
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/usr/bin/true"), to: candidate)
+        #expect(first.detectedCodexExecutable(environmentPath: root.path, homeDirectory: root)?.path
+            == candidate.resolvingSymlinksInPath().path)
+        #expect(try Data(contentsOf: configURL) == initialBytes)
+        // Only an explicit selection persists the candidate; future launches retain it.
+        try first.setCodexExecutable(candidate.path)
         try first.setUILanguage(.simplifiedChinese)
+        let savedBytes = try Data(contentsOf: configURL)
         let second = try service.load(engineURL: URL(fileURLWithPath: "/fake/engine"))
 
         #expect(second.configuration.uiLanguage == .simplifiedChinese)
+        #expect(second.configuration.providers.first { $0.id == "codex" }?.commandPath == candidate.path)
+        #expect(try Data(contentsOf: configURL) == savedBytes)
         let attributes = try FileManager.default.attributesOfItem(
             atPath: root.appending(path: "config/app-config.json").path
         )

@@ -2,7 +2,20 @@ import Foundation
 
 /// Resolves a user-selected or locally installed Codex executable without invoking a shell.
 public struct CodexExecutableResolver: Sendable {
-    public init() {}
+    private let systemExecutableDirectories: [URL]
+    private let systemApplicationDirectories: [URL]
+
+    public init() {
+        self.init(
+            systemExecutableDirectories: [URL(fileURLWithPath: "/opt/homebrew/bin"), URL(fileURLWithPath: "/usr/local/bin")],
+            systemApplicationDirectories: [URL(fileURLWithPath: "/Applications")]
+        )
+    }
+
+    init(systemExecutableDirectories: [URL], systemApplicationDirectories: [URL]) {
+        self.systemExecutableDirectories = systemExecutableDirectories
+        self.systemApplicationDirectories = systemApplicationDirectories
+    }
 
     public func resolve(
         savedPath: String?,
@@ -20,11 +33,13 @@ public struct CodexExecutableResolver: Sendable {
                 URL(fileURLWithPath: String($0)).appending(path: "codex")
             }
         }
-        candidates += [
-            URL(fileURLWithPath: "/opt/homebrew/bin/codex"),
-            URL(fileURLWithPath: "/usr/local/bin/codex"),
-            homeDirectory.appending(path: ".local/bin/codex"),
-        ]
+        candidates += systemExecutableDirectories.map { $0.appending(path: "codex") }
+        candidates.append(homeDirectory.appending(path: ".local/bin/codex"))
+        for directory in [homeDirectory.appending(path: "Applications")] + systemApplicationDirectories {
+            for app in ["Codex.app", "ChatGPT.app"] {
+                candidates.append(directory.appending(path: "\(app)/Contents/Resources/codex"))
+            }
+        }
         return candidates.lazy.compactMap(validExecutable).first
     }
 

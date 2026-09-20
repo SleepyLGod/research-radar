@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 public enum KeychainStoreError: Error, Equatable, Sendable {
@@ -17,10 +18,11 @@ protocol KeychainAccessing: Sendable {
     func update(service: String, account: String, value: Data) -> OSStatus
     func add(service: String, account: String, value: Data) -> OSStatus
     func read(service: String, account: String) -> (OSStatus, Data?)
+    func presence(service: String, account: String) -> OSStatus
     func delete(service: String, account: String) -> OSStatus
 }
 
-private struct SystemKeychainAccess: KeychainAccessing {
+struct SystemKeychainAccess: KeychainAccessing {
     func update(service: String, account: String, value: Data) -> OSStatus {
         SecItemUpdate(
             baseQuery(service: service, account: account) as CFDictionary,
@@ -45,6 +47,20 @@ private struct SystemKeychainAccess: KeychainAccessing {
 
     func delete(service: String, account: String) -> OSStatus {
         SecItemDelete(baseQuery(service: service, account: account) as CFDictionary)
+    }
+
+    static func presenceQuery(service: String, account: String) -> [String: Any] {
+        var query = Self().baseQuery(service: service, account: account)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
+        return query
+    }
+
+    func presence(service: String, account: String) -> OSStatus {
+        SecItemCopyMatching(Self.presenceQuery(service: service, account: account) as CFDictionary, nil)
     }
 
     private func baseQuery(service: String, account: String) -> [String: Any] {
@@ -95,7 +111,11 @@ public struct KeychainStore: SecretStoring {
     }
 
     public func contains(account: String) throws -> Bool {
-        try read(account: account) != nil
+        guard !account.isEmpty else { throw KeychainStoreError.invalidAccount }
+        let status = access.presence(service: service, account: account)
+        if status == errSecItemNotFound { return false }
+        guard status == errSecSuccess else { throw KeychainStoreError.unexpectedStatus(status) }
+        return true
     }
 
     public func remove(account: String) throws {

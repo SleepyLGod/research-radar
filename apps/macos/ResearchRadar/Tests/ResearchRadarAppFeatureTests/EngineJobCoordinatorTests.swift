@@ -30,6 +30,94 @@ private actor FakeEngineRunner: EngineProcessRunning {
 }
 
 @Suite struct EngineJobCoordinatorTests {
+    @Test(arguments: [false, true], ResearchOutcomeV1.Status.allCases)
+    func outcomeControlsNormalAndRecoveryDelivery(recovery: Bool, status: ResearchOutcomeV1.Status) async throws {
+        let fixture = try ReliabilityFixture()
+        defer { try? trashCoordinatorRoot(fixture.root) }
+        let id = try enqueuedID(try await fixture.queue.enqueueResearch(
+            topicID: "memory", reportDate: "2026-08-30", trigger: .runNow, deliveryChannels: [.email]))
+        let outcome = ResearchOutcomeV1(status: status, reasons: [.fullTextUnavailable])
+        let result = fixture.result(id: id, outcome: outcome)
+        let runner = FakeEngineRunner(result: result)
+        let coordinator = fixture.coordinator(runner: runner)
+        if recovery {
+            let job = try #require(try await fixture.queue.nextPending())
+            let paths = try FoundationJobBuilder.create(request: researchRequest(id: id, root: fixture.root),
+                jobDirectory: URL(fileURLWithPath: job.jobDirectory))
+            try EngineProtocolCodec.encode(result).write(to: paths.result)
+            try await coordinator.reconcileAfterLaunch()
+        } else {
+            _ = try await coordinator.executeNext(configuration: testConfiguration(root: fixture.root))
+        }
+        let report = try #require(await fixture.reports.reports().first)
+        #expect(report.researchOutcome == outcome)
+        #expect(report.deliveries.count == (status == .ready ? 1 : 0))
+        #expect(await fixture.queue.jobs().filter { $0.kind == .delivery }.count == (status == .ready ? 1 : 0))
+        try await coordinator.reconcileAfterLaunch()
+        #expect(await fixture.queue.jobs().count == (status == .ready ? 2 : 1))
+        if status == .ready {
+            let delivery = try #require(await fixture.queue.jobs().first { $0.kind == .delivery })
+            let send = EngineResultV1(requestID: delivery.id, command: .retryDelivery, status: .succeeded,
+                completedAt: Date(), delivery: .init(runDirectory: fixture.run.path, channel: .email, status: .sent, completedAt: Date()))
+            _ = try await fixture.coordinator(runner: FakeEngineRunner(result: send))
+                .executeNext(configuration: testConfiguration(root: fixture.root))
+            #expect(await fixture.reports.reports().first?.deliveries.first?.state == .sent)
+        } else {
+            #expect(try await coordinator.executeNext(configuration: testConfiguration(root: fixture.root)) == nil)
+        }
+    }
+
+    @Test func legacyEmptyPendingRecordsDoNotAutopublishAndHistoricalJobsRemain() async throws {
+        let fixture = try ReliabilityFixture()
+        defer { try? trashCoordinatorRoot(fixture.root) }
+        try await fixture.reports.upsert(ReportRecordV1(topicID: "memory", reportDate: "2026-08-30",
+            runDirectory: fixture.run.path, articleDraftPath: fixture.run.appending(path: "article_draft.json").path,
+            reportHTMLPath: fixture.run.appending(path: "wechat.html").path, title: "Empty", summary: "",
+            sourceCount: 1, deepReadCount: 0, publishableClaimCount: 0,
+            deliveries: [.init(channel: .email, state: .pending)], createdAt: Date()))
+        let runner = FakeEngineRunner(result: nil)
+        let coordinator = fixture.coordinator(runner: runner)
+        try await coordinator.reconcileAfterLaunch()
+        #expect(await fixture.queue.jobs().isEmpty)
+        let id = try enqueuedID(try await fixture.queue.enqueueDelivery(runDirectory: fixture.run,
+            topicID: "memory", reportDate: "2026-08-30", channel: .email))
+        await #expect(throws: EngineJobCoordinatorError.requestMismatch) {
+            _ = try await coordinator.executeNext(configuration: testConfiguration(root: fixture.root))
+        }
+        #expect(await runner.lastArguments.isEmpty)
+        #expect(await fixture.queue.jobs().first?.id == id)
+        try await coordinator.reconcileAfterLaunch()
+        #expect(await fixture.queue.jobs().count == 1)
+    }
+
+    @Test(arguments: [false, true], [0, 1, 2, 3])
+    func emptyResearchNeverCreatesDelivery(recovery: Bool, counts: Int) async throws {
+        let fixture = try ReliabilityFixture()
+        defer { try? trashCoordinatorRoot(fixture.root) }
+        let id = try enqueuedID(try await fixture.queue.enqueueResearch(
+            topicID: "memory", reportDate: "2026-08-30", trigger: .runNow,
+            deliveryChannels: [.wechat, .email]
+        ))
+        let result = fixture.result(id: id, deepCount: counts == 1 ? 1 : 0, claimCount: counts == 2 ? 1 : 0,
+            outcome: counts == 3 ? .init(status: .ready, reasons: []) : nil)
+        let runner = FakeEngineRunner(result: result)
+        let coordinator = fixture.coordinator(runner: runner)
+        if recovery {
+            let job = try #require(try await fixture.queue.nextPending())
+            let paths = try FoundationJobBuilder.create(
+                request: researchRequest(id: id, root: fixture.root),
+                jobDirectory: URL(fileURLWithPath: job.jobDirectory))
+            try EngineProtocolCodec.encode(result).write(to: paths.result)
+            try await coordinator.reconcileAfterLaunch()
+        } else {
+            _ = try await coordinator.executeNext(configuration: testConfiguration(root: fixture.root))
+        }
+        #expect(await fixture.reports.reports().count == 1)
+        #expect(await fixture.reports.reports().first?.deliveries.isEmpty == true)
+        #expect(await fixture.queue.jobs().filter { $0.kind == .delivery }.isEmpty)
+        #expect(try await coordinator.executeNext(configuration: testConfiguration(root: fixture.root)) == nil)
+    }
+
     @Test func dailyExecutionPassesConfiguredPDFHelperAsAnArgument() async throws {
         let fixture = try ReliabilityFixture()
         defer { try? trashCoordinatorRoot(fixture.root) }
@@ -536,14 +624,16 @@ private struct ReliabilityFixture: Sendable {
         reports = ReportIndexStore(store: store)
     }
 
-    func result(id: UUID, command: EngineCommand = .runDaily) -> EngineResultV1 {
+    func result(id: UUID, command: EngineCommand = .runDaily, deepCount: Int = 1, claimCount: Int = 1,
+                outcome: ResearchOutcomeV1? = nil) -> EngineResultV1 {
         EngineResultV1(
             requestID: id, command: command, status: .succeeded, completedAt: Date(timeIntervalSince1970: 20),
             report: EngineReportSummaryV1(
                 runDirectory: run.path, reportDate: "2026-08-30",
                 articleDraftPath: run.appending(path: "article_draft.json").path,
                 reportHTMLPath: run.appending(path: "wechat.html").path,
-                title: "Daily", summary: "Summary", sourceCount: 1, deepReadCount: 1, publishableClaimCount: 1
+                title: "Daily", summary: "Summary", sourceCount: 1, deepReadCount: deepCount, publishableClaimCount: claimCount,
+                researchOutcome: outcome
             )
         )
     }

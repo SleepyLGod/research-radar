@@ -11,11 +11,11 @@ import Testing
             AnyView(Text("ResearchRadar"))
         }
 
-        let first = coordinator.window
+        let first = coordinator.popover
         coordinator.show()
         coordinator.show()
 
-        #expect(coordinator.window === first)
+        #expect(coordinator.popover === first)
     }
 
     @Test func foundationJobBuilderWritesPrivateExactRequest() throws {
@@ -23,7 +23,13 @@ import Testing
             path: "job-builder-\(UUID().uuidString)",
             directoryHint: .isDirectory
         )
-        defer { try? FileManager.default.removeItem(at: root) }
+        defer {
+            let cleanup = Process()
+            cleanup.executableURL = URL(fileURLWithPath: "/usr/bin/trash")
+            cleanup.arguments = [root.path]
+            do { try cleanup.run(); cleanup.waitUntilExit(); #expect(cleanup.terminationStatus == 0) }
+            catch { Issue.record(error) }
+        }
         let job = try FoundationJobBuilder.create(appSupportRoot: root)
 
         let attributes = try FileManager.default.attributesOfItem(atPath: job.jobDirectory.path)

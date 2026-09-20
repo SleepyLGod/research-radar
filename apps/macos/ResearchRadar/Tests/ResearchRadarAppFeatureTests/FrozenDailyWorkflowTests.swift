@@ -28,7 +28,7 @@ private struct FrozenSecrets: SecretStoring {
         try FileManager.default.createDirectory(
             at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]
         )
-        let config = AppConfigurationV1(
+        var config = AppConfigurationV1(
             uiLanguage: .english, workspaceRoot: root.appending(path: "workspace").path,
             topics: [TopicRecordV1(
                 id: "memory", displayName: "Agent Memory", researchFocus: "Agent memory evidence",
@@ -47,6 +47,10 @@ private struct FrozenSecrets: SecretStoring {
                 )
             )
         )
+        config.providers = [ProviderRecordV1(id: "offline", kind: "local", timeoutSeconds: 30)]
+        config.routes = ["source_gist", "deep_reading", "anchor_repair", "report_localization", "verifier"].map {
+            RouteRecordV1(task: $0, providerID: "offline", model: "local")
+        }
         let runtime = AppRuntimeStateV1(
             onboardingStep: .complete, selectedTopicID: "memory", updatedAt: Date()
         )

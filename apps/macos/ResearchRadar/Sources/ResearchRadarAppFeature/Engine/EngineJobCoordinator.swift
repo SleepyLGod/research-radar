@@ -62,7 +62,11 @@ public actor EngineJobCoordinator {
         self.gate = gate
     }
 
-    public func executeNext(configuration: AppConfigurationV1) async throws -> EngineResultV1? {
+    public func executeNext(
+        configuration: AppConfigurationV1,
+        onJobsChanged: @escaping @Sendable ([JobRecordV1]) async -> Void = { _ in },
+        onObservationFailure: @escaping @Sendable () async -> Void = {}
+    ) async throws -> EngineResultV1? {
         let lease = try gate.acquire()
         defer { gate.release(lease) }
         let next: JobRecordV1?
@@ -73,6 +77,7 @@ public actor EngineJobCoordinator {
             throw EnginePersistenceError.reconciliationRequired(jobID: nil)
         }
         guard let job = next else { return nil }
+        await onJobsChanged(await queue.jobs())
         var launched = false
         let resolution: EngineTerminalResolution
         do {
@@ -86,13 +91,24 @@ public actor EngineJobCoordinator {
                 "--result", paths.result.path, "--error", paths.error.path,
             ]
             if let pdfHelperURL { arguments += ["--pdf-helper", pdfHelperURL.path] }
+            let observer = EngineEventObserver(eventsURL: paths.events, requestID: job.id)
+            await observer.start(onEvent: { [weak self] event in
+                await self?.observe(event, jobID: job.id, onJobsChanged: onJobsChanged,
+                    onFailure: onObservationFailure)
+            }, onFailure: onObservationFailure)
             launched = true
-            _ = try await gate.run(
-                lease: lease, runner: runner,
-                executable: engineURL,
-                arguments: arguments,
-                eventsURL: paths.events
-            )
+            do {
+                _ = try await gate.run(
+                    lease: lease, runner: runner,
+                    executable: engineURL,
+                    arguments: arguments,
+                    eventsURL: paths.events
+                )
+            } catch {
+                await observer.stop()
+                throw error
+            }
+            await observer.stop()
             resolution = try await resolve(job: job)
         } catch {
             // Only known setup/launch failures prove that no external effect occurred.
@@ -131,6 +147,26 @@ public actor EngineJobCoordinator {
     }
 
     public func cancel() async { await gate.cancel() }
+
+    private func observe(
+        _ event: EngineEventV1, jobID: UUID,
+        onJobsChanged: @Sendable ([JobRecordV1]) async -> Void,
+        onFailure: @Sendable () async -> Void
+    ) async {
+        guard event.requestID == jobID,
+              [.started, .stageChanged, .progress].contains(event.type),
+              event.status == nil || event.status == .running,
+              let stage = event.stage, stage != .complete,
+              let job = await queue.jobs().first(where: { $0.id == jobID }),
+              [.running, .cancelling].contains(job.state), job.stage != stage else { return }
+        do {
+            // Only stage changes are durable. Events never supply terminal state or errors.
+            try await queue.transition(jobID: jobID, to: job.state, stage: stage)
+            await onJobsChanged(await queue.jobs())
+        } catch {
+            await onFailure()
+        }
+    }
 
     /// Restores jobs whose engine reached a terminal artifact before the App stopped.
     public func reconcileAfterLaunch() async throws {
@@ -230,6 +266,7 @@ public actor EngineJobCoordinator {
     private func validateDeliveryAdmission(_ job: JobRecordV1) async throws {
         guard job.kind == .delivery else { return }
         guard let report = await reports.reports().first(where: { $0.runDirectory == job.runDirectory }),
+              report.isEffectiveDeepReport,
               report.topicID == job.topicID, report.reportDate == job.reportDate,
               let delivery = report.deliveries.first(where: { $0.channel == job.deliveryChannel }) else {
             throw EngineJobCoordinatorError.requestMismatch
@@ -282,7 +319,7 @@ public actor EngineJobCoordinator {
 
     private func restoreMissingDeliveryJobs() async throws {
         let existingJobs = await queue.jobs()
-        for report in await reports.reports() {
+        for report in await reports.reports() where report.isEffectiveDeepReport {
             for delivery in report.deliveries where delivery.state == .pending {
                 let alreadyRecorded = existingJobs.contains {
                     $0.kind == .delivery
@@ -312,7 +349,7 @@ public actor EngineJobCoordinator {
             }
             let existing = await reports.reports().first { $0.runDirectory == summary.runDirectory }
             var deliveryRecords = existing?.deliveries ?? []
-            for channel in job.requestedDeliveryChannels where !deliveryRecords.contains(where: { $0.channel == channel }) {
+            for channel in job.requestedDeliveryChannels where summary.isEffectiveDeepReport && !deliveryRecords.contains(where: { $0.channel == channel }) {
                 deliveryRecords.append(DeliveryRecordV1(channel: channel, state: .pending))
             }
             let report = ReportRecordV1(
@@ -323,7 +360,8 @@ public actor EngineJobCoordinator {
                 summary: summary.summary, sourceCount: summary.sourceCount,
                 deepReadCount: summary.deepReadCount,
                 publishableClaimCount: summary.publishableClaimCount,
-                deliveries: deliveryRecords, createdAt: result.completedAt
+                deliveries: deliveryRecords, createdAt: result.completedAt,
+                researchOutcome: summary.researchOutcome
             )
             try await reports.upsert(report)
             try await queue.transition(
