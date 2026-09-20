@@ -26,7 +26,10 @@ def test_daily_handler_reads_final_claim_count_not_timing_metadata(tmp_path: Pat
             digest="Digest",
             lede="Lede",
             sections=[],
-            metadata={"source_count": 1, "deep_read_count": 1},
+            metadata={
+                "source_count": 1, "deep_read_count": 1,
+                "research_outcome": {"status": "ready", "reasons": []},
+            },
         ),
     )
     write_json(tmp_path / "summary.json", {"publishable_claim_count": 6})
@@ -47,7 +50,10 @@ def test_daily_handler_reads_final_claim_count_not_timing_metadata(tmp_path: Pat
     )
     result = handle_run_daily(
         SimpleNamespace(payload=payload),
-        config=SimpleNamespace(workspace_root=tmp_path, research=object()),
+        config=SimpleNamespace(
+            workspace_root=tmp_path,
+            research=parse_config({"topics": [{"id": "memory", "queries": ["memory"]}]}),
+        ),
         secrets=object(),
         events=object(),
         pdf_helper_path=Path("/usr/bin/true"),
@@ -55,6 +61,7 @@ def test_daily_handler_reads_final_claim_count_not_timing_metadata(tmp_path: Pat
     )
     assert result["deep_read_count"] == 1
     assert result["publishable_claim_count"] == 6
+    assert result["research_outcome"] == {"status": "ready", "reasons": []}
 
 
 def test_daily_accepts_external_dependencies_and_runs_real_pipeline(tmp_path: Path) -> None:

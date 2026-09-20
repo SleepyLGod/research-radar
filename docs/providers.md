@@ -148,13 +148,13 @@ model_providers:
     kind: codex_cli
     command: /Applications/ChatGPT.app/Contents/Resources/codex
     timeout_seconds: 900
-    reasoning_effort: high
+    reasoning_effort: xhigh
 
 models:
   task_routes:
     verifier:
       provider: codex
-      model: gpt-5.6-terra
+      model: gpt-5.6-luna
 ```
 
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a

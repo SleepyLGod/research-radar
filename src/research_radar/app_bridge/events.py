@@ -52,6 +52,7 @@ class EventWriter:
         self.path = path
         self.request_id = request_id
         self.sequence = 0
+        self.last_stage: str | None = None
         self._clock = clock or (lambda: datetime.now(UTC))
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
@@ -82,6 +83,8 @@ class EventWriter:
             raise ValueError("Failed events require a redacted error.")
         if event_type == "delivery_result" and delivery_channel is None:
             raise ValueError("Delivery events require a channel.")
+        if stage is not None and event_type in {"progress", "stage_changed"}:
+            self.last_stage = stage
         self.sequence += 1
         event = {
             "schema_version": 1,

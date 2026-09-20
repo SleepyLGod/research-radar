@@ -238,6 +238,9 @@ def _topic_from_model_payload(
 ) -> TopicConfig:
     payload = _load_json_object(raw_json)
     concept_groups = _string_list_mapping(payload.get("concept_groups"), "concept_groups")
+    concept_groups["agent_context"] = _agent_memory_context_aliases(
+        _meaningful_terms(topic_text), concept_groups["agent_context"],
+    )
     return TopicConfig(
         id=_safe_topic_id(_tokens(str(payload.get("id") or topic_text))),
         queries=_required_string_list(payload.get("queries"), "queries"),
@@ -288,9 +291,15 @@ def _concept_aliases(terms: list[str], title_phrase: str) -> dict[str, list[str]
     context = _unique([title_phrase, base_phrase, *bigrams[:3]])
     mechanism = _unique([*_known_mechanism_aliases(terms), *bigrams, base_phrase])
     return {
-        "context": context[:5],
+        "context": _agent_memory_context_aliases(terms, context[:5]),
         "mechanism": mechanism[:6],
     }
+
+
+def _agent_memory_context_aliases(terms: list[str], aliases: list[str]) -> list[str]:
+    if "memory" in terms and ({"agent", "agents"} & set(terms)):
+        return _unique([*aliases, "memory agent", "memory agents"])
+    return aliases
 
 
 def _known_mechanism_aliases(terms: list[str]) -> list[str]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
 
 from research_radar.analysis.figures import FigureExtractor
 from research_radar.analysis.model_cache import CachedLLMProvider
@@ -70,6 +71,7 @@ def run_daily_application(
     figure_extractor: FigureExtractor | None = None,
     connectors: list[DiscoveryConnector] | None = None,
     task_routes: Mapping[str, TaskModelRoute] | None = None,
+    cancellation_event: Event | None = None,
 ) -> Path:
     """Resolve dependencies and run one daily report without CLI coupling."""
 
@@ -84,11 +86,15 @@ def run_daily_application(
     if connectors is None:
         connectors = build_daily_connectors(config, secret_manager, warning_listener)
     if task_routes is None:
-        gist = _resolve_route(config, secret_manager, "source_gist", options)
-        reader = _reader_route(config, secret_manager, options)
-        anchor = _optional_route(config, secret_manager, "anchor_repair", options)
-        localization = _localization_route(config, secret_manager, options, language)
-        verifier = _resolve_route(config, secret_manager, "verifier", options)
+        gist = _resolve_route(config, secret_manager, "source_gist", options, cancellation_event)
+        reader = _reader_route(config, secret_manager, options, cancellation_event)
+        anchor = _optional_route(
+            config, secret_manager, "anchor_repair", options, cancellation_event,
+        )
+        localization = _localization_route(
+            config, secret_manager, options, language, cancellation_event,
+        )
+        verifier = _resolve_route(config, secret_manager, "verifier", options, cancellation_event)
     else:
         required = {
             "source_gist",
@@ -143,6 +149,7 @@ def _resolve_route(
     manager: SecretManager,
     task: str,
     options: DailyRunOptions,
+    cancellation_event: Event | None = None,
 ) -> TaskModelRoute:
     provider, model = _task_override(options.routes, task)
     return resolve_task_route(
@@ -155,6 +162,7 @@ def _resolve_route(
         global_model=options.routes.model,
         provider_replacements=_provider_replacements(options.routes),
         default_local=True,
+        cancellation_event=cancellation_event,
     )
 
 
@@ -162,10 +170,11 @@ def _reader_route(
     config: AppConfig,
     manager: SecretManager,
     options: DailyRunOptions,
+    cancellation_event: Event | None = None,
 ) -> TaskModelRoute:
     if options.deep_limit <= 0:
         return TaskModelRoute(provider=None, model=None, provider_name="local")
-    return _resolve_route(config, manager, "deep_reading", options)
+    return _resolve_route(config, manager, "deep_reading", options, cancellation_event)
 
 
 def _optional_route(
@@ -173,10 +182,11 @@ def _optional_route(
     manager: SecretManager,
     task: str,
     options: DailyRunOptions,
+    cancellation_event: Event | None = None,
 ) -> TaskModelRoute:
     provider, _ = _task_override(options.routes, task)
     try:
-        return _resolve_route(config, manager, task, options)
+        return _resolve_route(config, manager, task, options, cancellation_event)
     except ConfigError:
         if provider or options.routes.provider:
             raise
@@ -188,10 +198,11 @@ def _localization_route(
     manager: SecretManager,
     options: DailyRunOptions,
     language: str,
+    cancellation_event: Event | None = None,
 ) -> TaskModelRoute:
     if language != "zh":
         return TaskModelRoute(provider=None, model=None, provider_name="local")
-    return _optional_route(config, manager, "report_localization", options)
+    return _optional_route(config, manager, "report_localization", options, cancellation_event)
 
 
 def _task_override(routes: ProviderOverrides, task: str) -> tuple[str | None, str | None]:

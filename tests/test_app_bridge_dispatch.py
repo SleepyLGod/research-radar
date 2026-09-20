@@ -7,6 +7,55 @@ from uuid import uuid4
 from research_radar.app_bridge.runner import BridgeDependencies, run_bridge
 
 
+def test_transport_failure_keeps_actual_source_gist_stage(tmp_path: Path) -> None:
+    from research_radar.app_bridge.handlers import _progress_listener
+    from research_radar.exceptions import ProviderTransportError
+
+    request, events, result, error, _ = _job(
+        tmp_path, command="run_daily", payload={
+            "topic_id": "llm-inference", "report_date": "2026-08-30",
+            "limit": 5, "deep_limit": 2, "language": "zh", "model_cache": True,
+            "model_cache_limit_bytes": None,
+        },
+    )
+
+    def fail(*args, **kwargs):
+        _progress_listener(kwargs["events"])({"stage": "source_gist", "status": "started"})
+        raise ProviderTransportError("Incomplete response", {"attempt_count": 2, "retryable": True})
+
+    dependencies = replace(
+        BridgeDependencies.testing(), run_daily=fail,
+        clock=lambda: datetime(2026, 8, 30, 10, tzinfo=UTC),
+    )
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 1
+    terminal = json.loads(error.read_text())
+    stream = [json.loads(line) for line in events.read_text().splitlines()]
+    assert terminal["stage"] == stream[-1]["stage"] == "source_gist"
+    assert terminal["code"] == "model_response_retry_exhausted"
+    assert stream[-2]["stage"] == "source_gist"
+
+
+def test_cooperative_provider_cancel_is_a_cancelled_terminal(tmp_path: Path) -> None:
+    from research_radar.exceptions import OperationCancelled
+
+    request, events, result, error, _ = _job(
+        tmp_path, command="preflight", payload={"live_probe": False},
+    )
+
+    def cancel(*args, **kwargs):
+        kwargs["cancellation_event"].set()
+        raise OperationCancelled()
+
+    dependencies = replace(BridgeDependencies.testing(), preflight=cancel)
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 130
+    assert json.loads(error.read_text())["code"] == "cancelled"
+    assert not result.exists()
+
+
 def _job(
     tmp_path: Path,
     *,

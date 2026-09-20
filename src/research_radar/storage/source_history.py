@@ -94,6 +94,18 @@ def is_reportable_source(source: SourceCandidate) -> bool:
     return str(status) in REPORTABLE_HISTORY_STATUSES
 
 
+def is_deep_read_eligible(source: SourceCandidate) -> bool:
+    """Return history eligibility for deep reading; relevance is gated separately."""
+
+    history = source.metadata.get("source_history", {})
+    if history.get("deep_read_succeeded") is True:
+        return False
+    status = str(history.get("status", "not_tracked"))
+    if status in REPORTABLE_HISTORY_STATUSES:
+        return True
+    return status == "seen"
+
+
 def source_family_key(source: SourceCandidate) -> str | None:
     """Return a stable source family key for history dedupe."""
 
@@ -186,6 +198,10 @@ def _annotate_candidate(
             version,
             previous_version,
             previous_outcome=previous_outcome,
+            deep_read_succeeded=(
+                previous is not None
+                and (version or previous_version) in previous["_deep_success_versions"]
+            ),
         ),
         None,
     )
@@ -211,6 +227,7 @@ def _with_history(
     previous_version: str | None,
     *,
     previous_outcome: dict[str, Any] | None = None,
+    deep_read_succeeded: bool = False,
 ) -> SourceCandidate:
     history = {
         "status": status,
@@ -221,6 +238,8 @@ def _with_history(
     }
     if previous_outcome is not None:
         history["previous_outcome"] = previous_outcome
+    if deep_read_succeeded:
+        history["deep_read_succeeded"] = True
     return replace(
         candidate,
         metadata={
@@ -370,9 +389,15 @@ def _merge_outcome_record(
     previous: dict[str, Any] | None,
     current: dict[str, Any],
 ) -> dict[str, Any]:
+    # Folded outcomes mix versions. Only raw, paired evidence establishes success;
+    # once folded, carry the index without reinterpreting the merged outcome.
+    deep_success_versions = _deep_success_versions(current)
+    if previous is not None:
+        deep_success_versions |= _deep_success_versions(previous)
     if previous is None:
         return {
             **current,
+            "_deep_success_versions": deep_success_versions,
             "family_keys": _row_family_keys(current),
             "outcome": dict(current.get("outcome", {})),
         }
@@ -381,6 +406,7 @@ def _merge_outcome_record(
     return {
         **previous,
         **current,
+        "_deep_success_versions": deep_success_versions,
         "latest_version": current.get("latest_version") or previous.get("latest_version"),
         "family_keys": list(
             dict.fromkeys([*_row_family_keys(previous), *_row_family_keys(current)])
@@ -390,6 +416,24 @@ def _merge_outcome_record(
             **(current_outcome if isinstance(current_outcome, dict) else {}),
         },
     }
+
+
+def _deep_success_versions(row: dict[str, Any]) -> set[str | None]:
+    if "_deep_success_versions" in row:
+        return set(row["_deep_success_versions"])
+    outcome = row.get("outcome")
+    if not isinstance(outcome, dict):
+        return set()
+    count = outcome.get("publishable_claim_count")
+    if (
+        outcome.get("deep_reading_status") == "succeeded"
+        and isinstance(count, (int, float))
+        and not isinstance(count, bool)
+        and count > 0
+    ):
+        version = row.get("latest_version")
+        return {str(version) if version else None}
+    return set()
 
 
 def _row_family_keys(row: dict[str, Any]) -> list[str]:

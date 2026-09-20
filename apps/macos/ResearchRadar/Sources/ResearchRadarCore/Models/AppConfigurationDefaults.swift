@@ -1,6 +1,21 @@
 import Foundation
 
 public enum AppConfigurationDefaults {
+    /// Migrate only an unmodified built-in Codex verifier, never a custom route.
+    public static func updatingLegacyCodexDefaults(_ configuration: AppConfigurationV1) -> AppConfigurationV1 {
+        guard let route = configuration.routes.firstIndex(where: {
+            $0.task == "verifier" && $0.providerID == "codex" && $0.model == "gpt-5.6-terra"
+        }), let provider = configuration.providers.firstIndex(where: {
+            $0.id == "codex" && $0.kind == "codex_cli" && $0.reasoningEffort == "high"
+        }), !configuration.routes.contains(where: { $0.providerID == "codex" && $0.task != "verifier" }) else {
+            return configuration
+        }
+        var updated = configuration
+        updated.routes[route].model = "gpt-5.6-luna"
+        updated.providers[provider].reasoningEffort = "xhigh"
+        return updated
+    }
+
     /// Updates only the former built-in DeepSeek model name, preserving user routes.
     public static func updatingLegacyFlashRoutes(_ configuration: AppConfigurationV1) -> AppConfigurationV1 {
         var updated = configuration
@@ -21,7 +36,7 @@ public enum AppConfigurationDefaults {
         )
         let codex = ProviderRecordV1(
             id: "codex", kind: "codex_cli", commandPath: codexExecutable?.path,
-            timeoutSeconds: 900, reasoningEffort: "high"
+            timeoutSeconds: 900, reasoningEffort: "xhigh"
         )
         let deepSeekTasks = [
             "topic_bootstrap", "source_gist", "deep_reading", "anchor_repair",
@@ -29,7 +44,7 @@ public enum AppConfigurationDefaults {
         ]
         let routes = deepSeekTasks.map {
             RouteRecordV1(task: $0, providerID: "deepseek", model: "deepseek-flash")
-        } + [RouteRecordV1(task: "verifier", providerID: "codex", model: "gpt-5.6-terra")]
+        } + [RouteRecordV1(task: "verifier", providerID: "codex", model: "gpt-5.6-luna")]
         return AppConfigurationV1(
             workspaceRoot: workspaceRoot.path,
             providers: [deepSeek, codex], routes: routes,

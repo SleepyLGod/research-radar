@@ -327,6 +327,7 @@ def test_default_command_providers_have_longer_timeout() -> None:
     )
 
     assert config.model_providers["codex"].timeout_seconds == 900
+    assert config.model_providers["codex"].reasoning_effort == "xhigh"
     assert config.model_providers["claude"].timeout_seconds == 900
     assert config.model_providers["von_claude"].timeout_seconds == 900
 

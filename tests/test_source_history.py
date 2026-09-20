@@ -1,12 +1,15 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from research_radar.models import SourceCandidate, SourceType
 from research_radar.storage.files import read_jsonl
 from research_radar.storage.source_history import (
     annotate_source_history,
     append_source_history_outcome_records,
     append_source_history_outcomes,
+    is_deep_read_eligible,
     is_reportable_source,
     source_family_key,
     source_family_keys,
@@ -416,6 +419,178 @@ def test_source_history_ignores_unsuccessful_empty_outcome(tmp_path: Path) -> No
     history = annotated_retry[0].metadata["source_history"]
     assert history["status"] == "new"
     assert "previous_outcome" not in history
+
+
+@pytest.mark.parametrize(
+    "outcome,eligible",
+    [
+        ({}, True),
+        ({"fulltext_status": "failed"}, True),
+        ({"deep_reading_status": "failed"}, True),
+        ({"deep_reading_status": "succeeded", "publishable_claim_count": 0}, True),
+        ({"deep_reading_status": "succeeded", "publishable_claim_count": 2}, False),
+        ({"deep_reading_status": "succeeded"}, True),
+        ({"publishable_claim_count": 2}, True),
+        ({"deep_reading_status": "succeeded", "publishable_claim_count": None}, True),
+        ({"deep_reading_status": "succeeded", "publishable_claim_count": True}, True),
+    ],
+)
+def test_deep_eligibility_for_seen_outcomes(
+    tmp_path: Path,
+    outcome: dict,
+    eligible: bool,
+) -> None:
+    source = _paper("https://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    _append_deep_outcome(tmp_path, source, outcome)
+    annotated = _annotated_deep_source(tmp_path, source)
+    assert annotated.metadata["source_history"]["status"] == "seen"
+    assert not is_reportable_source(annotated)
+    assert is_deep_read_eligible(annotated) is eligible
+
+
+def test_deep_success_survives_later_outcomes_and_version_bump(tmp_path: Path) -> None:
+    v1 = _paper("https://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    v2 = _paper("https://arxiv.org/abs/2604.01707v2", "2604.01707v2")
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, v1))
+    _append_deep_outcome(
+        tmp_path,
+        v1,
+        {"deep_reading_status": "succeeded", "publishable_claim_count": 2},
+    )
+    for outcome in [{}, {"deep_reading_status": "failed", "publishable_claim_count": 0}]:
+        _append_deep_outcome(tmp_path, v1, outcome)
+        assert not is_deep_read_eligible(_annotated_deep_source(tmp_path, v1))
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [v1],
+        run_id="delivery",
+        event="wechat_draft",
+        outcome_by_url={v1.url: {"wechat_draft_status": "created"}},
+    )
+    assert not is_deep_read_eligible(_annotated_deep_source(tmp_path, v1))
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, v2))
+    _append_deep_outcome(tmp_path, v2, {})
+    assert _annotated_deep_source(tmp_path, v2).metadata["source_history"]["status"] == "seen"
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, v2))
+    assert not is_deep_read_eligible(_annotated_deep_source(tmp_path, v1))
+    # An unversioned mirror is written with _outcome_row's latest-version fallback.
+    mirror = _paper("https://example.com/mirror", "CorpusId:mirror")
+    _append_deep_outcome(tmp_path, mirror, {})
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, v2))
+
+
+def test_deep_success_alias_bridge_does_not_reassign_version(tmp_path: Path) -> None:
+    path = tmp_path / "data" / "source_history" / "agent-memory.jsonl"
+    path.parent.mkdir(parents=True)
+    rows = [
+        {
+            "family_keys": ["doi:10.1234/a", "title:old-title"],
+            "latest_version": "v1",
+            "outcome": {"deep_reading_status": "succeeded", "publishable_claim_count": 2},
+        },
+        {
+            "family_keys": ["arxiv:2604.01707", "title:new-title"],
+            "latest_version": "v2",
+            "outcome": {},
+        },
+        {
+            "family_keys": ["doi:10.1234/a", "arxiv:2604.01707"],
+            "latest_version": "v2",
+            "outcome": {"deep_reading_status": "failed", "publishable_claim_count": 0},
+        },
+    ]
+    for row in rows:
+        row["event"] = "daily_outcome"
+        row["outcome"]["daily_included"] = True
+    original = "".join(json.dumps(row) + "\n" for row in rows)
+    path.write_text(original, encoding="utf-8")
+    for version, eligible in [("v1", False), ("v2", True)]:
+        source = _paper(f"https://arxiv.org/abs/2604.01707{version}", f"2604.01707{version}")
+        assert is_deep_read_eligible(_annotated_deep_source(tmp_path, source)) is eligible
+    old_alias = _paper("https://example.com/old", "", title="Old Title")
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, old_alias))
+    assert path.read_text(encoding="utf-8") == original
+
+
+def test_unknown_legacy_deep_history_remains_eligible(tmp_path: Path) -> None:
+    mirror = _paper("https://example.com/paper", "CorpusId:paper")
+    _append_deep_outcome(
+        tmp_path,
+        mirror,
+        {"deep_reading_status": "succeeded", "publishable_claim_count": 2},
+    )
+    v1 = _paper("https://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    _append_deep_outcome(tmp_path, v1, {})
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, v1))
+    assert is_deep_read_eligible(v1)
+
+
+def test_partial_outcomes_do_not_manufacture_deep_success(tmp_path: Path) -> None:
+    source = _paper("https://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    _append_deep_outcome(tmp_path, source, {"deep_reading_status": "succeeded"})
+    _append_deep_outcome(tmp_path, source, {"publishable_claim_count": 2})
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, source))
+
+
+def test_late_older_deep_success_does_not_satisfy_newer_version(tmp_path: Path) -> None:
+    v1 = _paper("https://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    v2 = _paper("https://arxiv.org/abs/2604.01707v2", "2604.01707v2")
+    _append_deep_outcome(tmp_path, v2, {})
+    _append_deep_outcome(
+        tmp_path,
+        v1,
+        {"deep_reading_status": "succeeded", "publishable_claim_count": 2},
+    )
+    _append_deep_outcome(tmp_path, v2, {})
+    assert is_deep_read_eligible(_annotated_deep_source(tmp_path, v2))
+    assert not is_deep_read_eligible(_annotated_deep_source(tmp_path, v1))
+    mirror = _paper("https://example.com/mirror", "CorpusId:mirror")
+    _append_deep_outcome(
+        tmp_path,
+        mirror,
+        {"deep_reading_status": "succeeded", "publishable_claim_count": 1},
+    )
+    assert not is_deep_read_eligible(_annotated_deep_source(tmp_path, v2))
+    assert not is_deep_read_eligible(_annotated_deep_source(tmp_path, mirror))
+    rows = read_jsonl(tmp_path / "data" / "source_history" / "agent-memory.jsonl")
+    assert rows[-1]["latest_version"] == "v2"
+    assert all("_deep_success_versions" not in row for row in rows)
+
+
+def _append_deep_outcome(tmp_path: Path, source: SourceCandidate, outcome: dict) -> None:
+    append_source_history_outcomes(
+        tmp_path,
+        "agent-memory",
+        [source],
+        run_id="run",
+        event="daily_outcome",
+        outcome_by_url={source.url: {"daily_included": True, **outcome}},
+    )
+
+
+def test_deep_success_blocks_version_update_after_delayed_older_outcome(tmp_path: Path) -> None:
+    v1 = _paper("https://arxiv.org/abs/2604.01707v1", "2604.01707v1")
+    v2 = _paper("https://arxiv.org/abs/2604.01707v2", "2604.01707v2")
+    _append_deep_outcome(
+        tmp_path,
+        v2,
+        {"deep_reading_status": "succeeded", "publishable_claim_count": 2},
+    )
+    _append_deep_outcome(tmp_path, v1, {})
+
+    annotated = _annotated_deep_source(tmp_path, v2)
+    history = annotated.metadata["source_history"]
+    assert history["status"] == "version_update"
+    assert history["previous_version"] == "v1"
+    assert history["deep_read_succeeded"] is True
+    assert is_reportable_source(annotated)
+    assert not is_deep_read_eligible(annotated)
+
+
+def _annotated_deep_source(tmp_path: Path, source: SourceCandidate) -> SourceCandidate:
+    sources, _ = annotate_source_history(tmp_path, "agent-memory", [source], run_id="check")
+    return sources[0]
 
 
 def _paper(

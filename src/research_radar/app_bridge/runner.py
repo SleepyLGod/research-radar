@@ -34,7 +34,7 @@ from research_radar.app_bridge.protocol import (
     RunDailyPayloadV1,
     load_request,
 )
-from research_radar.exceptions import ResearchRadarError
+from research_radar.exceptions import OperationCancelled, ProviderTransportError, ResearchRadarError
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import KeychainSecretBackend, SecretManager
 
@@ -48,8 +48,7 @@ _DEPENDENCIES = {
 }
 
 
-class _Cancelled(Exception):
-    pass
+_Cancelled = OperationCancelled
 
 
 class CommandHandler(Protocol):
@@ -63,6 +62,7 @@ class CommandHandler(Protocol):
         secrets: object,
         events: EventWriter,
         pdf_helper_path: Path | None,
+        cancellation_event: threading.Event | None = None,
     ) -> dict[str, object]: ...
 
 
@@ -211,6 +211,9 @@ def run_bridge(
     current_stage = "preflight"
     request: EngineRequestV1 | None = None
 
+    def active_stage() -> str:
+        return writer.last_stage or current_stage
+
     def write_result_once(value: dict[str, Any]) -> bool:
         with terminal_lock:
             if result_path.exists() or error_path.exists():
@@ -242,7 +245,7 @@ def run_bridge(
     def write_failure_event(code: str, message: str, *, retryable: bool) -> None:
         writer.write(
             "failed",
-            stage=current_stage,
+            stage=active_stage(),
             status="failed",
             message=message,
             error={"code": code, "message": message, "retryable": retryable},
@@ -255,7 +258,7 @@ def run_bridge(
         parent_lost.set()
         cancelled.set()
         message = "The supervising App exited while a task was running."
-        write_error_once(code="parent_lost", message=message, stage=current_stage)
+        write_error_once(code="parent_lost", message=message, stage=active_stage())
         _terminate_after_parent_loss(
             isolated=session_established.is_set(),
             grace_seconds=parent_loss_grace_seconds,
@@ -292,6 +295,7 @@ def run_bridge(
             secrets=active_dependencies.secret_manager_factory(),
             events=writer,
             pdf_helper_path=pdf_helper_path,
+            cancellation_event=cancelled,
         )
         if cancelled.is_set():
             raise _Cancelled
@@ -315,10 +319,10 @@ def run_bridge(
             if parent_lost.is_set()
             else "The task was cancelled."
         )
-        write_error_once(code=code, message=message, stage=current_stage)
+        write_error_once(code=code, message=message, stage=active_stage())
         writer.write(
             "cancelled" if code == "cancelled" else "failed",
-            stage=current_stage,
+            stage=active_stage(),
             status="failed",
             message=message,
             error={"code": code, "message": message, "retryable": False}
@@ -349,7 +353,7 @@ def run_bridge(
             if isinstance(exc, AppConfigurationError)
             else "invalid_request"
         )
-        write_error_once(code=code, message=message, stage=current_stage)
+        write_error_once(code=code, message=message, stage=active_stage())
         write_failure_event(code, message, retryable=False)
         return 2
     except ValueError as exc:
@@ -357,10 +361,23 @@ def run_bridge(
         write_error_once(
             code="invalid_configuration",
             message=message,
-            stage=current_stage,
+            stage=active_stage(),
         )
         write_failure_event("invalid_configuration", message, retryable=False)
         return 2
+    except ProviderTransportError as exc:
+        message = redact_text(str(exc)) or "The model response could not be read."
+        retryable = exc.diagnostics.get("retryable") is True
+        code = "model_transport_failed"
+        if retryable:
+            code = (
+                "model_response_retry_exhausted"
+                if exc.diagnostics.get("attempt_count") == 2
+                else "model_response_interrupted"
+            )
+        write_error_once(code=code, message=message, stage=active_stage(), retryable=retryable)
+        write_failure_event(code, message, retryable=retryable)
+        return 1
     except ResearchRadarError as exc:
         message = redact_text(str(exc)) or "The task could not be completed."
         code = (
@@ -371,7 +388,7 @@ def run_bridge(
         write_error_once(
             code=code,
             message=message,
-            stage=current_stage,
+            stage=active_stage(),
             retryable=True,
         )
         write_failure_event(code, message, retryable=True)
@@ -381,7 +398,7 @@ def run_bridge(
         write_error_once(
             code="engine_crashed",
             message=message,
-            stage=current_stage,
+            stage=active_stage(),
             retryable=True,
         )
         write_failure_event("engine_crashed", message, retryable=True)

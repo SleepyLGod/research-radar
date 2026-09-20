@@ -3,6 +3,31 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct ScheduleEvaluatorTests {
+    @Test(arguments: [ResearchOutcomeV1.Status.noNewContent, .incomplete])
+    func emptyOutcomeDoesNotTriggerImmediateScheduleRetry(status: ResearchOutcomeV1.Status) throws {
+        let calendar = utcCalendar()
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 30, hour: 12)))
+        let tomorrow = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 31, hour: 9)))
+        let schedule = DailyScheduleV1(topicID: "llm-inference", hour: 9, minute: 0)
+        let report = ReportRecordV1(topicID: "llm-inference", reportDate: "2026-08-30", runDirectory: "/run",
+            articleDraftPath: "/a", reportHTMLPath: "/h", title: "Empty", summary: "",
+            sourceCount: 0, deepReadCount: 0, publishableClaimCount: 0, deliveries: [], createdAt: now,
+            researchOutcome: .init(status: status, reasons: []))
+        let evaluator = ScheduleEvaluator()
+        #expect(evaluator.dueResearchJobs(schedules: [schedule], topics: [topicRecord()], reports: [report],
+            queuedJobs: [], now: now, calendar: calendar).isEmpty)
+        #expect(evaluator.nextFireDate(schedules: [schedule], topics: [topicRecord()], after: now, calendar: calendar) == tomorrow)
+    }
+
+    @Test func missedYesterdayWaitsForTodaysTime() throws {
+        let calendar = utcCalendar()
+        let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: 20, hour: 8)))
+        let expected = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: 20, hour: 9)))
+        let schedule = DailyScheduleV1(topicID: "llm-inference", hour: 9, minute: 0)
+        let evaluator = ScheduleEvaluator()
+        #expect(evaluator.dueResearchJobs(schedules: [schedule], topics: [topicRecord()], reports: [], queuedJobs: [], now: now, calendar: calendar).isEmpty)
+        #expect(evaluator.nextFireDate(schedules: [schedule], topics: [topicRecord()], after: now, calendar: calendar) == expected)
+    }
     @Test func onlyTodaysLatestDueJobIsReturned() throws {
         let calendar = utcCalendar()
         let now = try #require(calendar.date(from: DateComponents(

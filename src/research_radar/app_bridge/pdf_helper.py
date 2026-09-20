@@ -119,13 +119,24 @@ class PDFHelperClient:
                 "scale": dpi / 72.0,
             }
         )
+        returned_path = response.get("output_path")
         if (
             response.get("schema_version") != 1
             or response.get("operation") != "render_crop"
-            or response.get("output_path") != str(output)
+            or not isinstance(returned_path, str)
+            or not Path(returned_path).is_absolute()
         ):
             raise PDFHelperError("PDF helper returned an invalid response.")
-        return output.is_file()
+        returned = Path(returned_path)
+        if _existing_file(returned, root) != _existing_file(output, root):
+            raise PDFHelperError("PDF helper returned an unexpected output file.")
+        # Permit system aliases above the workspace, not links inside it.
+        for parent in returned.parents:
+            if parent.resolve(strict=True) == root:
+                break
+            if parent.is_symlink():
+                raise PDFHelperError("PDF output must not traverse workspace symbolic links.")
+        return True
 
     def _call(self, request: dict[str, object]) -> dict[str, object]:
         try:

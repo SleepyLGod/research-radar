@@ -135,7 +135,19 @@ public enum EngineProtocolCodec {
         case .bootstrapTopic:
             try validateTopicDraft(try requireObject(object[expected]))
         case .runDaily:
-            try requireExactKeys(try requireObject(object[expected]), reportKeys)
+            let report = try requireObject(object[expected])
+            try requireExactKeys(report, report["research_outcome"] == nil
+                ? reportKeys : reportKeys.union(["research_outcome"]))
+            if let value = report["research_outcome"] {
+                let outcome = try requireObject(value)
+                try requireExactKeys(outcome, ["status", "reasons"])
+                _ = try requireEnum(ResearchOutcomeV1.Status.self, outcome["status"])
+                guard let reasons = outcome["reasons"] as? [String],
+                      Set(reasons).count == reasons.count else {
+                    throw EngineProtocolError.invalidValue
+                }
+                for reason in reasons { _ = try requireEnum(ResearchOutcomeV1.Reason.self, reason) }
+            }
         case .retryDelivery:
             let delivery = try requireObject(object[expected])
             try requireExactKeys(delivery, deliveryKeys)
@@ -330,6 +342,7 @@ public enum EngineProtocolCodec {
         "invalid_configuration", "missing_secret", "missing_executable",
         "provider_unavailable", "invalid_report_date", "research_failed",
         "delivery_failed", "engine_crashed", "parent_lost", "protocol_error",
+        "model_transport_failed", "model_response_interrupted", "model_response_retry_exhausted",
         "cancelled",
     ]
 }
