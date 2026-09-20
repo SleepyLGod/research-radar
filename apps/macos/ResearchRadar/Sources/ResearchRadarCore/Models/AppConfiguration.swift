@@ -1,5 +1,9 @@
 import Foundation
 
+public enum AppAppearancePreference: String, CaseIterable, Codable, Sendable {
+    case system, light, dark
+}
+
 public enum AppLanguagePreference: String, CaseIterable, Codable, Sendable {
     case system
     case simplifiedChinese = "zh-Hans"
@@ -212,6 +216,7 @@ public struct AppConfigurationV1: Codable, Equatable, Sendable, ValidatableDurab
     public let schemaVersion: Int
     public var projectName: String
     public var uiLanguage: AppLanguagePreference
+    public var uiAppearance: AppAppearancePreference
     public var workspaceRoot: String
     public var providers: [ProviderRecordV1]
     public var routes: [RouteRecordV1]
@@ -225,6 +230,7 @@ public struct AppConfigurationV1: Codable, Equatable, Sendable, ValidatableDurab
         schemaVersion: Int = 1,
         projectName: String = "ResearchRadar",
         uiLanguage: AppLanguagePreference = .system,
+        uiAppearance: AppAppearancePreference = .system,
         workspaceRoot: String,
         providers: [ProviderRecordV1] = [],
         routes: [RouteRecordV1] = [],
@@ -237,6 +243,7 @@ public struct AppConfigurationV1: Codable, Equatable, Sendable, ValidatableDurab
         self.schemaVersion = schemaVersion
         self.projectName = projectName
         self.uiLanguage = uiLanguage
+        self.uiAppearance = uiAppearance
         self.workspaceRoot = workspaceRoot
         self.providers = providers
         self.routes = routes
@@ -245,6 +252,29 @@ public struct AppConfigurationV1: Codable, Equatable, Sendable, ValidatableDurab
         self.delivery = delivery
         self.storage = storage
         self.startAtLogin = startAtLogin
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, projectName, uiLanguage, uiAppearance, workspaceRoot
+        case providers, routes, topics, discovery, delivery, storage, startAtLogin
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try values.decode(Int.self, forKey: .schemaVersion)
+        projectName = try values.decode(String.self, forKey: .projectName)
+        uiLanguage = try values.decode(AppLanguagePreference.self, forKey: .uiLanguage)
+        // Only an absent field defaults; malformed or unknown values remain errors.
+        uiAppearance = values.contains(.uiAppearance)
+            ? try values.decode(AppAppearancePreference.self, forKey: .uiAppearance) : .system
+        workspaceRoot = try values.decode(String.self, forKey: .workspaceRoot)
+        providers = try values.decode([ProviderRecordV1].self, forKey: .providers)
+        routes = try values.decode([RouteRecordV1].self, forKey: .routes)
+        topics = try values.decode([TopicRecordV1].self, forKey: .topics)
+        discovery = try values.decode(DiscoverySettingsV1.self, forKey: .discovery)
+        delivery = try values.decode(DeliverySettingsV1.self, forKey: .delivery)
+        storage = try values.decode(StorageSettingsV1.self, forKey: .storage)
+        startAtLogin = try values.decode(Bool.self, forKey: .startAtLogin)
     }
 
     public func validate() throws {

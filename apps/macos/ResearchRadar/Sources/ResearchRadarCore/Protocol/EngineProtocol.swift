@@ -485,16 +485,22 @@ public struct EngineReportSummaryV1: Codable, Equatable, Sendable {
     public let sourceCount: Int
     public let deepReadCount: Int
     public let publishableClaimCount: Int
+    public let researchOutcome: ResearchOutcomeV1?
+    public var isEffectiveDeepReport: Bool {
+        ResearchOutcomeV1.admitsDelivery(deepReadCount: deepReadCount,
+            publishableClaimCount: publishableClaimCount, outcome: researchOutcome)
+    }
 
     public init(
         runDirectory: String, reportDate: String, articleDraftPath: String,
         reportHTMLPath: String, title: String, summary: String, sourceCount: Int,
-        deepReadCount: Int, publishableClaimCount: Int
+        deepReadCount: Int, publishableClaimCount: Int, researchOutcome: ResearchOutcomeV1? = nil
     ) {
         self.runDirectory = runDirectory; self.reportDate = reportDate
         self.articleDraftPath = articleDraftPath; self.reportHTMLPath = reportHTMLPath
         self.title = title; self.summary = summary; self.sourceCount = sourceCount
         self.deepReadCount = deepReadCount; self.publishableClaimCount = publishableClaimCount
+        self.researchOutcome = researchOutcome
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -507,6 +513,7 @@ public struct EngineReportSummaryV1: Codable, Equatable, Sendable {
         case sourceCount = "source_count"
         case deepReadCount = "deep_read_count"
         case publishableClaimCount = "publishable_claim_count"
+        case researchOutcome = "research_outcome"
     }
 }
 

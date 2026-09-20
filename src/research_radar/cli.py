@@ -1475,7 +1475,7 @@ def _scheduled_verifier_model(provider_name: str, model_name: str | None) -> str
     if model_name is not None:
         return model_name
     if provider_name == "codex":
-        return "gpt-5.6-terra"
+        return "gpt-5.6-luna"
     return None
 
 

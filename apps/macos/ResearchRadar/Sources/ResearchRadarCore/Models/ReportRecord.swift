@@ -29,6 +29,11 @@ public struct ReportRecordV1: Codable, Equatable, Identifiable, Sendable {
     public let sourceCount: Int
     public let deepReadCount: Int
     public let publishableClaimCount: Int
+    public let researchOutcome: ResearchOutcomeV1?
+    public var isEffectiveDeepReport: Bool {
+        ResearchOutcomeV1.admitsDelivery(deepReadCount: deepReadCount,
+            publishableClaimCount: publishableClaimCount, outcome: researchOutcome)
+    }
     public var deliveries: [DeliveryRecordV1]
     public let createdAt: Date
 
@@ -36,7 +41,8 @@ public struct ReportRecordV1: Codable, Equatable, Identifiable, Sendable {
         schemaVersion: Int = 1, id: UUID = UUID(), topicID: String, reportDate: String,
         runDirectory: String, articleDraftPath: String, reportHTMLPath: String,
         title: String, summary: String, sourceCount: Int, deepReadCount: Int,
-        publishableClaimCount: Int, deliveries: [DeliveryRecordV1], createdAt: Date
+        publishableClaimCount: Int, deliveries: [DeliveryRecordV1], createdAt: Date,
+        researchOutcome: ResearchOutcomeV1? = nil
     ) {
         self.schemaVersion = schemaVersion; self.id = id; self.topicID = topicID
         self.reportDate = reportDate; self.runDirectory = runDirectory
@@ -44,6 +50,7 @@ public struct ReportRecordV1: Codable, Equatable, Identifiable, Sendable {
         self.title = title; self.summary = summary; self.sourceCount = sourceCount
         self.deepReadCount = deepReadCount; self.publishableClaimCount = publishableClaimCount
         self.deliveries = deliveries; self.createdAt = createdAt
+        self.researchOutcome = researchOutcome
     }
 }
 

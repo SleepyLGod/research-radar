@@ -9,6 +9,61 @@ from research_radar.app_bridge.configuration import (
 )
 
 
+@pytest.mark.parametrize("appearance", ["system", "light", "dark"])
+def test_appearance_is_accepted_but_does_not_change_research(tmp_path, appearance) -> None:
+    value = _app_config(tmp_path)
+    path = _write_config(tmp_path, value)
+    baseline = load_app_configuration(path, require_topics=False)
+    value["ui_appearance"] = appearance
+    path.write_text(json.dumps(value), encoding="utf-8")
+    assert load_app_configuration(path, require_topics=False) == baseline
+
+
+@pytest.mark.parametrize("appearance", [None, "automatic", 1, {}, []])
+def test_invalid_appearance_is_rejected(tmp_path, appearance) -> None:
+    value = _app_config(tmp_path)
+    value["ui_appearance"] = appearance
+    with pytest.raises(AppConfigurationError):
+        load_app_configuration(_write_config(tmp_path, value), require_topics=False)
+
+
+@pytest.mark.parametrize("command", [None, "/missing/codex", "codex", "/tmp"])
+def test_daily_rejects_unavailable_codex_before_research(
+    tmp_path: Path, command: str | None
+) -> None:
+    from research_radar.app_bridge.events import EventWriter
+    from research_radar.app_bridge.handlers import handle_run_daily
+    from research_radar.app_bridge.protocol import EngineRequestV1, RunDailyPayloadV1
+    from research_radar.app_bridge.runner import BridgeExecutionError
+
+    value = _app_config(tmp_path)
+    value["providers"][1]["command_path"] = command
+    config_path = _write_config(tmp_path, value)
+    config = load_app_configuration(config_path, require_topics=False)
+
+    def forbidden(*args: object, **kwargs: object) -> Path:
+        pytest.fail("Research must not start with unavailable Codex")
+
+    with pytest.raises(BridgeExecutionError) as caught:
+        handle_run_daily(
+            EngineRequestV1(
+                1,
+                "fixture",
+                "run_daily",
+                "2026-09-20T00:00:00Z",
+                tmp_path,
+                config_path,
+                RunDailyPayloadV1("memory", "2026-09-20", 1, 1, "en", False, None),
+            ),
+            config=config,
+            secrets=object(),
+            events=EventWriter(tmp_path / "events.jsonl", request_id="fixture"),
+            pdf_helper_path=Path("/usr/bin/true"),
+            daily_runner=forbidden,
+        )
+    assert caught.value.code == "codex_not_configured"
+
+
 def _app_config(root: Path, *, topics: list[dict[str, object]] | None = None) -> dict[str, object]:
     return {
         "schema_version": 1,

@@ -14,6 +14,7 @@ _ROOT_FIELDS = {
     "schema_version",
     "project_name",
     "ui_language",
+    "ui_appearance",
     "workspace_root",
     "providers",
     "routes",
@@ -126,11 +127,14 @@ def load_app_configuration(
         raise AppConfigurationError("App configuration could not be read.") from exc
     root = _mapping(value, "App configuration")
     _reject_secret_values(root)
-    _exact_keys(root, _ROOT_FIELDS, "App configuration")
+    _exact_keys(root, _ROOT_FIELDS, "App configuration", optional={"ui_appearance"})
     if _integer(root.get("schema_version"), "schema_version") != 1:
         raise AppConfigurationError("Unsupported App configuration schema version.")
     if root.get("ui_language") not in {"system", "zh-Hans", "en"}:
         raise AppConfigurationError("ui_language must be system, zh-Hans, or en.")
+    appearance = root.get("ui_appearance", "system")
+    if not isinstance(appearance, str) or appearance not in {"system", "light", "dark"}:
+        raise AppConfigurationError("ui_appearance must be system, light, or dark.")
     _boolean(root.get("start_at_login"), "start_at_login")
 
     app_support_root = path.resolve(strict=True).parent.parent

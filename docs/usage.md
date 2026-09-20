@@ -63,8 +63,12 @@ The default quality path is:
 
 - Deep reading: `deepseek/deepseek-flash` with explicit thinking and `high` reasoning effort
 - Source gist and report localization: `deepseek-flash` through the same configured DeepSeek provider
-- Verification: `codex/gpt-5.6-terra` with `high` reasoning effort
+- Verification: `codex/gpt-5.6-luna` with `xhigh` reasoning effort
 - Web search: Tavily when the web-search secret is present
+
+Existing YAML remains authoritative: change both the verifier model and the Codex provider's
+`reasoning_effort` to adopt Luna/xhigh. This does not change global Codex settings or an installed
+scheduler snapshot. Regenerate a snapshot explicitly when its model should change.
 
 Daily users usually do not need route flags. Use the defaults first, then inspect or override
 providers only when you are testing another model:

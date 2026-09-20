@@ -8,7 +8,9 @@ from urllib.request import Request, urlopen
 
 from research_radar.discovery.base import DiscoveryContext
 from research_radar.discovery.dedupe import priority_score
-from research_radar.exceptions import DiscoveryError, SecretError
+from research_radar.discovery.optional_credential import OptionalCredential
+from research_radar.discovery.query_diagnostics import QueryDiagnostics
+from research_radar.exceptions import DiscoveryError
 from research_radar.models import SourceCandidate, SourceType
 from research_radar.security.secrets import SecretManager
 
@@ -20,14 +22,17 @@ class GitHubRepoConnector:
     endpoint = "https://api.github.com/search/repositories"
 
     def __init__(self, secrets: SecretManager | None = None) -> None:
-        self._secrets = secrets
+        self._credential = OptionalCredential(
+            secrets.get_github_token if secrets is not None else None
+        )
+        self.diagnostics: dict[str, object] = {}
 
     def discover(self, context: DiscoveryContext) -> list[SourceCandidate]:
         """Return GitHub repository candidates."""
 
         candidates: list[SourceCandidate] = []
-        failed_queries: list[str] = []
-        last_error: OSError | None = None
+        diagnostics = QueryDiagnostics(self.name, len(context.topic.queries))
+        self.diagnostics = diagnostics.snapshot(0)
         for query in context.topic.queries:
             url = (
                 f"{self.endpoint}?q={quote_plus(query)}&sort=updated&order=desc"
@@ -38,14 +43,17 @@ class GitHubRepoConnector:
                 with urlopen(request, timeout=20) as response:
                     payload = json.loads(response.read().decode("utf-8"))
             except OSError as exc:
-                failed_queries.append(query)
-                last_error = exc
+                diagnostics.failure(exc)
                 continue
             candidates.extend(self._parse(payload, context))
-        if not candidates and last_error is not None:
+            diagnostics.succeeded += 1
+        self.diagnostics = diagnostics.snapshot(
+            len(candidates), self._credential.warnings(),
+        )
+        if diagnostics.failed and not diagnostics.succeeded:
             raise DiscoveryError(
-                f"GitHub discovery failed for all queries: {_failed_query_summary(failed_queries)}"
-            ) from last_error
+                f"GitHub discovery failed for all queries ({diagnostics.failed} failed)."
+            ) from None
         return candidates
 
     def _headers(self) -> dict[str, str]:
@@ -54,12 +62,9 @@ class GitHubRepoConnector:
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "ResearchRadar/0.0.0",
         }
-        if self._secrets is None:
-            return headers
-        try:
-            headers["Authorization"] = f"Bearer {self._secrets.get_github_token()}"
-        except SecretError:
-            pass
+        credential = self._credential.get()
+        if credential:
+            headers["Authorization"] = f"Bearer {credential}"
         return headers
 
     def _parse(
@@ -99,10 +104,3 @@ class GitHubRepoConnector:
                 )
             )
         return candidates
-
-
-def _failed_query_summary(queries: list[str]) -> str:
-    shown = ", ".join(queries[:3])
-    if len(queries) > 3:
-        return f"{shown}, ..."
-    return shown

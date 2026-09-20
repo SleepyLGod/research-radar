@@ -526,7 +526,7 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
     )
 
     assert route.provider_name == "codex"
-    assert route.model == "gpt-5.6-terra"
+    assert route.model == "gpt-5.6-luna"
     assert isinstance(route.provider, CodexCliProvider)
 
 

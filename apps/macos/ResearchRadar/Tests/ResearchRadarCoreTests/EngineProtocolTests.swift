@@ -3,6 +3,57 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct EngineProtocolTests {
+    @Test func legacyOutcomeIsUnknownAndMalformedOutcomesAreRejected() throws {
+        let legacy = try CanonicalFixture.objectDictionary(named: "run-daily-result.json")
+        #expect(try EngineProtocolCodec.decodeResult(CanonicalFixture.data(from: legacy)).report?.researchOutcome == nil)
+        let malformed: [Any] = [NSNull(), "ready", [:], ["status": "unknown", "reasons": []],
+            ["status": "ready", "reasons": ["invented"]], ["status": "ready"],
+            ["status": "ready", "reasons": ["reading_failed", "reading_failed"]],
+            ["status": "ready", "reasons": [], "extra": true], ["status": "ready", "reasons": "reading_failed"]]
+        for value in malformed {
+            var object = legacy
+            var report = try #require(object["report"] as? [String: Any])
+            report["research_outcome"] = value
+            object["report"] = report
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeResult(CanonicalFixture.data(from: object)) }
+        }
+        var object = legacy
+        var report = try #require(object["report"] as? [String: Any])
+        report["unexpected"] = true
+        object["report"] = report
+        #expect(throws: EngineProtocolError.unexpectedFields) { try EngineProtocolCodec.decodeResult(CanonicalFixture.data(from: object)) }
+    }
+
+    @Test func durableOutcomeUsesSameStrictModelAndLegacyRemainsNil() throws {
+        let legacy = ReportRecordV1(topicID: "one", reportDate: "2026-09-20", runDirectory: "/run",
+            articleDraftPath: "/a", reportHTMLPath: "/h", title: "Empty", summary: "",
+            sourceCount: 0, deepReadCount: 0, publishableClaimCount: 0, deliveries: [], createdAt: Date())
+        let encoder = JSONEncoder(), decoder = JSONDecoder()
+        let data = try encoder.encode(legacy)
+        #expect(try decoder.decode(ReportRecordV1.self, from: data).researchOutcome == nil)
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        for value: Any in [NSNull(), ["status": "ready", "reasons": ["invented"]],
+                           ["status": "ready", "reasons": ["reading_failed", "reading_failed"]],
+                           ["status": "ready", "reasons": [], "extra": true]] {
+            object["researchOutcome"] = value
+            #expect(throws: (any Error).self) { try decoder.decode(ReportRecordV1.self, from: JSONSerialization.data(withJSONObject: object)) }
+        }
+        object["researchOutcome"] = ["status": "ready", "reasons": ["full_text_unavailable"]]
+        let decoded = try decoder.decode(ReportRecordV1.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(decoded.researchOutcome == .init(status: .ready, reasons: [.fullTextUnavailable]))
+        #expect(try decoder.decode(ReportRecordV1.self, from: encoder.encode(decoded)) == decoded)
+    }
+
+    @Test func additiveResearchOutcomeRoundTrips() throws {
+        var result = try CanonicalFixture.objectDictionary(named: "run-daily-result.json")
+        var report = try #require(result["report"] as? [String: Any])
+        report["research_outcome"] = ["status": "no_new_content", "reasons": ["no_eligible_papers"]]
+        result["report"] = report
+        let data = try CanonicalFixture.data(from: result)
+        let decoded = try EngineProtocolCodec.decodeResult(data)
+        #expect(try CanonicalFixture.object(from: EngineProtocolCodec.encode(decoded)) == CanonicalFixture.object(from: data))
+    }
+
     @Test(arguments: CanonicalFixture.requestNames)
     func canonicalRequestsRoundTrip(_ fixtureName: String) throws {
         let data = try CanonicalFixture.data(named: fixtureName)

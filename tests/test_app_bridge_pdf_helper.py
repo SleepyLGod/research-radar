@@ -1,11 +1,77 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from research_radar.analysis.figures import PdfCropBox
 from research_radar.app_bridge.pdf_helper import PDFHelperClient, PDFHelperError
+
+
+@pytest.mark.parametrize("result_kind", [
+    "alias", "different", "outside", "missing", "invalid", "relative", "symlink",
+    "parent_symlink", "no_output", "directory",
+])
+def test_crop_response_requires_same_safe_file(tmp_path: Path, result_kind: str) -> None:
+    root = tmp_path.resolve()
+    if result_kind == "alias" and (
+        sys.platform != "darwin" or not str(root).startswith("/private/")
+    ):
+        pytest.skip("Requires a macOS system temporary-directory alias")
+    helper = root / "helper"
+    helper.write_text("fixture")
+    helper.chmod(0o700)
+    allowed = root / "allowed"
+    allowed.mkdir()
+    pdf = allowed / "paper.pdf"
+    pdf.write_bytes(b"pdf")
+    output = allowed / "figure.png"
+    if result_kind == "parent_symlink":
+        (allowed / "images").mkdir()
+        output = allowed / "images/figure.png"
+
+    def run(args, **kwargs):
+        if result_kind == "directory":
+            output.mkdir()
+        elif result_kind != "no_output":
+            output.write_bytes(b"png")
+        returned: object = str(output)
+        if result_kind == "alias":
+            returned = str(output).removeprefix("/private")
+        elif result_kind in {"different", "outside"}:
+            other = (allowed if result_kind == "different" else root) / "other.png"
+            other.write_bytes(b"other")
+            returned = str(other)
+        elif result_kind == "missing":
+            returned = str(allowed / "missing.png")
+        elif result_kind == "invalid":
+            returned = 123
+        elif result_kind == "relative":
+            returned = "figure.png"
+        elif result_kind == "symlink":
+            link = allowed / "alias.png"
+            link.symlink_to(output)
+            returned = str(link)
+        elif result_kind == "parent_symlink":
+            directory = allowed / "images"
+            link = allowed / "images-link"
+            link.symlink_to(directory, target_is_directory=True)
+            returned = str(link / "figure.png")
+        return subprocess.CompletedProcess(args, 0, json.dumps({
+            "schema_version": 1, "operation": "render_crop", "output_path": returned,
+        }), "")
+
+    client = PDFHelperClient(helper, runner=run)
+    def render() -> bool:
+        return client.render_crop(pdf, 1, PdfCropBox(x=0, y=0, width=10, height=10),
+                                  output, dpi=72, allowed_root=allowed)
+
+    if result_kind == "alias":
+        assert render()
+    else:
+        with pytest.raises(PDFHelperError):
+            render()
 
 
 def test_pdf_helper_client_reports_missing_executable(tmp_path: Path) -> None:

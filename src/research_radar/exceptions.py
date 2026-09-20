@@ -1,6 +1,10 @@
 """Project-specific exception types."""
 
 
+class OperationCancelled(Exception):
+    """Cooperative cancellation, not a recoverable analysis/provider failure."""
+
+
 class ResearchRadarError(Exception):
     """Base exception for expected ResearchRadar failures."""
 
@@ -11,6 +15,14 @@ class ConfigError(ResearchRadarError):
 
 class SecretError(ResearchRadarError):
     """Raised when secret storage or retrieval fails."""
+
+
+class SecretNotFoundError(SecretError):
+    """Raised when a credential is absent, rather than inaccessible."""
+
+
+class SecretAccessError(SecretError):
+    """Raised when credential storage cannot be accessed."""
 
 
 class CryptoError(ResearchRadarError):

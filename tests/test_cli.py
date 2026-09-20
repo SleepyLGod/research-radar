@@ -258,7 +258,7 @@ def test_provider_list_outputs_configured_providers_without_secret_values(
     assert kimi["timeout_seconds"] == 333
     assert kimi["secret"] == "present"
     assert codex["secret"] == "not_required"
-    assert codex["reasoning_effort"] == "high"
+    assert codex["reasoning_effort"] == "xhigh"
     deepseek = next(item for item in output["providers"] if item["name"] == "deepseek")
     assert deepseek["thinking"] == "enabled"
     assert deepseek["reasoning_effort"] == "high"
@@ -323,7 +323,7 @@ def test_provider_routes_show_daily_defaults_and_deepseek_replacement(
     assert routes["deep_reading"]["model"] == "mimo-v2.5-pro"
     assert routes["verifier"]["provider"] == "codex"
     assert routes["verifier"]["model"] == "gpt-5.5"
-    assert routes["verifier"]["reasoning_effort"] == "high"
+    assert routes["verifier"]["reasoning_effort"] == "xhigh"
 
 
 def test_provider_routes_show_task_specific_override_precedence(
@@ -549,7 +549,7 @@ def test_schedule_daily_draft_writes_runner_and_plist(
     assert "--secret-source keychain" in daily_command
     assert "--deepseek-provider xiaomi" in daily_command
     assert "--verifier-provider codex" in daily_command
-    assert "--verifier-model gpt-5.6-terra" in daily_command
+    assert "--verifier-model gpt-5.6-luna" in daily_command
     assert "--dry-run" in publish_command
     assert "API_KEY" not in plist
     assert "appsecret" not in plist.casefold()
@@ -602,7 +602,7 @@ def test_schedule_daily_draft_non_codex_verifier_does_not_inherit_codex_model(
     schedule = json.loads((output_dir / "schedule.json").read_text(encoding="utf-8"))
     daily_command = " ".join(schedule["daily_command"])
     assert "--verifier-provider deepseek" in daily_command
-    assert "--verifier-model gpt-5.6-terra" not in daily_command
+    assert "--verifier-model gpt-5.6-luna" not in daily_command
 
 
 def test_schedule_daily_draft_fails_when_uv_is_missing(

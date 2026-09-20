@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from threading import Event
 from typing import cast
 
 from research_radar import __version__
+from research_radar.analysis.research_outcome import parse_research_outcome
 from research_radar.analysis.routing import resolve_task_route
 from research_radar.app_bridge.configuration import LoadedAppConfigurationV1
 from research_radar.app_bridge.events import EventWriter
@@ -22,7 +25,8 @@ from research_radar.app_bridge.protocol import (
 )
 from research_radar.application.daily import DailyRunOptions, run_daily_application
 from research_radar.application.email import EmailDeliveryOptions, publish_email_application
-from research_radar.application.provider_probe import probe_provider
+from research_radar.application.provider_probe import probe_excerpt, probe_provider
+from research_radar.application.search_probe import probe_web_search
 from research_radar.application.wechat import WeChatDraftOptions, publish_wechat_draft
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.exceptions import ResearchRadarError
@@ -39,6 +43,7 @@ def handle_preflight(
     secrets: object,
     events: EventWriter,
     pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
 ) -> dict[str, object]:
     """Check the local engine and configured capabilities without exposing secrets."""
 
@@ -61,7 +66,28 @@ def handle_preflight(
     if not all(item.get("available") for item in dependencies.values()):
         checks[0]["status"] = "unavailable"
     if payload.live_probe and config is not None:
-        checks.extend(_configured_route_checks(config, cast(SecretManager, secrets)))
+        checks.extend(_configured_route_checks(
+            config, cast(SecretManager, secrets), cancellation_event,
+        ))
+        search = config.research.discovery.web_search
+        search_status = "optional"
+        search_message = "Search not checked: this connectivity probe supports Tavily only."
+        if search.provider == "tavily":
+            try:
+                probe_web_search(search, cast(SecretManager, secrets),
+                                 cancellation_event=cancellation_event)
+                search_message = "Search connectivity check succeeded."
+                search_status = "ready"
+            except ResearchRadarError as exc:
+                search_message = probe_excerpt(str(exc)) or "Search connectivity check failed."
+                search_status = "action_required"
+        checks.append({
+            "id": "web_search",
+            "status": search_status,
+            "message": search_message,
+            "provider": search.provider,
+            "model": None,
+        })
     return {
         "ready": all(item["status"] in {"ready", "optional"} for item in checks),
         "checks": checks,
@@ -75,6 +101,7 @@ def handle_bootstrap_topic(
     secrets: object,
     events: EventWriter,
     pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
 ) -> dict[str, object]:
     """Generate a reviewable topic profile without writing YAML."""
 
@@ -110,12 +137,34 @@ def handle_run_daily(
     secrets: object,
     events: EventWriter,
     pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
     daily_runner: Callable[..., Path] = run_daily_application,
 ) -> dict[str, object]:
     """Run the existing daily application service and summarize its public result."""
 
     if config is None:
         raise ValueError("run_daily requires App configuration.")
+    # Reject unavailable CLI configuration before discovery or any provider call.
+    from research_radar.app_bridge.runner import BridgeExecutionError
+
+    for task, route in config.research.models.task_routes.items():
+        if task == "topic_bootstrap":
+            continue
+        provider = config.research.model_providers[route.provider]
+        if provider.kind != "codex_cli":
+            continue
+        command = Path(provider.command) if provider.command else None
+        if (
+            command is None
+            or not command.is_absolute()
+            or not command.is_file()
+            or not os.access(command, os.X_OK)
+        ):
+            raise BridgeExecutionError(
+                code="codex_not_configured",
+                stage="preflight",
+                message="Configure an available Codex executable in Settings before research.",
+            )
     payload = cast(RunDailyPayloadV1, request.payload)
     if (
         pdf_helper_path is None
@@ -136,6 +185,7 @@ def handle_run_daily(
         config.research,
         cast(SecretManager, secrets),
         progress_listener=_progress_listener(events),
+        cancellation_event=cancellation_event,
         figure_extractor=app_figure_extractor(
             PDFHelperClient(pdf_helper_path),
             allowed_root=config.workspace_root,
@@ -143,6 +193,11 @@ def handle_run_daily(
     )
     draft = load_article_draft(run_dir / "article_draft.json")
     summary = _optional_json(run_dir / "summary.json")
+    outcome_fields = {}
+    if "research_outcome" in draft.metadata:
+        outcome_fields["research_outcome"] = parse_research_outcome(
+            draft.metadata["research_outcome"],
+        )
     return {
         "run_dir": str(run_dir),
         "report_date": payload.report_date,
@@ -153,6 +208,7 @@ def handle_run_daily(
         "source_count": _metadata_count(draft.metadata, "source_count"),
         "deep_read_count": _metadata_count(draft.metadata, "deep_read_count"),
         "publishable_claim_count": _metadata_count(summary, "publishable_claim_count"),
+        **outcome_fields,
     }
 
 
@@ -163,6 +219,7 @@ def handle_retry_delivery(
     secrets: object,
     events: EventWriter,
     pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
     wechat_client_factory: type[WeChatDraftClient] = WeChatDraftClient,
 ) -> dict[str, object]:
     """Retry exactly one configured delivery channel."""
@@ -236,20 +293,24 @@ def _wechat_secret_manager(
 def _configured_route_checks(
     config: LoadedAppConfigurationV1,
     secrets: SecretManager,
+    cancellation_event: Event | None = None,
 ) -> list[dict[str, object]]:
     checks: list[dict[str, object]] = []
-    probe_status: dict[tuple[str, str], bool] = {}
+    probe_status: dict[tuple[str, str], str | None] = {}
     for task, route in sorted(config.research.models.task_routes.items()):
         key = (route.provider, route.model)
         if key not in probe_status:
             try:
-                resolved = resolve_task_route(config.research, secrets, task)
+                resolved = resolve_task_route(
+                    config.research, secrets, task, cancellation_event=cancellation_event,
+                )
                 if resolved.provider is not None:
                     probe_provider(resolved, probe="small")
-                probe_status[key] = True
-            except ResearchRadarError:
-                probe_status[key] = False
-        ready = probe_status[key]
+                probe_status[key] = None
+            except ResearchRadarError as exc:
+                probe_status[key] = probe_excerpt(str(exc)) or "Provider check failed."
+        failure = probe_status[key]
+        ready = failure is None
         checks.append(
             {
                 "id": task,
@@ -257,7 +318,7 @@ def _configured_route_checks(
                 "message": (
                     "Provider route is ready."
                     if ready
-                    else "Provider check failed. Review the provider and secret settings."
+                    else failure
                 ),
                 "provider": route.provider,
                 "model": route.model,
@@ -269,6 +330,13 @@ def _configured_route_checks(
 def _progress_listener(events: EventWriter):
     stage_map = {
         "discovery": "discovery",
+        "relevance": "discovery",
+        "history": "discovery",
+        "source_gist": "source_gist",
+        "acquisition": "acquisition",
+        "ingestion": "acquisition",
+        "paper_text_quality": "acquisition",
+        "anchor_repair": "anchor_repair",
         "reader": "deep_reading",
         "verifier": "verifier",
         "localization": "localization",
