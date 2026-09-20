@@ -162,11 +162,11 @@ def test_openai_compatible_sends_explicit_thinking_without_temperature(monkeypat
 
     monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
 
-    response = provider.complete([Message(role="user", content="hello")], model="deepseek-v4-flash")
+    response = provider.complete([Message(role="user", content="hello")], model="deepseek-flash")
 
     assert response.content == "ok"
     assert captured["payload"] == {
-        "model": "deepseek-v4-flash",
+        "model": "deepseek-flash",
         "messages": [{"role": "user", "content": "hello"}],
         "thinking": {"type": "enabled"},
         "reasoning_effort": "high",
@@ -521,12 +521,12 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
         "verifier",
         provider_override="codex",
         global_provider="deepseek",
-        global_model="deepseek-v4-flash",
+        global_model="deepseek-flash",
         default_local=False,
     )
 
     assert route.provider_name == "codex"
-    assert route.model == "gpt-5.6-terra"
+    assert route.model == "gpt-5.6-luna"
     assert isinstance(route.provider, CodexCliProvider)
 
 
@@ -537,7 +537,7 @@ def test_deep_reading_route_defaults_to_deepseek_v4_flash() -> None:
     route = resolve_task_route(config, manager, "deep_reading")
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
     assert isinstance(route.provider, OpenAICompatibleProvider)
 
 
@@ -553,7 +553,7 @@ def test_provider_override_keeps_matching_task_model() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
 
 
 def test_model_override_wins_over_matching_task_model() -> None:
@@ -584,7 +584,7 @@ def test_source_gist_route_stays_on_lightweight_deepseek_model() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
 
 
 def test_anchor_repair_route_defaults_to_deepseek_v4_flash() -> None:
@@ -594,7 +594,7 @@ def test_anchor_repair_route_defaults_to_deepseek_v4_flash() -> None:
     route = resolve_task_route(config, manager, "anchor_repair")
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
     assert isinstance(route.provider, OpenAICompatibleProvider)
 
 
@@ -657,7 +657,7 @@ def test_task_specific_provider_override_beats_deepseek_replacement() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
 
 
 def test_global_provider_override_keeps_global_behavior() -> None:
@@ -683,14 +683,14 @@ def _deepseek_route_config() -> AppConfig:
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-flash"},
                     "deep_reading": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-flash",
+                        "model": "deepseek-flash",
                     },
                     "anchor_repair": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-flash",
+                        "model": "deepseek-flash",
                     },
                 }
             },

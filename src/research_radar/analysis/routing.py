@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from threading import Event
 
 from research_radar.analysis.anthropic import AnthropicMessagesProvider
 from research_radar.analysis.cli_providers import ClaudeCodeCliProvider, CodexCliProvider
@@ -41,6 +42,7 @@ def resolve_task_route(
     global_model: str | None = None,
     provider_replacements: dict[str, str] | None = None,
     default_local: bool = False,
+    cancellation_event: Event | None = None,
 ) -> TaskModelRoute:
     """Resolve the provider and model for one task."""
 
@@ -60,7 +62,9 @@ def resolve_task_route(
         raise ConfigError(
             f"No model configured for task {task_name} provider {preview.provider_name}."
         )
-    provider = build_provider(config, secrets, preview.provider_name)
+    provider = build_provider(
+        config, secrets, preview.provider_name, cancellation_event=cancellation_event,
+    )
     return TaskModelRoute(
         provider=provider,
         model=preview.model,
@@ -132,6 +136,8 @@ def build_provider(
     config: AppConfig,
     secrets: SecretManager,
     provider_name: str,
+    *,
+    cancellation_event: Event | None = None,
 ) -> LLMProvider:
     """Build one configured provider instance."""
 
@@ -140,7 +146,7 @@ def build_provider(
     except KeyError as exc:
         raise ConfigError(f"Unknown model provider: {provider_name}") from exc
 
-    provider = _build_provider(provider_name, provider_config, secrets)
+    provider = _build_provider(provider_name, provider_config, secrets, cancellation_event)
     health_check = getattr(provider, "health_check", None)
     if callable(health_check):
         health_check()
@@ -151,6 +157,7 @@ def _build_provider(
     provider_name: str,
     provider_config: ModelProviderConfig,
     secrets: SecretManager,
+    cancellation_event: Event | None = None,
 ) -> LLMProvider:
     if provider_config.kind == "local":
         return StaticProvider()
@@ -167,6 +174,7 @@ def _build_provider(
             timeout_seconds=provider_config.timeout_seconds,
             thinking=provider_config.thinking,
             reasoning_effort=provider_config.reasoning_effort,
+            cancellation_event=cancellation_event,
         )
     if provider_config.kind == "anthropic_messages":
         if provider_config.api_key_secret is None:
@@ -199,11 +207,11 @@ def _build_provider(
 
 def _default_model(provider_name: str) -> str | None:
     defaults = {
-        "deepseek": "deepseek-v4-flash",
+        "deepseek": "deepseek-flash",
         "xiaomi": "mimo-v2.5-pro",
         "openai": "gpt-5.4",
         "anthropic": "claude-sonnet-4-5",
-        "codex": "gpt-5.6-terra",
+        "codex": "gpt-5.6-luna",
         "claude": "sonnet",
         "von_claude": "sonnet",
         "local": "local",

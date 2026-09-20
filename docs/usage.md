@@ -57,14 +57,62 @@ uv run research-radar secrets set-named kimi.api_key
 uv run research-radar secrets status --name kimi.api_key
 ```
 
+### macOS App Keychain Authorization
+
+Entering an API key in the App saves it to Keychain. The system's **Allow / Always Allow**
+dialog is permission to read that saved item, not a request to enter the API key again.
+Different items or requesting programs may require separate authorization. Use Always Allow
+only after checking that the program and credential belong to ResearchRadar; do not allow all
+applications or save keys as plaintext to avoid the dialog.
+
+The development App and bundled engine default to ad-hoc signatures. Their identity is tied to
+the specific build, so rebuilding can require authorization again. A stable certificate-based
+identity addresses that build-identity problem; it does not bypass first-use permission, locked
+keychains or item access controls. A local self-signed certificate is **not sufficient** to
+preserve Keychain authorization across updates: macOS can still use a per-build `cdhash`
+partition in addition to the designated requirement. Our local two-version dummy-credential
+test confirmed this restriction. Do not change credential ACLs to bypass it. See
+[Apple's signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+and [Apple's Keychain client classification](https://github.com/apple-oss-distributions/Security/blob/main/securityd/src/clientid.cpp).
+
+For developers who already have an approved code-signing certificate **and its private key**, use
+its exact 40-digit fingerprint from `security find-identity -v -p codesigning`:
+
+```bash
+RESEARCH_RADAR_SIGNING_IDENTITY="<CERTIFICATE_SHA1>" ./script/stage_macos_app.sh
+```
+
+To retain an explicitly selected identity on this checkout, put only its public fingerprint in
+the gitignored `packaging/macos/signing.local.json`:
+
+```json
+{"identity": "<CERTIFICATE_SHA1>"}
+```
+
+The signing script's `--identity` overrides the environment variable, which overrides this local
+file. Without any of these settings it uses ad-hoc signing. The file contains no private key and
+does not change global shell settings; the certificate and private key remain in Keychain.
+
+The assembler checks the identity before replacing the existing App. All nested code and the
+outer App use the selected identity; unavailable identities or signing failures stop the build,
+without falling back to ad-hoc. Invalid local settings also stop the build.
+This option does not create/import certificates, change Keychain ACLs or add notarization,
+Hardened Runtime or public-distribution approval. Certificate-backed signing, frozen preflight,
+and cross-version authorization are separate acceptance checks; a valid signature does not mean
+Keychain will accept an updated executable without another prompt.
+
 ## Model Routes
 
 The default quality path is:
 
-- Deep reading: `deepseek/deepseek-v4-flash` with explicit thinking and `high` reasoning effort
-- Source gist and report localization: `deepseek-v4-flash` through the same configured DeepSeek provider
-- Verification: `codex/gpt-5.6-terra` with `high` reasoning effort
+- Deep reading: `deepseek/deepseek-flash` with explicit thinking and `high` reasoning effort
+- Source gist and report localization: `deepseek-flash` through the same configured DeepSeek provider
+- Verification: `codex/gpt-5.6-luna` with `xhigh` reasoning effort
 - Web search: Tavily when the web-search secret is present
+
+Existing YAML remains authoritative: change both the verifier model and the Codex provider's
+`reasoning_effort` to adopt Luna/xhigh. This does not change global Codex settings or an installed
+scheduler snapshot. Regenerate a snapshot explicitly when its model should change.
 
 Daily users usually do not need route flags. Use the defaults first, then inspect or override
 providers only when you are testing another model:

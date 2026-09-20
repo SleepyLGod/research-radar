@@ -103,6 +103,9 @@ class DiscoveryOrchestrator:
                 diagnostics = _connector_diagnostics(connector)
                 if diagnostics is not None:
                     connector_diagnostics[connector.name] = diagnostics
+                    findings.extend(
+                        _connector_diagnostic_findings(connector.name, stage, diagnostics)
+                    )
                 findings.append(_discovery_failure(connector.name, stage, exc))
                 continue
             diagnostics = _connector_diagnostics(connector)
@@ -244,13 +247,38 @@ def _connector_diagnostic_findings(
     diagnostics: dict[str, object],
 ) -> list[ReviewFinding]:
     findings: list[ReviewFinding] = []
+    warnings = diagnostics.get("warnings", [])
+    if isinstance(warnings, list) and any(
+        isinstance(item, dict) and item.get("kind") == "optional_credential_access_failed"
+        for item in warnings
+    ):
+        # Use fixed text and metadata, never backend messages or credential details.
+        findings.append(
+            ReviewFinding(
+                severity="warning",
+                message=(
+                    f"{connector_name}: optional credential unavailable; continuing anonymously."
+                ),
+                metadata={
+                    "kind": "optional_credential_access_failed",
+                    "discovery_provider": connector_name,
+                    "discovery_stage": stage,
+                    "error_type": "SecretAccessError",
+                },
+            )
+        )
     queries = diagnostics.get("queries", [])
     if not isinstance(queries, list):
         return findings
+    failed_query_count = 0
     for item in queries:
         if not isinstance(item, dict) or item.get("status") == "succeeded":
             continue
+        if failed_query_count >= 20:
+            break
+        failed_query_count += 1
         query = str(item.get("query") or "")
+        http_status = item.get("http_status")
         findings.append(
             ReviewFinding(
                 severity="warning",
@@ -262,6 +290,11 @@ def _connector_diagnostic_findings(
                     "query": query,
                     "status": item.get("status"),
                     "error_type": item.get("error_type"),
+                    "http_status": (
+                        http_status
+                        if type(http_status) is int and 100 <= http_status <= 599
+                        else None
+                    ),
                     "elapsed_seconds": item.get("elapsed_seconds"),
                     "timeout_seconds": item.get("timeout_seconds"),
                 },

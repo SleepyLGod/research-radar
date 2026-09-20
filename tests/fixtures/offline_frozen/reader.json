@@ -1,0 +1,47 @@
+{
+  "deep_readings": {
+    "area_context": {
+      "background": "Agent memory systems require grounded retrieval.",
+      "active_questions": ["How should memory evidence be scored?"],
+      "common_baselines": ["Answer-only scoring"],
+      "evidence": [{"quote": "Agent memory systems require grounded retrieval."}]
+    },
+    "problem_solution": {
+      "problem": "Memory benchmarks reward unsupported answers.",
+      "why_it_matters": "Scores can hide ungrounded guessing.",
+      "hidden_assumptions": ["Retrieved memory evidence exists."],
+      "solution": "Require cited memory evidence before crediting answers.",
+      "mechanism": "The evaluator checks answers against retrieved memory items.",
+      "evidence": [{"quote": "Require cited memory evidence before crediting answers."}]
+    },
+    "related_work": {
+      "prior_work": ["Answer-only memory benchmarks"],
+      "novelty": "It evaluates grounded answerability rather than answer match alone.",
+      "repackaging_risk": "It is an evaluation lens, not a new memory store.",
+      "evidence": [{"quote": "grounded answerability rather than answer match"}]
+    },
+    "experiments": {
+      "setup": "The evaluation runs on a fixture benchmark.",
+      "metrics_benchmarks": ["Accuracy is the main fixture metric."],
+      "main_findings": "The fixture result shows grounded answers score higher.",
+      "cost_robustness_findings": "unknown",
+      "known_caveats": "unknown",
+      "evidence": [{"quote": "The evaluation runs on a fixture benchmark."}]
+    },
+    "limitations": {
+      "explicit_limitations": ["It only evaluates benchmark-style tasks."],
+      "inferred_weaknesses": ["Deployment behavior remains untested."],
+      "evidence": [{"quote": "only evaluates benchmark-style tasks"}]
+    },
+    "critical_assessment": {
+      "overclaiming_risk": "Medium",
+      "weak_evaluations": ["No long-horizon deployment evaluation"],
+      "missing_ablations": ["No retrieval-format ablation"],
+      "bottom_line": "The useful contribution is the evaluation lens.",
+      "evidence": [{"quote": "useful contribution is the evaluation lens"}]
+    },
+    "plain_language_example": "A correct answer without evidence should not get full credit.",
+    "essence": "The source reframes memory quality as grounded recall.",
+    "unsupported_or_rejected_claims": []
+  }
+}

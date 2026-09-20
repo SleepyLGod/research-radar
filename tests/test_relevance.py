@@ -1,7 +1,12 @@
+from dataclasses import replace
+
+import pytest
+
 from research_radar.config import TopicConfig
 from research_radar.discovery.relevance import gate_relevant_sources, score_source
 from research_radar.evaluation.topic_smoke import DEFAULT_TOPIC_SMOKE_SPECS
 from research_radar.models import SourceCandidate, SourceType
+from research_radar.topic_bootstrap import bootstrap_topic_draft
 
 
 def _agent_memory_concept_topic(source_intent: str = "research_brief") -> TopicConfig:
@@ -386,6 +391,75 @@ def test_concept_gate_accepts_known_benchmark_anchor() -> None:
 
     assert scored.metadata["relevance"]["status"] == "relevant"
     assert scored.metadata["relevance"]["concept_gate"]["decision_rule"] == "benchmark_anchor"
+
+
+@pytest.mark.parametrize("profile", ["builtin", "bootstrap"])
+def test_memory_agents_alias_admits_memoryagentbench_through_concept_gate(profile: str) -> None:
+    topic = (
+        _smoke_topic("agent-memory")
+        if profile == "builtin"
+        else bootstrap_topic_draft("agent memory")
+    )
+    # Synthetic summary isolates the alias, without a known benchmark anchor.
+    source = SourceCandidate(
+        title="MemoryAgentBench",
+        url="https://example.invalid/memoryagentbench",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary="A benchmark evaluating memory agents on memory retrieval across sessions.",
+    )
+
+    scored = score_source(source, topic)
+    gate = scored.metadata["relevance"]["concept_gate"]
+
+    assert scored.metadata["relevance"]["status"] == "relevant"
+    assert gate["passed"] is True
+    assert gate["decision_rule"] == "agent_context+memory_mechanism"
+    assert "memory agents" in gate["matched_aliases"]["agent_context"]
+    assert "memory retrieval" in gate["matched_aliases"]["memory_mechanism"]
+
+    without_aliases = replace(topic, concept_groups={
+        **topic.concept_groups,
+        "agent_context": [
+            alias for alias in topic.concept_groups["agent_context"]
+            if alias not in {"memory agent", "memory agents"}
+        ],
+    })
+    baseline = score_source(source, without_aliases)
+    assert baseline.metadata["relevance"]["concept_gate"]["passed"] is False
+    assert baseline.metadata["relevance"]["status"] != "relevant"
+
+
+@pytest.mark.parametrize("profile", ["builtin", "bootstrap"])
+@pytest.mark.parametrize("summary", [
+    "A quantum thermalization study of equilibration and response theory.",
+    "A hardware study of memory retrieval bandwidth and storage latency.",
+    "A deployment guide for memory agents covering installation and packaging.",
+])
+def test_memory_agents_alias_does_not_admit_unrelated_or_single_concept_sources(
+    profile: str, summary: str,
+) -> None:
+    topic = (
+        _smoke_topic("agent-memory")
+        if profile == "builtin"
+        else bootstrap_topic_draft("agent memory")
+    )
+    source = SourceCandidate(
+        title="Unrelated Source",
+        url="https://example.invalid/unrelated",
+        source_type=SourceType.PAPER,
+        source_name="arxiv",
+        summary=summary,
+    )
+
+    scored = score_source(source, topic)
+    gate = scored.metadata["relevance"]["concept_gate"]
+
+    assert gate["passed"] is False
+    assert gate["decision_rule"] == "missing_required_concept_combination"
+    assert scored.metadata["relevance"]["status"] != "relevant"
+    _, selected, _ = gate_relevant_sources([source], topic)
+    assert selected == []
 
 
 def test_concept_gate_downgrades_generic_compute_and_training_sources() -> None:

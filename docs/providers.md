@@ -9,7 +9,7 @@ predictable: add a provider instance once, then route selected tasks to it.
   `claude-code`.
 - Provider kind: the wire format used by that backend, such as `openai_compatible`,
   `anthropic_messages`, `codex_cli`, `claude_code_cli`, or `local`.
-- Task route: the model used for a task, for example `deep_reading -> deepseek/deepseek-v4-flash`.
+- Task route: the model used for a task, for example `deep_reading -> deepseek/deepseek-flash`.
 
 The default path remains DeepSeek reader plus Codex verifier. Extra vendors should be configured in
 local `config.yaml`, not added to the public `config.example.yaml`.
@@ -148,13 +148,13 @@ model_providers:
     kind: codex_cli
     command: /Applications/ChatGPT.app/Contents/Resources/codex
     timeout_seconds: 900
-    reasoning_effort: high
+    reasoning_effort: xhigh
 
 models:
   task_routes:
     verifier:
       provider: codex
-      model: gpt-5.6-terra
+      model: gpt-5.6-luna
 ```
 
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a

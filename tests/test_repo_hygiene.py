@@ -48,9 +48,9 @@ def test_readme_is_concise_project_entrypoint() -> None:
     assert "[RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml)" in readme
     assert "[Detailed Usage](docs/usage.md)" in readme
     assert "[Provider Configuration](docs/providers.md)" in readme
-    assert "DeepSeek v4 Flash" in readme
+    assert "deepseek-flash" in readme
     assert "explicit thinking" in readme
-    assert "Codex `gpt-5.6-terra`" in readme
+    assert "Codex `gpt-5.6-luna`" in readme
     assert "`Evidence-gated`" in readme
     assert "Turn a reviewed research topic into a daily article" in readme
     assert "ResearchRadar does not publish" in readme
@@ -78,8 +78,8 @@ def test_chinese_readme_and_usage_doc_exist() -> None:
     assert "--config config.yaml" in chinese
     assert "--config config.example.yaml" not in chinese
     assert "# ResearchRadar Usage Guide" in usage
-    assert "Deep reading: `deepseek/deepseek-v4-flash`" in usage
-    assert "Verification: `codex/gpt-5.6-terra`" in usage
+    assert "Deep reading: `deepseek/deepseek-flash`" in usage
+    assert "Verification: `codex/gpt-5.6-luna`" in usage
     assert "--deepseek-provider xiaomi" in usage
     assert "[Provider Configuration](providers.md)" in usage
     assert "research-radar compose zhihu" in usage
@@ -125,10 +125,10 @@ def test_example_config_uses_codex_terra_high_verifier() -> None:
     config = Path("config.example.yaml").read_text(encoding="utf-8")
 
     assert "thinking: enabled" in config
-    assert "analyst: deepseek-v4-flash" in config
+    assert "analyst: deepseek-flash" in config
     assert "deepseek-v4-pro" not in config
     assert "reasoning_effort: high" in config
-    assert "verifier:\n      provider: codex\n      model: gpt-5.6-terra" in config
+    assert "verifier:\n      provider: codex\n      model: gpt-5.6-luna" in config
 
 
 def test_architecture_contains_canonical_e2e_flow() -> None:

@@ -7,7 +7,11 @@ from pathlib import Path
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
-from research_radar.analysis.figures import FigureExtractionError, extract_paper_figures
+from research_radar.analysis.figures import (
+    FigureExtractionError,
+    FigureExtractor,
+    extract_paper_figures,
+)
 from research_radar.analysis.localization import (
     localization_failed,
     localization_status_from_attempts,
@@ -24,11 +28,12 @@ from research_radar.analysis.paper_reading import (
 )
 from research_radar.analysis.providers import LLMProvider
 from research_radar.analysis.public_style import audit_public_writing_text
+from research_radar.analysis.research_outcome import assess_research_outcome
 from research_radar.analysis.research_plan import build_research_plan, research_plan_to_dict
 from research_radar.analysis.review import model_review_publishable_claims, rule_based_review
 from research_radar.analysis.source_gist import attach_source_gists
 from research_radar.analysis.triage import heuristic_claims
-from research_radar.compose.draft import build_daily_draft
+from research_radar.compose.draft import apply_research_outcome, build_daily_draft
 from research_radar.compose.markdown import render_markdown
 from research_radar.compose.synthesis import render_synthesis_outline
 from research_radar.compose.wechat import render_wechat_html
@@ -64,7 +69,7 @@ from research_radar.models import (
     SourceType,
     dataclass_to_dict,
 )
-from research_radar.pipeline.progress import ProgressWriter
+from research_radar.pipeline.progress import ProgressListener, ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
 from research_radar.pipeline.reporting import render_review_report
 from research_radar.pipeline.runtime import build_runtime_summary
@@ -74,7 +79,9 @@ from research_radar.storage.runs import create_run_dir, update_manifest
 from research_radar.storage.source_history import (
     annotate_source_history,
     append_source_history_outcomes,
+    is_deep_read_eligible,
     is_reportable_source,
+    source_family_keys,
 )
 
 ANALYSIS_LANGUAGE = "en"
@@ -99,6 +106,8 @@ def run_daily(
     localizer: LLMProvider | None = None,
     localization_model: str | None = None,
     language: str | None = None,
+    progress_listener: ProgressListener | None = None,
+    figure_extractor: FigureExtractor | None = None,
 ) -> Path:
     """Run the daily monitoring pipeline and return the run directory."""
 
@@ -109,7 +118,10 @@ def run_daily(
             "Chinese report localization requires a localization provider and model."
         )
     run_dir, manifest = create_run_dir(root, topic_id, "daily")
-    progress = ProgressWriter(run_dir / "run_progress.jsonl")
+    progress = ProgressWriter(
+        run_dir / "run_progress.jsonl",
+        listener=progress_listener,
+    )
     progress.record("run", "created", topic_id=topic_id, mode="daily")
     findings: list[ReviewFinding] = []
     research_plan = build_research_plan(topic, trusted_domains=config.discovery.trusted_domains)
@@ -187,6 +199,10 @@ def run_daily(
         for candidate in relevant_candidates
         if is_reportable_source(candidate) and _passes_daily_report_gate(candidate)
     ]
+    # A seen retry candidate must not suppress a new version in the public list.
+    reportable_candidates = annotate_deep_selection_dedupe(
+        reportable_candidates, source_intent=topic.source_intent,
+    )
     progress.record(
         "source_gist",
         "started",
@@ -235,11 +251,16 @@ def run_daily(
         for candidate in relevant_candidates
         if is_reportable_source(candidate) and _passes_daily_report_gate(candidate)
     ]
-    reportable_candidates = annotate_deep_selection_dedupe(
-        reportable_candidates,
+    # Listing history must not prevent the first successful deep read of a paper.
+    selection_candidates = annotate_deep_selection_dedupe(
+        [
+            candidate for candidate in relevant_candidates
+            if _passes_daily_report_gate(candidate)
+            and (is_reportable_source(candidate) or is_deep_read_eligible(candidate))
+        ],
         source_intent=topic.source_intent,
     )
-    candidates = _replace_candidates(candidates, reportable_candidates)
+    candidates = _replace_candidates(candidates, selection_candidates)
     relevant_candidates = [
         candidate
         for candidate in candidates
@@ -262,6 +283,7 @@ def run_daily(
     reader_attempts = []
     selected_deep_candidates: list[SourceCandidate] = []
     deep_reading_status_by_url: dict[str, str] = {}
+    deep_candidate_pool: list[SourceCandidate] = []
     deep_required = deep_reader is not None and deep_limit > 0
     if deep_required:
         progress.record(
@@ -271,9 +293,11 @@ def run_daily(
             deep_limit=deep_limit,
         )
         deep_candidate_pool = ranked_deep_candidates(
-            reportable_candidates,
+            [source for source in selection_candidates if is_deep_read_eligible(source)],
             source_intent=topic.source_intent,
         )
+        # Stable sort preserves the existing quality ranking within each group.
+        deep_candidate_pool.sort(key=lambda source: not is_reportable_source(source))
         progress.record(
             "deep_selection",
             "ranked",
@@ -442,20 +466,22 @@ def run_daily(
             anchor_repairs.extend(deep_result.anchor_repairs)
             reader_attempts.extend(deep_result.reader_attempts)
         _mark_successful_duplicate_statuses(
-            reportable_candidates,
+            selection_candidates,
             selected_deep_candidates,
             deep_reading_status_by_url,
         )
         findings.extend(
             _deep_selection_findings(
-                reportable_candidates,
+                selection_candidates,
                 selected_deep_candidates,
                 source_intent=topic.source_intent,
                 deep_reading_status_by_url=deep_reading_status_by_url,
             )
         )
 
-    paper_coverage = paper_coverage_diagnostics(candidates, source_intent=topic.source_intent)
+    paper_coverage = paper_coverage_diagnostics(
+        deep_candidate_pool if deep_required else candidates, source_intent=topic.source_intent,
+    )
     findings.extend(_quality_gate_findings(paper_coverage))
     claims, fallback_findings = _daily_claims(
         deep_required=deep_required,
@@ -470,6 +496,7 @@ def run_daily(
 
     model_feedback = None
     verification_actions = []
+    verifier_reviewed_count = 0
     if verifier is not None and claims:
         progress.record(
             "verifier",
@@ -493,6 +520,7 @@ def run_daily(
             model_findings = review_result.findings
             model_feedback = review_result.raw_feedback
             verification_actions = review_result.actions
+            verifier_reviewed_count = review_result.reviewed_count
         except AnalysisError as exc:
             progress.record(
                 "verifier",
@@ -522,6 +550,7 @@ def run_daily(
         deep_artifacts,
         claims,
         run_dir / "figures",
+        figure_extractor=figure_extractor or extract_paper_figures,
     )
     findings.extend(figure_findings)
     web_search_summary = _web_search_summary(
@@ -530,8 +559,22 @@ def run_daily(
         duplicate_count=discovery.duplicate_count,
         diagnostics=discovery.connector_diagnostics.get("web_search"),
     )
+    public_claim_counts = _publishable_claim_counts_by_url(claims)
+    public_deep_sources = [
+        source for source in selected_deep_candidates if public_claim_counts.get(source.url, 0)
+    ]
+    public_deep_families = {
+        key for source in public_deep_sources for key in source_family_keys(source)
+    }
+    seen_sources = [
+        source for source in history_report["omitted_seen_sources"]
+        if not public_deep_families.intersection(source.get("family_keys", []))
+    ]
+    report_source_pool = list({source.url: source for source in [
+        *reportable_candidates, *public_deep_sources,
+    ]}.values())
     public_reportable_candidates = select_public_report_sources(
-        reportable_candidates,
+        report_source_pool,
         selected_deep_candidates,
         source_intent=topic.source_intent,
     )
@@ -658,7 +701,7 @@ def run_daily(
         write_json(
             run_dir / "source_selection.json",
             build_source_selection_report(
-                reportable_candidates,
+                selection_candidates,
                 selected_deep_candidates,
                 source_intent=topic.source_intent,
                 deep_reading_status_by_url=deep_reading_status_by_url,
@@ -702,9 +745,29 @@ def run_daily(
             language=report_language,
             readings=display_readings,
             deep_read_sources=display_deep_sources,
-            seen_sources=history_report["omitted_seen_sources"],
+            seen_sources=seen_sources,
             figures_by_source_url=display_figures_by_source_url,
         )
+        outcome_fields = {}
+        if deep_required:
+            outcome = assess_research_outcome(
+                eligible_count=len(deep_candidate_pool),
+                deep_read_count=int(draft.metadata["deep_read_count"]),
+                publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
+                discovery_failed=any(
+                    finding.metadata.get("kind") in {"discovery_failed", "web_search_query_failed"}
+                    for finding in discovery.findings
+                ) or any(
+                    isinstance(details, dict) and bool(details.get("failed_query_count"))
+                    for details in discovery.connector_diagnostics.values()
+                ),
+                reading_statuses=deep_reading_status_by_url.values(),
+                verifier_reviewed_count=verifier_reviewed_count,
+            )
+            draft = apply_research_outcome(draft, outcome)
+            outcome_fields = {"research_outcome": outcome}
+            manifest = replace(manifest, metadata={**manifest.metadata, **outcome_fields})
+            update_manifest(run_dir, manifest)
         explanation_audit = draft.metadata.get("explanation_audit", {})
         if isinstance(explanation_audit, dict):
             dropped_count = int(explanation_audit.get("dropped_count", 0) or 0)
@@ -846,6 +909,7 @@ def run_daily(
                 "publishable_claim_count": sum(
                     1 for claim in claims if claim.is_publishable()
                 ),
+                **outcome_fields,
             },
         )
         progress.record(
@@ -855,7 +919,9 @@ def run_daily(
             publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
         )
         progress.record("run", "completed")
-        write_json(run_dir / "runtime_summary.json", build_runtime_summary(progress.events))
+        write_json(run_dir / "runtime_summary.json", {
+            **build_runtime_summary(progress.events), **outcome_fields,
+        })
     except (OSError, TypeError, ValueError, ResearchRadarError) as exc:
         progress.record(
             "artifacts",
@@ -1232,6 +1298,8 @@ def _extract_deep_read_figures(
     deep_artifacts: list[Artifact],
     claims: list[Claim],
     figure_dir: Path,
+    *,
+    figure_extractor: FigureExtractor | None = None,
 ) -> tuple[dict[str, list[dict[str, object]]], list[ReviewFinding]]:
     figures_by_source_url: dict[str, list[dict[str, object]]] = {}
     findings: list[ReviewFinding] = []
@@ -1239,7 +1307,7 @@ def _extract_deep_read_figures(
         if not artifact.artifact_path:
             continue
         try:
-            figures = extract_paper_figures(artifact, figure_dir, claims)
+            figures = (figure_extractor or extract_paper_figures)(artifact, figure_dir, claims)
         except FigureExtractionError as exc:
             findings.append(
                 ReviewFinding(

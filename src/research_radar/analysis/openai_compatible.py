@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
-from http.client import HTTPException, IncompleteRead
-from urllib.error import HTTPError
+import time
+from http.client import HTTPException, IncompleteRead, RemoteDisconnected
+from threading import Event
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from research_radar.analysis.providers import Message, ModelResponse
-from research_radar.exceptions import ProviderTransportError
+from research_radar.exceptions import OperationCancelled, ProviderTransportError
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import SecretManager
 
@@ -27,6 +29,7 @@ class OpenAICompatibleProvider:
         timeout_seconds: int = 120,
         thinking: str | None = None,
         reasoning_effort: str | None = None,
+        cancellation_event: Event | None = None,
     ) -> None:
         self.name = name
         self.endpoint = endpoint
@@ -35,6 +38,7 @@ class OpenAICompatibleProvider:
         self._timeout_seconds = timeout_seconds
         self.thinking = thinking
         self.reasoning_effort = reasoning_effort
+        self._cancellation_event = cancellation_event
         identity_parts = []
         if thinking is not None:
             identity_parts.append(f"thinking={thinking}")
@@ -45,6 +49,7 @@ class OpenAICompatibleProvider:
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Call a chat completions endpoint and return normalized content."""
 
+        self._check_cancelled()
         payload: dict[str, object] = {
             "model": model,
             "messages": [
@@ -67,13 +72,34 @@ class OpenAICompatibleProvider:
             },
             method="POST",
         )
-        raw_response = ""
-        try:
-            with urlopen(request, timeout=self._timeout_seconds) as response:
-                raw_response = response.read().decode("utf-8", errors="replace")
-                data = json.loads(raw_response)
-        except (HTTPException, OSError, json.JSONDecodeError) as exc:
-            raise self._transport_error(exc, model=model, response_text=raw_response) from exc
+        deadline = time.monotonic() + self._timeout_seconds
+        for attempt in (1, 2):
+            self._check_cancelled()
+            raw_response = ""
+            timeout = self._timeout_seconds if attempt == 1 else deadline - time.monotonic()
+            try:
+                with urlopen(request, timeout=timeout) as response:
+                    raw_response = response.read().decode("utf-8", errors="replace")
+                    data = json.loads(raw_response)
+                self._check_cancelled()
+                break
+            except (HTTPException, OSError, json.JSONDecodeError) as exc:
+                self._check_cancelled()
+                error = self._transport_error(
+                    exc, model=model, response_text=raw_response, attempt_count=attempt,
+                )
+                if (
+                    attempt == 2 or not _is_transient_disconnect(exc)
+                    or deadline - time.monotonic() <= 1
+                ):
+                    raise error from exc
+                if self._cancellation_event is None:
+                    time.sleep(1)
+                else:
+                    self._cancellation_event.wait(1)
+                self._check_cancelled()
+                if deadline <= time.monotonic():
+                    raise error from exc
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -82,6 +108,7 @@ class OpenAICompatibleProvider:
                 model=model,
                 response_text=raw_response,
                 summary="response did not contain a chat message",
+                attempt_count=attempt,
             ) from exc
         return ModelResponse(
             content=str(content),
@@ -91,8 +118,13 @@ class OpenAICompatibleProvider:
                 "endpoint": self.endpoint,
                 "thinking": self.thinking or "inherited",
                 "reasoning_effort": self.reasoning_effort or "inherited",
+                "attempt_count": attempt,
             },
         )
+
+    def _check_cancelled(self) -> None:
+        if self._cancellation_event is not None and self._cancellation_event.is_set():
+            raise OperationCancelled("The task was cancelled.")
 
     def _transport_error(
         self,
@@ -101,6 +133,7 @@ class OpenAICompatibleProvider:
         model: str,
         response_text: str = "",
         summary: str = "request failed",
+        attempt_count: int = 1,
     ) -> ProviderTransportError:
         diagnostics = self._failure_diagnostics(
             exc,
@@ -108,6 +141,7 @@ class OpenAICompatibleProvider:
             response_text=response_text,
             summary=summary,
         )
+        diagnostics.update(attempt_count=attempt_count, retryable=_is_transient_disconnect(exc))
         return ProviderTransportError(_failure_message(diagnostics), diagnostics)
 
     def _failure_diagnostics(
@@ -145,6 +179,16 @@ class OpenAICompatibleProvider:
         return diagnostics
 
 
+def _is_transient_disconnect(exc: BaseException) -> bool:
+    if isinstance(exc, HTTPError):
+        return False
+    cause = exc.reason if isinstance(exc, URLError) else exc
+    return isinstance(cause, (
+        IncompleteRead, RemoteDisconnected, ConnectionResetError,
+        ConnectionAbortedError, BrokenPipeError,
+    ))
+
+
 def _failure_message(diagnostics: dict[str, object]) -> str:
     parts = [
         f"{diagnostics['provider']} {diagnostics['summary']}",
@@ -154,6 +198,7 @@ def _failure_message(diagnostics: dict[str, object]) -> str:
         f"error_type={diagnostics['error_type']}",
     ]
     for key in (
+        "attempt_count",
         "status",
         "partial_byte_count",
         "expected_byte_count",

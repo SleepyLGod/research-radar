@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from threading import Lock
 from typing import Protocol
 
-from research_radar.exceptions import SecretError
+from research_radar.exceptions import SecretAccessError, SecretError, SecretNotFoundError
 
 
 class SecretBackend(Protocol):
@@ -22,9 +23,11 @@ class SecretBackend(Protocol):
 
 @dataclass(frozen=True)
 class KeychainSecretBackend:
-    """Secret backend backed by macOS Keychain through keyring."""
+    """Keychain backend with an in-memory cache owned by this job's instance."""
 
     service_name: str = "ResearchRadar"
+    _cache: dict[str, str] = field(default_factory=dict, init=False, repr=False, compare=False)
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False, compare=False)
 
     def set_secret(self, name: str, value: str) -> None:
         """Store a secret in Keychain."""
@@ -35,19 +38,29 @@ class KeychainSecretBackend:
             import keyring
         except ImportError as exc:
             raise SecretError("Install keyring to use the Keychain secret backend.") from exc
-        keyring.set_password(self.service_name, name, value)
+        with self._lock:
+            keyring.set_password(self.service_name, name, value)
+            self._cache[name] = value
 
     def get_secret(self, name: str) -> str:
-        """Read a secret from Keychain."""
+        """Read once per instance; failures remain retryable and are not cached."""
 
         try:
             import keyring
+            from keyring.errors import KeyringError
         except ImportError as exc:
-            raise SecretError("Install keyring to use the Keychain secret backend.") from exc
-        value = keyring.get_password(self.service_name, name)
-        if value is None:
-            raise SecretError(f"Secret not found: {name}")
-        return value
+            raise SecretAccessError("Install keyring to use the Keychain secret backend.") from exc
+        with self._lock:
+            if name in self._cache:
+                return self._cache[name]
+            try:
+                value = keyring.get_password(self.service_name, name)
+            except KeyringError:
+                raise SecretAccessError("Keychain secret access failed.") from None
+            if value is None:
+                raise SecretNotFoundError(f"Secret not found: {name}")
+            self._cache[name] = value
+            return value
 
 
 class InMemorySecretBackend:
@@ -69,7 +82,7 @@ class InMemorySecretBackend:
         try:
             return self._values[name]
         except KeyError as exc:
-            raise SecretError(f"Secret not found: {name}") from exc
+            raise SecretNotFoundError(f"Secret not found: {name}") from exc
 
 
 class EnvSecretBackend:
@@ -101,7 +114,7 @@ class EnvSecretBackend:
         env_name = self._env_name(name)
         value = os.environ.get(env_name)
         if value is None or not value.strip():
-            raise SecretError(f"Secret not found in environment: {env_name}")
+            raise SecretNotFoundError(f"Secret not found in environment: {env_name}")
         return value
 
     def _env_name(self, name: str) -> str:

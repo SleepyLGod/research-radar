@@ -3,6 +3,18 @@ import pytest
 from research_radar.config import ConfigError, parse_config
 
 
+def test_parse_config_allows_empty_topics_only_when_explicitly_requested() -> None:
+    with pytest.raises(ConfigError, match="at least one topic"):
+        parse_config({"project": {"name": "ResearchRadar"}, "topics": []})
+
+    config = parse_config(
+        {"project": {"name": "ResearchRadar"}, "topics": []},
+        require_topics=False,
+    )
+
+    assert config.topics == []
+
+
 @pytest.mark.parametrize(
     ("legacy_config", "message"),
     [
@@ -315,6 +327,7 @@ def test_default_command_providers_have_longer_timeout() -> None:
     )
 
     assert config.model_providers["codex"].timeout_seconds == 900
+    assert config.model_providers["codex"].reasoning_effort == "xhigh"
     assert config.model_providers["claude"].timeout_seconds == 900
     assert config.model_providers["von_claude"].timeout_seconds == 900
 
@@ -384,7 +397,7 @@ def test_default_deepseek_provider_uses_flash_thinking_high() -> None:
         }
     )
 
-    assert config.models.analyst == "deepseek-v4-flash"
+    assert config.models.analyst == "deepseek-flash"
     assert config.model_providers["deepseek"].thinking == "enabled"
     assert config.model_providers["deepseek"].reasoning_effort == "high"
 
