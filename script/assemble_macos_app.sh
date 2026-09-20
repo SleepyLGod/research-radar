@@ -14,6 +14,8 @@ if [[ "$BUILD_MODE" != "--development" && "$BUILD_MODE" != "--production" ]]; th
   exit 2
 fi
 
+"$ROOT/.venv/bin/python" "$ROOT/script/sign_macos_bundle.py" "$APP" --check-identity
+
 for required in "$SWIFT_BINARY" "$PDF_HELPER" "$RESOURCE_BUNDLE" "$SOURCE_ENGINE"; do
   if [[ ! -e "$required" ]]; then
     print -u2 "Missing staged input: $required"
