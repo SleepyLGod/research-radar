@@ -12,9 +12,13 @@ final class ReportReaderHost: NSView, WKNavigationDelegate, WKUIDelegate {
     private var generation = UUID()
     private var preparation: Task<Void, Never>?
     private var memoryPressure: (any DispatchSourceMemoryPressure)?
+    private let makeMemoryPressureSource: () -> (any DispatchSourceMemoryPressure)?
     private let openExternal: (URL) -> Void
 
-    init(openExternal: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+    init(makeMemoryPressureSource: @escaping () -> (any DispatchSourceMemoryPressure)? = {
+        DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+    }, openExternal: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+        self.makeMemoryPressureSource = makeMemoryPressureSource
         self.openExternal = openExternal
         super.init(frame: .zero)
     }
@@ -67,12 +71,12 @@ final class ReportReaderHost: NSView, WKNavigationDelegate, WKUIDelegate {
             policy = validated
             webView = web
             addSubview(web)
-            let pressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
-            pressure.setEventHandler { [weak self] in
+            let pressure = makeMemoryPressureSource()
+            pressure?.setEventHandler { [weak self] in
                 MainActor.assumeIsolated { self?.handleMemoryPressure() }
             }
             memoryPressure = pressure
-            pressure.resume()
+            pressure?.resume()
             web.load(URLRequest(url: validated.entryURL))
         } catch {
             guard generation == token, !Task.isCancelled else { return }
