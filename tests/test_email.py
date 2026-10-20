@@ -6,9 +6,12 @@ import smtplib
 from datetime import UTC, datetime
 from email.message import EmailMessage
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from research_radar.app_bridge.handlers import handle_retry_delivery
+from research_radar.app_bridge.protocol import EngineRequestV1, RetryDeliveryPayloadV1
 from research_radar.compose.archive_html import render_archive_article
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.compose.wechat import render_wechat_html, render_wechat_publish_html
@@ -147,6 +150,36 @@ def test_email_uncertain_delivery_requires_explicit_resend(monkeypatch, tmp_path
     result = publish_email_run(run_dir, _settings(), manager, allow_resend=True)
     assert result.status == "sent"
     assert len(working_transport.messages) == 1
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_app_unknown_email_confirmation_reuses_publisher_guard(
+    monkeypatch, tmp_path: Path, confirmed: bool,
+) -> None:
+    run_dir = _write_email_run(tmp_path)
+    write_json(run_dir / "email_send_attempt.json", {"status": "delivery_unknown"})
+    transport = _FakeSMTP()
+    monkeypatch.setattr(email_client.smtplib, "SMTP_SSL", lambda *args, **kwargs: transport)
+    request = EngineRequestV1(
+        schema_version=1, request_id="00000000-0000-4000-8000-000000000001",
+        command="retry_delivery", created_at="2026-10-20T00:00:00Z",
+        app_support_root=tmp_path, config_path=None,
+        payload=RetryDeliveryPayloadV1(
+            run_dir=run_dir, channel="email", allow_resend=confirmed,
+            acknowledge_unknown_outcome=confirmed,
+        ),
+    )
+    config = SimpleNamespace(email_enabled=True, research=SimpleNamespace(email=_settings()))
+    arguments = dict(config=config, secrets=_secret_manager(), events=None, pdf_helper_path=None)
+    if confirmed:
+        result = handle_retry_delivery(request, **arguments)
+        assert result["status"] == "sent"
+        assert len(transport.messages) == 1
+        assert read_json(run_dir / "email_send_result.json")["status"] == "sent"
+    else:
+        with pytest.raises(PublishError, match="previous email delivery"):
+            handle_retry_delivery(request, **arguments)
+        assert transport.messages == []
 
 
 def test_email_missing_figure_is_omitted_without_broken_image(tmp_path: Path) -> None:

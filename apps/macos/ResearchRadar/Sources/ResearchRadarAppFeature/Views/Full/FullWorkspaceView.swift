@@ -122,6 +122,10 @@ struct FullWorkspaceView: View {
                     Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                 }.padding(16)
                 Divider()
+                ReportEmailView(store: store, report: report, localization: localization) {
+                    navigation.section = .settings
+                }
+                Divider()
                 if presentation.isVisible && store.runtime.windowMode == .full {
                     ReportReaderView(report: report, workspaceRoot: URL(fileURLWithPath: store.configuration.workspaceRoot), localization: localization).id(report.id)
                 } else {

@@ -366,6 +366,28 @@ use `archive publish-git` once the local `archive` config has been reviewed.
 
 ## Private Email
 
+### Send From the macOS App
+
+Save and enable SMTP settings and the application password in **Settings → Private email**.
+Open a completed report from **Reports** or **Read report**; its email row shows the delivery
+state and next recipient. Choose **Send email**, check the sender and recipient in the
+confirmation sheet, then confirm. Opening a report or cancelling this sheet never sends mail.
+Saved settings indicate local configuration, not a successful SMTP connection.
+
+The App and CLI keep separate configuration files. An existing CLI `config.yaml` does not
+automatically populate App SMTP settings; save the same non-secret settings in the App once.
+The default Keychain password name is shared (`email.smtp_password`), so an already saved
+password does not need to be pasted again. macOS may still request access authorization for
+the App's bundled engine; this is different from entering a new Gmail application password.
+
+After a failure, retry only email from the same report. A previously successful send requires
+confirmation to send another copy. An unknown outcome requires checking the inbox before
+confirming another send, because a duplicate is possible. Changes to the saved destination,
+report or send history invalidate an open confirmation. Existing automatic delivery settings
+continue to apply to future research; sending an existing report does not run research again.
+
+### Send From the CLI
+
 Private email v1 sends one completed `ArticleDraft` to one personal inbox. It does not manage
 subscribers, tracking, unsubscribe links, or campaigns. Add SMTP settings to the gitignored local
 `config.yaml`:
