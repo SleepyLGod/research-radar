@@ -35,7 +35,7 @@ public final class AppStore {
     public private(set) var cancellationRequested = false
     @ObservationIgnored private var commandActive = false
     @ObservationIgnored private var drainTask: Task<Void, Never>?
-    @ObservationIgnored private var admissionCount = 0
+    private var admissionCount = 0
     @ObservationIgnored private var drainRequested = false
     @ObservationIgnored private var schedulingBlockedByConfiguration = false
     @ObservationIgnored private let executionGate = EngineExecutionGate()
@@ -588,13 +588,49 @@ public final class AppStore {
         }
     }
 
+    func prepareEmailDelivery(reportID: UUID) throws -> EmailSendConfirmation {
+        guard let report = reports.first(where: { $0.id == reportID }) else {
+            throw EmailDeliveryActionError.blocked("email_report_missing")
+        }
+        let settings = configuration.delivery.email
+        let presentation = EmailDeliveryPresentation(report: report, jobs: jobs,
+            settings: settings, busy: behaviorChangesBlocked)
+        if let code = presentation.blockedReason { throw EmailDeliveryActionError.blocked(code) }
+        guard coordinator != nil else { throw EmailDeliveryActionError.blocked("engine_missing") }
+        do {
+            guard try secretStore.contains(account: settings.passwordSecret) else {
+                throw EmailDeliveryActionError.blocked("email_password_missing")
+            }
+        } catch let error as EmailDeliveryActionError { throw error }
+        catch { throw EmailDeliveryActionError.blocked("keychain_lookup_failed") }
+        return EmailSendConfirmation(report: report, settings: settings,
+            priorJobIDs: jobs.filter { $0.deliveryChannel == .email && $0.runDirectory == report.runDirectory }.map(\.id),
+            previouslySent: presentation.previouslySent,
+            allowResend: presentation.allowResend, acknowledgeUnknownOutcome: presentation.acknowledgeUnknownOutcome)
+    }
+
+    func sendEmail(_ confirmation: EmailSendConfirmation) async {
+        do {
+            guard try prepareEmailDelivery(reportID: confirmation.report.id) == confirmation else {
+                throw EmailDeliveryActionError.blocked("email_confirmation_changed")
+            }
+            lastErrorCode = nil
+            await retryDelivery(report: confirmation.report, channel: .email,
+                allowResend: confirmation.allowResend,
+                acknowledgeUnknownOutcome: confirmation.acknowledgeUnknownOutcome)
+        } catch let error as EmailDeliveryActionError { lastErrorCode = error.code }
+        catch { lastErrorCode = "delivery_retry_blocked" }
+    }
+
+    func showEmailDeliveryError(_ error: EmailDeliveryActionError) { lastErrorCode = error.code }
+
     public func retryDelivery(
         report: ReportRecordV1,
         channel: DeliveryChannel,
         allowResend: Bool,
         acknowledgeUnknownOutcome: Bool
     ) async {
-        guard !isShuttingDown else { lastErrorCode = "app_stopping"; return }
+        guard !isShuttingDown, !requiresReconciliation else { lastErrorCode = "app_stopping"; return }
         admissionCount += 1
         defer { admissionCount -= 1 }
         do {
