@@ -136,11 +136,17 @@ struct ReportReaderPolicyTests {
 }
 
 @MainActor @Suite struct ReportReaderLifecycleTests {
+    // Rendering tests control pressure explicitly instead of inheriting the
+    // developer machine's pressure while WebKit is loading the fixture.
+    private func reader(openExternal: @escaping (URL) -> Void = { _ in }) -> ReportReaderHost {
+        ReportReaderHost(makeMemoryPressureSource: { nil }, openExternal: openExternal)
+    }
+
     @Test func backToBackRequestsForSameReportRenderDespiteCancelledPreparation() async throws {
         _ = NSApplication.shared
         let fixture = try ReaderFixture()
         let report = fixture.report
-        let host = ReportReaderHost()
+        let host = reader()
         host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
         defer { host.releaseReader() }
         // Neither preparation can start until this actor yields. The second
@@ -162,7 +168,7 @@ struct ReportReaderPolicyTests {
 
     @Test func demandLoadedReusedAndReleasedOnDismantleAndPressure() async throws {
         _ = NSApplication.shared
-        let host = ReportReaderHost()
+        let host = reader()
         #expect(host.webView == nil)
         let fixture = try ReaderFixture()
         let report = fixture.report
@@ -178,16 +184,19 @@ struct ReportReaderPolicyTests {
         #expect(first.uiDelegate == nil)
         #expect(first.superview == nil)
         await host.display(report, workspaceRoot: fixture.workspaceRoot)
-        #expect(host.webView != nil)
+        let reloaded = try #require(host.webView)
         host.handleMemoryPressure()
         #expect(host.webView == nil)
+        #expect(reloaded.navigationDelegate == nil)
+        #expect(reloaded.uiDelegate == nil)
+        #expect(reloaded.superview == nil)
         #expect(host.errorKey == "reader.memoryPressure")
         await host.display(report, workspaceRoot: fixture.workspaceRoot)
         #expect(host.webView == nil)
     }
 
     @Test func dismantleDuringPreparationCannotResurrectWebView() async throws {
-        let host = ReportReaderHost()
+        let host = reader()
         let fixture = try ReaderFixture()
         let work = Task { await host.display(fixture.report, workspaceRoot: fixture.workspaceRoot) }
         await Task.yield()
@@ -197,7 +206,7 @@ struct ReportReaderPolicyTests {
     }
 
     @Test func dismantleBeforePreparationStartsDoesNotCreateWebView() async throws {
-        let host = ReportReaderHost()
+        let host = reader()
         let fixture = try ReaderFixture()
         host.requestDisplay(fixture.report, workspaceRoot: fixture.workspaceRoot)
         ReportReaderRepresentable.dismantleNSView(host, coordinator: ())
@@ -206,7 +215,7 @@ struct ReportReaderPolicyTests {
     }
 
     @Test func releaseDropsLastAppReference() async throws {
-        let host = ReportReaderHost()
+        let host = reader()
         let fixture = try ReaderFixture()
         await host.display(fixture.report, workspaceRoot: fixture.workspaceRoot)
         weak let web = host.webView
@@ -229,7 +238,7 @@ struct ReportReaderPolicyTests {
         try Data(mixedHTML.utf8).write(to: fixture.root.appending(path: "wechat.html"))
         let original = try Data(contentsOf: fixture.root.appending(path: "wechat.html"))
         var opened: [URL] = []
-        let host = ReportReaderHost(openExternal: { opened.append($0) })
+        let host = reader(openExternal: { opened.append($0) })
         host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
         let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

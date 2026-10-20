@@ -113,6 +113,102 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Native Gmail Acceptance (2026-10-20)
+
+- [x] Copied the already verified Gmail SMTP settings into the development App's typed
+  configuration, reusing `email.smtp_password` in Keychain. Schedules remained paused with no
+  enabled schedule or pending job. No password was copied into JSON or source files.
+- [x] Imported the selected report's real prior CLI `email_send_result.json` into its email
+  delivery status, with recipient/time validation, so native UI showed Sent / Send again before
+  this acceptance. This was a one-time reconciliation of an existing success, not a fabricated job.
+- [x] Exercised the actual staged App via native AX: Read report, Send again and the real
+  sender/recipient confirmation sheet. During acceptance the App created exactly one new email
+  delivery job, `77DFEBB5-3D8E-4E7F-AD05-B17BF0C19EE4`, which succeeded at **13:27 HKT** with six
+  inline images to the configured Gmail self-recipient. The final automation guard observed that
+  success and did not dispatch another confirmation. No new research job was created.
+- [x] Verified native Sent status, restart persistence and Cancel on the real resend sheet;
+  cancellation created no additional job. `article_draft.json`, `wechat.html` and `daily.md`
+  remained byte-identical. Acceptance artifacts and scoped screenshots are retained in ignored
+  `.build/email-native-20261020/`; no commit or push was performed.
+- Found and reproduced stale busy UI after a completed send: the final admission counter release
+  was ignored by observation. Made that existing counter observable; an actual SwiftUI-hosted
+  offline regression failed before the one-line fix and passed afterward. The updated signed
+  development App retained Sent state and no stale busy label on reopening. No extra SMTP send.
+- [x] The recipient confirmed the native-App message arrived and its Chinese text and images
+  render correctly. This acceptance is separate from the preceding CLI message.
+- Recovered the original full Swift diagnostics: the reported two issues were two assertions in
+  **one** test, `backToBackRequestsForSameReportRenderDespiteCancelledPreparation`. A real system
+  memory-pressure event correctly released the reader during a test that expected it to remain
+  loaded (`reader.memoryPressure`, then nil WebView). The cause was ambient-event coupling in
+  the test, not two email failures or evidence of an email-sending regression.
+- Loading/lifecycle tests now inject no external pressure source; the production default still
+  observes system warning/critical events on the main queue. The separate explicit-pressure test
+  checks release, cleared delegates, removed view and suppression of immediate same-report reload.
+  All six reader lifecycle tests passed in five consecutive runs. The recovered original output
+  and follow-up logs are retained in ignored `.build/email-native-20261020/`.
+- Final checks: Python **855 passed / 2 skipped**; Swift **235 tests across 44 suites passed**,
+  with the frozen-pipeline/restart test explicitly enabled and passed (not skipped). The first
+  enabled attempt rejected an outdated offline engine's configuration (`ui_appearance`); rebuilding
+  that test-only engine from current source resolved the mismatch without a compatibility patch.
+  Frozen network-blocked pipeline, production dependency preflight, development App build,
+  bundle/signature verification, Ruff, privacy scan and diff checks passed. Independent read-only
+  review found no concrete issue. No additional real research or send was performed; the saved
+  user queue remained at nine jobs and the three accepted report artifacts remained byte-identical.
+- Reader resource and other unrelated manual gates remain open; deterministic tests do not
+  replace real system-pressure, VoiceOver, multi-display or final beta acceptance.
+
+#### App Email Entry: Offline Acceptance (2026-10-20)
+
+- [x] Full report reader provides email status, next recipient, Settings navigation and a
+  sender/recipient confirmation sheet. Opening a report or dismissing confirmation sends nothing.
+  SMTP settings, serialized jobs, the bridge command and publisher are reused; no new wire command,
+  SMTP client, research stage or channel renderer was added.
+- [x] First manual email sends create only their missing channel record; existing WeChat state and
+  report bytes are preserved. Active tasks block manual admission. Report/settings/history changes
+  invalidate a previously opened confirmation, and repeated confirmation cannot create a second job.
+- [x] Failure, unknown outcome and prior success have distinct retry/confirmation behavior.
+  Confirmed unknown outcomes pass both existing acknowledgements required by queue/publisher.
+  Crash recovery between queue and initial channel-record writes is idempotent. Neither case
+  silently sends another copy. The read-only review findings were reproduced, fixed and retested.
+- Offline checks: Python **855 passed / 2 skipped**; Swift reported **234 tests** across 44 suites
+  passed, with the pre-existing conditional frozen-workflow test not enabled in this run.
+  The 10 new Swift email tests cover first send, failures, uncertainty, stale confirmation,
+  duplicate clicks, missing/denied metadata access, queue-write failure and restart recovery.
+  The Python bridge test uses the real publisher with a fake SMTP transport to verify unresolved
+  attempt protection and explicit resend. No real provider, search, SMTP or credential values used.
+- English/light and Chinese/dark component snapshots were rendered and inspected for email
+  controls and confirmation states (16 images in ignored `.build/email-entry-20261020/`).
+  These are view-layout evidence, not physical-click or native-popover interaction acceptance.
+- Ruff, privacy, diff, release build, bundle dependency and deep/strict signature checks passed.
+  The refreshed development App passed offline engine preflight in **1.506 seconds**. Signing used
+  the existing local identity; no new identity or credential permissions were installed.
+- [x] Native confirmation/cancel interaction and one authorized real App SMTP send were verified
+  in the follow-up above; the recipient confirmed Chinese text and images in the second message.
+  WeChat final actions, cover upload, notifications, DMG and prior reader resource/manual gates
+  remain separate. At the offline checkpoint no live send, commit or push was performed.
+
+#### Reader Cycle Acceptance Attempt (2026-09-20)
+
+- Tested commit `6a6cc2c` using current release objects in the existing isolated presentation
+  harness. Its native status item opened the production popover and compact view; this is a
+  test-entrypoint observation, not production startup or a completed reader workflow.
+- **Blocked, 0/20 cycles:** the in-process accessibility tree did not expose the compact
+  `Open workspace` button, although it is visible in the captured window. CG event posting
+  was unavailable; a separate read-only System Events availability check was denied with
+  Apple Events error `-1743`. No permissions were enabled and no control success was inferred.
+- Evidence is retained in ignored `.build/task3a-visual/ede3e9eb45284d76a86c083b2d2ce46d/`
+  (`acceptance.json`, compact-popover and status-item captures). The test App terminated;
+  original and copied offline report artifacts remained byte-identical. No engine, real
+  credential, model, search or delivery operation was invoked. Product code is unchanged.
+- Reader load, weak-reference release, memory trend and final idle-resource gates were **not
+  reached**. Do not reuse previous idle measurements as evidence for this attempt.
+- [ ] Resume with user-assisted input on isolated offline data: open the report, dismiss with
+  Escape/outside click, reopen from the status item and alternate compact/full mode for 20
+  cycles. Record retained selection, Chinese text, image/formula/anchor rendering and any
+  blank page. Couple the session with resource/reader-lifetime observations; manual clicks
+  alone do not establish memory release. VoiceOver, multi-display and file-picker gates remain
+  separate. Do not trigger Run Now, connection checks or delivery during this acceptance.
+
 #### Pre-commit Regression Follow-up (2026-09-20)
 
 - Separate public-source family deduplication from the expanded deep-reading retry pool. A

@@ -2659,7 +2659,31 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter ReportReaderPo
 
 Expected: PASS for every allowed and rejected URL case plus no eager WebView creation, one-instance reuse while visible, and App-reference release on navigation away, window hide, and memory pressure.
 
+Reader test isolation follow-up (2026-10-20): the recovered full-suite failure contained two
+assertions from one loading test interrupted by a real `reader.memoryPressure` event. Lifecycle
+tests inject the pressure-source factory rather than depending on ambient machine pressure;
+explicit pressure-policy coverage retains delegate teardown and same-report reload suppression.
+The App's default warning/critical subscription and release behavior remain unchanged. Original
+diagnostics and repeated-test logs are retained outside Git in `.build/email-native-20261020/`.
+The final full Swift run passed all 235 reported tests with the frozen workflow explicitly
+enabled. Its test-only engine was freshly rebuilt from current source after an older binary
+rejected `ui_appearance`; no production compatibility code was introduced for stale test builds.
+
 - [ ] **Step 5: Implement independent delivery jobs and recovery**
+
+Task 3B email-entry slice (2026-10-20): the full report reader now exposes scoped email state,
+saved next recipient, Settings navigation and an explicit sender/recipient confirmation sheet.
+Manual first sends use the existing serialized `retry_delivery` command and SMTP application
+service. The coordinator creates a missing email record as `notRequested` before launch, never
+as an automatic pending send. Existing successful/unknown outcomes retain both resend guards.
+Confirmation captures the report, saved email settings and prior email attempts; changed inputs
+require review again. Display and layout do not read credential values or start engine jobs.
+Offline acceptance is tracked in TODO. The 2026-10-20 follow-up saved the verified Gmail settings
+in the development App, observed its native resend confirmation and exactly one successful App
+email job, then verified restart and native cancellation without another send. It also reproduced
+and fixed stale busy-state observation after send completion. The recipient has confirmed that
+second message's Chinese text and images. WeChat actions, notifications and final packaging
+remain separate gates. Do not mark all of Step 5 complete from this email-only slice.
 
 Research success writes `ReportRecordV1` before channel jobs are enqueued. Each enabled channel becomes its own `retry_delivery` engine request. Delivery state is one of `notRequested`, `pending`, `sending`, `created`, `sent`, `failed`, or `unknown`.
 
