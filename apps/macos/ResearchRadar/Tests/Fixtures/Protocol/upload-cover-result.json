@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "request_id": "00000000-0000-4000-8000-000000000003",
+  "command": "upload_wechat_cover",
+  "status": "succeeded",
+  "completed_at": "2026-10-21T00:00:01Z",
+  "preflight": null,
+  "topic_draft": null,
+  "report": null,
+  "delivery": null,
+  "cover": {
+    "media_id": "offline-cover-id",
+    "image_sha256": "19a7aee828cccd04d817526c1033c1949e737b48d0540a0ec3e8c5bb9eae2cde"
+  }
+}

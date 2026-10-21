@@ -118,7 +118,10 @@ private struct DeliveryConfigurationView: View {
         Section(localization.text("setting.wechat")) {
             Toggle(localization.text("setting.enable_wechat"), isOn: $wechatEnabled)
             TextField(localization.text("label.author"), text: $author)
-            TextField(localization.text("label.cover_media"), text: $thumbMediaID)
+            WeChatCoverView(store: store, localization: localization)
+            DisclosureGroup(localization.text("cover.manual_id")) {
+                TextField(localization.text("label.cover_media"), text: $thumbMediaID)
+            }
             SecureField(localization.text("label.wechat_app_id"), text: $appID)
             SecureField(localization.text("label.wechat_app_secret"), text: $appSecret)
             Button(localization.text("action.save_wechat")) {
@@ -128,6 +131,7 @@ private struct DeliveryConfigurationView: View {
                 ) }) { appID = ""; appSecret = "" }
             }
         }
+        .onChange(of: store.configuration.delivery.wechat.thumbMediaID) { _, value in thumbMediaID = value }
         Section(localization.text("setting.email")) {
             Toggle(localization.text("setting.enable_email"), isOn: $emailEnabled)
             TextField(localization.text("label.smtp_host"), text: $smtpHost)

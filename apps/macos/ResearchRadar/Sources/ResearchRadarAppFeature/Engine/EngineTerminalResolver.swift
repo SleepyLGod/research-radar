@@ -74,6 +74,11 @@ enum EngineTerminalResolver {
                 guard result.preflight != nil else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
             case .bootstrapTopic:
                 guard result.topicDraft != nil else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
+            case .uploadWeChatCover:
+                guard let cover = result.cover, case .uploadWeChatCover(let payload) = request.payload,
+                      cover.imageSHA256 == payload.imageSHA256 else {
+                    throw EngineJobCoordinatorError.requestMismatch
+                }
             }
             return .success(result)
         }

@@ -335,3 +335,17 @@
 "error.wechat.configure_first" = "请先在设置中启用微信，保存凭据和封面素材 ID。";
 "error.wechat.busy" = "请等待当前任务结束后再创建草稿。";
 "error.schedule_recovery_failed" = "无法恢复计划。请在诊断中检查配置及存储状态；调度仍保持停止。";
+"cover.choose" = "选择封面…";
+"cover.upload" = "上传封面";
+"cover.requirements" = "支持 PNG/JPEG，最大 2 MiB、4000 万像素。请先保存公众号凭据；选图本身不会上传。";
+"cover.manual_id" = "使用已有封面素材 ID";
+"cover.confirm_title" = "将这张封面上传到微信？";
+"cover.confirm_detail" = "将图片加入已配置公众号的永久素材库，并保存返回的素材 ID，供后续草稿使用。不会创建草稿，也不修改已有草稿。";
+"cover.saved" = "已上传并保存，后续草稿将使用这张封面";
+"cover.save_failed" = "已上传，但未保存到本地。可只保存素材 ID，不必再次上传。";
+"cover.save_only" = "保存已上传封面";
+"cover.unknown" = "上次上传结果未确认。请先检查微信素材库，再决定是否重试；再次上传可能产生重复素材。";
+"error.wechat_cover_invalid" = "请选择可读取的 PNG/JPEG，最大 2 MiB、4000 万像素。不接受符号链接文件。";
+"error.wechat_cover_unconfirmed" = "封面上传未确认，原封面未改动。重试前请检查微信素材库。";
+"error.wechat_cover_save_failed" = "封面已上传，但配置保存失败。请用“保存已上传封面”重试本地保存。";
+"stage.wechat_cover" = "上传封面";

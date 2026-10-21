@@ -35,6 +35,12 @@ public final class AppStore {
     public private(set) var cancellationRequested = false
     @ObservationIgnored private var commandActive = false
     @ObservationIgnored private var wechatCredentialRevision = UUID()
+    private(set) var selectedWeChatCover: WeChatCoverImage?
+    private(set) var coverUploadReceipt: WeChatCoverResultV1?
+    private(set) var coverUploadUncertain = false
+    private(set) var isUploadingWeChatCover = false
+    private var coverConfirmationID = UUID()
+    private var uploadedCoverConfirmation: WeChatCoverConfirmation?
     @ObservationIgnored private var drainTask: Task<Void, Never>?
     private var admissionCount = 0
     @ObservationIgnored private var drainRequested = false
@@ -662,6 +668,87 @@ public final class AppStore {
     }
 
     func showWeChatDraftError(_ error: WeChatDraftActionError) { lastErrorCode = error.code }
+
+    func selectWeChatCover(_ image: WeChatCoverImage) throws {
+        try requireBehaviorChange()
+        selectedWeChatCover = image
+        coverUploadReceipt = nil
+        uploadedCoverConfirmation = nil
+        coverConfirmationID = UUID()
+        lastErrorCode = nil
+    }
+
+    func selectWeChatCover(from url: URL) throws {
+        try requireBehaviorChange()
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        try selectWeChatCover(WeChatCoverImage.load(url))
+    }
+
+    func showWeChatCoverError(_ error: Error, fallback: String = "wechat_cover_invalid") {
+        lastErrorCode = (error as? WeChatDraftActionError)?.code ?? fallback
+    }
+
+    func prepareWeChatCoverUpload() throws -> WeChatCoverConfirmation {
+        try requireBehaviorChange()
+        guard commandClient != nil else { throw WeChatDraftActionError.blocked("engine_missing") }
+        guard let image = selectedWeChatCover else { throw WeChatDraftActionError.blocked("wechat_cover_invalid") }
+        let settings = configuration.delivery.wechat
+        do {
+            guard try secretStore.contains(account: settings.appIDSecret),
+                  try secretStore.contains(account: settings.appSecretSecret) else {
+                throw WeChatDraftActionError.blocked("wechat_credentials_missing")
+            }
+        } catch let error as WeChatDraftActionError { throw error }
+        catch { throw WeChatDraftActionError.blocked("keychain_lookup_failed") }
+        return .init(image: image, settings: settings, credentialRevision: wechatCredentialRevision,
+            attemptID: coverConfirmationID,
+            uncertainPriorUpload: coverUploadUncertain)
+    }
+
+    func uploadWeChatCover(_ confirmation: WeChatCoverConfirmation) async {
+        do {
+            guard confirmation == (try prepareWeChatCoverUpload()), let commandClient else {
+                throw WeChatDraftActionError.blocked("wechat_confirmation_changed")
+            }
+            coverConfirmationID = UUID()
+            commandActive = true; isEngineRunning = true; cancellationRequested = false
+            isUploadingWeChatCover = true
+            defer { isUploadingWeChatCover = false; finishCommand() }
+            coverUploadReceipt = nil
+            do {
+                coverUploadReceipt = try await commandClient.uploadWeChatCover(data: confirmation.image.data,
+                    fileExtension: confirmation.image.fileExtension, sha256: confirmation.image.sha256)
+                uploadedCoverConfirmation = confirmation
+                coverUploadUncertain = false
+            } catch {
+                coverUploadUncertain = true
+                lastErrorCode = "wechat_cover_unconfirmed"
+                return
+            }
+            do { try persistUploadedWeChatCover() }
+            catch { lastErrorCode = "wechat_cover_save_failed" }
+        } catch let error as WeChatDraftActionError { lastErrorCode = error.code }
+        catch { lastErrorCode = "engine_busy" }
+    }
+
+    func saveUploadedWeChatCover() throws {
+        try requireBehaviorChange()
+        guard let confirmation = uploadedCoverConfirmation,
+              confirmation.credentialRevision == wechatCredentialRevision,
+              confirmation.settings == configuration.delivery.wechat else {
+            throw WeChatDraftActionError.blocked("wechat_confirmation_changed")
+        }
+        try persistUploadedWeChatCover()
+    }
+
+    private func persistUploadedWeChatCover() throws {
+        guard let receipt = coverUploadReceipt else { throw WeChatDraftActionError.blocked("wechat_cover_unconfirmed") }
+        var candidate = configuration
+        candidate.delivery.wechat.thumbMediaID = receipt.mediaID
+        try persistConfiguration(candidate)
+        lastErrorCode = nil
+    }
 
     public func retryDelivery(
         report: ReportRecordV1,

@@ -240,6 +240,7 @@ private enum CanonicalFixture {
         "bootstrap-topic-request.json",
         "run-daily-request.json",
         "retry-delivery-request.json",
+        "upload-cover-request.json",
     ]
 
     static let resultNames = [
@@ -247,6 +248,7 @@ private enum CanonicalFixture {
         "bootstrap-topic-result.json",
         "run-daily-result.json",
         "retry-delivery-result.json",
+        "upload-cover-result.json",
     ]
 
     static func url(named name: String) -> URL {

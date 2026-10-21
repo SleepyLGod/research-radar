@@ -58,13 +58,31 @@ public actor EngineCommandClient {
 
     public func cancel() async { await gate.cancel() }
 
-    private func execute(_ request: EngineRequestV1) async throws -> EngineResultV1 {
+    public func uploadWeChatCover(data: Data, fileExtension: String, sha256: String) async throws -> WeChatCoverResultV1 {
+        let requestID = UUID()
+        let path = appSupportRoot.appending(path: "jobs/\(requestID.uuidString.lowercased())/cover.\(fileExtension)")
+        let request = try EngineRequestV1(requestID: requestID, command: .uploadWeChatCover, createdAt: clock(),
+            appSupportRoot: appSupportRoot.path,
+            configPath: appSupportRoot.appending(path: "config/app-config.json").path,
+            payload: .uploadWeChatCover(.init(imagePath: path.path, imageSHA256: sha256)))
+        let result = try await execute(request, coverData: data)
+        guard let cover = result.cover else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
+        return cover
+    }
+
+    private func execute(_ request: EngineRequestV1, coverData: Data? = nil) async throws -> EngineResultV1 {
         let lease = try gate.acquire()
         defer { gate.release(lease) }
         let job = appSupportRoot.appending(
             path: "jobs/\(request.requestID.uuidString.lowercased())", directoryHint: .isDirectory
         )
         let paths = try FoundationJobBuilder.create(request: request, jobDirectory: job)
+        if let coverData, case .uploadWeChatCover(let payload) = request.payload {
+            let image = URL(fileURLWithPath: payload.imagePath)
+            guard image.deletingLastPathComponent() == job else { throw EngineProtocolError.invalidValue }
+            try coverData.write(to: image, options: .withoutOverwriting)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: image.path)
+        }
         do {
             _ = try await gate.run(
                 lease: lease, runner: runner,

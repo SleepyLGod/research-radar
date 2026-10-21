@@ -12,7 +12,11 @@ from unittest.mock import patch
 
 from offline_frozen.inputs import FrozenDiscovery, FrozenModel
 from research_radar.analysis.routing import TaskModelRoute
-from research_radar.app_bridge.handlers import handle_retry_delivery, handle_run_daily
+from research_radar.app_bridge.handlers import (
+    handle_retry_delivery,
+    handle_run_daily,
+    handle_upload_wechat_cover,
+)
 from research_radar.app_bridge.runner import BridgeDependencies, run_bridge
 from research_radar.application.daily import run_daily_application
 from research_radar.exceptions import PublishError
@@ -64,6 +68,15 @@ class FailedWeChat(WeChatDraftClient):
     def add_draft(self, article: object) -> dict[str, object]:
         """Simulate a known channel failure, never send a message."""
         raise PublishError("OFFLINE_WECHAT_DELIVERY_FAILURE")
+
+    def upload_permanent_image_material(
+        self,
+        image_path: Path,
+        *,
+        image_bytes: bytes | None = None,
+    ) -> dict[str, str]:
+        """Return an inert receipt after the production cover service validates the image."""
+        return {"media_id": "offline-cover-id", "url": ""}
 
 
 class OfflineSMTP:
@@ -120,6 +133,7 @@ def dependencies(root: Path) -> BridgeDependencies:
             ),
         ),
         retry_delivery=partial(handle_retry_delivery, wechat_client_factory=FailedWeChat),
+        upload_wechat_cover=partial(handle_upload_wechat_cover, wechat_client_factory=FailedWeChat),
         secret_manager_factory=lambda: SecretManager(backend),
     )
 

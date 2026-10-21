@@ -91,7 +91,8 @@ private final class AppContainer {
                     : active.job.stage.map { "stage.\($0.rawValue)" }
                     ?? (active.job.kind == .delivery ? "today.delivering" : "today.running")
             } else {
-                state = store.isEngineRunning ? "today.checking" : today.statusKey
+                state = store.isUploadingWeChatCover ? "stage.wechat_cover"
+                    : store.isEngineRunning ? "today.checking" : today.statusKey
             }
             statusItem.refresh(status: localization.text(state), topic: active?.topic?.displayName ?? store.selectedTopic?.displayName)
         } onChange: { [weak self] in

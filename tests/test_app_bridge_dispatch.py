@@ -123,6 +123,7 @@ def test_runner_dispatches_only_selected_handler(tmp_path: Path) -> None:
         bootstrap_topic=selected,
         run_daily=unexpected,
         retry_delivery=unexpected,
+        upload_wechat_cover=unexpected,
         clock=lambda: datetime(2026, 8, 30, 10, tzinfo=UTC),
         config_loader=lambda path, require_topics: object(),
         secret_manager_factory=lambda: object(),

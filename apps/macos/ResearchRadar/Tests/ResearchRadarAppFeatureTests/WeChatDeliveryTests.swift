@@ -274,7 +274,7 @@ private struct WeChatMetadataSecrets: SecretStoring {
     func remove(account: String) throws { Issue.record("Must not remove credentials") }
 }
 
-@MainActor private struct WeChatFixture {
+@MainActor struct WeChatFixture {
     let root: URL
     var configuration: AppConfigurationV1
     var report: ReportRecordV1
@@ -305,7 +305,7 @@ private struct WeChatMetadataSecrets: SecretStoring {
             to: "state/app-state.json")
     }
 
-    func store(_ runner: WeChatRunner, secrets: any SecretStoring = AdmissionSecrets(),
+    func store(_ runner: any EngineProcessRunning, secrets: any SecretStoring = AdmissionSecrets(),
                jobs: [JobRecordV1] = []) -> AppStore {
         AppStore(configuration: configuration, queueSnapshot: .init(jobs: jobs), reportSnapshot: .init(reports: [report]),
             runtime: .init(onboardingStep: .complete, selectedTopicID: "memory", updatedAt: Date()),
