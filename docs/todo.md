@@ -113,6 +113,54 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### App WeChat Cover Entry: Implementation And Acceptance (2026-10-21)
+
+- [x] Added selection, a bounded local preview and explicit upload confirmation in WeChat
+  Settings. PNG/JPEG inputs are limited to 2 MiB and 40 megapixels by App policy. Original images
+  are not edited; the confirmed bytes are staged privately and bound to the result by SHA-256.
+- [x] Reused the single engine execution gate and existing permanent-material client. A separate
+  typed `upload_wechat_cover` command returns a receipt, not a research or delivery job. Only the
+  App applies a confirmed media ID through its existing atomic configuration writer; reports,
+  channel results, author, enabled state and CLI behavior are unchanged.
+- [x] Offline tests cover invalid images/paths, stale selection/credentials, uncertain outcomes,
+  wrong result hashes, persisted cover ID and retrying only local saving after upload success.
+  Selection/layout performs no credential-value reads. Upload is never automatically retried.
+- [x] Python **868 passed / 2 skipped**; Swift **255 tests across 46 suites**, with both frozen
+  workflow tests explicitly enabled. The cover-focused suite also passed all ten tests after
+  the latest JPEG and component-capture checks. Ruff, privacy, diff, release, bundle, signing
+  and non-live bundled preflight checks passed. Read-only review found and verified closure of
+  a path re-read race: multipart now uses the validated bytes, not a second file read. Frozen
+  testing also caught and fixed equivalent system-directory aliases without relaxing job scope.
+  Evidence is retained in ignored `.build/wechat-cover-20261021/`.
+- [x] During offline checks, real saved cover and report/email hashes remained unchanged, with
+  the same 12 historical jobs, zero new/active jobs and no leftover engine/PDF helper.
+  No actual upload or delivery ran during those checks.
+- [x] Native-control acceptance in an isolated host using the current production views:
+  opened the file picker, cancelled before selection, selected the PNG fixture, visually checked
+  its preview and dimensions, cancelled upload confirmation, cancelled replacement selection,
+  and reopened the menu-bar popover with the selection retained. Existing cover ID was unchanged;
+  engine starts, credential-value reads/writes and jobs remained zero. Real App configuration,
+  queue and report index retain their hashes. Evidence and native-window screenshots are in
+  ignored `.build/wechat-cover-native-20261021/`.
+- [x] Separately authorized one live cover upload from the actual staged App's native picker and
+  confirmation button, using existing configuration and the same test PNG. Cancellation was
+  checked first; a one-shot guard prevented a second confirmation. WeChat returned a successful
+  receipt, the image hash matched, and the native UI showed **Uploaded and saved for future
+  drafts**. Only the default cover ID changed. The 12 historical queue jobs, report index and
+  262 workspace-file hashes were unchanged; exactly one new engine request was for cover upload,
+  not research or delivery. No engine/PDF helper remained. Evidence and native screenshot:
+  ignored `.build/wechat-cover-live-20261021/`.
+- No draft, research, email, automatic retry, commit or push ran in live cover acceptance.
+  The uploaded test image is now the default cover; existing drafts are unaffected. Native
+  automation used accessibility and guarded synthetic input, not physical-user input. Other
+  manual accessibility/multi-display gates remain separate.
+- [x] Precommit rerun: Python **870 passed, no skips** and Swift **255 tests across 46 suites**
+  with both frozen workflow checks enabled against a freshly built, network-blocked test engine.
+  Ruff, privacy, diff, release/bundle/signing verification and non-live bundled preflight passed.
+  CodeRabbit reviewed all 30 changed files and raised 0 issues. No additional live operation ran;
+  real queue/report/workspace hashes and the single confirmed cover receipt remain unchanged.
+  Logs are retained in ignored `.build/wechat-cover-precommit-20261021/`.
+
 #### WeChat Entry: Restart Acceptance (2026-10-21)
 
 - [x] Cold-launched the staged development App and opened the existing report through the native
