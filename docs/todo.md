@@ -113,6 +113,112 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### WeChat Entry: Restart Acceptance (2026-10-21)
+
+- [x] Cold-launched the staged development App and opened the existing report through the native
+  status item. Its WeChat row still shows **Draft created**, and its email row still shows **Sent**.
+  The saved queue remains at 12 historical jobs with no active or new job. All schedules remain
+  paused; no research, search, credential-value read, draft creation or email was requested.
+- [x] Original `article_draft.json`, `wechat.html`, `daily.md` and the prior email result retain
+  their acceptance hashes. Native restart evidence is in ignored
+  `.build/wechat-precommit-20261021/native-restart.json`.
+- [x] Precommit checks passed: Python **856 passed / 2 skipped**, Swift **245 tests across 45
+  suites** with the rebuilt offline frozen workflow explicitly enabled, Ruff, privacy, diff,
+  release build, bundle verification, deep/strict signing and non-live bundled preflight.
+  Independent read-only review found no concrete issue. The newly staged App was cold-launched
+  and checked again: the same delivery states and queue remain, with no idle engine/PDF helper.
+  Build and frozen-workflow evidence is retained in ignored `.build/wechat-precommit-20261021/`.
+- This completes the successful WeChat record's native restart check, not the remaining cover
+  upload, notification, packaging or broader manual/resource gates.
+
+#### Native WeChat Draft: User Acceptance Passed (2026-10-20)
+
+- [x] Under fresh authorization, operated the real App confirmation/cancel flow and then
+  dispatched exactly one creation confirmation for the existing Chinese report and saved cover.
+  One new WeChat job, `A14D5064-BCD9-48A5-8D7E-4E892778620B`, succeeded at **15:49:22 HKT**.
+- [x] WeChat returned `created`, `draft_created=true` and a nonempty draft media ID. Six body
+  images were uploaded, the configured cover was reused, and the request remained draft-only
+  with `auto_publish=false`. No research, email, publication or broadcast was requested.
+- [x] Native report UI displays **Draft created** while email remains **Sent**. The successful
+  WeChat record is persisted in the report index. Original draft, preview, daily Markdown and
+  prior email result remain byte-identical; the saved queue has 12 jobs, none active, with only
+  one new job in this authorization. All schedules remain paused. No commit or push performed.
+- Evidence is retained in ignored `.build/wechat-native-20261020-retry2/`. The previous token
+  failures remain historical unknown attempts; no speculative code fix or history rewrite was
+  used to mark them successful. Their root cause remains unresolved, but no longer blocks this
+  successful native attempt.
+- [x] After being asked to inspect the new draft's Chinese text, image placement and cover in the
+  WeChat backend, the user confirmed this slice can close. This is user visual acceptance,
+  separate from API/native success.
+- Cover upload, notifications, DMG and earlier manual/resource gates remain separate. Native
+  restart acceptance of this successful WeChat record was completed on 2026-10-21 above.
+
+#### WeChat Token Diagnosis Follow-up (2026-10-20)
+
+- The user confirmed account identity and that the rejected IP was already listed. Do not treat
+  the previous 40164 responses as proof that the user omitted the IP or configured another account.
+- Read-only inspection found the frozen WeChat client bytecode matches current source and uses
+  the expected HTTPS endpoint. IPv4-mapped IPv6 denotes the same reported IPv4 address. Prior error
+  request identifiers encode contemporaneous timestamps, not a replayed old local error.
+- The Mac has a system HTTP/HTTPS proxy. Credentialless proxy/direct checks both returned fresh
+  WeChat missing-AppID errors. Two token-only checks using existing credentials then succeeded:
+  system proxy at **07:39:56 UTC**, direct at **07:42:20 UTC**. Credentials and tokens were not
+  logged or persisted. No images, drafts, research, email or App queue jobs were created.
+- Current token access works, but the specific cause of the earlier 40164 responses is unresolved.
+  Neither a proxy defect nor whitelist propagation delay is established. No speculative runtime
+  fix was made. Historical App delivery remains unknown; token success is not draft acceptance.
+  Diagnostic summary is retained in ignored `.build/wechat-network-20261020/diagnostic.json`.
+
+#### Earlier Native WeChat Attempts: Blocked (2026-10-20)
+
+- [x] Connected the saved cover/author from an earlier confirmed WeChat success to the development
+  App; reused existing Keychain names, with metadata-only presence checks before execution.
+  All schedules stayed paused and there was no pending work.
+- [x] Operated the actual native status item, report button and WeChat confirmation sheet.
+  Native Cancel left the queue and report unchanged. Then dispatched exactly one native creation
+  confirmation, protected by a local one-confirmation guard in ignored acceptance evidence.
+- **Blocked at this attempt:** the one new WeChat delivery job reached the token endpoint, which
+  returned error **40164** (IP whitelist rejection). It stopped before
+  image upload and draft submission; no draft request/result artifact was produced. The App
+  conservatively records `delivery_unknown`; no retry or second confirmation was attempted.
+- No new research or email job, no publish/broadcast, and no commit or push. Original draft,
+  preview, daily Markdown and prior email result remained byte-identical. Evidence is retained in
+  ignored `.build/wechat-native-20261020/`; the network address is not copied into public docs.
+- A later single native attempt under fresh authorization succeeded and received user visual
+  acceptance; see the checkpoint above. Native restart acceptance was subsequently completed on
+  2026-10-21, separately from these earlier blocked attempts.
+- A subsequent user-authorized single native attempt on the same date again returned **40164**
+  at token acquisition. Cancel was rechecked, exactly one new WeChat job was admitted, and no
+  image/draft submission or automatic retry followed. Original report/email artifacts were
+  unchanged. Evidence is in ignored `.build/wechat-native-20261020-retry1/`. The user confirmed
+  the IP was already listed; the cause of these earlier rejections remains unresolved.
+
+#### App WeChat Entry: Offline Acceptance (2026-10-20)
+
+- [x] Existing reports now expose WeChat status, Settings navigation, and explicit creation
+  confirmation using the saved cover and author. Missing configuration or credential metadata
+  blocks admission. Opening/rendering a report and dismissing confirmation do not create jobs.
+- [x] Reused the serialized delivery queue, `retry_delivery` bridge and WeChat application service.
+  The existing first-manual-email channel-record helper now covers both supported channels;
+  missing records remain `notRequested`, not automatic pending work. No new pipeline, wire command,
+  renderer, publishing client or runtime dependency was added.
+- [x] Verified duplicate/unknown confirmations, changed cover or App-managed credential
+  invalidation, busy admission, queue-write failure and crash recovery using offline substitutes.
+  Email status remains independent. First-record and credential-change tests reproduced the
+  missing behavior before their fixes. No real credential values were read or written.
+- [x] The Python bridge test uses the real handler and application service with an offline client:
+  title/summary come from `ArticleDraft`, cover/author from settings, and only draft creation is
+  requested. The existing draft, preview and no-image publish HTML remain byte-identical.
+- Sixteen English/light and Chinese/dark component captures are retained in ignored
+  `.build/wechat-entry-20261020/`. These are offline layout evidence, not native popover clicking
+  or real service acceptance. Real App draft creation and user visual acceptance were subsequently
+  completed above. Cover upload, notifications, DMG and prior manual/resource gates remain open.
+  No real research, draft, email, commit or push occurred in this offline slice.
+- Checks passed: Python **856 passed / 2 skipped**; Swift **245 tests across 45 suites**, including
+  ten WeChat entry tests and the explicitly enabled frozen workflow. Release build, bundle and
+  deep/strict signing checks, Ruff, privacy and diff checks passed. Independent read-only review
+  found no concrete issue. Production Python services and all channel renderers are unchanged.
+
 #### Native Gmail Acceptance (2026-10-20)
 
 - [x] Copied the already verified Gmail SMTP settings into the development App's typed

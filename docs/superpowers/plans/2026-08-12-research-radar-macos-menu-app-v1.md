@@ -2685,6 +2685,34 @@ and fixed stale busy-state observation after send completion. The recipient has 
 second message's Chinese text and images. WeChat actions, notifications and final packaging
 remain separate gates. Do not mark all of Step 5 complete from this email-only slice.
 
+Task 3B WeChat-entry slice (2026-10-20): an existing report now offers a separate WeChat row
+and explicit confirmation using the configured cover and author. The App reuses `retry_delivery`
+and the existing WeChat service; no research or email is requested by this action. The existing
+manual channel-record repair covers both supported channels without creating automatic work.
+Confirmation captures WeChat settings and attempt history; App-managed credential changes also
+invalidate it without reading key values. Success/unknown retry guards remain independent of
+email. Offline queue, recovery, service integration and bilingual layout checks are tracked in
+TODO. No real draft was created at this offline checkpoint; subsequent native and user acceptance
+are recorded below. Cover upload remains separate.
+
+Native follow-up on 2026-10-20 verified the real confirmation/cancel path and submitted one
+authorized App job using the existing cover. WeChat rejected token acquisition with error 40164
+(outbound IP not whitelisted), before draft submission. The App retained its conservative unknown
+state; no retry was made at this checkpoint. A later separately authorized attempt also received
+40164. The user confirmed the IP was already listed; no whitelist correction or specific root
+cause was established. Subsequent success is recorded below, not treated as an automatic retry.
+
+After token-only diagnosis succeeded, a new user-authorized native attempt on 2026-10-20 created
+one real WeChat draft at 15:49:22 HKT, uploaded six body images and reused the configured cover.
+The native report UI showed Draft created with email still Sent, and the successful result was
+persisted. No research, email, publish/broadcast or automatic retry was performed. The previous
+failures were not rewritten as successes. After being asked to inspect the Chinese text, images
+and cover in the WeChat backend, the user confirmed this slice can close. On 2026-10-21, a cold
+launch and native report inspection retained Draft created and email Sent, with the same 12
+historical jobs, no new work and unchanged original report/email artifacts. The rebuilt App passed
+the same native restart check after full precommit testing. Notifications, cover upload and final
+packaging are not completed by this slice; Step 5 is not marked complete solely from this check.
+
 Research success writes `ReportRecordV1` before channel jobs are enqueued. Each enabled channel becomes its own `retry_delivery` engine request. Delivery state is one of `notRequested`, `pending`, `sending`, `created`, `sent`, `failed`, or `unknown`.
 
 WeChat retry calls only `publish_wechat_draft()` and preserves its duplicate/unknown safety.
