@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from argparse import Namespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from research_radar.app_bridge.handlers import handle_retry_delivery
+from research_radar.app_bridge.protocol import EngineRequestV1, RetryDeliveryPayloadV1
 from research_radar.application.daily import DailyRunOptions, run_daily_application
 from research_radar.application.email import EmailDeliveryOptions, publish_email_application
 from research_radar.application.wechat import (
@@ -16,11 +19,13 @@ from research_radar.application.wechat import (
     article_draft_source_urls,
     publish_wechat_draft,
 )
+from research_radar.compose.draft_io import load_article_draft
+from research_radar.compose.wechat import render_wechat_html, render_wechat_publish_html
 from research_radar.config import EmailPublishConfig, parse_config
 from research_radar.exceptions import PublishError, ResearchRadarError
 from research_radar.pipeline.progress import ProgressWriter
-from research_radar.security.secrets import EnvSecretBackend, SecretManager
-from research_radar.storage.files import read_json
+from research_radar.security.secrets import EnvSecretBackend, InMemorySecretBackend, SecretManager
+from research_radar.storage.files import read_json, write_text
 
 
 def test_progress_writer_emits_the_same_redacted_event_to_listener(tmp_path: Path) -> None:
@@ -179,6 +184,56 @@ def test_wechat_application_dry_run_uses_article_draft(tmp_path: Path) -> None:
     assert result["status"] == "dry_run"
     assert read_json(run_dir / "publish_wechat_draft.json")["draft_created"] is False
     assert (run_dir / "wechat_publish.html").exists()
+
+
+def test_app_wechat_entry_reuses_report_cover_and_existing_publisher(tmp_path: Path) -> None:
+    run_dir = _write_minimal_article_draft(tmp_path)
+    draft = load_article_draft(run_dir / "article_draft.json")
+    (run_dir / "wechat.html").write_text(render_wechat_html(draft), encoding="utf-8")
+    write_text(run_dir / "wechat_publish.html", render_wechat_publish_html(draft))
+    paths = [
+        run_dir / name for name in ("article_draft.json", "wechat.html", "wechat_publish.html")
+    ]
+    before = [path.read_bytes() for path in paths]
+    articles = []
+
+    class OfflineWeChatClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def add_draft(self, article) -> dict[str, str]:
+            articles.append(article)
+            return {"media_id": "offline-draft"}
+
+    config = SimpleNamespace(wechat=SimpleNamespace(
+        enabled=True, author="Saved author", thumb_media_id="saved-cover",
+        app_id_secret="wx.id",
+        app_secret_secret="wx.secret",
+    ))
+    request = EngineRequestV1(
+        schema_version=1, request_id="00000000-0000-4000-8000-000000000002",
+        command="retry_delivery", created_at="2026-10-20T00:00:00Z",
+        app_support_root=tmp_path, config_path=None,
+        payload=RetryDeliveryPayloadV1(
+            run_dir=run_dir, channel="wechat", allow_resend=False,
+            acknowledge_unknown_outcome=False,
+        ),
+    )
+    result = handle_retry_delivery(
+        request, config=config, secrets=SecretManager(InMemorySecretBackend()),
+        events=None, pdf_helper_path=None, wechat_client_factory=OfflineWeChatClient,
+    )
+
+    assert result == {"run_dir": str(run_dir), "channel": "wechat", "status": "created"}
+    assert len(articles) == 1
+    article = articles[0]
+    assert (article.title, article.digest) == (draft.title, draft.lede)
+    assert (article.author, article.thumb_media_id) == ("Saved author", "saved-cover")
+    assert [path.read_bytes() for path in paths] == before
+    record = read_json(run_dir / "publish_wechat_draft.json")
+    assert record["draft_created"] is True
+    assert record["request"]["auto_publish"] is False
+    assert not (run_dir / "email_send_result.json").exists()
 
 
 def test_email_application_delegates_to_existing_publisher(monkeypatch, tmp_path: Path) -> None:
