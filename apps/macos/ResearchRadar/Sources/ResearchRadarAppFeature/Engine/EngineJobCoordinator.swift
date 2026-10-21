@@ -265,7 +265,7 @@ public actor EngineJobCoordinator {
 
     private func validateDeliveryAdmission(_ job: JobRecordV1) async throws {
         guard job.kind == .delivery else { return }
-        try await ensureManualEmailRecord(for: job)
+        try await ensureManualDeliveryRecord(for: job)
         guard let report = await reports.reports().first(where: { $0.runDirectory == job.runDirectory }),
               report.isEffectiveDeepReport,
               report.topicID == job.topicID, report.reportDate == job.reportDate else {
@@ -282,21 +282,21 @@ public actor EngineJobCoordinator {
         }
     }
 
-    private func ensureManualEmailRecord(for job: JobRecordV1) async throws {
-        guard job.kind == .delivery, job.deliveryChannel == .email, job.trigger == .retry,
+    private func ensureManualDeliveryRecord(for job: JobRecordV1) async throws {
+        guard job.kind == .delivery, let channel = job.deliveryChannel, job.trigger == .retry,
               var report = await reports.reports().first(where: { $0.runDirectory == job.runDirectory }),
-              !report.deliveries.contains(where: { $0.channel == .email }) else { return }
+              !report.deliveries.contains(where: { $0.channel == channel }) else { return }
         guard report.isEffectiveDeepReport, report.topicID == job.topicID, report.reportDate == job.reportDate else {
             throw EngineJobCoordinatorError.requestMismatch
         }
         // Idempotent on admission and recovery if the App stopped between the queue/index writes.
-        report.deliveries.append(DeliveryRecordV1(channel: .email, state: .notRequested))
+        report.deliveries.append(DeliveryRecordV1(channel: channel, state: .notRequested))
         try await reports.upsert(report)
     }
 
     private func persist(job: JobRecordV1, resolution: EngineTerminalResolution) async throws {
         do {
-            try await ensureManualEmailRecord(for: job)
+            try await ensureManualDeliveryRecord(for: job)
             switch resolution {
             case .success(let result): try await complete(job: job, result: result)
             case .failure(let state, let error, let stage):

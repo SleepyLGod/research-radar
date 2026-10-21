@@ -122,6 +122,10 @@ struct FullWorkspaceView: View {
                     Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                 }.padding(16)
                 Divider()
+                ReportWeChatView(store: store, report: report, localization: localization) {
+                    navigation.section = .settings
+                }
+                Divider()
                 ReportEmailView(store: store, report: report, localization: localization) {
                     navigation.section = .settings
                 }

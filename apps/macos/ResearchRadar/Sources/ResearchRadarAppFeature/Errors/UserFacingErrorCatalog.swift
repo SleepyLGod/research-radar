@@ -17,6 +17,8 @@ public struct UserFacingErrorCatalog {
             "schedule_refresh_failed", "schedule_recovery_failed", "state_reconciliation_failed",
             "email_confirmation_changed", "email_report_missing", "email_password_missing", "delivery_retry_blocked",
             "email.no_public_report", "email.configure_first", "email.busy",
+            "wechat_confirmation_changed", "wechat_report_missing", "wechat_credentials_missing",
+            "wechat.no_public_report", "wechat.configure_first", "wechat.busy",
         ])
 
     @MainActor public func message(for code: String) -> String {

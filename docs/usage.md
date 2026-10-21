@@ -454,6 +454,27 @@ record.
 
 ## WeChat Drafts
 
+### Create From the macOS App
+
+In **Settings → WeChat draft**, enable WeChat and save the App ID, App Secret and an already
+uploaded cover media ID. This App entry reuses the saved cover; it does not upload a new cover
+or verify that the media ID is still valid. Saved settings do not establish a successful connection.
+
+Open an existing completed report and choose **Create draft** in its WeChat row. Review the
+report and saved-cover notice, then confirm. The App uploads the existing report and local figures
+through the existing WeChat service. It does not run research again, send email, publish or broadcast.
+Opening the report or cancelling confirmation creates no task. Credential presence checks do not
+read secret values; the engine may request macOS Keychain authorization when a real task runs.
+
+If creation fails, retry only WeChat from this report. A prior success requires confirmation to
+create another copy. For an unknown outcome, check the WeChat draft box before confirming, because
+a duplicate is possible. Changing the report, WeChat settings, credentials through App Settings,
+or attempt history invalidates an old confirmation. The entry does not change your existing
+automatic delivery settings. After creation, inspect the text, figures and cover in the WeChat
+backend before publishing manually.
+
+### Create From the CLI
+
 Upload a cover image once and store the returned media id somewhere local:
 
 ```bash

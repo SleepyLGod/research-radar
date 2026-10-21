@@ -34,6 +34,7 @@ public final class AppStore {
     public private(set) var isShuttingDown = false
     public private(set) var cancellationRequested = false
     @ObservationIgnored private var commandActive = false
+    @ObservationIgnored private var wechatCredentialRevision = UUID()
     @ObservationIgnored private var drainTask: Task<Void, Never>?
     private var admissionCount = 0
     @ObservationIgnored private var drainRequested = false
@@ -369,6 +370,7 @@ public final class AppStore {
         candidate.delivery.wechat.author = author
         candidate.delivery.wechat.thumbMediaID = thumbMediaID
         try candidate.validate()
+        if !appID.isEmpty || !appSecret.isEmpty { wechatCredentialRevision = UUID() }
         if !appID.isEmpty { try saveSecret(name: "wechat.app_id", value: appID) }
         if !appSecret.isEmpty { try saveSecret(name: "wechat.app_secret", value: appSecret) }
         try persistConfiguration(candidate)
@@ -623,6 +625,43 @@ public final class AppStore {
     }
 
     func showEmailDeliveryError(_ error: EmailDeliveryActionError) { lastErrorCode = error.code }
+
+    func prepareWeChatDraft(reportID: UUID) throws -> WeChatDraftConfirmation {
+        guard let report = reports.first(where: { $0.id == reportID }) else {
+            throw WeChatDraftActionError.blocked("wechat_report_missing")
+        }
+        let settings = configuration.delivery.wechat
+        let view = WeChatDraftPresentation(report: report, jobs: jobs, settings: settings, busy: behaviorChangesBlocked)
+        if let code = view.blockedReason { throw WeChatDraftActionError.blocked(code) }
+        guard coordinator != nil else { throw WeChatDraftActionError.blocked("engine_missing") }
+        do {
+            for account in [settings.appIDSecret, settings.appSecretSecret] {
+                guard try secretStore.contains(account: account) else {
+                    throw WeChatDraftActionError.blocked("wechat_credentials_missing")
+                }
+            }
+        } catch let error as WeChatDraftActionError { throw error }
+        catch { throw WeChatDraftActionError.blocked("keychain_lookup_failed") }
+        return WeChatDraftConfirmation(report: report, settings: settings,
+            priorJobIDs: jobs.filter { $0.deliveryChannel == .wechat && $0.runDirectory == report.runDirectory }.map(\.id),
+            credentialRevision: wechatCredentialRevision,
+            previouslyCreated: view.previouslyCreated, acknowledgeUnknownOutcome: view.acknowledgeUnknownOutcome)
+    }
+
+    func createWeChatDraft(_ confirmation: WeChatDraftConfirmation) async {
+        do {
+            guard try prepareWeChatDraft(reportID: confirmation.report.id) == confirmation else {
+                throw WeChatDraftActionError.blocked("wechat_confirmation_changed")
+            }
+            lastErrorCode = nil
+            await retryDelivery(report: confirmation.report, channel: .wechat,
+                allowResend: confirmation.allowResend,
+                acknowledgeUnknownOutcome: confirmation.acknowledgeUnknownOutcome)
+        } catch let error as WeChatDraftActionError { lastErrorCode = error.code }
+        catch { lastErrorCode = "delivery_retry_blocked" }
+    }
+
+    func showWeChatDraftError(_ error: WeChatDraftActionError) { lastErrorCode = error.code }
 
     public func retryDelivery(
         report: ReportRecordV1,
