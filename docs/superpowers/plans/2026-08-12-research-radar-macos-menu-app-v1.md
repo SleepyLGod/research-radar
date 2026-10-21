@@ -628,6 +628,7 @@ class EngineCommand(StrEnum):
     BOOTSTRAP_TOPIC = "bootstrap_topic"
     RUN_DAILY = "run_daily"
     RETRY_DELIVERY = "retry_delivery"
+    UPLOAD_WECHAT_COVER = "upload_wechat_cover"
 ```
 
 Command payloads are exact dataclasses:
@@ -661,9 +662,20 @@ class RetryDeliveryPayloadV1:
     channel: str  # "wechat" or "email"
     allow_resend: bool
     acknowledge_unknown_outcome: bool
+
+
+@dataclass(frozen=True)
+class UploadWeChatCoverPayloadV1:
+    image_path: str
+    image_sha256: str
 ```
 
 This section describes the final schema frozen in Task 2. Task 1 implements only the common envelope, terminal types, and `preflight` payload; it does not add placeholder decoders for bootstrap, daily, or delivery. Task 2 adds and freezes the remaining command payloads before any beta is published.
+
+Task 3B adds `upload_wechat_cover` to the same tagged protocol. Its image must be a regular
+non-symlink `cover.png` or `cover.jpg` directly in that request's private job directory, never
+an arbitrary user path. Its SHA-256 binds the immutable preview snapshot. This explicit,
+non-queued command uses the same engine gate as preflight/bootstrap; it is not a delivery retry.
 
 `request_id` and job directory UUID must match. `config_path` is nullable only for the local-only foundation preflight in Task 1; every Task 2 production command and every live provider preflight requires it. A present `config_path`, `run_dir`, PDF input, or helper output must resolve under `app_support_root`. The request protocol rejects unknown keys, unknown enum values, symlink escapes, and secret-value fields such as `password`, `secret_value`, `api_key_value`, `token_value`, or `cookie`. App configuration may contain validated symbolic names ending in `_secret`, such as `deepseek.api_key`; it never contains the corresponding value. `model_cache_limit_bytes` is either null or a positive integer; null performs no automatic eviction.
 
@@ -811,6 +823,7 @@ enum EngineStage: String, Codable, Sendable {
     case localization
     case compose
     case wechatDraft = "wechat_draft"
+    case wechatCover = "wechat_cover"
     case email
     case complete
 }
@@ -824,6 +837,7 @@ enum EngineCommand: String, Codable, Sendable {
     case bootstrapTopic = "bootstrap_topic"
     case runDaily = "run_daily"
     case retryDelivery = "retry_delivery"
+    case uploadWeChatCover = "upload_wechat_cover"
 }
 
 enum EngineEventStatus: String, Codable, Sendable {
@@ -961,6 +975,7 @@ The v1 mapping is fixed and tested:
 | `localization` | `localization` | Prepare report |
 | `artifacts`, `explanation_policy`, `public_style` | `compose` | Prepare report |
 | WeChat service event | `wechat_draft` | Deliver |
+| Explicit cover upload | `wechat_cover` | Settings only |
 | Email service event | `email` | Deliver |
 | `run/completed` | `complete`, `completed` event | Complete |
 
@@ -979,6 +994,7 @@ struct EngineResultV1: Codable, Equatable, Sendable {
     let preflight: PreflightSummaryV1?
     let topicDraft: TopicDraftV1?
     let delivery: DeliveryResultV1?
+    let cover: WeChatCoverResultV1? // media_id and image_sha256; cover command only
 }
 
 struct EngineErrorV1: Codable, Equatable, Sendable {
@@ -995,6 +1011,11 @@ struct EngineErrorV1: Codable, Equatable, Sendable {
 
 The error `message` is redacted and capped at 500 characters. Python tracebacks may be written only to the bounded redacted diagnostic log. They never enter notifications or the report.
 
+`cover` is an additive terminal payload, omitted from existing command results to preserve their
+wire shape. A cover result has exactly `media_id` and `image_sha256`; the native terminal resolver
+requires the hash to match the originating request. Cover service errors use `cover_upload_failed`
+and stage `wechat_cover`. Missing/unconfirmed terminal results never update the saved cover.
+
 `EngineErrorV1.code` is a stable machine identifier. Schema v1 recognizes these codes:
 
 ```text
@@ -1008,6 +1029,7 @@ provider_unavailable
 invalid_report_date
 research_failed
 delivery_failed
+cover_upload_failed
 engine_crashed
 parent_lost
 protocol_error
@@ -2712,6 +2734,41 @@ launch and native report inspection retained Draft created and email Sent, with 
 historical jobs, no new work and unchanged original report/email artifacts. The rebuilt App passed
 the same native restart check after full precommit testing. Notifications, cover upload and final
 packaging are not completed by this slice; Step 5 is not marked complete solely from this check.
+
+Task 3B cover-entry slice (2026-10-21): WeChat Settings gains a native image picker, bounded
+preview and explicit upload confirmation. Selection and display do not read secret values or
+start an engine. The App accepts PNG/JPEG up to 2 MiB and 40 megapixels without editing them,
+stages the confirmed bytes privately, then calls the existing permanent-image client through
+`upload_wechat_cover`. It atomically saves only the returned cover ID, retaining all unrelated
+configuration and reports. An uncertain outcome keeps the old ID and requires a fresh explicit
+confirmation; no automatic retry occurs. Successful receipts survive local save failure in memory,
+with a save-only action that does not upload again. The receipt also remains in private engine
+terminal artifacts; there is no automatic upload/replay after restart. Tests use an independently
+frozen network-blocked transport, never real credentials. Native-control acceptance on 2026-10-21
+used an isolated host with current production views, injected credentials and a runner that rejects
+all engine launches. Native accessibility and guarded synthetic input exercised chooser cancellation,
+fixture selection, visible preview, upload-confirmation cancellation, replacement cancellation and
+popover close/reopen. Selection persisted, the existing cover ID was unchanged, and no engine,
+credential-value access or job was started. Real configuration, queue and report-index hashes stayed
+unchanged; evidence is in ignored `.build/wechat-cover-native-20261021/`. This isolated check is
+not physical-user input, production-startup or live-service acceptance.
+
+Separately authorized live cover acceptance on 2026-10-21 used the actual staged App, existing
+configuration and the same test PNG through its native picker and confirmation button. After
+checking cancellation, exactly one guarded confirmation produced one `upload_wechat_cover`
+engine request. WeChat returned a successful receipt with the expected image hash; the App
+saved the new default cover ID and displayed the native success label. Other configuration,
+the 12 historical queue jobs, report index and workspace hashes stayed unchanged. The engine
+exited; no draft, research, email or automatic retry ran. Evidence is in ignored
+`.build/wechat-cover-live-20261021/`. The test image is now the default cover; existing drafts
+are unaffected. Native automation is not physical-user input. No commit or push ran.
+Notifications and DMG are outside this slice.
+
+Cover-entry precommit gate (2026-10-21): Python 870 passed without skips; Swift 255 tests in
+46 suites passed with both frozen workflow checks enabled against a newly frozen, network-blocked
+test engine. Ruff, privacy/diff checks, release bundle/signature verification and non-live bundled
+preflight passed. CodeRabbit reviewed all 30 changed files and raised 0 issues. No additional live
+upload or delivery ran. Evidence is in ignored `.build/wechat-cover-precommit-20261021/`.
 
 Research success writes `ReportRecordV1` before channel jobs are enqueued. Each enabled channel becomes its own `retry_delivery` engine request. Delivery state is one of `notRequested`, `pending`, `sending`, `created`, `sent`, `failed`, or `unknown`.
 
