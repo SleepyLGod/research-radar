@@ -111,11 +111,15 @@ public enum EngineProtocolCodec {
                 throw EngineProtocolError.invalidValue
             }
         }
+        if command == .uploadWeChatCover {
+            guard let path = payload["image_path"] as? String, path.hasPrefix("/"),
+                  validDigest(payload["image_sha256"]) else { throw EngineProtocolError.invalidValue }
+        }
     }
 
     private static func validateResult(_ data: Data) throws {
         let object = try protocolObject(data)
-        try requireExactKeys(object, resultKeys)
+        try requireExactKeys(object, object["cover"] == nil ? resultKeys : resultKeys.union(["cover"]))
         try requireSchemaVersion(object)
         let command = try requireEnum(EngineCommand.self, object["command"])
         _ = try requireEnum(EngineResultStatus.self, object["status"])
@@ -153,7 +157,18 @@ public enum EngineProtocolCodec {
             try requireExactKeys(delivery, deliveryKeys)
             _ = try requireEnum(DeliveryChannel.self, delivery["channel"])
             _ = try requireEnum(DeliveryResultStatus.self, delivery["status"])
+        case .uploadWeChatCover:
+            let cover = try requireObject(object[expected])
+            try requireExactKeys(cover, ["media_id", "image_sha256"])
+            guard let mediaID = cover["media_id"] as? String,
+                  !mediaID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  validDigest(cover["image_sha256"]) else { throw EngineProtocolError.invalidValue }
         }
+    }
+
+    private static func validDigest(_ value: Any?) -> Bool {
+        guard let digest = value as? String else { return false }
+        return digest.utf8.count == 64 && digest.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
     }
 
     private static func validateError(_ data: Data) throws {
@@ -295,17 +310,19 @@ public enum EngineProtocolCodec {
         .retryDelivery: [
             "run_dir", "channel", "allow_resend", "acknowledge_unknown_outcome",
         ],
+        .uploadWeChatCover: ["image_path", "image_sha256"],
     ]
     private static let resultKeys: Set<String> = [
         "schema_version", "request_id", "command", "status", "completed_at",
         "report", "preflight", "topic_draft", "delivery",
     ]
-    private static let resultPayloadKeys = ["report", "preflight", "topic_draft", "delivery"]
+    private static let resultPayloadKeys = ["report", "preflight", "topic_draft", "delivery", "cover"]
     private static let resultPayloadKey: [EngineCommand: String] = [
         .preflight: "preflight",
         .bootstrapTopic: "topic_draft",
         .runDaily: "report",
         .retryDelivery: "delivery",
+        .uploadWeChatCover: "cover",
     ]
     private static let preflightKeys: Set<String> = ["checks", "ready"]
     private static let preflightCheckKeys: Set<String> = [
@@ -344,5 +361,6 @@ public enum EngineProtocolCodec {
         "delivery_failed", "engine_crashed", "parent_lost", "protocol_error",
         "model_transport_failed", "model_response_interrupted", "model_response_retry_exhausted",
         "cancelled",
+        "cover_upload_failed",
     ]
 }

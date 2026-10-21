@@ -33,6 +33,7 @@ _STAGES = {
     "localization",
     "compose",
     "wechat_draft",
+    "wechat_cover",
     "email",
     "complete",
 }

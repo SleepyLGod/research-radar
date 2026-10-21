@@ -456,9 +456,23 @@ record.
 
 ### Create From the macOS App
 
-In **Settings → WeChat draft**, enable WeChat and save the App ID, App Secret and an already
-uploaded cover media ID. This App entry reuses the saved cover; it does not upload a new cover
-or verify that the media ID is still valid. Saved settings do not establish a successful connection.
+In **Settings → WeChat draft**, save the App ID and App Secret, then choose a cover image.
+The App shows a local preview; selection alone does not read credential values or contact WeChat.
+Choose **Upload cover**, review the confirmation, and confirm to add the image to the configured
+account's permanent material library. The returned media ID is saved for future drafts. This
+does not create a draft, change existing drafts or enable automatic delivery.
+
+The App currently accepts PNG/JPEG up to **2 MiB and 40 megapixels** as its own bounded-input
+policy; it does not crop, compress or edit the image. The preview and upload use the same selected
+bytes. To reuse an existing material instead, expand **Use an existing cover media ID**. Enable
+WeChat and save the delivery settings when ready. Saved settings alone do not verify connectivity
+or prove that an older media ID is still valid.
+
+An interrupted or unconfirmed upload never replaces the saved cover or retries automatically.
+Check the WeChat material library before explicitly uploading again, since another upload may
+create a duplicate material. If upload succeeded but local saving failed, use **Save uploaded
+cover** to retry only the local save, without uploading again. The selection/preview is held in
+memory; after restarting, the saved media ID remains, but the App does not fetch a remote preview.
 
 Open an existing completed report and choose **Create draft** in its WeChat row. Review the
 report and saved-cover notice, then confirm. The App uploads the existing report and local figures

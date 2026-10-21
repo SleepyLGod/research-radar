@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,6 +25,7 @@ _REQUEST_FIELDS = {
     "payload",
 }
 _PAYLOAD_FIELDS = {
+    "upload_wechat_cover": {"image_path", "image_sha256"},
     "preflight": {"live_probe"},
     "bootstrap_topic": {"description", "language"},
     "run_daily": {
@@ -65,6 +67,7 @@ class EngineCommand(StrEnum):
     BOOTSTRAP_TOPIC = "bootstrap_topic"
     RUN_DAILY = "run_daily"
     RETRY_DELIVERY = "retry_delivery"
+    UPLOAD_WECHAT_COVER = "upload_wechat_cover"
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,11 +108,20 @@ class RetryDeliveryPayloadV1:
     acknowledge_unknown_outcome: bool
 
 
+@dataclass(frozen=True, slots=True)
+class UploadWeChatCoverPayloadV1:
+    """An immutable cover snapshot staged inside this request's private job directory."""
+
+    image_path: Path
+    image_sha256: str
+
+
 EnginePayloadV1 = (
     PreflightPayloadV1
     | BootstrapTopicPayloadV1
     | RunDailyPayloadV1
     | RetryDeliveryPayloadV1
+    | UploadWeChatCoverPayloadV1
 )
 
 
@@ -175,7 +187,7 @@ def load_request(path: Path, *, job_dir: Path) -> EngineRequestV1:
     except ValueError as exc:
         raise ProtocolError("created_at must be an ISO-8601 timestamp.") from exc
     config_path = _parse_optional_contained_path(value["config_path"], app_root)
-    payload = _parse_payload(command, value["payload"], app_root)
+    payload = _parse_payload(command, value["payload"], app_root, private_job)
     if config_path is None and not (
         command is EngineCommand.PREFLIGHT
         and isinstance(payload, PreflightPayloadV1)
@@ -197,6 +209,7 @@ def _parse_payload(
     command: EngineCommand,
     value: Any,
     app_root: Path,
+    job_dir: Path,
 ) -> EnginePayloadV1:
     if not isinstance(value, dict):
         raise ProtocolError(f"{command.value} payload must be an object.")
@@ -211,6 +224,25 @@ def _parse_payload(
         raise ProtocolError(f"Invalid {command.value} payload: {detail}.")
     if command is EngineCommand.PREFLIGHT:
         return PreflightPayloadV1(live_probe=_require_bool(value, "live_probe"))
+    if command is EngineCommand.UPLOAD_WECHAT_COVER:
+        image = Path(_require_str(value, "image_path"))
+        digest = _require_str(value, "image_sha256")
+        try:
+            parent = image.parent.resolve(strict=True)
+        except OSError as exc:
+            raise ProtocolError("Cover image directory is unavailable.") from exc
+        if (
+            not image.is_absolute()
+            or parent != job_dir
+            or image.name not in {"cover.png", "cover.jpg"}
+        ):
+            raise ProtocolError("Cover image must be staged in this job directory.")
+        image = job_dir / image.name
+        if image.is_symlink() or not image.is_file():
+            raise ProtocolError("Cover image must be a regular non-symlink file.")
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise ProtocolError("image_sha256 must be a lowercase SHA-256 digest.")
+        return UploadWeChatCoverPayloadV1(image_path=image, image_sha256=digest)
     if command is EngineCommand.BOOTSTRAP_TOPIC:
         return BootstrapTopicPayloadV1(
             description=_require_str(value, "description"),

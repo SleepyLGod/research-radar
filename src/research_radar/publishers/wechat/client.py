@@ -81,16 +81,22 @@ class WeChatDraftClient:
             raise PublishError(f"WeChat image upload response did not contain url: {result}")
         return url
 
-    def upload_permanent_image_material(self, image_path: Path) -> dict[str, str]:
+    def upload_permanent_image_material(
+        self,
+        image_path: Path,
+        *,
+        image_bytes: bytes | None = None,
+    ) -> dict[str, str]:
         """Upload a permanent image material and return its media id and URL."""
 
-        if not image_path.exists():
+        if image_bytes is None and not image_path.exists():
             raise PublishError(f"WeChat thumbnail image not found: {image_path}")
         access_token = self.get_access_token()
         result = self._post_multipart_file(
             f"{self.base_url}/material/add_material?access_token={access_token}&type=image",
             field_name="media",
             file_path=image_path,
+            file_data=image_bytes,
         )
         media_id = result.get("media_id")
         url = result.get("url")
@@ -171,10 +177,11 @@ class WeChatDraftClient:
         *,
         field_name: str,
         file_path: Path,
+        file_data: bytes | None = None,
     ) -> dict[str, object]:
         boundary = f"ResearchRadarBoundary{uuid4().hex}"
         content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-        file_bytes = file_path.read_bytes()
+        file_bytes = file_path.read_bytes() if file_data is None else file_data
         body = b"".join(
             [
                 f"--{boundary}\r\n".encode(),

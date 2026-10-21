@@ -335,3 +335,17 @@
 "error.wechat.configure_first" = "Enable WeChat and save its credentials and cover media ID in Settings first.";
 "error.wechat.busy" = "Wait for the current task to finish before creating a draft.";
 "error.schedule_recovery_failed" = "Could not resume schedules. Check configuration and stored state in Diagnostics; scheduling remains stopped.";
+"cover.choose" = "Choose cover…";
+"cover.upload" = "Upload cover";
+"cover.requirements" = "PNG or JPEG, up to 2 MiB and 40 megapixels. Save account credentials before uploading. Choosing an image does not upload it.";
+"cover.manual_id" = "Use an existing cover media ID";
+"cover.confirm_title" = "Upload this cover to WeChat?";
+"cover.confirm_detail" = "Adds this image to the configured account's permanent material library and saves the returned media ID for future drafts. No draft is created. Existing drafts are unchanged.";
+"cover.saved" = "Uploaded and saved for future drafts";
+"cover.save_failed" = "Uploaded, but not saved locally. Save the ID without uploading again.";
+"cover.save_only" = "Save uploaded cover";
+"cover.unknown" = "The last upload could not be confirmed. Check the WeChat material library before trying again; another upload may create a duplicate.";
+"error.wechat_cover_invalid" = "Choose a readable PNG or JPEG up to 2 MiB and 40 megapixels. Linked files are not accepted.";
+"error.wechat_cover_unconfirmed" = "Cover upload was not confirmed. Your saved cover is unchanged. Check the WeChat material library before retrying.";
+"error.wechat_cover_save_failed" = "The cover was uploaded but settings could not be saved. Use Save uploaded cover to retry saving only.";
+"stage.wechat_cover" = "Uploading cover";

@@ -22,12 +22,14 @@ from research_radar.app_bridge.protocol import (
     PreflightPayloadV1,
     RetryDeliveryPayloadV1,
     RunDailyPayloadV1,
+    UploadWeChatCoverPayloadV1,
 )
 from research_radar.application.daily import DailyRunOptions, run_daily_application
 from research_radar.application.email import EmailDeliveryOptions, publish_email_application
 from research_radar.application.provider_probe import probe_excerpt, probe_provider
 from research_radar.application.search_probe import probe_web_search
 from research_radar.application.wechat import WeChatDraftOptions, publish_wechat_draft
+from research_radar.application.wechat_cover import upload_wechat_cover
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.exceptions import ResearchRadarError
 from research_radar.publishers.wechat.client import WeChatDraftClient
@@ -210,6 +212,30 @@ def handle_run_daily(
         "publishable_claim_count": _metadata_count(summary, "publishable_claim_count"),
         **outcome_fields,
     }
+
+
+def handle_upload_wechat_cover(
+    request: EngineRequestV1,
+    *,
+    config: LoadedAppConfigurationV1 | None,
+    secrets: object,
+    events: EventWriter,
+    pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
+    wechat_client_factory: type[WeChatDraftClient] = WeChatDraftClient,
+) -> dict[str, object]:
+    """Upload one confirmed cover, never creating a draft or modifying App settings."""
+    if config is None:
+        raise ValueError("Cover upload requires App configuration.")
+    from research_radar.exceptions import OperationCancelled
+
+    if cancellation_event is not None and cancellation_event.is_set():
+        raise OperationCancelled()
+    payload = cast(UploadWeChatCoverPayloadV1, request.payload)
+    events.write("stage_changed", stage="wechat_cover", message="Uploading the selected cover.")
+    return dict(upload_wechat_cover(payload.image_path, payload.image_sha256,
+        _wechat_secret_manager(cast(SecretManager, secrets), config),
+        client_factory=wechat_client_factory))
 
 
 def handle_retry_delivery(

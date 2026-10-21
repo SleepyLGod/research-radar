@@ -74,6 +74,7 @@ class BridgeDependencies:
     bootstrap_topic: CommandHandler
     run_daily: CommandHandler
     retry_delivery: CommandHandler
+    upload_wechat_cover: CommandHandler
     clock: Callable[[], datetime]
     config_loader: Callable[[Path, bool], object]
     secret_manager_factory: Callable[[], object]
@@ -87,6 +88,7 @@ class BridgeDependencies:
             handle_preflight,
             handle_retry_delivery,
             handle_run_daily,
+            handle_upload_wechat_cover,
         )
 
         return cls(
@@ -94,6 +96,7 @@ class BridgeDependencies:
             bootstrap_topic=handle_bootstrap_topic,
             run_daily=handle_run_daily,
             retry_delivery=handle_retry_delivery,
+            upload_wechat_cover=handle_upload_wechat_cover,
             clock=lambda: datetime.now(UTC),
             config_loader=lambda path, require_topics: load_app_configuration(
                 path, require_topics=require_topics
@@ -113,6 +116,7 @@ class BridgeDependencies:
             bootstrap_topic=unexpected,
             run_daily=unexpected,
             retry_delivery=unexpected,
+            upload_wechat_cover=unexpected,
             clock=lambda: datetime.now(UTC),
             config_loader=lambda path, require_topics: object(),
             secret_manager_factory=lambda: object(),
@@ -380,11 +384,10 @@ def run_bridge(
         return 1
     except ResearchRadarError as exc:
         message = redact_text(str(exc)) or "The task could not be completed."
-        code = (
-            "delivery_failed"
-            if request is not None and request.command is EngineCommand.RETRY_DELIVERY
-            else "research_failed"
-        )
+        code = {
+            EngineCommand.RETRY_DELIVERY: "delivery_failed",
+            EngineCommand.UPLOAD_WECHAT_COVER: "cover_upload_failed",
+        }.get(request.command if request else None, "research_failed")
         write_error_once(
             code=code,
             message=message,
@@ -449,6 +452,7 @@ def _handler_for(command: EngineCommand, dependencies: BridgeDependencies) -> Co
         EngineCommand.BOOTSTRAP_TOPIC: dependencies.bootstrap_topic,
         EngineCommand.RUN_DAILY: dependencies.run_daily,
         EngineCommand.RETRY_DELIVERY: dependencies.retry_delivery,
+        EngineCommand.UPLOAD_WECHAT_COVER: dependencies.upload_wechat_cover,
     }[command]
 
 
@@ -459,6 +463,7 @@ def _stage_for_request(request: EngineRequestV1) -> str:
         EngineCommand.PREFLIGHT: "preflight",
         EngineCommand.BOOTSTRAP_TOPIC: "topic_bootstrap",
         EngineCommand.RUN_DAILY: "discovery",
+        EngineCommand.UPLOAD_WECHAT_COVER: "wechat_cover",
     }[request.command]
 
 
@@ -473,6 +478,7 @@ def _result_envelope(
         EngineCommand.BOOTSTRAP_TOPIC: "topic_draft",
         EngineCommand.RUN_DAILY: "report",
         EngineCommand.RETRY_DELIVERY: "delivery",
+        EngineCommand.UPLOAD_WECHAT_COVER: "cover",
     }[request.command]
     payloads: dict[str, object | None] = {
         "preflight": None,

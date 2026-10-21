@@ -19,6 +19,7 @@ public struct UserFacingErrorCatalog {
             "email.no_public_report", "email.configure_first", "email.busy",
             "wechat_confirmation_changed", "wechat_report_missing", "wechat_credentials_missing",
             "wechat.no_public_report", "wechat.configure_first", "wechat.busy",
+            "wechat_cover_invalid", "wechat_cover_unconfirmed", "wechat_cover_save_failed",
         ])
 
     @MainActor public func message(for code: String) -> String {

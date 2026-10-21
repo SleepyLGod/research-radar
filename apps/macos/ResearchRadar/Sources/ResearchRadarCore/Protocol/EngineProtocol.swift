@@ -14,6 +14,7 @@ public enum EngineCommand: String, Codable, Equatable, Sendable {
     case bootstrapTopic = "bootstrap_topic"
     case runDaily = "run_daily"
     case retryDelivery = "retry_delivery"
+    case uploadWeChatCover = "upload_wechat_cover"
 }
 
 public enum ReportLanguageV1: String, Codable, Equatable, Sendable {
@@ -128,6 +129,7 @@ public enum EnginePayloadV1: Equatable, Sendable {
     case bootstrapTopic(BootstrapTopicPayloadV1)
     case runDaily(RunDailyPayloadV1)
     case retryDelivery(RetryDeliveryPayloadV1)
+    case uploadWeChatCover(UploadWeChatCoverPayloadV1)
 
     public var command: EngineCommand {
         switch self {
@@ -135,6 +137,7 @@ public enum EnginePayloadV1: Equatable, Sendable {
         case .bootstrapTopic: .bootstrapTopic
         case .runDaily: .runDaily
         case .retryDelivery: .retryDelivery
+        case .uploadWeChatCover: .uploadWeChatCover
         }
     }
 }
@@ -228,6 +231,8 @@ public struct EngineRequestV1: Codable, Equatable, Sendable {
             .retryDelivery(
                 try container.decode(RetryDeliveryPayloadV1.self, forKey: .payload)
             )
+        case .uploadWeChatCover:
+            .uploadWeChatCover(try container.decode(UploadWeChatCoverPayloadV1.self, forKey: .payload))
         }
         try self.init(
             schemaVersion: container.decode(Int.self, forKey: .schemaVersion),
@@ -260,6 +265,8 @@ public struct EngineRequestV1: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .payload)
         case let .retryDelivery(value):
             try container.encode(value, forKey: .payload)
+        case let .uploadWeChatCover(value):
+            try container.encode(value, forKey: .payload)
         }
     }
 }
@@ -286,6 +293,7 @@ public enum EngineStage: String, Codable, Equatable, Sendable {
     case localization
     case compose
     case wechatDraft = "wechat_draft"
+    case wechatCover = "wechat_cover"
     case email
     case complete
 }
@@ -527,16 +535,18 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
     public let preflight: PreflightSummaryV1?
     public let topicDraft: TopicDraftV1?
     public let delivery: DeliveryResultV1?
+    public let cover: WeChatCoverResultV1?
 
     public init(
         schemaVersion: Int = 1, requestID: UUID, command: EngineCommand,
         status: EngineResultStatus, completedAt: Date, report: EngineReportSummaryV1? = nil,
         preflight: PreflightSummaryV1? = nil, topicDraft: TopicDraftV1? = nil,
-        delivery: DeliveryResultV1? = nil
+        delivery: DeliveryResultV1? = nil, cover: WeChatCoverResultV1? = nil
     ) {
         self.schemaVersion = schemaVersion; self.requestID = requestID; self.command = command
         self.status = status; self.completedAt = completedAt; self.report = report
         self.preflight = preflight; self.topicDraft = topicDraft; self.delivery = delivery
+        self.cover = cover
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -549,6 +559,7 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
         case preflight
         case topicDraft = "topic_draft"
         case delivery
+        case cover
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -562,6 +573,7 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
         try container.encode(preflight, forKey: .preflight)
         try container.encode(topicDraft, forKey: .topicDraft)
         try container.encode(delivery, forKey: .delivery)
+        try container.encodeIfPresent(cover, forKey: .cover)
     }
 }
 
