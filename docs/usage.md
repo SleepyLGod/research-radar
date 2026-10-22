@@ -101,6 +101,29 @@ Hardened Runtime or public-distribution approval. Certificate-backed signing, fr
 and cross-version authorization are separate acceptance checks; a valid signature does not mean
 Keychain will accept an updated executable without another prompt.
 
+## App Report Notifications
+
+In the expanded App, open **Settings > General > Report completion and failure notifications**.
+Notifications are off by default, including for existing installations. Only explicitly enabling
+this switch can request macOS permission; opening the App, changing a schedule or completing a
+task never requests permission. If access was denied, allow ResearchRadar in System Settings >
+Notifications and then enable the switch again. Research does not depend on notification permission.
+
+Only newly completed research attempts notify: a usable public deep-read report is ready, or an
+attempt failed/interrupted. Empty results, user cancellations and channel-only delivery jobs do
+not produce these reminders. Notifications contain fixed localized text and the recorded public
+failure stage, not topic text, report content, raw errors, account details, secrets or local paths.
+Click a reminder to open its local report or Diagnostics. Switching UI language affects future
+reminders, not notifications already delivered by macOS.
+
+The preference is stored in the App's local `state/app-state.json`, separate from research
+configuration. Reminders are best-effort: no automatic retry or historical replay after restart;
+a notification failure never changes report/job outcomes or triggers research or delivery.
+Offline tests use a notification-client substitute and do not establish real system banner or
+permission-dialog acceptance. Separate native acceptance with isolated offline reports has verified
+the permission prompt, banners and report/Diagnostics click routing; see the checkpoint in
+[`todo.md`](todo.md). This does not replace broader report-reading or accessibility acceptance.
+
 ## App Diagnostics
 
 In the expanded macOS App, open **Diagnostics → Copy redacted diagnostics**. Paste the result

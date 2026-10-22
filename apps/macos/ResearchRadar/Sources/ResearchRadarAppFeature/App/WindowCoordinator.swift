@@ -8,7 +8,19 @@ public final class WindowPresentationState {
     public var isVisible = true
     var requestedSection: WorkspaceSection?
     var requestedReportID: UUID?
+    var notificationFallbackExpanded = false
     public init() {}
+
+    func windowMode(saved: WindowMode) -> WindowMode { notificationFallbackExpanded ? .full : saved }
+
+    func openReportNotification(jobID: UUID, store: AppStore) {
+        var reportID: UUID?
+        let saved = store.performAction { reportID = try store.openReportNotification(jobID: jobID) }
+        if saved { store.showNotifiedResearchFailure(jobID: jobID) }
+        notificationFallbackExpanded = !saved
+        requestedReportID = saved ? reportID : nil
+        requestedSection = saved && reportID != nil ? .reports : .diagnostics
+    }
 }
 
 @MainActor

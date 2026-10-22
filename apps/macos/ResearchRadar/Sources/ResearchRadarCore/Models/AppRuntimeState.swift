@@ -14,6 +14,7 @@ public struct AppRuntimeStateV1: Codable, Equatable, Sendable, VersionedDurableS
     public var windowMode: WindowMode
     public var selectedTopicID: String?
     public var schedulesPaused: Bool
+    public var reportNotificationsEnabled: Bool?
     public var legacyHistoryImportedAt: Date?
     public var updatedAt: Date
 
@@ -21,13 +22,15 @@ public struct AppRuntimeStateV1: Codable, Equatable, Sendable, VersionedDurableS
         schemaVersion: Int = 1, onboardingStep: OnboardingStep = .storage,
         onboardingInProgress: Bool? = nil,
         windowMode: WindowMode = .compact, selectedTopicID: String? = nil,
-        schedulesPaused: Bool = false, legacyHistoryImportedAt: Date? = nil,
+        schedulesPaused: Bool = false, reportNotificationsEnabled: Bool? = nil,
+        legacyHistoryImportedAt: Date? = nil,
         updatedAt: Date
     ) {
         self.schemaVersion = schemaVersion; self.onboardingStep = onboardingStep
         self.onboardingInProgress = onboardingInProgress
         self.windowMode = windowMode; self.selectedTopicID = selectedTopicID
         self.schedulesPaused = schedulesPaused
+        self.reportNotificationsEnabled = reportNotificationsEnabled
         self.legacyHistoryImportedAt = legacyHistoryImportedAt; self.updatedAt = updatedAt
     }
 }
