@@ -2783,6 +2783,21 @@ Expected: PASS for WeChat-only failure, Email-only failure, both success, no ena
 
 - [ ] **Step 6: Implement notifications and useful diagnostics**
 
+Diagnostics-copy slice (2026-10-21): implemented an App-only allowlist export and bilingual
+copy/success/failure controls, reusing existing AppStore state and local platform metadata.
+Raw configuration/error prose, secret names/values, topic text/IDs, accounts, paths and report
+content are excluded. Unknown identifiers and unrecorded versions use fixed placeholders;
+copying never refreshes credentials, checks connectivity, starts an engine or modifies jobs.
+Offline privacy/state tests and English/Chinese native button actions used fake state and private
+test pasteboards. Evidence is retained in ignored `.build/diagnostics-20261021/`. That initial
+offline slice did not replace or use the actual development App.
+On 2026-10-22 the development App was rebuilt with the existing local certificate, preserving
+App/engine designated requirements and all configuration/report/job bytes. The user accepted the
+native copy button after Swift, bundle, signature, non-live preflight and privacy checks passed.
+Build evidence is retained in ignored `.build/diagnostics-update-20261022.log`. No real credential,
+research, upload or delivery was invoked for acceptance. This does not complete notifications or
+all of Step 6's diagnostics actions, nor resolve cross-version Keychain authorization.
+
 Ask for notification permission only when the user enables schedules. Send notifications for report ready, partial delivery, research failed, and delivery unknown. Notification text contains topic, public stage, and action, never paths or raw errors.
 
 `NotificationService` resolves strings when scheduling each notification, using the current `LocalizationStore` language. A later language change does not attempt to edit notifications already delivered by macOS. Alerts, timeline failures, and retry buttons use `UserFacingErrorCatalog`; only Diagnostics may show the original redacted engine message.

@@ -178,27 +178,3 @@ private struct ReportListView: View {
         }
     }
 }
-
-private struct WorkspaceDiagnosticsView: View {
-    let store: AppStore
-    let localization: LocalizationStore
-    var body: some View {
-        Form {
-            LabeledContent(localization.text("label.jobs"), value: "\(store.jobs.count)")
-            LabeledContent(localization.text("label.reports"), value: "\(store.reports.count)")
-            if let preflight = store.preflight {
-                ForEach(preflight.checks.filter { $0.status != .ready }, id: \.id) { check in
-                    LabeledContent(check.model ?? check.id) {
-                        Text(check.message).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
-                    }
-                }
-            }
-            if let error = store.lastErrorCode {
-                Text(UserFacingErrorCatalog(localization: localization).message(for: error))
-                Text(error).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-            } else {
-                Label(localization.text("diagnostics.none"), systemImage: "checkmark.circle")
-            }
-        }.formStyle(.grouped).padding(20)
-    }
-}
