@@ -195,6 +195,10 @@
 "confirm.clear_cache" = "Clear model cache?";
 "confirm.clear_cache_detail" = "Reports and source history will not be deleted.";
 "diagnostics.none" = "No recent failure.";
+"diagnostics.copy" = "Copy redacted diagnostics";
+"diagnostics.copy_detail" = "Copy versions, supported model names and task status. Excludes credentials, account details, paths, report content and raw errors. Nothing is sent.";
+"diagnostics.copied" = "Copied. Nothing was sent.";
+"diagnostics.copy_failed" = "Could not copy diagnostics. Try again.";
 "error.state_unavailable" = "ResearchRadar could not load local state.";
 "error.state_unavailable_detail" = "The original files were left unchanged. Open Diagnostics before trying again.";
 "action.compact" = "Compact view";

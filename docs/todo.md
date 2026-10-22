@@ -113,6 +113,38 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Copy Redacted Diagnostics: Implementation And Acceptance (2026-10-22)
+
+- [x] Added the bilingual copy action and local success/failure feedback in Diagnostics. A small
+  App-only allowlist projection copies platform/app versions, supported configured routes,
+  typed runtime/task/report/channel state and known error codes. It never serializes raw
+  configuration, error prose, topic text/IDs, account details, paths or report contents.
+- [x] Copying only uses existing in-memory state and local platform metadata. It does not query
+  Keychain, run preflight, start an engine, write state, upload or send. Unrecorded versions and
+  unknown/custom identifiers use fixed placeholders instead of raw values.
+- [x] Offline tests cover selected-topic isolation, private-value canaries, unchanged App state,
+  no extra credential access, empty state, bounded version parsing and bilingual layout. Native
+  copy-button actions in separate English/Chinese offline windows wrote only to private test
+  pasteboards with fake credentials and no engine; both returned the expected safe failure state.
+  In-process SwiftUI AX traversal did not expose the control, so native clicking was checked
+  outside the unit-test host, not claimed from component rendering.
+- [x] Swift **260 tests across 47 suites**, Python **870 passed** with frozen workflows enabled,
+  release compilation, Ruff, privacy and diff checks passed. Swift/native checks ran with OS
+  networking denied. The initial Python OS-sandbox attempt passed 868 tests but blocked `/bin/ps`
+  in `test_frozen_accepts_actual_swift_config` and `test_frozen_pipeline_and_delivery`; both passed
+  in the full rerun using Python socket/DNS/Keychain-read guards and the existing frozen child's
+  external-IO block. Original sandbox failures are retained, not counted as product regressions.
+  Review was local and read-only; no networked reviewer was invoked.
+- [x] On 2026-10-22, rebuilt and opened the development App using the existing local signing
+  certificate. App and engine designated requirements were unchanged; configuration, reports and
+  job artifacts remained byte-identical. Swift **260 tests across 47 suites**, bundle validation,
+  signature checks, non-live dependency preflight and privacy scan passed. The user accepted the
+  native copy button. No real credentials, research, upload or delivery were invoked for acceptance.
+  Build evidence: ignored `.build/diagnostics-update-20261022.log`.
+- Notifications, complete diagnostics tooling and the remaining manual/resource gates are outside
+  this slice. Cross-version Keychain authorization remains a separate known limitation. Original
+  offline evidence: ignored `.build/diagnostics-20261021/`.
+
 #### App WeChat Cover Entry: Implementation And Acceptance (2026-10-21)
 
 - [x] Added selection, a bounded local preview and explicit upload confirmation in WeChat

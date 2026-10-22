@@ -195,6 +195,10 @@
 "confirm.clear_cache" = "清理模型缓存？";
 "confirm.clear_cache_detail" = "研究报告和来源历史不会被删除。";
 "diagnostics.none" = "最近没有失败记录。";
+"diagnostics.copy" = "复制脱敏诊断";
+"diagnostics.copy_detail" = "复制版本、受支持的模型名称和任务状态，不含凭据、账号信息、路径、报告内容或原始错误。不会发送任何信息。";
+"diagnostics.copied" = "已复制，未发送任何信息。";
+"diagnostics.copy_failed" = "未能复制诊断，请重试。";
 "error.state_unavailable" = "ResearchRadar 无法读取本地状态。";
 "error.state_unavailable_detail" = "原文件没有被改写，请先查看诊断信息。";
 "action.compact" = "紧凑视图";

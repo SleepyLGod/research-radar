@@ -101,6 +101,19 @@ Hardened Runtime or public-distribution approval. Certificate-backed signing, fr
 and cross-version authorization are separate acceptance checks; a valid signature does not mean
 Keychain will accept an updated executable without another prompt.
 
+## App Diagnostics
+
+In the expanded macOS App, open **Diagnostics → Copy redacted diagnostics**. Paste the result
+when reporting a problem. Copying uses the current in-memory state: it does not run connection
+checks, read credentials, change jobs, upload anything or send a message.
+
+The JSON includes versions, supported configured model names, the selected topic's latest task
+state and recorded stage, fixed error codes and report delivery states. It excludes account
+details, secret names/values, topic text/IDs, private paths, report content and raw error messages.
+Unknown/custom identifiers are omitted or replaced with fixed placeholders. Engine version is
+`not_recorded` when no usable version is already recorded; copying never starts an engine to
+look it up. The button confirms copying or displays a local failure message in the current UI language.
+
 ## Model Routes
 
 The default quality path is:
