@@ -250,6 +250,16 @@
 "label.smtp_host" = "SMTP 服务器";
 "label.smtp_port" = "SMTP 端口";
 "setting.general" = "通用";
+"notification.enable" = "报告完成与失败通知";
+"notification.detail" = "默认关闭，开启时才申请 macOS 通知权限。点击通知可阅读报告或查看诊断；通知不显示报告正文或账号信息。";
+"notification.ready" = "ResearchRadar：报告已就绪";
+"notification.ready_body" = "报告已生成，点击阅读。";
+"notification.failed" = "ResearchRadar：研究已停止";
+"notification.failed_body" = "研究未完成，点击查看诊断。";
+"notification.issue.permissionDenied" = "未获通知权限。可在「系统设置 > 通知」中允许 ResearchRadar；不影响研究功能。";
+"notification.issue.permissionUnavailable" = "未能申请通知权限，请重新尝试开启。";
+"notification.issue.preferenceSaveFailed" = "通知设置保存失败，原设置未变，请重试。";
+"notification.issue.submissionFailed" = "未能显示提醒，研究结果未受影响，请在 App 中查看。";
 "setting.automation" = "运行计划";
 "label.total_storage" = "App 数据总占用";
 "setting.deepseek_key" = "DeepSeek API 密钥";

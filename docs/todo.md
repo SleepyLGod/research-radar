@@ -113,6 +113,53 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Report Completion/Failure Notifications: Offline And Native Acceptance (2026-10-22)
+
+- [x] Added an explicit, default-off Settings switch. Only enabling it may request notification
+  permission. Opening the App/settings, saving schedules and finishing tasks never request it.
+  The App-only preference is atomically saved in runtime state; old state defaults to disabled.
+- [x] Reused durable research job/report outcomes after queue persistence. Effective public reports
+  and failed/interrupted research notify; empty results, cancellations and channel delivery do not.
+  No engine command, pipeline change, timer, background helper or external dependency was added.
+- [x] Fixed English/Chinese text and known public failure stages exclude topic/report prose,
+  raw errors, credentials, accounts and paths. Click targets are UUIDs revalidated against local
+  state before opening the corresponding report or Diagnostics. Reminders are session-deduplicated;
+  launch reconciliation does not replay historical notifications or retry uncertain submissions.
+- [x] Offline tests cover permission denial/errors, saving failure, legacy state, disabling during
+  authorization lookup, private canaries, deduplication, actual queue success/failure and restart.
+  Failed notification submission leaves successful reports and research errors unchanged.
+- [x] Swift **274 tests across 48 suites**, Python **870 passed** with frozen workflows enabled,
+  Ruff, privacy and diff checks passed. Native English/Chinese Settings controls were enabled and
+  disabled with a fake notification client: no permission access before clicking, one simulated
+  request, and correct persisted preferences. Evidence: ignored `.build/notifications-20261022/`
+  and `.build/notifications-focused-20261022.log`.
+- [x] Read-only review identified forced-cancel failure reminders and compact-mode navigation
+  after a preference-write failure. Both were fixed with regressions; re-review found no new
+  concrete issues. Cancellation stays observable until notification eligibility is decided;
+  a transient expanded Diagnostics fallback does not pretend a failed preference save succeeded.
+- [x] Reassembled and opened the development App with the existing local signing certificate;
+  bundle/signature validation and non-live dependency preflight passed. The notification switch
+  remains off. All existing configuration, report and job files stayed byte-identical; no engine,
+  PDF helper or offline QA window was left running. Build evidence: the ignored slice directory's
+  `bundle.log`.
+- [x] Separate native acceptance used isolated offline reports and simulated failures with the
+  existing signing identity. The user allowed the real macOS permission prompt; success-banner
+  activation selected its report, and failure-banner activation opened Diagnostics. Fixed a
+  navigation action clearing the notified failure code; its regression and all 274 Swift tests
+  passed. The final single-instance check retained `model_transport_failed` with the popover open.
+  Four local test notifications were delivered (one success and three distinct failure fixtures).
+  Earlier overlapping QA instances were stopped; the clean final check is the acceptance evidence.
+  Evidence: ignored `.build/notification-system-20261022/`. No research, upload or delivery ran.
+- [x] Precommit reruns passed: Python **870**, Swift **274**, Ruff, privacy, bundle and signature
+  checks. Staged CodeRabbit review covered all 16 files, including new services/tests. Removed
+  iOS-only `ephemeral` authorization handling after checking the macOS SDK; message assertions now
+  require a value before inspecting it. The suggested extra expanded-mode fallback was redundant:
+  successful notification navigation already persists full mode; failed saves use the fallback.
+  Evidence: ignored `precommit-coderabbit*.ndjson` and `precommit-*.log` in the native slice directory.
+- [ ] Native routing evidence does not establish report-body rendering from the unavailable final
+  screenshot. Partial-delivery/unknown-delivery notifications, DMG and other final gates remain
+  separate; previously pending broader manual gates are not closed by this notification check.
+
 #### Copy Redacted Diagnostics: Implementation And Acceptance (2026-10-22)
 
 - [x] Added the bilingual copy action and local success/failure feedback in Diagnostics. A small

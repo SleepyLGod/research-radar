@@ -66,6 +66,7 @@ private final class AppContainer {
         observePresentation()
         window.show()
         if let store {
+            store.notifications.activate { [weak self] jobID in self?.openNotification(jobID) }
             scheduleEventObserver = ScheduleEventObserver { [weak store] in
                 Task { await store?.startScheduling() }
             }
@@ -77,10 +78,17 @@ private final class AppContainer {
         }
     }
 
+    private func openNotification(_ jobID: UUID) {
+        guard let store else { return }
+        presentation.openReportNotification(jobID: jobID, store: store)
+        NSApp.activate(ignoringOtherApps: true)
+        window.show()
+    }
+
     private func observePresentation() {
         withObservationTracking {
             guard let store else { return }
-            let mode = store.requiresOnboarding ? WindowMode.full : store.runtime.windowMode
+            let mode = store.requiresOnboarding ? WindowMode.full : presentation.windowMode(saved: store.runtime.windowMode)
             window.setAppearance(store.configuration.uiAppearance)
             window.present(mode: mode, animated: window.popover.isShown)
             let today = store.todayPresentation

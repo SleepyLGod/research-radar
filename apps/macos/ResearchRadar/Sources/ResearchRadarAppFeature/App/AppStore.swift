@@ -48,6 +48,7 @@ public final class AppStore {
     @ObservationIgnored private let executionGate = EngineExecutionGate()
     public private(set) var requiresReconciliation = false
     public private(set) var scheduleFaulted = false
+    let notifications: NotificationService
 
     public var requiresOnboarding: Bool {
         configuration.topics.isEmpty || runtime.onboardingInProgress == true
@@ -247,11 +248,13 @@ public final class AppStore {
         runner: (any EngineProcessRunning)? = nil,
         secretStore: any SecretStoring = KeychainStore(),
         loginItemService: LoginItemService = LoginItemService(),
-        legacyScheduleTopics: Set<String> = []
+        legacyScheduleTopics: Set<String> = [],
+        notificationClient: (any ReportNotificationClient)? = nil
     ) {
         self.configuration = configuration; jobs = queueSnapshot.jobs
         schedules = scheduleSnapshot.schedules; reports = reportSnapshot.reports
         self.runtime = runtime
+        notifications = NotificationService(client: notificationClient ?? SystemReportNotificationClient())
         self.legacyScheduleTopics = legacyScheduleTopics
         self.secretStore = secretStore
         self.loginItemService = loginItemService
@@ -860,7 +863,7 @@ public final class AppStore {
         rearmRecoveredSchedules()
     }
 
-    private func persistRuntime(_ value: AppRuntimeStateV1) throws {
+    func persistRuntime(_ value: AppRuntimeStateV1) throws {
         var candidate = value
         candidate.updatedAt = Date()
         try persistence.write(candidate, to: "state/app-state.json")
@@ -880,6 +883,12 @@ public final class AppStore {
         catch AppStoreError.researchConfiguration(let code) { lastErrorCode = code }
         catch { lastErrorCode = "configuration_write_failed" }
         return false
+    }
+
+    func showNotifiedResearchFailure(jobID: UUID) {
+        guard let job = jobs.first(where: { $0.id == jobID && $0.kind == .research }),
+              [.failed, .interrupted].contains(job.state) else { return }
+        lastErrorCode = job.error?.code ?? "engine_failed"
     }
 
     public func selectTopic(_ id: String) throws {
@@ -1008,10 +1017,8 @@ public final class AppStore {
                 ) != nil else {
                     break
                 }
-                cancellationRequested = false
             } catch let failure as EngineCommandFailure {
                 lastErrorCode = failure.error.code
-                cancellationRequested = false
                 jobs = await queue.jobs()
             } catch is EnginePersistenceError {
                 failed = true
@@ -1038,10 +1045,11 @@ public final class AppStore {
                     break
                 }
                 lastErrorCode = terminal.error?.code ?? "engine_failed"
-                cancellationRequested = false
             }
             jobs = await queue.jobs()
             reports = await reportIndex.reports()
+            if let attemptedID { await notifyResearchCompletion(jobID: attemptedID) }
+            cancellationRequested = false
         }
         jobs = await queue.jobs()
         reports = await reportIndex.reports()

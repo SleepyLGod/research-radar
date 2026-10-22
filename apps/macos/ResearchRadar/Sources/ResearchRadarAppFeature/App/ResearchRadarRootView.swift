@@ -14,19 +14,20 @@ public struct ResearchRadarRootView: View {
     }
 
     public var body: some View {
+        let mode = presentation.windowMode(saved: store.runtime.windowMode)
         Group {
             if store.requiresOnboarding {
                 TopicOnboardingView(store: store, localization: localization)
             } else {
                 ZStack {
                     // Keep editable view state while compact or dismissed, but release its reader.
-                    if workspaceOpened || store.runtime.windowMode == .full {
+                    if workspaceOpened || mode == .full {
                         FullWorkspaceView(store: store, localization: localization, presentation: presentation)
-                            .opacity(store.runtime.windowMode == .full ? 1 : 0)
-                            .allowsHitTesting(store.runtime.windowMode == .full)
-                            .accessibilityHidden(store.runtime.windowMode != .full)
+                            .opacity(mode == .full ? 1 : 0)
+                            .allowsHitTesting(mode == .full)
+                            .accessibilityHidden(mode != .full)
                     }
-                    if store.runtime.windowMode == .compact {
+                    if mode == .compact {
                         CompactTodayView(store: store, localization: localization, presentation: presentation)
                     }
                 }
@@ -39,8 +40,8 @@ public struct ResearchRadarRootView: View {
         .controlSize(.regular)
         .preferredColorScheme(store.configuration.uiAppearance.colorScheme)
         .clipped()
-        .onAppear { if store.runtime.windowMode == .full { workspaceOpened = true } }
-        .onChange(of: store.runtime.windowMode) { _, mode in
+        .onAppear { if mode == .full { workspaceOpened = true } }
+        .onChange(of: mode) { _, mode in
             if mode == .full { workspaceOpened = true }
         }
     }

@@ -250,6 +250,16 @@
 "label.smtp_host" = "SMTP server";
 "label.smtp_port" = "SMTP port";
 "setting.general" = "General";
+"notification.enable" = "Report completion and failure notifications";
+"notification.detail" = "Off by default. Enabling requests macOS permission. Click a notification to read the report or view diagnostics. No report text or account details appear in notifications.";
+"notification.ready" = "ResearchRadar: report ready";
+"notification.ready_body" = "Your report is ready. Click to read it.";
+"notification.failed" = "ResearchRadar: research stopped";
+"notification.failed_body" = "Research did not finish. Click to view diagnostics.";
+"notification.issue.permissionDenied" = "Notifications are not allowed. You can allow ResearchRadar in System Settings > Notifications; research still works.";
+"notification.issue.permissionUnavailable" = "Could not request notification permission. Try enabling notifications again.";
+"notification.issue.preferenceSaveFailed" = "Could not save the notification setting. The previous setting is unchanged; try again.";
+"notification.issue.submissionFailed" = "Could not show the reminder. Your research result is unchanged; check the App.";
 "setting.automation" = "Scheduling";
 "label.total_storage" = "Total App data";
 "setting.deepseek_key" = "DeepSeek API key";

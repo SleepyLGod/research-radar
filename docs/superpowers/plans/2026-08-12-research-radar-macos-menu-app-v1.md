@@ -1093,7 +1093,7 @@ public final class LocalizationStore {
 }
 ```
 
-`LocalizationStore` resolves the requested `en` or `zh-Hans` localization directory from `Bundle.module`, creates the corresponding language bundle, and reads `Localizable.strings` from that bundle. `AppDelegate`, `WindowCoordinator`, SwiftUI views, `NotificationService`, and `UserFacingErrorCatalog` all receive the same store instance from `AppContainer`. They never cache localized strings in durable state. Durable jobs and reports store enum/state values and content only, so changing UI language re-renders existing state without rewriting it.
+`LocalizationStore` resolves the requested `en` or `zh-Hans` localization directory from `Bundle.module`, creates the corresponding language bundle, and reads `Localizable.strings` from that bundle. `AppDelegate`, `WindowCoordinator`, SwiftUI views and `UserFacingErrorCatalog` receive the shared UI store from `AppContainer`; `NotificationService` resolves through the same localization implementation using the current App language preference when preparing a reminder. They never cache localized strings in durable state. Durable jobs and reports store enum/state values and content only, so changing UI language re-renders existing state without rewriting it.
 
 The catalog audit requires every `AppStringKey` to have both `en` and `zh-Hans` values. Dynamic values use localized format entries with typed arguments; code must not build sentences by concatenating translated fragments.
 
@@ -2798,9 +2798,29 @@ Build evidence is retained in ignored `.build/diagnostics-update-20261022.log`. 
 research, upload or delivery was invoked for acceptance. This does not complete notifications or
 all of Step 6's diagnostics actions, nor resolve cross-version Keychain authorization.
 
-Ask for notification permission only when the user enables schedules. Send notifications for report ready, partial delivery, research failed, and delivery unknown. Notification text contains topic, public stage, and action, never paths or raw errors.
+Report-notification slice (2026-10-22): an explicit Settings switch defaults off and is stored in
+the App's runtime state (legacy missing field means off), not Python research configuration.
+Only the user's enable action can request macOS permission; enabling schedules never requests it.
+The existing serialized queue calls the App-only notification service after durable terminal
+state/report persistence. Effective deep-read success and failed/interrupted research notify;
+empty results, user cancellations and delivery jobs do not. Fixed localized text and a known
+public failure stage exclude topic/report prose, raw errors, credentials, accounts and paths.
+Notification clicks carry only a job UUID and revalidate it against local state before opening
+the report or Diagnostics. Session deduplication and no notification calls from launch
+reconciliation prevent repeats; notification submission is best-effort, never auto-retried and
+never changes research results. No new wire command, engine behavior or idle polling is added.
+Offline queue tests and English/Chinese native Settings actions use a fake notification client.
+Separate native acceptance used isolated offline reports with the existing signing identity:
+the user allowed macOS permission, success activation selected its report, and a clean
+single-instance failure activation opened Diagnostics with `model_transport_failed` retained and
+the popover visible. A regression covers navigation clearing the notified failure code; all 274
+Swift tests passed after the fix. Four local notifications were delivered, without research,
+upload or channel delivery. Evidence is retained in ignored `.build/notifications-20261022/` and
+`.build/notification-system-20261022/`; overlapping earlier QA instances are not final acceptance
+evidence. Final screenshot capture was unavailable, so native routing is not claimed as report-body
+visual verification. Partial-delivery and delivery-unknown reminders remain deferred.
 
-`NotificationService` resolves strings when scheduling each notification, using the current `LocalizationStore` language. A later language change does not attempt to edit notifications already delivered by macOS. Alerts, timeline failures, and retry buttons use `UserFacingErrorCatalog`; only Diagnostics may show the original redacted engine message.
+`NotificationService` resolves strings when preparing each notification, using the current App UI language preference and `LocalizationStore` catalogs. A later language change does not attempt to edit notifications already delivered by macOS. Alerts, timeline failures, and retry buttons use `UserFacingErrorCatalog`; only Diagnostics may show the original redacted engine message. Cancellation provenance is retained until reminder eligibility is decided, including artifact-less forced termination. If opening a notification cannot save window/topic preferences, a presentation-only expanded fallback still shows Diagnostics and the save error without pretending that persistence succeeded.
 
 Diagnostics shows:
 

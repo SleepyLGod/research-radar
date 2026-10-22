@@ -11,6 +11,17 @@ struct WorkspaceSettingsView: View {
             Section(localization.text("setting.general")) {
                 AppAppearancePicker(store: store, localization: localization)
                 AppLanguagePicker(store: store, localization: localization)
+                Toggle(localization.text("notification.enable"), isOn: Binding(
+                    get: { store.reportNotificationsEnabled },
+                    set: { value in Task { await store.setReportNotificationsEnabled(value) } }
+                ))
+                .disabled(store.notifications.isChangingPreference || store.isShuttingDown)
+                .accessibilityIdentifier("notifications.enable")
+                Text(localization.text("notification.detail")).font(.callout).foregroundStyle(.secondary)
+                if let issue = store.notifications.issue {
+                    Text(localization.text("notification.issue.\(issue.rawValue)"))
+                        .font(.callout).foregroundStyle(.secondary)
+                }
             }
             ProviderSettingsView(store: store, localization: localization)
             Section(localization.text("setting.automation")) {

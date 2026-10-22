@@ -46,7 +46,11 @@ struct FullWorkspaceView: View {
                 Text(localization.text("nav.\(navigation.section.rawValue)"))
                     .font(.system(size: 13, weight: .medium))
                 Spacer()
-                Button { store.performAction { try store.setWindowMode(.compact) } } label: {
+                Button {
+                    if store.performAction({ try store.setWindowMode(.compact) }) {
+                        presentation.notificationFallbackExpanded = false
+                    }
+                } label: {
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
                 }
                 .help(localization.text("action.compact"))
@@ -130,7 +134,7 @@ struct FullWorkspaceView: View {
                     navigation.section = .settings
                 }
                 Divider()
-                if presentation.isVisible && store.runtime.windowMode == .full {
+                if presentation.isVisible && presentation.windowMode(saved: store.runtime.windowMode) == .full {
                     ReportReaderView(report: report, workspaceRoot: URL(fileURLWithPath: store.configuration.workspaceRoot), localization: localization).id(report.id)
                 } else {
                     Color.clear
