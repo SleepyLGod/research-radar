@@ -582,9 +582,9 @@ public final class AppStore {
                   try JSONCoding.encode(savedReports.reports) == JSONCoding.encode(currentReports) else {
                 throw DurableStateValidationError.invalidValue
             }
-            try validateResearchConfiguration()
             if requiresReconciliation { await reconcileAfterLaunch(resumePending: false) }
             guard !requiresReconciliation, !isShuttingDown else { return }
+            try validateResearchConfiguration()
             await refreshScheduleInputs()
             guard !isShuttingDown else { return }
             try await scheduleCoordinator.recover()

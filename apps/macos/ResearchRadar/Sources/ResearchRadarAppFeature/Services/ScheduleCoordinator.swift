@@ -109,7 +109,7 @@ public actor ScheduleCoordinator {
                 reports: snapshot.reports, queuedJobs: jobs,
                 now: current, calendar: activeCalendar
             ) {
-                guard lifecycle == .active, generation == timerGeneration else { return }
+                guard lifecycle == .active, generation == timerGeneration else { break }
                 let result = try await queue.enqueueResearch(
                     topicID: due.topicID,
                     reportDate: due.reportDate,
@@ -119,8 +119,10 @@ public actor ScheduleCoordinator {
                 if case .enqueued = result { enqueuedJob = true }
             }
         }
-        guard lifecycle == .active, generation == timerGeneration else { return }
+        // A newer refresh may replace the timer, but cannot revoke already committed work.
+        guard lifecycle == .active else { return }
         if enqueuedJob { await onJobsEnqueued() }
+        guard lifecycle == .active, generation == timerGeneration else { return }
         let next = snapshot.paused ? nil : evaluator.nextFireDate(
             schedules: snapshot.schedules, topics: snapshot.topics,
             after: current, calendar: activeCalendar

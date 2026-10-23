@@ -3,6 +3,27 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct EngineProtocolTests {
+    @Test func codexConfigurationFailurePreservesItsActionableCode() throws {
+        let error = try EngineProtocolCodec.decodeError(
+            CanonicalFixture.data(named: "codex-configuration-error.json")
+        )
+        #expect(error.code == "codex_not_configured")
+        #expect(error.stage == .preflight)
+        #expect(!error.retryable)
+    }
+
+    @Test(arguments: [500, 501])
+    func errorMessageLengthBoundaryIsStrict(length: Int) throws {
+        var object = try CanonicalFixture.objectDictionary(named: "engine-error.json")
+        object["message"] = String(repeating: "x", count: length)
+        let data = try CanonicalFixture.data(from: object)
+        if length == 500 {
+            #expect(try EngineProtocolCodec.decodeError(data).message.count == 500)
+        } else {
+            #expect(throws: EngineProtocolError.invalidValue) { try EngineProtocolCodec.decodeError(data) }
+        }
+    }
+
     @Test func legacyOutcomeIsUnknownAndMalformedOutcomesAreRejected() throws {
         let legacy = try CanonicalFixture.objectDictionary(named: "run-daily-result.json")
         #expect(try EngineProtocolCodec.decodeResult(CanonicalFixture.data(from: legacy)).report?.researchOutcome == nil)

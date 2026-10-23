@@ -95,11 +95,11 @@ class EventWriter:
             "type": event_type,
             "stage": stage,
             "status": status,
-            "message": _safe_text(message) if message is not None else None,
+            "message": safe_message(message) if message is not None else None,
             "completed": completed,
             "total": total,
             "delivery_channel": delivery_channel,
-            "run_dir": _safe_text(run_dir) if run_dir is not None else None,
+            "run_dir": safe_message(run_dir) if run_dir is not None else None,
             "error": _safe_value(error) if error is not None else None,
         }
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
@@ -112,20 +112,22 @@ class EventWriter:
         os.chmod(self.path, 0o600)
 
 
-def _safe_text(value: str) -> str:
+def safe_message(value: str) -> str:
+    """Redact before truncating to the wire protocol's inclusive message limit."""
     redacted = redact_text(value)
     if len(redacted) <= _MAX_MESSAGE_CHARS:
         return redacted
-    return f"{redacted[:_MAX_MESSAGE_CHARS]}...[truncated]"
+    suffix = "...[truncated]"
+    return redacted[:_MAX_MESSAGE_CHARS - len(suffix)] + suffix
 
 
 def _safe_value(value: Any) -> Any:
     if isinstance(value, str):
-        return _safe_text(value)
+        return safe_message(value)
     if isinstance(value, dict):
         return {str(key): _safe_value(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_safe_value(item) for item in value[:20]]
     if isinstance(value, (bool, int, float)) or value is None:
         return value
-    return _safe_text(str(value))
+    return safe_message(str(value))

@@ -25,7 +25,7 @@ from research_radar.app_bridge.configuration import (
     LoadedAppConfigurationV1,
     load_app_configuration,
 )
-from research_radar.app_bridge.events import EventWriter
+from research_radar.app_bridge.events import EventWriter, safe_message
 from research_radar.app_bridge.protocol import (
     EngineCommand,
     EngineRequestV1,
@@ -543,7 +543,7 @@ def _write_error(
             "status": "failed",
             "stage": stage,
             "code": code,
-            "message": redact_text(message),
+            "message": safe_message(message),
             "retryable": retryable,
             "completed_at": _timestamp(completed_at),
         },

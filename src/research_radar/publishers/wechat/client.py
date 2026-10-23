@@ -7,11 +7,12 @@ import mimetypes
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from research_radar.exceptions import PublishError
+from research_radar.exceptions import OperationCancelled, PublishError
 from research_radar.security.secrets import SecretManager
 from research_radar.storage.encrypted_store import EncryptedJsonStore
 
@@ -86,12 +87,17 @@ class WeChatDraftClient:
         image_path: Path,
         *,
         image_bytes: bytes | None = None,
+        cancellation_event: Event | None = None,
     ) -> dict[str, str]:
         """Upload a permanent image material and return its media id and URL."""
 
         if image_bytes is None and not image_path.exists():
             raise PublishError(f"WeChat thumbnail image not found: {image_path}")
+        if cancellation_event is not None and cancellation_event.is_set():
+            raise OperationCancelled()
         access_token = self.get_access_token()
+        if cancellation_event is not None and cancellation_event.is_set():
+            raise OperationCancelled()
         result = self._post_multipart_file(
             f"{self.base_url}/material/add_material?access_token={access_token}&type=image",
             field_name="media",

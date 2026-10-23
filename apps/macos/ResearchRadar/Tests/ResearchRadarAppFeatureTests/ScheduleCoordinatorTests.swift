@@ -28,6 +28,35 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
 }
 
 @Suite struct ScheduleCoordinatorTests {
+    @Test func overlappingRefreshCannotLoseWakeupForPersistedWork() async throws {
+        let root = try scheduleRoot(); defer { try? trashScheduleRoot(root) }
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let enqueueStarted = AsyncStream<Void>.makeStream()
+        let releaseEnqueue = DispatchSemaphore(value: 0)
+        let queue = JobQueue(store: AtomicJSONStore(root: root), jobsRoot: root.appending(path: "jobs"), clock: {
+            enqueueStarted.continuation.yield(())
+            #expect(releaseEnqueue.wait(timeout: .now() + 5) == .success)
+            return now
+        })
+        let topic = TopicRecordV1(id: "memory", displayName: "Memory", researchFocus: "Memory",
+            queries: ["memory"], paperQueries: ["memory"], reportLanguage: .english)
+        let inputs = OverlappingScheduleInputs(snapshot: ScheduleInputs(
+            schedules: [DailyScheduleV1(topicID: topic.id, hour: 0, minute: 0)],
+            topics: [topic], reports: [], paused: false), releaseEnqueue: releaseEnqueue)
+        let recorder = DueJobRecorder()
+        let coordinator = ScheduleCoordinator(queue: queue, timer: FakeTimerDriver(),
+            inputs: { await inputs.read() }, onJobsEnqueued: { await recorder.record() }, now: { now })
+        let first = Task { try await coordinator.refresh() }
+        var started = enqueueStarted.stream.makeAsyncIterator()
+        await started.next()
+        let second = Task { try await coordinator.refresh() }
+        try await first.value
+        try await second.value
+        #expect(await queue.jobs().count == 1)
+        #expect(await recorder.count == 1)
+        await coordinator.stop()
+    }
+
     @Test func validatedRecoveryArmsAnActiveCoordinatorThatNeverStarted() async throws {
         let root = try scheduleRoot(); defer { try? trashScheduleRoot(root) }
         let queue = JobQueue(store: AtomicJSONStore(root: root), jobsRoot: root.appending(path: "jobs"))
@@ -197,6 +226,20 @@ private final class ScheduleFailureSwitch: @unchecked Sendable {
         #expect(await timer.replacementCount == 0)
         try await coordinator.refresh()
         #expect(await timer.replacementCount == 0)
+    }
+}
+
+private actor OverlappingScheduleInputs {
+    let snapshot: ScheduleInputs
+    let releaseEnqueue: DispatchSemaphore
+    private var reads = 0
+    init(snapshot: ScheduleInputs, releaseEnqueue: DispatchSemaphore) {
+        self.snapshot = snapshot; self.releaseEnqueue = releaseEnqueue
+    }
+    func read() -> ScheduleInputs {
+        reads += 1
+        if reads == 2 { releaseEnqueue.signal() }
+        return snapshot
     }
 }
 

@@ -4,7 +4,63 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
+
 from research_radar.app_bridge.runner import BridgeDependencies, run_bridge
+
+
+@pytest.mark.parametrize("length", [100, 500, 501, 2000])
+def test_failure_message_is_bounded_and_consistent_with_events(tmp_path: Path, length: int) -> None:
+    from research_radar.app_bridge.runner import BridgeExecutionError
+
+    request, events, result, error, _ = _job(
+        tmp_path, command="preflight", payload={"live_probe": False},
+    )
+
+    def fail(*args, **kwargs):
+        raise BridgeExecutionError(
+            code="provider_unavailable", stage="preflight", retryable=True,
+            message="token=offline-private-canary " + "x" * length,
+        )
+
+    dependencies = replace(BridgeDependencies.testing(), preflight=fail)
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 1
+    terminal = json.loads(error.read_text())
+    event = json.loads(events.read_text().splitlines()[-1])
+    assert terminal["code"] == "provider_unavailable"
+    assert terminal["stage"] == "preflight" and terminal["retryable"] is True
+    assert 0 < len(terminal["message"]) <= 500
+    assert terminal["message"] == event["message"] == event["error"]["message"]
+    assert "offline-private-canary" not in error.read_text() + events.read_text()
+    assert not result.exists()
+
+
+def test_codex_configuration_error_matches_swift_fixture(tmp_path: Path) -> None:
+    from research_radar.app_bridge.runner import BridgeExecutionError
+
+    fixture = json.loads(Path(
+        "apps/macos/ResearchRadar/Tests/Fixtures/Protocol/codex-configuration-error.json"
+    ).read_text())
+    request, events, result, error, _ = _job(
+        tmp_path, command="preflight", payload={"live_probe": False},
+    )
+
+    def fail(*args, **kwargs):
+        raise BridgeExecutionError(
+            code="codex_not_configured", stage="preflight",
+            message="Configure an available Codex executable in Settings before research.",
+        )
+
+    dependencies = replace(BridgeDependencies.testing(), preflight=fail,
+                           clock=lambda: datetime(2026, 8, 30, 10, tzinfo=UTC))
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 1
+    assert json.loads(error.read_text()) == {
+        **fixture, "request_id": request.parent.name,
+    }
 
 
 def test_transport_failure_keeps_actual_source_gist_stage(tmp_path: Path) -> None:
