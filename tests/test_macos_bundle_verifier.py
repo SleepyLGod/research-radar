@@ -1,5 +1,6 @@
 import importlib.util
 import plistlib
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -184,3 +185,51 @@ def test_otool_install_name_parses_dylib_identity(
     )
 
     assert _otool_install_name(Path("libpython.dylib")) == "@rpath/libpython3.13.dylib"
+
+
+def test_engine_copy_rejects_compressed_python_metadata_with_builder_path(tmp_path: Path) -> None:
+    writers = pytest.importorskip("PyInstaller.archive.writers")
+    module_name = "_sysconfigdata_fixture"
+    source = "build_time_vars = {'prefix': " + repr(str(Path.home() / "build-python")) + "}"
+    pyz = tmp_path / "PYZ.pyz"
+    writers.ZlibArchiveWriter(
+        str(pyz), [(module_name, f"{module_name}.py", "PYMODULE")],
+        {module_name: compile(source, f"{module_name}.py", "exec")},
+    )
+    roots = [tmp_path / "source", tmp_path / "staged"]
+    for root in roots:
+        engine = root / "Contents/MacOS/research-radar-engine"
+        engine.parent.mkdir(parents=True)
+        writers.CArchiveWriter(str(engine), [("PYZ.pyz", str(pyz), False, "z")], "libpython.dylib")
+    with pytest.raises(BundleVerificationError, match="private build path"):
+        verify_engine_copy(*roots)
+
+
+def test_engine_copy_rejects_private_paths_inside_stdlib_zip(tmp_path: Path) -> None:
+    roots = [tmp_path / "source", tmp_path / "staged"]
+    for root in roots:
+        root.mkdir()
+        with zipfile.ZipFile(root / "base_library.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("metadata.pyc", str(Path.home() / "build-python").encode())
+    with pytest.raises(BundleVerificationError, match="private build path"):
+        verify_engine_copy(*roots)
+
+
+@pytest.mark.parametrize("source", [
+    "import sys\nbuild_time_vars = {'prefix': sys._MEIPASS}",
+    r"pattern = r'(?:/private/tmp|/tmp)(?:/[^\s]+)*'",
+])
+def test_engine_copy_accepts_relocated_metadata_and_redaction_pattern(
+    tmp_path: Path, source: str,
+) -> None:
+    writers = pytest.importorskip("PyInstaller.archive.writers")
+    name = "_sysconfigdata_fixture"
+    pyz = tmp_path / "PYZ.pyz"
+    code = compile(source, name + ".py", "exec")
+    writers.ZlibArchiveWriter(str(pyz), [(name, name + ".py", "PYMODULE")], {name: code})
+    roots = [tmp_path / "source", tmp_path / "staged"]
+    for root in roots:
+        engine = root / "Contents/MacOS/research-radar-engine"
+        engine.parent.mkdir(parents=True)
+        writers.CArchiveWriter(str(engine), [("PYZ.pyz", str(pyz), False, "z")], "libpython.dylib")
+    verify_engine_copy(*roots)

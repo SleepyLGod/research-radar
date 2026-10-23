@@ -6,7 +6,10 @@ from __future__ import annotations
 import argparse
 import os
 import plistlib
+import struct
 import subprocess
+import zipfile
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +52,9 @@ def verify_engine_copy(source: Path, staged: Path) -> None:
     if source_manifest != staged_manifest:
         raise BundleVerificationError("The staged engine symlink manifest differs from source.")
     _reject_private_build_paths(staged)
+    engine = staged / "Contents/MacOS/research-radar-engine"
+    if engine.is_file():
+        _verify_frozen_python(engine)
 
 
 def verify_bundle(source_engine: Path, app: Path) -> None:
@@ -94,6 +100,7 @@ def _verify_info_plist(app: Path) -> None:
 def _reject_private_build_paths(root: Path) -> None:
     forbidden = [
         str(SOURCE_ROOT).encode(),
+        str(Path.home()).encode(),
         b"/private/tmp",
         b"/.venv/",
     ]
@@ -113,6 +120,48 @@ def _reject_private_build_paths(root: Path) -> None:
             raise BundleVerificationError(
                 f"Bundled file {path.name} contains a private build path."
             )
+        if path.suffix == ".zip":
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    for member in archive.infolist():
+                        _check_python_data(archive.read(member), f"{path.name}:{member.filename}")
+            except BundleVerificationError:
+                raise
+            except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+                raise BundleVerificationError(
+                    f"Could not inspect bundled archive {path.name}."
+                ) from exc
+
+
+def _check_python_data(data: bytes, member: str) -> None:
+    # A redaction regex may name the generic temp root; reject concrete paths below it.
+    forbidden = (str(SOURCE_ROOT).encode(), str(Path.home()).encode(), b"/private/tmp/", b"/.venv/")
+    if any(value in data for value in forbidden):
+        raise BundleVerificationError(
+            f"Python archive member {member} contains a private build path."
+        )
+
+
+def _verify_frozen_python(engine: Path) -> None:
+    """Inspect compressed Python bytecode without importing or running bundled modules."""
+    try:
+        from PyInstaller.archive.readers import ArchiveReadError, CArchiveReader
+    except ImportError as exc:
+        raise BundleVerificationError(
+            "Frozen archive verification requires the app-build extra."
+        ) from exc
+    try:
+        archive = CArchiveReader(str(engine))
+        for name in archive.toc:
+            _check_python_data(archive.extract(name), name)
+            if name.endswith(".pyz"):
+                embedded = archive.open_embedded_archive(name)
+                for module in embedded.toc:
+                    data = embedded.extract(module, raw=True)
+                    if data is not None:
+                        _check_python_data(data, f"{name}:{module}")
+    except (OSError, ArchiveReadError, ValueError, EOFError, struct.error, zlib.error) as exc:
+        raise BundleVerificationError("Could not inspect the frozen Python archive.") from exc
 
 
 def _verify_macho_dependencies(app: Path) -> None:

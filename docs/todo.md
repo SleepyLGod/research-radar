@@ -113,6 +113,81 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Frozen Python Metadata: Relocatable Build And New Local DMG (2026-10-23)
+
+- [x] Reproduced the privacy gap with compressed PYZ/ZIP fixtures: the old verifier inspected
+  outer bytes but missed CPython's embedded builder prefix. A build-only generator now supplies
+  the same sysconfig module and variable keys, preserving values except that the Python install
+  prefix resolves to `sys._MEIPASS` in a frozen engine. Both production and offline-test specs
+  use it. It does not modify installed Python, CLI configuration, research logic or renderers.
+- [x] Bundle verification now inspects compressed Python archives and stdlib ZIP entries without
+  importing their modules. The old engine is rejected for its sysconfig path; the rebuilt engine
+  passes without a module exception. Generic redaction patterns are not mistaken for concrete
+  temp-file paths. Tests also protect non-path values and the host sysconfig source/dictionary.
+- [x] Python **892 passed**, including the newly rebuilt frozen workflows; **21** focused packaging
+  tests, Ruff and the signed isolated engine's non-live sanitized-PATH preflight passed. The
+  frozen offline report/PDF/simulated channel check and Swift's one frozen queue/restart test
+  passed. A first OS-sandboxed measurement attempt failed because `/bin/ps` could not run; that
+  evidence is retained. The successful rerun used the existing parent socket/Keychain guard and
+  the test engine's socket/process audit guard, never real providers or sending clients. This
+  is not a complete Swift/UI or live-service acceptance claim.
+- [x] Assembled and signed only a new isolated App using the existing certificate. Its new
+  **24,797,031-byte** DMG passed checksum verification, read-only mount, **61 regular-file /
+  36 symlink** equality, dependency/signature and **882 archive-entry** checks, with no builder
+  metadata-path exception or personal runtime artifacts found. The image was detached. Existing
+  development App, original engine, installed Python sysconfig source and normal App state were
+  hash-verified unchanged; the previous image is retained. No original App was overwritten.
+  Artifact: ignored `dist/ResearchRadar-local-beta-arm64-20261023-sysconfig-clean.dmg`;
+  evidence: `.build/sysconfig-fix-20261023/`, including `result.json`, frozen verification,
+  RED/GREEN logs and protected-input manifests.
+- [ ] The new image remains a locally signed development build, not an installed or notarized
+  release. It still uses the development data root if later launched. VoiceOver, broader native
+  acceptance and final resource/lifecycle gates remain separate. No real research, upload,
+  delivery, stage, commit or push was performed in this repair.
+
+#### Local Test DMG: Read-only Packaging Check (2026-10-23)
+
+- [x] Packaged the existing `ac73aa4` development App into a local-only arm64 DMG without
+  rebuilding, re-signing, installing or launching it. Only the App and a generic local-beta
+  notice enter the image; the normal development App and its configuration/state files remain
+  unchanged. Existing local certificate and designated requirements are preserved.
+- [x] Image checksum verification and read-only mount checks passed. The mounted App matches
+  all **61 regular-file hashes/modes and 36 symlink targets**; recursive bundle/dependency and
+  deep/strict signature checks passed. Inspected files and **882 Python/archive entries** for
+  runtime artifacts, developer output and credential indicators, without reading real secrets.
+  No personal configuration, credential files, reports or development caches were found.
+  The **24,800,084-byte** image was detached after inspection. This is not installation,
+  launch, Gatekeeper or final-beta acceptance, and no reusable release-packaging command was
+  added. Ignored artifact: `dist/ResearchRadar-local-beta-arm64-20261023-ac73aa4.dmg`;
+  evidence: `.build/local-dmg-20261023/result.json` and command logs.
+- [x] The initial image's frozen CPython `_sysconfigdata__darwin_darwin` module retained the builder's Python
+  installation prefix in its build metadata. This is not copied user configuration or a
+  credential, but the image is **not private-path-free**. The local-beta notice records this
+  limitation. The follow-up above resolves it in a new build/image without changing this
+  earlier artifact or silently treating its warning as a clean scan.
+- [ ] This unchanged development build would still use `ResearchRadar-Dev` if later launched;
+  mounting/copying it does not isolate existing user data. Installation/launch, VoiceOver,
+  final resource/lifecycle and broader manual gates remain separate. No real service, upload,
+  delivery, commit or push was performed during this packaging check.
+
+#### VoiceOver Core Controls: Native AX Inspection, Speech Acceptance Pending (2026-10-23)
+
+- [x] At `ac73aa4`, an isolated, certificate-signed host linked the current production RootView,
+  status-item controller and anchored popover with two copied offline report fixtures. It has no
+  engine; secret, notification and login-item integrations use offline substitutes. Networking
+  is denied by the OS, schedules remain paused, and no real credentials or deliveries are used.
+- [x] Read-only native accessibility-tree inspection in English and Simplified Chinese found the
+  ResearchRadar menu extra with status help, sidebar controls and entries, Run Now, both dated
+  report actions, and the settings controls. Fixture-directed page changes are inspection setup,
+  not proof of VoiceOver navigation or activation. Source report bytes and normal configuration
+  and state files were preserved. No product-code defect was established or fix added.
+- [ ] Actual VoiceOver speech, core-control traversal and activation await user-assisted
+  acceptance. VoiceOver was off during the recorded AX inspection; the App did not enable it
+  or change system accessibility preferences. Do not count names in the AX tree as a successful
+  screen-reader test. Ignored evidence: `.build/voiceover-20261023/`, including build fingerprints,
+  per-language/page AX captures and `ax-summary.json`. Production-bootstrap, wider forms and
+  multi-display acceptance remain separate.
+
 #### Keyboard Navigation: Focus Fix And Bounded Native Acceptance (2026-10-23)
 
 - [x] Reproduced invisible expanded-workspace controls receiving Tab focus in compact mode.

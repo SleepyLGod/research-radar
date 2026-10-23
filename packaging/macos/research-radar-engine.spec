@@ -1,8 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+from runpy import run_path
 
 project_root = Path(SPECPATH).parents[1]
+frozen_stdlib = run_path(str(Path(SPECPATH) / "frozen_sysconfig.py"))["prepare_sysconfig"](Path(workpath))
 hidden_imports = [
     "cryptography",
     "keyring.backends.chainer",
@@ -15,7 +17,7 @@ hidden_imports = [
 
 analysis = Analysis(
     [str(project_root / "packaging/macos/engine_entry.py")],
-    pathex=[str(project_root / "src")],
+    pathex=[str(frozen_stdlib), str(project_root / "src")],
     binaries=[],
     datas=[],
     hiddenimports=hidden_imports,
