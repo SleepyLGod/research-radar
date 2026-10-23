@@ -272,8 +272,9 @@ Inspect screenshots before sharing them for email addresses, keys, private paths
 
 - **Missing configuration:** check saved credentials, the Codex executable, and the selected verifier.
   Finding a program does not prove it is signed in.
-- **Spaces in the Codex path:** this development version still has a known path-handling issue.
-  Prefer confirming the detected executable.
+- **Selecting Codex:** choose the executable file itself, not a command with arguments.
+  Paths containing spaces or Chinese characters are supported; do not add quotation marks yourself.
+  CLI configuration still supports [commands with arguments](providers.md#cli-agent-providers).
 - **Connection check failed:** check the named service's credentials, access, quota, and network.
   You do not need to re-enter every provider's key.
 - **Research stopped:** use the latest attempt's time, stage, and reason, not statistics from an older report.

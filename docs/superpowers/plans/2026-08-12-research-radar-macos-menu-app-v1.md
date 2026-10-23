@@ -2368,6 +2368,12 @@ Candidate order is:
 
 Resolve symlinks, require a regular executable file, and store the absolute path. Do not silently replace a missing Codex verifier. The onboarding screen offers either Fix Codex Path or Use DeepSeek as Verifier. The fallback explicitly changes only the `verifier` route to `deepseek/deepseek-flash` with the configured thinking/high provider settings and displays: `Reader and verifier will use the same provider, so review diversity is reduced.`
 
+Treat App `command_path` as one literal file path, including spaces and Chinese characters. The
+Python App configuration adapter quotes it for the existing shared CLI command-string contract;
+daily admission decodes exactly one executable before validating it. Do not change CLI parsing:
+CLI `command` continues to accept a quoted executable plus arguments. Offline path/argument
+regressions are separate from native file-picker and real Codex acceptance.
+
 Run: `swift test --package-path apps/macos/ResearchRadar --filter OnboardingTests`
 
 Expected: PASS for detection precedence and explicit fallback.

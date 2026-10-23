@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -155,7 +156,11 @@ def handle_run_daily(
         provider = config.research.model_providers[route.provider]
         if provider.kind != "codex_cli":
             continue
-        command = Path(provider.command) if provider.command else None
+        try:
+            parts = shlex.split(provider.command) if provider.command else []
+        except ValueError:
+            parts = []
+        command = Path(parts[0]) if len(parts) == 1 else None
         if (
             command is None
             or not command.is_absolute()

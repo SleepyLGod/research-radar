@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 from http.client import IncompleteRead
 from io import BytesIO
 from pathlib import Path
@@ -429,6 +430,27 @@ def test_codex_cli_provider_reads_output_last_message(tmp_path: Path) -> None:
     assert response.metadata["provider"] == "codex"
 
 
+def test_codex_cli_preserves_quoted_executable_and_configured_arguments(tmp_path: Path) -> None:
+    tools_dir = tmp_path / "Research Tools"
+    tools_dir.mkdir()
+    args_path = tmp_path / "args.txt"
+    executable = _fake_codex_command(tools_dir, args_path=args_path)
+    command = f"{shlex.quote(str(executable))} --profile 'offline research'"
+    config = parse_config({
+        "topics": [{"id": "memory", "queries": ["agent memory"]}],
+        "model_providers": {"codex": {"kind": "codex_cli", "command": command}},
+    })
+    provider = build_provider(config, SecretManager(InMemorySecretBackend()), "codex")
+
+    response = provider.complete([Message(role="user", content="offline")], model="fake-model")
+
+    assert response.content == "codex response"
+    assert config.model_providers["codex"].command == command
+    assert args_path.read_text(encoding="utf-8").splitlines()[:3] == [
+        "--profile", "offline research", "exec",
+    ]
+
+
 def test_codex_cli_provider_passes_explicit_reasoning_effort(tmp_path: Path) -> None:
     args_path = tmp_path / "args.txt"
     command = tmp_path / "fake-codex"
@@ -698,10 +720,12 @@ def _deepseek_route_config() -> AppConfig:
     )
 
 
-def _fake_codex_command(tmp_path: Path) -> Path:
+def _fake_codex_command(tmp_path: Path, *, args_path: Path | None = None) -> Path:
     command = tmp_path / "fake-codex"
+    record_args = f'printf \'%s\\n\' "$@" > {shlex.quote(str(args_path))}\n' if args_path else ""
     command.write_text(
         "#!/bin/sh\n"
+        f"{record_args}"
         "output=''\n"
         "prev=''\n"
         "for arg in \"$@\"; do\n"
