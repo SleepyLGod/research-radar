@@ -108,13 +108,21 @@ def handle_bootstrap_topic(
 ) -> dict[str, object]:
     """Generate a reviewable topic profile without writing YAML."""
 
+    if config is None:
+        raise ValueError("bootstrap_topic requires App configuration.")
     payload = cast(BootstrapTopicPayloadV1, request.payload)
     events.write(
         "stage_changed",
         stage="topic_bootstrap",
         message="Drafting topic profile.",
     )
-    topic = bootstrap_topic_draft(payload.description, language=payload.language)
+    route = resolve_task_route(
+        config.research, cast(SecretManager, secrets), "topic_bootstrap",
+        cancellation_event=cancellation_event,
+    )
+    topic = bootstrap_topic_draft(
+        payload.description, language=payload.language, provider=route.provider, model=route.model,
+    )
     return {
         "id": topic.id,
         "display_name": topic.id.replace("-", " ").title(),
