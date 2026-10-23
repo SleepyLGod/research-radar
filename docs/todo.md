@@ -113,6 +113,21 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Unsaved Draft Retention: Bounded Native Acceptance (2026-10-23)
+
+- [x] At `e41b74a`, an isolated host linked unchanged production RootView, Settings, AppStore,
+  StatusItemController and the default transient WindowCoordinator. A non-secret Author field
+  was edited through accessibility without pressing Save. CGEvent Escape, a click in an inert
+  owned window outside the popover, and native compact/expand controls each preserved the draft
+  after reopening. Settings navigation and the preselected nondefault topic/report also remained.
+- [x] Eight snapshots confirmed the saved Author was unchanged, zero jobs and secret-value
+  accesses, and the same topic/report selection. Networking was denied and no engine was present.
+  Four real App data files and linked production objects stayed byte-identical; the QA App exited.
+  No product fix was needed. Evidence: ignored `.build/draft-retention-20261023/acceptance.json`.
+- This covers one field and simulated native input, not human typing, every form, production
+  bootstrap, background-job continuity, unsaved drafts across process restart, VoiceOver or
+  multi-display behavior. Those broader gates remain open.
+
 #### Codex Executable Paths (2026-10-23)
 
 - [x] The App configuration adapter encodes a literal executable path for the shared CLI provider;
