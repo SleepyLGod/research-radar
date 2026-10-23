@@ -160,6 +160,17 @@ models:
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a
 specific route, define another named `codex_cli` provider instance and route that task to it.
 
+CLI `command` accepts an executable followed by arguments. Quote paths and arguments containing
+spaces inside the YAML string, for example:
+
+```yaml
+command: '"/Applications/Research Tools/codex" --profile "research work"'
+```
+
+ResearchRadar splits this string into an argument array; it does not run it through a shell.
+The macOS App instead stores one literal executable path selected in the file picker. Spaces and
+Chinese characters are supported without manually adding quotes or arguments.
+
 Claude Code compatible CLI:
 
 ```yaml

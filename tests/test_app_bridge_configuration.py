@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,76 @@ from research_radar.app_bridge.configuration import (
     AppConfigurationError,
     load_app_configuration,
 )
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "Research Tools/codex",
+        "研究 工具/codex",
+        "Reader's Tools/codex",
+        "Research $Tools; test/codex",
+        "Research Tools/codex ",
+    ],
+)
+def test_app_codex_path_stays_one_executable_through_daily(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative_path: str,
+) -> None:
+    from research_radar.analysis.providers import Message
+    from research_radar.analysis.routing import build_provider
+    from research_radar.app_bridge.events import EventWriter
+    from research_radar.app_bridge.handlers import handle_run_daily
+    from research_radar.app_bridge.protocol import EngineRequestV1, RunDailyPayloadV1
+    from research_radar.application.daily import DailyRunOptions
+    from research_radar.config import AppConfig
+    from research_radar.security.secrets import InMemorySecretBackend, SecretManager
+
+    executable = tmp_path / relative_path
+    executable.parent.mkdir()
+    executable.touch(mode=0o700)
+    value = _app_config(tmp_path)
+    value["providers"][1]["command_path"] = str(executable)
+    config_path = _write_config(tmp_path, value)
+    config = load_app_configuration(config_path, require_topics=False)
+    manager = SecretManager(InMemorySecretBackend())
+    invocations: list[list[str]] = []
+
+    def process_stub(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        invocations.append(args)
+        output = Path(args[args.index("--output-last-message") + 1])
+        output.write_text("offline codex response", encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr("research_radar.analysis.cli_providers.subprocess.run", process_stub)
+
+    def daily_stub(
+        options: DailyRunOptions, research: AppConfig, secrets: SecretManager, **kwargs: object,
+    ) -> Path:
+        provider = build_provider(research, secrets, "codex")
+        response = provider.complete([Message(role="user", content="offline")], model="fake-model")
+        assert response.content == "offline codex response"
+        run_dir = options.root / "runs" / "offline"
+        run_dir.mkdir(parents=True)
+        (run_dir / "article_draft.json").write_text(json.dumps({
+            "title": "Offline report", "topic_id": "memory",
+            "digest": "Offline digest", "lede": "Offline summary",
+            "sections": [], "claims": [], "metadata": {},
+        }), encoding="utf-8")
+        return run_dir
+
+    result = handle_run_daily(
+        EngineRequestV1(
+            1, "fixture", "run_daily", "2026-09-20T00:00:00Z", tmp_path, config_path,
+            RunDailyPayloadV1("memory", "2026-09-20", 1, 1, "en", False, None),
+        ),
+        config=config, secrets=manager,
+        events=EventWriter(tmp_path / "events.jsonl", request_id="fixture"),
+        pdf_helper_path=Path("/usr/bin/true"), daily_runner=daily_stub,
+    )
+
+    assert result["title"] == "Offline report"
+    assert len(invocations) == 1
+    assert invocations[0][:2] == [str(executable), "exec"]
 
 
 @pytest.mark.parametrize("appearance", ["system", "light", "dark"])
@@ -27,7 +98,9 @@ def test_invalid_appearance_is_rejected(tmp_path, appearance) -> None:
         load_app_configuration(_write_config(tmp_path, value), require_topics=False)
 
 
-@pytest.mark.parametrize("command", [None, "/missing/codex", "codex", "/tmp"])
+@pytest.mark.parametrize(
+    "command", [None, "/missing/codex", "codex", "/tmp", "/usr/bin/true --profile offline"],
+)
 def test_daily_rejects_unavailable_codex_before_research(
     tmp_path: Path, command: str | None
 ) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -188,11 +189,17 @@ def _providers(value: Any) -> dict[str, dict[str, object]]:
         provider_id = _string(provider.get("id"), f"providers[{index}].id")
         if provider_id in result:
             raise AppConfigurationError(f"Duplicate provider id: {provider_id}")
+        command_path = provider.get("command_path")
+        if command_path is not None and not isinstance(command_path, str):
+            raise AppConfigurationError(
+                f"providers[{index}].command_path must be a string or null."
+            )
         result[provider_id] = {
             "kind": _string(provider.get("kind"), f"provider {provider_id} kind"),
             "base_url": provider.get("base_url"),
             "api_key_secret": provider.get("api_key_secret"),
-            "command": provider.get("command_path"),
+            # App paths are literal; the shared CLI provider accepts command strings.
+            "command": shlex.quote(command_path) if command_path else None,
             "timeout_seconds": _positive_integer(
                 provider.get("timeout_seconds"), f"provider {provider_id} timeout_seconds"
             ),

@@ -113,6 +113,30 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Codex Executable Paths (2026-10-23)
+
+- [x] The App configuration adapter encodes a literal executable path for the shared CLI provider;
+  daily admission decodes and validates that single executable before research starts. Paths with
+  spaces, Chinese characters, quotes or shell metacharacters are not split into extra arguments.
+  CLI command strings retain quoted-path and additional-argument support.
+- [x] Offline regressions cover App configuration through daily admission and provider invocation,
+  plus a real local fake executable with CLI arguments. No real Codex or provider is called.
+- [x] Rebuilt the development App with its existing local signing identity; bundle checks and the
+  non-live frozen preflight passed. The user selected a local executable whose path contains spaces
+  and Chinese characters in the production file picker hosted in an isolated native settings window.
+  A new QA process restored the exact path and displayed `Executable found`; saved configuration
+  bytes were unchanged. Shared configuration conversion kept it as one executable token. The selected
+  executable was never started, no secret values were read, and the real config/queue/report index/schedules were unchanged.
+- [x] Confirmed the production `StatusItemController`, `WindowCoordinator` and settings flow in a
+  separate isolated host, retaining the default transient popover rather than using a stable window.
+  Cancellation left configuration unchanged; the user selected the spaced/Chinese fixture through
+  the native picker, and status-button hide/reopen preserved it. A new process restored the same
+  configuration bytes; three CGEvent-based pointer open/hide cycles then passed with the path
+  intact. No engine or real credentials were available, and the four real data files stayed unchanged.
+  AX-driven sequences had inconsistent open/hide observations; their failure logs are retained and
+  are not treated as passing automation. This does not cover production application bootstrap,
+  real Codex login, model access or paper-verification quality.
+
 #### Three-State Offline Resource Check (2026-10-22)
 
 - [x] Reused current release module objects at `ec5a5fd` and an existing frozen offline report,
