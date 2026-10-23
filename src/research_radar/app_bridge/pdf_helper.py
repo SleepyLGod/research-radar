@@ -9,7 +9,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from research_radar.analysis.figures import PdfCropBox, PdfPageBbox, PdfTextWord
+from research_radar.analysis.figures import (
+    FigureExtractionError,
+    FigureExtractor,
+    PaperFigure,
+    PdfCropBox,
+    PdfPageBbox,
+    PdfTextWord,
+)
+from research_radar.models import Artifact, Claim
 from research_radar.security.redaction import redact_text
 
 
@@ -149,7 +157,7 @@ class PDFHelperClient:
                 timeout=self.timeout_seconds,
                 env={"PATH": "/usr/bin:/bin", "LANG": "en_US.UTF-8"},
             )
-        except (OSError, subprocess.SubprocessError) as exc:
+        except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
             raise PDFHelperError("PDF helper did not complete.") from exc
         if result.returncode != 0:
             detail = redact_text(result.stderr)[:300].strip()
@@ -161,28 +169,31 @@ class PDFHelperClient:
         return _mapping(value, "PDF helper response")
 
 
-def app_figure_extractor(client: PDFHelperClient, *, allowed_root: Path):
+def app_figure_extractor(client: PDFHelperClient, *, allowed_root: Path) -> FigureExtractor:
     """Build an extractor that keeps policy in Python and mechanics in PDFKit."""
 
     from research_radar.analysis.figures import extract_paper_figures
 
-    def extract(artifact, output_dir, claims):
-        return extract_paper_figures(
-            artifact,
-            output_dir,
-            claims,
-            pdf_page_bbox_reader=lambda path, page: client.page_bbox(
-                path, page, allowed_root=allowed_root
-            ),
-            pdf_crop_renderer=lambda path, page, crop, destination: client.render_crop(
-                path,
-                page,
-                crop,
-                destination,
-                dpi=160,
-                allowed_root=allowed_root,
-            ),
-        )
+    def extract(artifact: Artifact, output_dir: Path, claims: list[Claim]) -> list[PaperFigure]:
+        try:
+            return extract_paper_figures(
+                artifact,
+                output_dir,
+                claims,
+                pdf_page_bbox_reader=lambda path, page: client.page_bbox(
+                    path, page, allowed_root=allowed_root
+                ),
+                pdf_crop_renderer=lambda path, page, crop, destination: client.render_crop(
+                    path,
+                    page,
+                    crop,
+                    destination,
+                    dpi=160,
+                    allowed_root=allowed_root,
+                ),
+            )
+        except PDFHelperError as exc:
+            raise FigureExtractionError(str(exc)) from exc
 
     return extract
 

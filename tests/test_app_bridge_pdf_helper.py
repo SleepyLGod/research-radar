@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -156,3 +157,134 @@ def test_pdf_helper_client_rejects_escape_and_malformed_response(tmp_path: Path)
     inside.write_bytes(b"pdf")
     with pytest.raises(PDFHelperError, match="response"):
         client.page_bbox(inside, 1, allowed_root=allowed)
+
+
+@pytest.mark.parametrize("failure", ["timeout", "nonzero", "invalid_json", "invalid_encoding"])
+@pytest.mark.parametrize("operation", ["page_text", "render_crop"])
+def test_optional_pdf_helper_failure_skips_figures_not_research(
+    tmp_path: Path, failure: str, operation: str,
+) -> None:
+    from research_radar.app_bridge.pdf_helper import app_figure_extractor
+    from research_radar.models import (
+        Artifact,
+        Claim,
+        ClaimStatus,
+        EvidenceAnchor,
+        SourceCandidate,
+        SourceType,
+    )
+    from research_radar.pipeline.daily import _extract_deep_read_figures
+
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF offline fixture")
+    source = SourceCandidate(title="MARS", url="https://example.com/offline-mars",
+                             source_type=SourceType.PAPER, source_name="offline")
+    artifact = Artifact(source=source, artifact_path=str(pdf), content_type="application/pdf",
+        text="[page 3]\nFigure 2: MARS architecture. MARS predicts API duration and "
+             "schedules requests with memory-aware handling.\n")
+    claim = Claim(text="Solution: MARS predicts API duration for memory-aware scheduling.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[EvidenceAnchor(source_url=source.url, quote="MARS predicts API duration")])
+    calls: list[str] = []
+
+    def run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        request = json.loads(kwargs["input"])
+        calls.append(request["operation"])
+        if request["operation"] == operation:
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+            if failure == "invalid_encoding":
+                raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "Offline invalid helper output")
+            return subprocess.CompletedProcess(args, 1 if failure == "nonzero" else 0,
+                "{", "Offline helper rejected operation")
+        words = [("MARS", 45, 60, 37, 14), ("uses", 86, 60, 29, 14),
+                 ("scheduling", 120, 60, 68, 14), ("Figure", 45, 410, 46, 15),
+                 ("2:", 96, 410, 16, 15), ("MARS", 116, 410, 37, 15),
+                 ("architecture.", 158, 410, 82, 15)]
+        return subprocess.CompletedProcess(args, 0, json.dumps({
+            "schema_version": 1, "operation": "page_text", "page": {
+                "page_box": {"x": 0, "y": 0, "width": 600, "height": 800},
+                "words": [{"text": text, "box": {"x": x, "y": y, "width": w, "height": h}}
+                          for text, x, y, w, h in words],
+            },
+        }), "")
+
+    figures, findings = _extract_deep_read_figures([artifact], [claim], tmp_path / "figures",
+        figure_extractor=app_figure_extractor(PDFHelperClient(Path(sys.executable), runner=run),
+                                             allowed_root=tmp_path))
+    assert figures == {}
+    assert len(findings) == 1
+    assert findings[0].metadata["kind"] == "figure_extraction_skipped"
+    assert claim.is_publishable()
+    assert calls == (["page_text"] if operation == "page_text" else ["page_text", "render_crop"])
+
+
+def test_pdf_helper_adapter_does_not_swallow_programming_errors(tmp_path: Path) -> None:
+    from research_radar.app_bridge.pdf_helper import app_figure_extractor
+    from research_radar.models import (
+        Artifact,
+        Claim,
+        ClaimStatus,
+        EvidenceAnchor,
+        SourceCandidate,
+        SourceType,
+    )
+
+    pdf = tmp_path / "paper.pdf"
+    pdf.write_bytes(b"%PDF offline fixture")
+    source = SourceCandidate(title="MARS", url="https://example.com/offline-mars",
+                             source_type=SourceType.PAPER, source_name="offline")
+    artifact = Artifact(source=source, artifact_path=str(pdf), content_type="application/pdf",
+        text="[page 3]\nFigure 2: MARS architecture. MARS predicts API duration and "
+             "schedules requests with memory-aware handling.\n")
+    claim = Claim(text="Solution: MARS predicts API duration for memory-aware scheduling.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[EvidenceAnchor(source_url=source.url, quote="MARS predicts API duration")])
+
+    def broken_runner(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise TypeError("Offline programming defect")
+
+    extract = app_figure_extractor(PDFHelperClient(Path(sys.executable), runner=broken_runner),
+                                    allowed_root=tmp_path)
+    with pytest.raises(TypeError, match="programming defect"):
+        extract(artifact, tmp_path / "figures", [claim])
+
+
+def test_daily_writes_verified_report_when_optional_pdf_helper_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    from research_radar.app_bridge.configuration import load_app_configuration
+    from research_radar.app_bridge.events import EventWriter
+    from research_radar.app_bridge.protocol import EngineRequestV1, RunDailyPayloadV1
+    from research_radar.compose.draft_io import load_article_draft
+    from script.verify_offline_frozen import prepare_config
+
+    monkeypatch.syspath_prepend(str(Path(__file__).parent / "fixtures"))
+    from offline_frozen.entry import dependencies
+
+    root = tmp_path / "ResearchRadar"
+    config_path = prepare_config(root)
+    config = load_app_configuration(config_path)
+    injected = dependencies(config.workspace_root)
+    result = injected.run_daily(
+        EngineRequestV1(1, "offline", "run_daily", "2026-10-24T00:00:00Z", root,
+            config_path, RunDailyPayloadV1("memory", "2026-10-24", 1, 1, "en", False, None)),
+        config=config, secrets=injected.secret_manager_factory(),
+        events=EventWriter(root / "events.jsonl", request_id="offline"),
+        pdf_helper_path=Path("/usr/bin/false"),
+    )
+    run = Path(result["run_dir"])
+    draft = load_article_draft(run / "article_draft.json")
+    findings = [json.loads(line)
+                for line in (run / "review_findings.jsonl").read_text().splitlines()]
+    assert result["deep_read_count"] == 1
+    assert result["publishable_claim_count"] == 6
+    assert result["research_outcome"]["status"] == "ready"
+    assert draft.claims and all(claim.is_publishable() for claim in draft.claims)
+    assert any(item.get("metadata", {}).get("kind") == "figure_extraction_skipped"
+               for item in findings)
+    assert (run / "wechat.html").is_file()
+    assert not list((run / "figures").rglob("*.png"))
+    assert not (run / "email_send_result.json").exists()
+    assert not (run / "publish_wechat_draft_request.json").exists()
