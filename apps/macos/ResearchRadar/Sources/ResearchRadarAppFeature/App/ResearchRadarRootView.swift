@@ -1,3 +1,4 @@
+import AppKit
 import ResearchRadarCore
 import SwiftUI
 
@@ -22,10 +23,8 @@ public struct ResearchRadarRootView: View {
                 ZStack {
                     // Keep editable view state while compact or dismissed, but release its reader.
                     if workspaceOpened || mode == .full {
-                        FullWorkspaceView(store: store, localization: localization, presentation: presentation)
-                            .opacity(mode == .full ? 1 : 0)
-                            .allowsHitTesting(mode == .full)
-                            .accessibilityHidden(mode != .full)
+                        RetainedWorkspaceView(store: store, localization: localization,
+                            presentation: presentation, isVisible: mode == .full)
                     }
                     if mode == .compact {
                         CompactTodayView(store: store, localization: localization, presentation: presentation)
@@ -44,5 +43,31 @@ public struct ResearchRadarRootView: View {
         .onChange(of: mode) { _, mode in
             if mode == .full { workspaceOpened = true }
         }
+    }
+}
+
+private struct RetainedWorkspaceView: NSViewRepresentable {
+    let store: AppStore
+    let localization: LocalizationStore
+    let presentation: WindowPresentationState
+    let isVisible: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let host = NSHostingView(rootView:
+            FullWorkspaceView(store: store, localization: localization, presentation: presentation)
+                .font(context.environment.font)
+                .controlSize(context.environment.controlSize)
+        )
+        host.sizingOptions = []
+        host.autoresizingMask = [.width, .height]
+        let container = NSView()
+        container.addSubview(host)
+        return container
+    }
+
+    func updateNSView(_ container: NSView, context: Context) {
+        // The hosted view observes its long-lived stores without replacing its root.
+        // Opacity and hit testing do not remove native lists from the key-view loop.
+        container.isHidden = !isVisible
     }
 }

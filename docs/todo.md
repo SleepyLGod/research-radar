@@ -113,6 +113,38 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Keyboard Navigation: Focus Fix And Bounded Native Acceptance (2026-10-23)
+
+- [x] Reproduced invisible expanded-workspace controls receiving Tab focus in compact mode.
+  The regression failed because the retained sidebar could still become a native key view.
+  A private native container now hides the retained workspace instead of relying on opacity
+  and hit testing; its hosted root remains stable and observes the existing stores directly.
+  No engine, renderer, scheduler, keyboard shortcut or dependency was added.
+- [x] Regressions verify the hidden sidebar leaves keyboard navigation, the same sidebar returns
+  on expansion, and compact mode releases the actual reader/WebView while retaining report
+  selection and unchanged HTML. A non-secret unsaved Author also survived native mode changes.
+  An intermediate re-rooting implementation produced AttributeGraph warnings; it was removed.
+  The final isolated launches did not produce those warnings.
+- [x] The user enabled macOS Keyboard Navigation; the App did not change the global preference.
+  The user then confirmed real Tab/Shift+Tab movement through Chinese Settings. Earlier isolated
+  English/Chinese runs exercised safe sidebar/mode controls with visible focus; Space activated
+  those controls, while Return did not activate the non-default expand button. This is not a
+  claim that Return activates every macOS button or that every form was checked.
+- [x] Final offline checks passed: Python **885**, Swift **280 across 48 suites**, including the
+  enabled frozen workflows, Ruff, privacy and diff checks. Read-only review found no actionable
+  issues. All native hosts had no engine, a forbidden secret-value backend and denied networking.
+- [x] After the final-source English/Chinese automation was interrupted by transient-popover
+  focus loss, the user completed manual acceptance in the isolated native popover and confirmed
+  both languages worked: Tab/Shift+Tab focus movement, Space activation, sidebar toggling and
+  compact/full switching. The host used the current production UI components, no engine,
+  offline secret/system-service substitutes and OS-denied networking. Neither interrupted
+  automation run is counted as passing. The development App was rebuilt with the existing
+  signing identity and unchanged designated requirement; normal configuration and state files
+  were unchanged. Evidence: ignored `.build/keyboard-manual-20261023/` and
+  `.build/keyboard-qa-20261023/`, including `native-final.json` and RED/GREEN logs.
+- [ ] Broader form coverage, VoiceOver, multi-display and production-bootstrap keyboard
+  acceptance remain separate; this bounded manual result does not close those gates.
+
 #### Unsaved Draft Retention: Bounded Native Acceptance (2026-10-23)
 
 - [x] At `e41b74a`, an isolated host linked unchanged production RootView, Settings, AppStore,
