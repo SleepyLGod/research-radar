@@ -34,17 +34,17 @@ class CodexCliProvider:
     def health_check(self) -> None:
         """Fail if the configured command cannot be executed."""
 
-        _resolve_command(self.command)
+        _codex_command_parts(self.command)
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Run `codex exec` and return its last message."""
 
-        self.health_check()
+        parts = _codex_command_parts(self.command)
         prompt = messages_to_prompt(messages)
         with tempfile.TemporaryDirectory(prefix="research-radar-codex-") as tmpdir:
             output_path = Path(tmpdir) / "last-message.txt"
             command = [
-                *_command_parts(self.command),
+                *parts,
                 "exec",
                 "--ephemeral",
                 "--sandbox",
@@ -135,6 +135,40 @@ def _command_parts(command: str) -> list[str]:
     if not parts:
         raise AnalysisError("Provider command cannot be empty.")
     return parts
+
+
+def _codex_command_parts(command: str) -> list[str]:
+    """Resolve a standard npm launcher without widening the engine's PATH."""
+
+    parts = _command_parts(command)
+    executable = Path(_resolve_command(command))
+    try:
+        with executable.open("rb") as stream:
+            shebang = stream.readline(128).strip()
+    except OSError as exc:
+        raise AnalysisError("Could not inspect the configured Codex executable.") from exc
+    if shebang != b"#!/usr/bin/env node":
+        return parts
+
+    launcher = executable.resolve(strict=True)
+    node = shutil.which("node")
+    if node is None:
+        # npm links may already be resolved by the App's native file picker.
+        directories = [executable.parent, launcher.parent]
+        for parent in launcher.parents:
+            if parent.name == "node_modules" and parent.parent.name == "lib":
+                directories.append(parent.parent.parent / "bin")
+                break
+        directories.extend([
+            Path("/opt/homebrew/bin"), Path("/usr/local/bin"), Path.home() / ".local/bin",
+        ])
+        node = shutil.which("node", path=":".join(str(path) for path in directories))
+    if node is None:
+        raise AnalysisError(
+            "The npm-installed Codex launcher requires Node.js. "
+            "Use a matching Node installation or select a native Codex executable."
+        )
+    return [node, str(launcher), *parts[1:]]
 
 
 def _resolve_command(command: str) -> str:
