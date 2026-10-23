@@ -8,6 +8,7 @@ import sys
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
+from threading import Event
 from unittest.mock import patch
 
 from offline_frozen.inputs import FrozenDiscovery, FrozenModel
@@ -74,6 +75,7 @@ class FailedWeChat(WeChatDraftClient):
         image_path: Path,
         *,
         image_bytes: bytes | None = None,
+        cancellation_event: Event | None = None,
     ) -> dict[str, str]:
         """Return an inert receipt after the production cover service validates the image."""
         return {"media_id": "offline-cover-id", "url": ""}

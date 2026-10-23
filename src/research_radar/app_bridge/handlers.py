@@ -235,7 +235,7 @@ def handle_upload_wechat_cover(
     events.write("stage_changed", stage="wechat_cover", message="Uploading the selected cover.")
     return dict(upload_wechat_cover(payload.image_path, payload.image_sha256,
         _wechat_secret_manager(cast(SecretManager, secrets), config),
-        client_factory=wechat_client_factory))
+        client_factory=wechat_client_factory, cancellation_event=cancellation_event))
 
 
 def handle_retry_delivery(

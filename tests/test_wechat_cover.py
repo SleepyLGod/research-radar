@@ -5,6 +5,7 @@ import io
 import json
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -33,7 +34,7 @@ def test_cover_service_reuses_permanent_material_client_once(tmp_path: Path) -> 
             pass
 
         def upload_permanent_image_material(
-            self, path: Path, *, image_bytes: bytes
+            self, path: Path, *, image_bytes: bytes, cancellation_event: Event | None = None
         ) -> dict[str, str]:
             uploads.append(image_bytes)
             return {"media_id": "offline-cover-id", "url": "https://example.com/cover.png"}
@@ -114,7 +115,7 @@ def test_cover_bridge_is_separate_from_research_and_delivery(tmp_path: Path) -> 
             assert manager.get_wechat_app_id() == "offline-id"
             assert manager.get_wechat_app_secret() == "offline-secret"
 
-        def upload_permanent_image_material(self, path: Path, **kwargs: bytes) -> dict[str, str]:
+        def upload_permanent_image_material(self, path: Path, **kwargs: object) -> dict[str, str]:
             assert kwargs["image_bytes"] == image_bytes()
             return {"media_id": "offline-cover-id", "url": ""}
 
@@ -252,6 +253,79 @@ def test_client_uploads_validated_bytes_even_if_staged_path_changes(
     assert original in requests[0]
     assert b"different unconfirmed content" not in requests[0]
     assert receipt["media_id"] == "offline-cover-id"
+
+
+@pytest.mark.parametrize("cancel_at", ["before_handler", "credentials", "token"])
+def test_cover_cancellation_prevents_starting_upload(
+    tmp_path: Path, monkeypatch, cancel_at: str
+) -> None:
+    from research_radar.app_bridge.events import EventWriter
+    from research_radar.app_bridge.handlers import handle_upload_wechat_cover
+    from research_radar.app_bridge.protocol import (
+        EngineCommand,
+        EngineRequestV1,
+        UploadWeChatCoverPayloadV1,
+    )
+    from research_radar.exceptions import OperationCancelled
+
+    image = tmp_path / "cover.png"
+    image.write_bytes(image_bytes())
+    cancelled = Event()
+    requests: list[str] = []
+
+    class Backend(InMemorySecretBackend):
+        def get_secret(self, name: str) -> str:
+            if cancel_at == "credentials":
+                cancelled.set()
+            return super().get_secret(name)
+
+    class Response:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def read(self) -> bytes:
+            return json.dumps(self.payload).encode()
+
+    def offline_http(request, **kwargs):
+        if isinstance(request, str):
+            requests.append("token")
+            if cancel_at == "token":
+                cancelled.set()
+            return Response({"access_token": "fake-token", "expires_in": 7200})
+        requests.append("upload")
+        return Response({"media_id": "offline-cover-id"})
+
+    monkeypatch.setattr("research_radar.publishers.wechat.client.urlopen", offline_http)
+    backend = Backend()
+    backend.set_secret("wx.id", "offline-id")
+    backend.set_secret("wx.secret", "offline-secret")
+    if cancel_at == "before_handler":
+        cancelled.set()
+    request = EngineRequestV1(
+        schema_version=1, request_id="offline-cover", command=EngineCommand.UPLOAD_WECHAT_COVER,
+        created_at="2026-10-23T00:00:00Z", app_support_root=tmp_path, config_path=None,
+        payload=UploadWeChatCoverPayloadV1(image, hashlib.sha256(image_bytes()).hexdigest()),
+    )
+    with pytest.raises(OperationCancelled):
+        handle_upload_wechat_cover(
+            request,
+            config=SimpleNamespace(wechat=SimpleNamespace(
+                app_id_secret="wx.id", app_secret_secret="wx.secret"
+            )),
+            secrets=SecretManager(backend),
+            events=EventWriter(tmp_path / "events.jsonl", request_id=request.request_id),
+            pdf_helper_path=None, cancellation_event=cancelled,
+        )
+    assert "upload" not in requests
+    if cancel_at == "before_handler":
+        assert requests == []
+    assert image.read_bytes() == image_bytes()
 
 
 @pytest.mark.parametrize("escape", ["outside", "other_job", "symlink"])

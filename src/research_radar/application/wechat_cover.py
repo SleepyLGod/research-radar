@@ -8,10 +8,11 @@ import os
 import stat
 from collections.abc import Callable
 from pathlib import Path
+from threading import Event
 
 from PIL import Image, UnidentifiedImageError
 
-from research_radar.exceptions import PublishError
+from research_radar.exceptions import OperationCancelled, PublishError
 from research_radar.publishers.wechat.client import WeChatDraftClient
 from research_radar.security.secrets import SecretManager
 
@@ -25,8 +26,11 @@ def upload_wechat_cover(
     secret_manager: SecretManager,
     *,
     client_factory: Callable[..., WeChatDraftClient] = WeChatDraftClient,
+    cancellation_event: Event | None = None,
 ) -> dict[str, str]:
     """Upload once, returning a receipt without changing configuration or any report."""
+    if cancellation_event is not None and cancellation_event.is_set():
+        raise OperationCancelled()
     try:
         descriptor = os.open(image_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor, "rb") as image_file:
@@ -43,7 +47,7 @@ def upload_wechat_cover(
     except (OSError, ValueError, UnidentifiedImageError, Image.DecompressionBombError) as exc:
         raise PublishError("The selected cover could not be read as a safe image.") from exc
     result = client_factory(secret_manager).upload_permanent_image_material(
-        image_path, image_bytes=content,
+        image_path, image_bytes=content, cancellation_event=cancellation_event,
     )
     media_id = result.get("media_id")
     if not isinstance(media_id, str) or not media_id.strip():

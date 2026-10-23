@@ -46,6 +46,52 @@ actor EmailRunner: EngineProcessRunning {
 
 @MainActor
 @Suite struct EmailDeliveryTests {
+    @Test func recoveryConfirmsSavedDeliveryBeforeCheckingResearchReadiness() async throws {
+        let fixture = try EmailFixture()
+        defer { fixture.cleanup() }
+        let runner = EmailRunner()
+        let id = UUID()
+        let job = try JobRecordV1(id: id, kind: .delivery, topicID: fixture.report.topicID,
+            reportDate: fixture.report.reportDate, deliveryChannel: .email, trigger: .retry,
+            state: .running, jobDirectory: fixture.root.appending(path: "jobs/\(id.uuidString.lowercased())").path,
+            runDirectory: fixture.report.runDirectory, createdAt: Date(), startedAt: Date())
+        let request = try EngineRequestV1(requestID: id, command: .retryDelivery, createdAt: Date(),
+            appSupportRoot: fixture.root.path, configPath: fixture.root.appending(path: "config/app-config.json").path,
+            payload: .retryDelivery(.init(runDirectory: fixture.report.runDirectory, channel: .email,
+                allowResend: false, acknowledgeUnknownOutcome: false)))
+        let paths = try FoundationJobBuilder.create(request: request,
+            jobDirectory: URL(fileURLWithPath: job.jobDirectory))
+        let result = EngineResultV1(requestID: id, command: .retryDelivery, status: .succeeded,
+            completedAt: Date(), delivery: .init(runDirectory: fixture.report.runDirectory,
+                channel: .email, status: .sent, completedAt: Date()))
+        try EngineProtocolCodec.encode(result).write(to: paths.result)
+        let disk = AtomicJSONStore(root: fixture.root)
+        let store = fixture.store(runner, jobs: [job])
+        try disk.write(JobQueueSnapshotV1(jobs: [job]), to: "state/queue.json")
+        try disk.write(ScheduleSnapshotV1(), to: "state/schedules.json")
+        try disk.write(store.runtime, to: "state/app-state.json")
+        let index = fixture.root.appending(path: "state/report-index.json")
+        let savedIndex = fixture.root.appending(path: "saved-report-index.json")
+        try FileManager.default.moveItem(at: index, to: savedIndex)
+        try FileManager.default.createDirectory(at: index, withIntermediateDirectories: false)
+
+        await store.reconcileAfterLaunch(resumePending: false)
+        #expect(store.requiresReconciliation)
+        try FileManager.default.moveItem(at: index, to: fixture.root.appending(path: "blocked-index"))
+        try FileManager.default.moveItem(at: savedIndex, to: index)
+        await store.recoverScheduling()
+
+        #expect(!store.requiresReconciliation)
+        #expect(store.jobs.first?.state == .succeeded)
+        #expect(store.reports[0].deliveries.first { $0.channel == .email }?.state == .sent)
+        #expect(!store.behaviorChangesBlocked)
+        // New research stays blocked, but its missing Codex cannot prevent delivery recovery.
+        #expect(store.scheduleFaulted)
+        #expect(store.researchConfigurationErrorCode == "codex_not_configured")
+        #expect(await runner.payloads.isEmpty)
+        #expect(try Data(contentsOf: paths.result) == EngineProtocolCodec.encode(result))
+    }
+
     @Test func firstManualSendUsesExistingQueueAndSurvivesRestart() async throws {
         let fixture = try EmailFixture()
         defer { fixture.cleanup() }

@@ -357,6 +357,7 @@ public enum EngineProtocolCodec {
     private static let knownErrorCodes: Set<String> = [
         "invalid_request", "command_unavailable", "unsupported_schema",
         "invalid_configuration", "missing_secret", "missing_executable",
+        "codex_not_configured",
         "provider_unavailable", "invalid_report_date", "research_failed",
         "delivery_failed", "engine_crashed", "parent_lost", "protocol_error",
         "model_transport_failed", "model_response_interrupted", "model_response_retry_exhausted",
