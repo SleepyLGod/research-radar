@@ -8,7 +8,8 @@ For your first run, **make one local report. Set up delivery and scheduling late
 
 This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
 A local test DMG has passed read-only packaging checks and isolated offline startup/reader checks.
-Normal Finder installation/launch and Gatekeeper acceptance remain unverified.
+System launch through LaunchServices also passed with isolated per-instance test data.
+Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unverified.
 The latest test image fixes the Python build-metadata path but retains development-data behavior;
 see the [roadmap](todo.md). Existing installed/development Apps are not automatically replaced.
 There is no notarized or approved public installer.
@@ -88,6 +89,12 @@ and Git.
    This means a program file, not a paper, project folder, or API key.
    The App does not install or sign in to Codex for you.
 
+An npm-installed Codex also needs Node.js. The provider recognizes the standard npm launcher
+and looks for Node on PATH, beside the launcher, in its npm installation prefix, or in common
+Homebrew/local bin directories. It does not load your shell configuration, install Node, or
+widen the engine's PATH. If Node cannot be found, the check reports that requirement.
+Native Codex executables keep their existing launch behavior.
+
 The default reader is DeepSeek `deepseek-flash`, with thinking explicitly enabled and
 `reasoning_effort: high`. The default verifier is Codex `gpt-5.6-luna` with `xhigh` effort.
 The App offers `high` and `xhigh`. These settings do not change your global Codex configuration
@@ -115,6 +122,8 @@ Describe what you want to follow. For example:
 
 Choose the report language, then click **Generate topic draft**.
 **This calls a model**; it is not an entirely local form action.
+It uses the configured `topic_bootstrap` route, accepts Chinese or English descriptions, and
+reports model failures rather than silently substituting a heuristic profile.
 Review the name, research focus, and search scope. Expand the advanced section to edit queries,
 concept groups, and exclusions. Read any quality warnings before saving.
 
@@ -149,6 +158,8 @@ Source, full-text read, and verified-claim counts belong to that report, not to 
 
 The read limit is not an output promise. Insufficient evidence does not lower the publication threshold,
 and empty results are not automatically delivered.
+If the optional PDF figure helper fails, its figures are omitted and the reason is recorded in
+diagnostics. This does not discard an otherwise valid report or relax its evidence requirements.
 If there is already a useful report today, **Run Now** selects it.
 Use **Run Again** and confirm to start a new attempt. This is not a resume operation and may incur new charges.
 

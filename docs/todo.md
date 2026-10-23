@@ -113,6 +113,101 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
+
+#### Three P2 Repairs: Offline And Native Acceptance (2026-10-24)
+
+- [x] App topic bootstrap now resolves the configured provider/model through the existing shared
+  routing function and passes its cancellation event. Missing routes and provider failures are
+  not replaced with heuristics; an explicitly local route keeps its existing behavior. The
+  shared structured-topic parser accepts a valid model-generated profile for a Chinese input
+  without requiring English tokens in the description. Topic/schema validation remains intact.
+- [x] The shared Codex provider recognizes the standard npm `env node` shebang and invokes an
+  absolute Node runtime with the selected script and original arguments. It honors an existing
+  PATH runtime, otherwise checks launcher siblings, the recognized npm prefix and common
+  Homebrew/local bin directories; it does not search arbitrary ancestor bin directories, load
+  a shell, or widen engine PATH. Native commands, quoted paths and CLI arguments are preserved.
+  Missing Node fails before starting a child and is reported by the existing provider diagnostics.
+- [x] The App PDF adapter converts only `PDFHelperError` into the existing skippable
+  `FigureExtractionError`; helper text-decoding failures are also typed as helper errors.
+  Timeout, nonzero exit, malformed JSON and malformed text skip the optional image stage with a
+  diagnostic. Programming errors still propagate, and crop safety, same-paper claim binding,
+  evidence gates and all renderer implementations remain unchanged.
+- [x] Reproduced the original defects before implementation. Final Python regression:
+  **913 passed**, with both opt-in frozen integrations enabled; **128** focused tests passed.
+  The full Swift suite passed **280** tests, and its queue/report/restart integration passed
+  separately against the newly frozen test engine. A complete source/frozen offline daily with
+  a failed helper still produced a ready report with **6** publishable claims and no figures.
+- [x] Built separate production and offline-test engines without replacing the normal App.
+  Sanitized-PATH production preflight, compressed archive/private-path scans, Mach-O dependency
+  checks and engine signature verification passed. The production frozen bridge generated a
+  Chinese topic through a configured fake model executable and ran an npm-style launcher using
+  a fake Node runtime under `/usr/bin:/bin`; network and Keychain were denied for these checks.
+  Evidence: ignored `.build/p2-fixes-20261024/` with RED/GREEN logs, frozen checks and report
+  artifacts. No real providers, real credentials or real delivery clients were used.
+- [x] Updated `dist/ResearchRadar.app` with the repaired production engine, reusing the existing
+  local signing certificate and identical designated requirement. Bundle/dependency/private-path
+  checks and strict signature verification passed. The previous development App went to Trash;
+  the normal configuration, queue, schedules and report-index files retained their original hashes.
+- [x] Native offline acceptance used isolated per-instance data. In the updated production App,
+  **Generate topic draft** accepted a Chinese-only description and showed the configured fake
+  model's profile for review. The npm-style launcher found its fake Node runtime while PATH
+  remained `/usr/bin:/bin`; neither is an actual Codex/Node integration test. A separately signed
+  QA copy used the frozen offline engine and a deliberately failing helper: native **Run Now**
+  produced a ready report (1 read, 6 public claims, no figures) with an image-skip diagnostic.
+  **Read report** rendered it; restart preserved the same report and single successful job.
+  WeChat/Email were disabled, and no delivery jobs were created. Both test instances exited.
+  Evidence: ignored `.build/p2-native-20261024/` (fixtures, native captures and verification).
+- [x] Precommit rerun: **913 Python tests** and **280 Swift tests** passed with the frozen
+  integrations enabled. Ruff, privacy, bundle/dependency/private-path checks, strict signing,
+  diff checks and normal-data preservation checks passed. Evidence: ignored
+  `.build/p2-closeout-20261024/`.
+- [ ] Actual npm/provider acceptance remains separate. The earlier DMG has not been regenerated
+  with these repairs. No API-key values, real providers or sending were used in this checkpoint;
+  it adds no UI, protocol command, dependency or auto-retry.
+
+#### System Launch And Initial PR Review Verification (2026-10-24)
+
+- [x] At `c021fc0`, launched the unchanged signed DMG App copy through
+  `NSWorkspace.openApplication` / LaunchServices, with a new per-instance data-root override,
+  a paused test topic, empty queue/report index/schedules and disabled delivery, login and
+  notifications. The system resolved the requested copy, displayed the unique test topic in
+  its native popover and required no launch confirmation. Native-menu exit passed; the first
+  test-driver AXPress was unsupported, so the identified Quit menu item was clicked instead.
+- [x] The two normal App/engine manifests and five normal configuration/state hashes remained
+  unchanged. The copy's signature and bytes stayed intact, Gatekeeper still reported
+  `assessments enabled`, and quarantine attributes were unchanged. No App/helper under the test
+  bundle remained and no research or delivery jobs were created. No provider/search probe,
+  credential-value action or sending was requested; bootstrap uses metadata-only credential
+  presence queries. Unlike the earlier sandbox-entry test, this was a normal system launch,
+  not a claim that LaunchServices inherited the earlier deny-network sandbox.
+  Evidence: ignored `.build/system-launch-20261024/result.json` and native captures under
+  `/private/tmp/research-radar-system-launch-20261024/`.
+- [ ] The local image had no quarantine attribute before this test. No attribute was removed,
+  no Gatekeeper rule was changed, and no App was rebuilt or re-signed. This proves the scoped
+  local system-launch path, not a physical Finder double-click, downloaded/quarantined
+  distribution approval, notarization or final beta acceptance.
+- [x] At the initial review checkpoint, verified all three supplied P2 issues against source
+  and offline reproductions, without changing production implementation or committed tests.
+  Evidence:
+  ignored `.build/review-validation-20261024/result.json`; Python socket/Keychain guard and OS
+  deny-network sandbox covered these reproductions. The npm-style launcher was a local fake,
+  not the real Codex executable; PDF failures used an injected runner, not the native helper.
+- [x] **Topic bootstrap route (original defect):** the App handler called `bootstrap_topic_draft()`
+  without a provider/model, ignoring the configured route. Route resolution was never called; the pure
+  Chinese description failed with no searchable terms. The source/offline repair is recorded
+  above; no evidence policy was weakened or heuristic disguised as a model-generated topic.
+- [x] **npm Codex runtime (original defect):** the engine's `/usr/bin:/bin` PATH could not resolve
+  Node for an accepted `#!/usr/bin/env node` launcher. The offline launcher returned 127. The
+  repair above preserves bounded process setup and resolves the configured executable's runtime
+  dependency. Finding the launcher still does not establish working connectivity.
+- [x] **Optional PDF figures (original defect):** helper timeout, nonzero exit and malformed JSON
+  each escaped
+  `app_figure_extractor()` as `PDFHelperError`; the pipeline only skips `FigureExtractionError`.
+  The typed-error control correctly produced a skipped-figure diagnostic. The repair above
+  restores that optional-image boundary without swallowing unrelated failures or changing
+  renderer/evidence behavior.
+
 #### Local DMG: Isolated Production Startup And Reader Acceptance (2026-10-24)
 
 - [x] At `2203b39`, mounted the sysconfig-clean image read-only, copied its signed App to an
