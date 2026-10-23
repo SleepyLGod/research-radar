@@ -7,7 +7,8 @@ and lets you read the report without using the terminal.
 For your first run, **make one local report. Set up delivery and scheduling later.**
 
 This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
-A local test DMG has passed read-only packaging checks, not installation or launch acceptance.
+A local test DMG has passed read-only packaging checks and isolated offline startup/reader checks.
+Normal Finder installation/launch and Gatekeeper acceptance remain unverified.
 The latest test image fixes the Python build-metadata path but retains development-data behavior;
 see the [roadmap](todo.md). Existing installed/development Apps are not automatically replaced.
 There is no notarized or approved public installer.
