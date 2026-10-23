@@ -113,6 +113,33 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Local DMG: Isolated Production Startup And Reader Acceptance (2026-10-24)
+
+- [x] At `2203b39`, mounted the sysconfig-clean image read-only, copied its signed App to an
+  independent temporary directory outside the checkout, compared all file bytes/modes/link
+  targets, and detached the image. The App was not rebuilt, re-signed or installed over another
+  copy. Its production entry/bootstrap ran with an explicit development-data-root override,
+  sanitized PATH and an OS sandbox denying network, Keychain access, checkout reads and helper
+  execution. This is the actual packaged App, not the earlier fixture UI host.
+- [x] Native status-item clicks opened, hid and reopened the anchored popover. Compact/expanded
+  transitions retained the selected report. One existing structured offline report rendered
+  with its local figure; a second existing bilingual static fixture rendered Chinese/English,
+  a local image and static formula text. Its formula contents link navigated to the local
+  fragment. Screenshots and native accessibility captures record the actual reader. A second
+  launch loaded the isolated persisted report index; both launches quit through the native menu.
+- [x] No research jobs or schedules were created, both delivery channels and notifications stayed
+  disabled, and no credential-value action was invoked. Final process checks found neither test
+  App PID nor an executable under its copied bundle. The two normal App/engine manifests, five
+  normal configuration/state hashes, copied report bytes and test App signature stayed unchanged.
+  Test-driver compile/label/post-exit inspection errors were corrected; no product-code fix was
+  warranted. Evidence: ignored `.build/dmg-launch-20261024/result.json`; native captures and the
+  stopped copy remain under `/private/tmp/research-radar-dmg-launch-20261024/`.
+- [ ] This sandboxed entry launch does not establish Finder/LaunchServices, quarantine or
+  Gatekeeper installation acceptance, public distribution, or active-research/resource gates.
+  Hidden-state AX captures are not proof of weak-reference release or all system WebKit process
+  termination. The data override is test-only; the image still defaults to development storage.
+  VoiceOver and other previously open manual gates remain separate. No commit or push here.
+
 #### Frozen Python Metadata: Relocatable Build And New Local DMG (2026-10-23)
 
 - [x] Reproduced the privacy gap with compressed PYZ/ZIP fixtures: the old verifier inspected
