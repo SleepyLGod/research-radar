@@ -113,6 +113,37 @@ drive the research model.
 
 ### macOS App Checkpoint
 
+#### Three-State Offline Resource Check (2026-10-22)
+
+- [x] Reused current release module objects at `ec5a5fd` and an existing frozen offline report,
+  copied byte-for-byte. The isolated native host mounts production `ResearchRadarRootView`,
+  `WindowCoordinator` and the restricted reader. It has no engine, real secret store, schedules
+  or notification client activation; networking is denied. Signal-driven test actions add no
+  App polling loop. This is not production-bootstrap or active-research resource acceptance.
+- [x] Before opening any report, 300 seconds / 61 external samples observed no reader/WebView
+  or descendants. Native-process RSS ended at **52.16 MiB** (range **34.00-77.95 MiB**, including
+  startup/transient variation); final sampled CPU was **0.0%**. The sampled CPU mean was 0.61%,
+  including the initial 27.2% startup sample; `ps` samples are not integrated CPU/energy readings.
+- [x] A first 30-second reading attempt was interrupted by transient-popover dismissal. Retained
+  that failed attempt, then restarted the same signed host for the two remaining states. The
+  successful 30-second reading sample kept exactly one loaded WebView; RSS ended at **100.86 MiB**.
+  After explicit collapse and 60 seconds, both reader-host and WebView weak references were nil,
+  the view tree had neither object, and report selection remained intact. RSS ended at **81.23
+  MiB**, with sampled CPU 0.0% throughout the collapsed interval. These are two host launches,
+  not a continuous same-process idle-to-reading memory curve or a long-term leak test.
+- [x] No descendants or research/PDF helpers remained. WebKit XPC candidates were recorded
+  separately without claiming attribution from parent PID alone; the newly observed reading
+  candidates were absent by the final collapsed sample. Native RSS excludes those system
+  processes and is not total reader memory. Secret-value accesses were zero; original App data,
+  source report bytes and release inputs stayed unchanged. No product-code fix was warranted.
+  Evidence: ignored `.build/resource-three-state-20261022/resources.json` and
+  `reader-followup.json`. Wider multi-cycle, production startup and accessibility gates remain
+  separate. No research, upload, delivery, commit or push was performed.
+- [x] On 2026-10-23, moved only the temporary `ResourceAcceptance.app` to Trash after explicit
+  user approval. The normal development App executable and Info.plist hashes stayed unchanged.
+  Retained ignored measurement evidence and confirmed its values against this checkpoint;
+  repository-hygiene tests passed (15 tests). Cleanup did not rerun research or send anything.
+
 #### Report Completion/Failure Notifications: Offline And Native Acceptance (2026-10-22)
 
 - [x] Added an explicit, default-off Settings switch. Only enabling it may request notification

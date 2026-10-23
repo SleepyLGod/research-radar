@@ -2941,6 +2941,17 @@ Hardened Runtime and App Sandbox are separate decisions. Before a future Develop
 
 Retain the Task 1 foundation measurements and regenerate `dist/macos-resource-report.json` from the complete staged App. Record final App and helper sizes, cold launch, fake preflight, five-minute idle RSS/CPU sample, visible-report RSS/child-process sample, and active fake-run process inventory. Compare each value with the Task 1 and Task 2 measurements and name the feature responsible for every meaningful increase; do not convert unmeasured assumptions into hard release numbers.
 
+Partial resource checkpoint (2026-10-22, `ec5a5fd`): an isolated, network-denied native host
+linked current release UI/reader modules, with no engine or real secret store. An existing offline
+report was copied unchanged. Five-minute not-opened idle ended at 52.16 MiB native RSS; following
+a focus-interrupted attempt, a fresh host completed 30-second reading (100.86 MiB) and 60-second
+collapsed (81.23 MiB) samples. Collapse released the reader host and WebView, preserved selection
+and left no descendants/helper. Original App data and release inputs were unchanged. Native RSS
+excludes WebKit XPC processes; these two launches are not one continuous memory curve or a
+long-term leak test. No product-code fix was needed. Evidence and full variations are in
+`.build/resource-three-state-20261022/` and `docs/todo.md`. This does not close the full staged
+production-bootstrap, active-job, repeated-cycle or final-beta gates below.
+
 The functional lightweight gate is strict:
 
 1. before a report is opened, no WebKit content is requested by the App;
