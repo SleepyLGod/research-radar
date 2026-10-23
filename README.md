@@ -12,7 +12,8 @@ or your private inbox.
 [简体中文](README.zh-CN.md) ·
 [Live Archive](https://sleepylgod.github.io/research-radar/archive/) ·
 [RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml) ·
-[Usage](docs/usage.md) · [Providers](docs/providers.md)
+[Usage](docs/usage.md) · [Providers](docs/providers.md) ·
+[macOS App Guide (local beta)](docs/macos-app.md)
 
 `Local-first` · `Full-paper reading` · `Evidence-gated` · `No auto-publish`
 
@@ -114,6 +115,7 @@ does not automatically publish to WeChat, the public Archive, or Zhihu.
 
 ## Documentation
 
+- [macOS App Guide (local beta)](docs/macos-app.md)
 - [Detailed Usage](docs/usage.md)
 - [Provider Configuration](docs/providers.md)
 - [Architecture](docs/architecture.md)

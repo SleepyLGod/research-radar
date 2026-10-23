@@ -11,7 +11,8 @@ ResearchRadar 会寻找新工作，挑出真正值得读的论文，读取全文
 [English README](README.md) ·
 [在线 Archive](https://sleepylgod.github.io/research-radar/archive/) ·
 [RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml) ·
-[使用说明](docs/usage.md) · [Provider 配置](docs/providers.md)
+[使用说明](docs/usage.md) · [Provider 配置](docs/providers.md) ·
+[macOS App 入门（本地 beta）](docs/macos-app.zh-CN.md)
 
 `本地运行` · `读取论文全文` · `证据核验` · `不会自动发布`
 
@@ -112,6 +113,7 @@ ResearchRadar 是自托管工具，不是在线研究服务。Secret 保存在�
 
 ## 文档
 
+- [macOS App 入门（本地 beta）](docs/macos-app.zh-CN.md)
 - [详细使用说明](docs/usage.md)
 - [Provider 配置](docs/providers.md)
 - [架构](docs/architecture.md)
