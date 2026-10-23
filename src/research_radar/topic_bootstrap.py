@@ -239,7 +239,7 @@ def _topic_from_model_payload(
     payload = _load_json_object(raw_json)
     concept_groups = _string_list_mapping(payload.get("concept_groups"), "concept_groups")
     concept_groups["agent_context"] = _agent_memory_context_aliases(
-        _meaningful_terms(topic_text), concept_groups["agent_context"],
+        _tokens(topic_text), concept_groups["agent_context"],
     )
     return TopicConfig(
         id=_safe_topic_id(_tokens(str(payload.get("id") or topic_text))),
