@@ -7,7 +7,10 @@ and lets you read the report without using the terminal.
 For your first run, **make one local report. Set up delivery and scheduling later.**
 
 This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
-There is no delivered DMG installer, notarization, or public-distribution approval.
+A local test DMG has passed read-only packaging checks, not installation or launch acceptance.
+The latest test image fixes the Python build-metadata path but retains development-data behavior;
+see the [roadmap](todo.md). Existing installed/development Apps are not automatically replaced.
+There is no notarized or approved public installer.
 Final resource, keyboard, VoiceOver, and multi-display acceptance is still incomplete.
 See the [roadmap](todo.md) for the remaining checks.
 
@@ -315,7 +318,7 @@ and account permissions; the App is not an encrypted document vault.
 
 Archive/RSS and Zhihu export remain available through the [CLI guide](usage.md).
 There are no App pages for those channels. A true multi-run weekly report is outside this version.
-There is no delivered DMG or notarized release, and final acceptance is still incomplete.
+The local test DMG is not a notarized release, and final acceptance is still incomplete.
 A development build is not a release.
 
 To uninstall, quit first and move the chosen `.app` to Trash.

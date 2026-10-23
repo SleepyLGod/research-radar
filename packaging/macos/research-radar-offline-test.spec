@@ -2,11 +2,13 @@
 """Test-only frozen engine. Never used by production bundle assembly."""
 
 from pathlib import Path
+from runpy import run_path
 
 root = Path(SPECPATH).parents[1]
+frozen_stdlib = run_path(str(Path(SPECPATH) / "frozen_sysconfig.py"))["prepare_sysconfig"](Path(workpath))
 analysis = Analysis(
     [str(root / "tests/fixtures/offline_frozen/entry.py")],
-    pathex=[str(root / "src"), str(root / "tests/fixtures")],
+    pathex=[str(frozen_stdlib), str(root / "src"), str(root / "tests/fixtures")],
     binaries=[],
     datas=[(str(root / "tests/fixtures/offline_frozen/reader.json"), "offline_frozen")],
     hiddenimports=["cryptography", "keyring.backends.chainer", "keyring.backends.macOS",
