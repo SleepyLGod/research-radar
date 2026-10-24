@@ -7,11 +7,12 @@ import mimetypes
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from research_radar.exceptions import PublishError
+from research_radar.exceptions import OperationCancelled, PublishError
 from research_radar.security.secrets import SecretManager
 from research_radar.storage.encrypted_store import EncryptedJsonStore
 
@@ -81,16 +82,27 @@ class WeChatDraftClient:
             raise PublishError(f"WeChat image upload response did not contain url: {result}")
         return url
 
-    def upload_permanent_image_material(self, image_path: Path) -> dict[str, str]:
+    def upload_permanent_image_material(
+        self,
+        image_path: Path,
+        *,
+        image_bytes: bytes | None = None,
+        cancellation_event: Event | None = None,
+    ) -> dict[str, str]:
         """Upload a permanent image material and return its media id and URL."""
 
-        if not image_path.exists():
+        if image_bytes is None and not image_path.exists():
             raise PublishError(f"WeChat thumbnail image not found: {image_path}")
+        if cancellation_event is not None and cancellation_event.is_set():
+            raise OperationCancelled()
         access_token = self.get_access_token()
+        if cancellation_event is not None and cancellation_event.is_set():
+            raise OperationCancelled()
         result = self._post_multipart_file(
             f"{self.base_url}/material/add_material?access_token={access_token}&type=image",
             field_name="media",
             file_path=image_path,
+            file_data=image_bytes,
         )
         media_id = result.get("media_id")
         url = result.get("url")
@@ -171,10 +183,11 @@ class WeChatDraftClient:
         *,
         field_name: str,
         file_path: Path,
+        file_data: bytes | None = None,
     ) -> dict[str, object]:
         boundary = f"ResearchRadarBoundary{uuid4().hex}"
         content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-        file_bytes = file_path.read_bytes()
+        file_bytes = file_path.read_bytes() if file_data is None else file_data
         body = b"".join(
             [
                 f"--{boundary}\r\n".encode(),

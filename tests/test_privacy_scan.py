@@ -56,6 +56,20 @@ def test_privacy_scan_does_not_hide_secret_beside_smtp_reference(tmp_path: Path)
         assert_clean(tmp_path)
 
 
+def test_privacy_scan_allows_swift_named_secret_but_not_neighboring_value(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "AppConfiguration.swift"
+    fake_value = "abcd1234abcd1234"
+    path.write_text(
+        'apiKeySecret: "deepseek.api_key", token="' + fake_value + '"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PrivacyScanError, match="token"):
+        assert_clean(tmp_path)
+
+
 def test_privacy_scan_skips_local_only_secret_files(tmp_path: Path) -> None:
     env_path = tmp_path / ".env"
     config_path = tmp_path / "config.yaml"
@@ -63,5 +77,17 @@ def test_privacy_scan_skips_local_only_secret_files(tmp_path: Path) -> None:
 
     env_path.write_text(f"DEEPSEEK_API_KEY='{fake_secret}'\n", encoding="utf-8")
     config_path.write_text(f"secret: '{fake_secret}'\n", encoding="utf-8")
+
+    assert_clean(tmp_path)
+
+
+@pytest.mark.parametrize("directory", [".build", ".swiftpm", "build", "dist"])
+def test_privacy_scan_skips_rebuildable_output_directories(
+    tmp_path: Path, directory: str
+) -> None:
+    output = tmp_path / directory
+    output.mkdir()
+    local_path = "/" + "Users/private/generated"
+    (output / "generated.txt").write_text(local_path, encoding="utf-8")
 
     assert_clean(tmp_path)

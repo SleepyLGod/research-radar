@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Any
 
 from research_radar.analysis.explanation_policy import (
@@ -11,6 +12,7 @@ from research_radar.analysis.explanation_policy import (
     public_explanation,
 )
 from research_radar.analysis.paper_reading import ReaderExplanation
+from research_radar.analysis.research_outcome import ResearchOutcome
 from research_radar.analysis.source_gist import sanitize_source_gist
 from research_radar.compose.diagrams import build_mechanism_diagram
 from research_radar.compose.source_groups import source_group_for_candidate
@@ -107,6 +109,7 @@ def _build_long_form_daily_draft(
         figures_by_source_url=figures_by_source_url,
     )
     explanation_audit = _explanation_audit(deep_read_entries)
+    deep_read_entries = [entry for entry in deep_read_entries if entry["claims"]]
     other_source_entries = [entry for entry in source_entries if not entry.get("deep_read")]
     seen_entries = _seen_source_entries(seen_sources)
     lede = _long_form_lede(verified, deep_read_entries, source_entries, seen_entries, language)
@@ -161,6 +164,52 @@ def _build_long_form_daily_draft(
             "explanation_audit": explanation_audit,
         },
     )
+
+
+def apply_research_outcome(draft: ArticleDraft, outcome: ResearchOutcome) -> ArticleDraft:
+    """Attach the pipeline result and explain empty reports without blaming a verifier."""
+    metadata = {**draft.metadata, "research_outcome": outcome}
+    if outcome["status"] == "ready":
+        return replace(draft, metadata=metadata)
+    zh = metadata.get("language") == "zh"
+    messages = {
+        "discovery_failed": (
+            "部分搜索来源暂时不可用，本轮未形成可公开的精读报告。",
+            "Some discovery sources were unavailable; no publishable deep read was produced.",
+        ),
+        "full_text_unavailable": (
+            "未能取得足够完整的论文全文，本轮未完成精读。",
+            "Complete paper text was unavailable; deep reading could not finish.",
+        ),
+        "reading_failed": (
+            "论文精读未完成；来源和诊断已保留，可重新运行。",
+            "Paper reading did not finish; sources and diagnostics are available for a new run.",
+        ),
+        "verification_no_public_claims": (
+            "已执行证据核验，但本轮没有可公开的精读结论。",
+            "Evidence verification ran, but no publishable deep-reading claims remained.",
+        ),
+        "evidence_insufficient": (
+            "精读内容尚未满足公开证据要求，本轮没有可公开的精读结论。",
+            "Reading evidence did not meet publication requirements; "
+            "no publishable deep read is available.",
+        ),
+        "no_eligible_papers": (
+            "本轮未找到可精读的新候选；已有报告仍可回看。",
+            "No eligible new deep-reading candidate was found in this run; "
+            "earlier reports remain available.",
+        ),
+    }
+    reasons = set(outcome["reasons"])
+    key = next((key for key in messages if key in reasons), "evidence_insufficient")
+    text = messages[key][0 if zh else 1]
+    sections = [
+        replace(section, body=text)
+        if section.metadata.get("kind") in {"today_summary", "deep_reads"}
+        else section
+        for section in draft.sections
+    ]
+    return replace(draft, lede=text, digest=text[:120], sections=sections, metadata=metadata)
 
 
 def _lede(claims: list[Claim], *, language: str = "en") -> str:

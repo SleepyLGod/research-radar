@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 
 from research_radar.discovery.base import DiscoveryContext
 from research_radar.discovery.dedupe import priority_score
+from research_radar.discovery.query_diagnostics import QueryDiagnostics
 from research_radar.exceptions import DiscoveryError
 from research_radar.models import SourceCandidate, SourceType
 
@@ -37,8 +38,8 @@ class ArxivConnector:
         """Return arXiv candidates for configured queries."""
 
         candidates: list[SourceCandidate] = []
-        failed_queries: list[str] = []
-        last_error: OSError | None = None
+        diagnostics = QueryDiagnostics(self.name, len(context.topic.queries))
+        self.diagnostics = diagnostics.snapshot(0)
         for query in context.topic.queries:
             url = (
                 f"{self.endpoint}?search_query={_search_query(query)}"
@@ -48,14 +49,17 @@ class ArxivConnector:
                 with urlopen(url, timeout=20) as response:
                     payload = response.read()
             except OSError as exc:
-                failed_queries.append(query)
-                last_error = exc
+                diagnostics.failure(exc)
                 continue
             candidates.extend(self._parse(payload, context))
-        if not candidates and last_error is not None:
+            diagnostics.succeeded += 1
+        self.diagnostics = diagnostics.snapshot(
+            len(candidates),
+        )
+        if diagnostics.failed and not diagnostics.succeeded:
             raise DiscoveryError(
-                f"arXiv discovery failed for all queries: {_failed_query_summary(failed_queries)}"
-            ) from last_error
+                f"arXiv discovery failed for all queries ({diagnostics.failed} failed)."
+            ) from None
         return candidates
 
     def _parse(self, payload: bytes, context: DiscoveryContext) -> list[SourceCandidate]:
@@ -105,10 +109,3 @@ def _search_query(query: str) -> str:
     if not terms:
         return f"all:{quote_plus(query)}"
     return "+AND+".join(f"all:{quote_plus(term)}" for term in terms)
-
-
-def _failed_query_summary(queries: list[str]) -> str:
-    shown = ", ".join(queries[:3])
-    if len(queries) > 3:
-        return f"{shown}, ..."
-    return shown

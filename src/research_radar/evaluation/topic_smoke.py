@@ -102,6 +102,8 @@ DEFAULT_TOPIC_SMOKE_SPECS: tuple[TopicSmokeSpec, ...] = (
                 "LLM agent memory",
                 "agentic memory",
                 "autonomous LLM agents",
+                "memory agent",
+                "memory agents",
             ),
             "memory_mechanism": (
                 "memory retrieval",

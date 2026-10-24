@@ -57,14 +57,98 @@ uv run research-radar secrets set-named kimi.api_key
 uv run research-radar secrets status --name kimi.api_key
 ```
 
+### macOS App Keychain Authorization
+
+Entering an API key in the App saves it to Keychain. The system's **Allow / Always Allow**
+dialog is permission to read that saved item, not a request to enter the API key again.
+Different items or requesting programs may require separate authorization. Use Always Allow
+only after checking that the program and credential belong to ResearchRadar; do not allow all
+applications or save keys as plaintext to avoid the dialog.
+
+The development App and bundled engine default to ad-hoc signatures. Their identity is tied to
+the specific build, so rebuilding can require authorization again. A stable certificate-based
+identity addresses that build-identity problem; it does not bypass first-use permission, locked
+keychains or item access controls. A local self-signed certificate is **not sufficient** to
+preserve Keychain authorization across updates: macOS can still use a per-build `cdhash`
+partition in addition to the designated requirement. Our local two-version dummy-credential
+test confirmed this restriction. Do not change credential ACLs to bypass it. See
+[Apple's signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+and [Apple's Keychain client classification](https://github.com/apple-oss-distributions/Security/blob/main/securityd/src/clientid.cpp).
+
+For developers who already have an approved code-signing certificate **and its private key**, use
+its exact 40-digit fingerprint from `security find-identity -v -p codesigning`:
+
+```bash
+RESEARCH_RADAR_SIGNING_IDENTITY="<CERTIFICATE_SHA1>" ./script/stage_macos_app.sh
+```
+
+To retain an explicitly selected identity on this checkout, put only its public fingerprint in
+the gitignored `packaging/macos/signing.local.json`:
+
+```json
+{"identity": "<CERTIFICATE_SHA1>"}
+```
+
+The signing script's `--identity` overrides the environment variable, which overrides this local
+file. Without any of these settings it uses ad-hoc signing. The file contains no private key and
+does not change global shell settings; the certificate and private key remain in Keychain.
+
+The assembler checks the identity before replacing the existing App. All nested code and the
+outer App use the selected identity; unavailable identities or signing failures stop the build,
+without falling back to ad-hoc. Invalid local settings also stop the build.
+This option does not create/import certificates, change Keychain ACLs or add notarization,
+Hardened Runtime or public-distribution approval. Certificate-backed signing, frozen preflight,
+and cross-version authorization are separate acceptance checks; a valid signature does not mean
+Keychain will accept an updated executable without another prompt.
+
+## App Report Notifications
+
+In the expanded App, open **Settings > General > Report completion and failure notifications**.
+Notifications are off by default, including for existing installations. Only explicitly enabling
+this switch can request macOS permission; opening the App, changing a schedule or completing a
+task never requests permission. If access was denied, allow ResearchRadar in System Settings >
+Notifications and then enable the switch again. Research does not depend on notification permission.
+
+Only newly completed research attempts notify: a usable public deep-read report is ready, or an
+attempt failed/interrupted. Empty results, user cancellations and channel-only delivery jobs do
+not produce these reminders. Notifications contain fixed localized text and the recorded public
+failure stage, not topic text, report content, raw errors, account details, secrets or local paths.
+Click a reminder to open its local report or Diagnostics. Switching UI language affects future
+reminders, not notifications already delivered by macOS.
+
+The preference is stored in the App's local `state/app-state.json`, separate from research
+configuration. Reminders are best-effort: no automatic retry or historical replay after restart;
+a notification failure never changes report/job outcomes or triggers research or delivery.
+Offline tests use a notification-client substitute and do not establish real system banner or
+permission-dialog acceptance. Separate native acceptance with isolated offline reports has verified
+the permission prompt, banners and report/Diagnostics click routing; see the checkpoint in
+[`todo.md`](todo.md). This does not replace broader report-reading or accessibility acceptance.
+
+## App Diagnostics
+
+In the expanded macOS App, open **Diagnostics → Copy redacted diagnostics**. Paste the result
+when reporting a problem. Copying uses the current in-memory state: it does not run connection
+checks, read credentials, change jobs, upload anything or send a message.
+
+The JSON includes versions, supported configured model names, the selected topic's latest task
+state and recorded stage, fixed error codes and report delivery states. It excludes account
+details, secret names/values, topic text/IDs, private paths, report content and raw error messages.
+Unknown/custom identifiers are omitted or replaced with fixed placeholders. Engine version is
+`not_recorded` when no usable version is already recorded; copying never starts an engine to
+look it up. The button confirms copying or displays a local failure message in the current UI language.
+
 ## Model Routes
 
 The default quality path is:
 
-- Deep reading: `deepseek/deepseek-v4-flash` with explicit thinking and `high` reasoning effort
-- Source gist and report localization: `deepseek-v4-flash` through the same configured DeepSeek provider
-- Verification: `codex/gpt-5.6-terra` with `high` reasoning effort
+- Deep reading: `deepseek/deepseek-flash` with explicit thinking and `high` reasoning effort
+- Source gist and report localization: `deepseek-flash` through the same configured DeepSeek provider
+- Verification: `codex/gpt-5.6-luna` with `xhigh` reasoning effort
 - Web search: Tavily when the web-search secret is present
+
+Existing YAML remains authoritative: change both the verifier model and the Codex provider's
+`reasoning_effort` to adopt Luna/xhigh. This does not change global Codex settings or an installed
+scheduler snapshot. Regenerate a snapshot explicitly when its model should change.
 
 Daily users usually do not need route flags. Use the defaults first, then inspect or override
 providers only when you are testing another model:
@@ -318,6 +402,28 @@ use `archive publish-git` once the local `archive` config has been reviewed.
 
 ## Private Email
 
+### Send From the macOS App
+
+Save and enable SMTP settings and the application password in **Settings → Private email**.
+Open a completed report from **Reports** or **Read report**; its email row shows the delivery
+state and next recipient. Choose **Send email**, check the sender and recipient in the
+confirmation sheet, then confirm. Opening a report or cancelling this sheet never sends mail.
+Saved settings indicate local configuration, not a successful SMTP connection.
+
+The App and CLI keep separate configuration files. An existing CLI `config.yaml` does not
+automatically populate App SMTP settings; save the same non-secret settings in the App once.
+The default Keychain password name is shared (`email.smtp_password`), so an already saved
+password does not need to be pasted again. macOS may still request access authorization for
+the App's bundled engine; this is different from entering a new Gmail application password.
+
+After a failure, retry only email from the same report. A previously successful send requires
+confirmation to send another copy. An unknown outcome requires checking the inbox before
+confirming another send, because a duplicate is possible. Changes to the saved destination,
+report or send history invalidate an open confirmation. Existing automatic delivery settings
+continue to apply to future research; sending an existing report does not run research again.
+
+### Send From the CLI
+
 Private email v1 sends one completed `ArticleDraft` to one personal inbox. It does not manage
 subscribers, tracking, unsubscribe links, or campaigns. Add SMTP settings to the gitignored local
 `config.yaml`:
@@ -383,6 +489,41 @@ acceptable. A dry run writes `email_preview_result.json` and never overwrites th
 record.
 
 ## WeChat Drafts
+
+### Create From the macOS App
+
+In **Settings → WeChat draft**, save the App ID and App Secret, then choose a cover image.
+The App shows a local preview; selection alone does not read credential values or contact WeChat.
+Choose **Upload cover**, review the confirmation, and confirm to add the image to the configured
+account's permanent material library. The returned media ID is saved for future drafts. This
+does not create a draft, change existing drafts or enable automatic delivery.
+
+The App currently accepts PNG/JPEG up to **2 MiB and 40 megapixels** as its own bounded-input
+policy; it does not crop, compress or edit the image. The preview and upload use the same selected
+bytes. To reuse an existing material instead, expand **Use an existing cover media ID**. Enable
+WeChat and save the delivery settings when ready. Saved settings alone do not verify connectivity
+or prove that an older media ID is still valid.
+
+An interrupted or unconfirmed upload never replaces the saved cover or retries automatically.
+Check the WeChat material library before explicitly uploading again, since another upload may
+create a duplicate material. If upload succeeded but local saving failed, use **Save uploaded
+cover** to retry only the local save, without uploading again. The selection/preview is held in
+memory; after restarting, the saved media ID remains, but the App does not fetch a remote preview.
+
+Open an existing completed report and choose **Create draft** in its WeChat row. Review the
+report and saved-cover notice, then confirm. The App uploads the existing report and local figures
+through the existing WeChat service. It does not run research again, send email, publish or broadcast.
+Opening the report or cancelling confirmation creates no task. Credential presence checks do not
+read secret values; the engine may request macOS Keychain authorization when a real task runs.
+
+If creation fails, retry only WeChat from this report. A prior success requires confirmation to
+create another copy. For an unknown outcome, check the WeChat draft box before confirming, because
+a duplicate is possible. Changing the report, WeChat settings, credentials through App Settings,
+or attempt history invalidates an old confirmation. The entry does not change your existing
+automatic delivery settings. After creation, inspect the text, figures and cover in the WeChat
+backend before publishing manually.
+
+### Create From the CLI
 
 Upload a cover image once and store the returned media id somewhere local:
 

@@ -11,7 +11,8 @@ ResearchRadar 会寻找新工作，挑出真正值得读的论文，读取全文
 [English README](README.md) ·
 [在线 Archive](https://sleepylgod.github.io/research-radar/archive/) ·
 [RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml) ·
-[使用说明](docs/usage.md) · [Provider 配置](docs/providers.md)
+[使用说明](docs/usage.md) · [Provider 配置](docs/providers.md) ·
+[macOS App 入门（本地 beta）](docs/macos-app.zh-CN.md)
 
 `本地运行` · `读取论文全文` · `证据核验` · `不会自动发布`
 
@@ -96,8 +97,8 @@ uv run research-radar run daily \
 
 ## 默认模型可以替换
 
-当前默认使用 DeepSeek v4 Flash，并为 DeepSeek 任务显式开启 thinking 和 `high` reasoning；Tavily 补充
-网页召回，再由 Codex `gpt-5.6-terra` 以 `high` reasoning 做 verifier。默认值只是经过验证的组合，
+当前默认使用 DeepSeek `deepseek-flash`，并为 DeepSeek 任务显式开启 thinking 和 `high` reasoning；Tavily 补充
+网页召回，再由 Codex `gpt-5.6-luna` 以 `xhigh` reasoning 做 verifier。默认值可以按需更换，
 不是硬编码限制；
 自定义 API、本地模型和 CLI agent 的接入方式见 [Provider 配置](docs/providers.md)。
 
@@ -112,6 +113,7 @@ ResearchRadar 是自托管工具，不是在线研究服务。Secret 保存在�
 
 ## 文档
 
+- [macOS App 入门（本地 beta）](docs/macos-app.zh-CN.md)
 - [详细使用说明](docs/usage.md)
 - [Provider 配置](docs/providers.md)
 - [架构](docs/architecture.md)

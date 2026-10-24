@@ -12,7 +12,8 @@ or your private inbox.
 [简体中文](README.zh-CN.md) ·
 [Live Archive](https://sleepylgod.github.io/research-radar/archive/) ·
 [RSS](https://sleepylgod.github.io/research-radar/archive/feed.xml) ·
-[Usage](docs/usage.md) · [Providers](docs/providers.md)
+[Usage](docs/usage.md) · [Providers](docs/providers.md) ·
+[macOS App Guide (local beta)](docs/macos-app.md)
 
 `Local-first` · `Full-paper reading` · `Evidence-gated` · `No auto-publish`
 
@@ -98,8 +99,8 @@ See [Detailed Usage](docs/usage.md) for the exact commands and deployment steps.
 
 ## Defaults, Not Lock-In
 
-The current quality path uses DeepSeek v4 Flash with explicit thinking and `high` reasoning for
-DeepSeek-backed tasks, Tavily for web recall, and Codex `gpt-5.6-terra` with `high` reasoning for
+The current quality path uses DeepSeek `deepseek-flash` with explicit thinking and `high` reasoning for
+DeepSeek-backed tasks, Tavily for web recall, and Codex `gpt-5.6-luna` with `xhigh` reasoning for
 verification. Provider instances and task routes are configurable; see
 [Provider Configuration](docs/providers.md).
 
@@ -114,6 +115,7 @@ does not automatically publish to WeChat, the public Archive, or Zhihu.
 
 ## Documentation
 
+- [macOS App Guide (local beta)](docs/macos-app.md)
 - [Detailed Usage](docs/usage.md)
 - [Provider Configuration](docs/providers.md)
 - [Architecture](docs/architecture.md)

@@ -9,6 +9,7 @@ from research_radar.analysis.cli_providers import CodexCliProvider
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
 from research_radar.analysis.providers import Message, ModelResponse
+from research_radar.application.wechat import article_draft_source_urls
 from research_radar.compose.draft import build_daily_draft
 from research_radar.config import parse_config
 from research_radar.exceptions import (
@@ -257,7 +258,7 @@ def test_provider_list_outputs_configured_providers_without_secret_values(
     assert kimi["timeout_seconds"] == 333
     assert kimi["secret"] == "present"
     assert codex["secret"] == "not_required"
-    assert codex["reasoning_effort"] == "high"
+    assert codex["reasoning_effort"] == "xhigh"
     deepseek = next(item for item in output["providers"] if item["name"] == "deepseek")
     assert deepseek["thinking"] == "enabled"
     assert deepseek["reasoning_effort"] == "high"
@@ -278,12 +279,12 @@ def test_provider_routes_show_daily_defaults_and_deepseek_replacement(
             },
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-flash"},
                     "deep_reading": {"provider": "deepseek", "model": "deepseek-v4-pro"},
                     "anchor_repair": {"provider": "deepseek", "model": "deepseek-v4-pro"},
                     "report_localization": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-flash",
+                        "model": "deepseek-flash",
                     },
                     "verifier": {"provider": "codex", "model": "gpt-5.5"},
                 }
@@ -322,7 +323,7 @@ def test_provider_routes_show_daily_defaults_and_deepseek_replacement(
     assert routes["deep_reading"]["model"] == "mimo-v2.5-pro"
     assert routes["verifier"]["provider"] == "codex"
     assert routes["verifier"]["model"] == "gpt-5.5"
-    assert routes["verifier"]["reasoning_effort"] == "high"
+    assert routes["verifier"]["reasoning_effort"] == "xhigh"
 
 
 def test_provider_routes_show_task_specific_override_precedence(
@@ -548,7 +549,7 @@ def test_schedule_daily_draft_writes_runner_and_plist(
     assert "--secret-source keychain" in daily_command
     assert "--deepseek-provider xiaomi" in daily_command
     assert "--verifier-provider codex" in daily_command
-    assert "--verifier-model gpt-5.6-terra" in daily_command
+    assert "--verifier-model gpt-5.6-luna" in daily_command
     assert "--dry-run" in publish_command
     assert "API_KEY" not in plist
     assert "appsecret" not in plist.casefold()
@@ -601,7 +602,7 @@ def test_schedule_daily_draft_non_codex_verifier_does_not_inherit_codex_model(
     schedule = json.loads((output_dir / "schedule.json").read_text(encoding="utf-8"))
     daily_command = " ".join(schedule["daily_command"])
     assert "--verifier-provider deepseek" in daily_command
-    assert "--verifier-model gpt-5.6-terra" not in daily_command
+    assert "--verifier-model gpt-5.6-luna" not in daily_command
 
 
 def test_schedule_daily_draft_fails_when_uv_is_missing(
@@ -1005,11 +1006,11 @@ def test_run_daily_can_use_deepseek_verifier_from_env(
 
     assert isinstance(captured["verifier"], OpenAICompatibleProvider)
     assert captured["verifier"].name == "deepseek"
-    assert captured["verifier_model"] == "deepseek-v4-flash"
+    assert captured["verifier_model"] == "deepseek-flash"
     assert captured["limit"] == 3
     assert isinstance(captured["deep_reader"], OpenAICompatibleProvider)
     assert captured["deep_reader"].name == "deepseek"
-    assert captured["deep_model"] == "deepseek-v4-flash"
+    assert captured["deep_model"] == "deepseek-flash"
     assert captured["deep_limit"] == 1
     assert captured["language"] == "zh"
 
@@ -1024,7 +1025,7 @@ def test_run_daily_deepseek_provider_replacement_uses_xiaomi(
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-flash"},
                     "deep_reading": {
                         "provider": "deepseek",
                         "model": "deepseek-v4-pro",
@@ -1293,7 +1294,7 @@ def test_run_daily_supports_task_specific_provider_routes(
             root=tmp_path,
             topic="agent-memory",
             provider="deepseek",
-            model="deepseek-v4-flash",
+            model="deepseek-flash",
             gist_provider="openai",
             gist_model="gpt-5.4",
             reader_provider=None,
@@ -1311,7 +1312,7 @@ def test_run_daily_supports_task_specific_provider_routes(
     assert captured["gist_provider"].name == "openai"
     assert captured["gist_model"] == "gpt-5.4"
     assert captured["deep_reader"].name == "deepseek"
-    assert captured["deep_model"] == "deepseek-v4-flash"
+    assert captured["deep_model"] == "deepseek-flash"
     assert isinstance(captured["verifier"], CodexCliProvider)
     assert captured["verifier_model"] == "gpt-5.4"
 
@@ -1767,7 +1768,7 @@ def test_article_draft_source_urls_include_reference_urls() -> None:
         ]
     )
 
-    assert cli._article_draft_source_urls(draft) == {"https://example.com/reference"}
+    assert article_draft_source_urls(draft) == {"https://example.com/reference"}
 
 
 def test_publish_wechat_draft_writes_failure_artifact(

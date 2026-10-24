@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 from http.client import IncompleteRead
 from io import BytesIO
 from pathlib import Path
@@ -162,11 +163,11 @@ def test_openai_compatible_sends_explicit_thinking_without_temperature(monkeypat
 
     monkeypatch.setattr("research_radar.analysis.openai_compatible.urlopen", fake_urlopen)
 
-    response = provider.complete([Message(role="user", content="hello")], model="deepseek-v4-flash")
+    response = provider.complete([Message(role="user", content="hello")], model="deepseek-flash")
 
     assert response.content == "ok"
     assert captured["payload"] == {
-        "model": "deepseek-v4-flash",
+        "model": "deepseek-flash",
         "messages": [{"role": "user", "content": "hello"}],
         "thinking": {"type": "enabled"},
         "reasoning_effort": "high",
@@ -429,6 +430,27 @@ def test_codex_cli_provider_reads_output_last_message(tmp_path: Path) -> None:
     assert response.metadata["provider"] == "codex"
 
 
+def test_codex_cli_preserves_quoted_executable_and_configured_arguments(tmp_path: Path) -> None:
+    tools_dir = tmp_path / "Research Tools"
+    tools_dir.mkdir()
+    args_path = tmp_path / "args.txt"
+    executable = _fake_codex_command(tools_dir, args_path=args_path)
+    command = f"{shlex.quote(str(executable))} --profile 'offline research'"
+    config = parse_config({
+        "topics": [{"id": "memory", "queries": ["agent memory"]}],
+        "model_providers": {"codex": {"kind": "codex_cli", "command": command}},
+    })
+    provider = build_provider(config, SecretManager(InMemorySecretBackend()), "codex")
+
+    response = provider.complete([Message(role="user", content="offline")], model="fake-model")
+
+    assert response.content == "codex response"
+    assert config.model_providers["codex"].command == command
+    assert args_path.read_text(encoding="utf-8").splitlines()[:3] == [
+        "--profile", "offline research", "exec",
+    ]
+
+
 def test_codex_cli_provider_passes_explicit_reasoning_effort(tmp_path: Path) -> None:
     args_path = tmp_path / "args.txt"
     command = tmp_path / "fake-codex"
@@ -521,12 +543,12 @@ def test_task_specific_override_beats_global_provider(tmp_path: Path) -> None:
         "verifier",
         provider_override="codex",
         global_provider="deepseek",
-        global_model="deepseek-v4-flash",
+        global_model="deepseek-flash",
         default_local=False,
     )
 
     assert route.provider_name == "codex"
-    assert route.model == "gpt-5.6-terra"
+    assert route.model == "gpt-5.6-luna"
     assert isinstance(route.provider, CodexCliProvider)
 
 
@@ -537,7 +559,7 @@ def test_deep_reading_route_defaults_to_deepseek_v4_flash() -> None:
     route = resolve_task_route(config, manager, "deep_reading")
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
     assert isinstance(route.provider, OpenAICompatibleProvider)
 
 
@@ -553,7 +575,7 @@ def test_provider_override_keeps_matching_task_model() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
 
 
 def test_model_override_wins_over_matching_task_model() -> None:
@@ -584,7 +606,7 @@ def test_source_gist_route_stays_on_lightweight_deepseek_model() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
 
 
 def test_anchor_repair_route_defaults_to_deepseek_v4_flash() -> None:
@@ -594,7 +616,7 @@ def test_anchor_repair_route_defaults_to_deepseek_v4_flash() -> None:
     route = resolve_task_route(config, manager, "anchor_repair")
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
     assert isinstance(route.provider, OpenAICompatibleProvider)
 
 
@@ -657,7 +679,7 @@ def test_task_specific_provider_override_beats_deepseek_replacement() -> None:
     )
 
     assert route.provider_name == "deepseek"
-    assert route.model == "deepseek-v4-flash"
+    assert route.model == "deepseek-flash"
 
 
 def test_global_provider_override_keeps_global_behavior() -> None:
@@ -683,14 +705,14 @@ def _deepseek_route_config() -> AppConfig:
             "topics": [{"id": "agent-memory", "queries": ["agent memory"]}],
             "models": {
                 "task_routes": {
-                    "source_gist": {"provider": "deepseek", "model": "deepseek-v4-flash"},
+                    "source_gist": {"provider": "deepseek", "model": "deepseek-flash"},
                     "deep_reading": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-flash",
+                        "model": "deepseek-flash",
                     },
                     "anchor_repair": {
                         "provider": "deepseek",
-                        "model": "deepseek-v4-flash",
+                        "model": "deepseek-flash",
                     },
                 }
             },
@@ -698,10 +720,12 @@ def _deepseek_route_config() -> AppConfig:
     )
 
 
-def _fake_codex_command(tmp_path: Path) -> Path:
+def _fake_codex_command(tmp_path: Path, *, args_path: Path | None = None) -> Path:
     command = tmp_path / "fake-codex"
+    record_args = f'printf \'%s\\n\' "$@" > {shlex.quote(str(args_path))}\n' if args_path else ""
     command.write_text(
         "#!/bin/sh\n"
+        f"{record_args}"
         "output=''\n"
         "prev=''\n"
         "for arg in \"$@\"; do\n"

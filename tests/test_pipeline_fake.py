@@ -766,7 +766,7 @@ def test_daily_deep_required_disables_summary_fallback_when_ingestion_fails(
     assert manifest["claim_count"] == 0
     assert manifest["publishable_claim_count"] == 0
     assert claims == []
-    assert "No claim passed evidence verification" in draft
+    assert "Complete paper text was unavailable" in draft
     assert "A careful paper is relevant" not in draft
     assert any(
         finding["metadata"].get("kind") == "deep_ingestion_failed" for finding in findings
@@ -1214,7 +1214,7 @@ def test_daily_deep_reading_does_not_fallback_to_repo_for_research_brief(
     assert claims == []
     assert manifest["publishable_claim_count"] == 0
     assert source_selection["selected_count"] == 0
-    assert "No claim passed evidence verification" in draft
+    assert "No eligible new deep-reading candidate" in draft
 
 
 def test_daily_deep_reading_suppresses_resource_list_for_research_brief(

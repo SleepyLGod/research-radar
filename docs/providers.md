@@ -9,7 +9,7 @@ predictable: add a provider instance once, then route selected tasks to it.
   `claude-code`.
 - Provider kind: the wire format used by that backend, such as `openai_compatible`,
   `anthropic_messages`, `codex_cli`, `claude_code_cli`, or `local`.
-- Task route: the model used for a task, for example `deep_reading -> deepseek/deepseek-v4-flash`.
+- Task route: the model used for a task, for example `deep_reading -> deepseek/deepseek-flash`.
 
 The default path remains DeepSeek reader plus Codex verifier. Extra vendors should be configured in
 local `config.yaml`, not added to the public `config.example.yaml`.
@@ -148,17 +148,42 @@ model_providers:
     kind: codex_cli
     command: /Applications/ChatGPT.app/Contents/Resources/codex
     timeout_seconds: 900
-    reasoning_effort: high
+    reasoning_effort: xhigh
 
 models:
   task_routes:
     verifier:
       provider: codex
-      model: gpt-5.6-terra
+      model: gpt-5.6-luna
 ```
 
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a
 specific route, define another named `codex_cli` provider instance and route that task to it.
+
+CLI `command` accepts an executable followed by arguments. Quote paths and arguments containing
+spaces inside the YAML string, for example:
+
+```yaml
+command: '"/Applications/Research Tools/codex" --profile "research work"'
+```
+
+ResearchRadar splits this string into an argument array; it does not run it through a shell.
+The macOS App instead stores one literal executable path selected in the file picker. Spaces and
+Chinese characters are supported without manually adding quotes or arguments.
+
+Nonzero CLI exits produce a redacted diagnostic of at most 500 characters, including the exit
+code and bounded head/tail excerpts from nonempty stderr and stdout. Codex's known input echo is
+omitted before redaction and truncation. This keeps trailing failure details from being displaced
+by startup chatter when progress and App messages apply their existing limits; it is not a full
+command transcript. Already-truncated historical artifacts cannot recover their missing output,
+and a visible startup warning alone does not establish the final cause of a failed command.
+Raw subprocess exceptions are not chained into error tracebacks, avoiding a second copy of the
+command and input that would bypass message redaction.
+Connection-check excerpts retain both ends after newline escaping, with the truncation marker
+included in the same 500-character budget. Local paths may contain spaces, so redaction omits
+the rest of an affected line rather than risk exposing a private path suffix; a reason on that
+same line may also be omitted. A server response requiring a newer Codex version means the selected
+executable needs updating; finding its path alone does not establish model compatibility.
 
 Claude Code compatible CLI:
 

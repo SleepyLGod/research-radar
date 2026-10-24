@@ -78,8 +78,8 @@ class TaskRouteConfig:
 class ModelConfig:
     """Model selection configuration."""
 
-    scout: str = "deepseek-v4-flash"
-    analyst: str = "deepseek-v4-flash"
+    scout: str = "deepseek-flash"
+    analyst: str = "deepseek-flash"
     verifier: str = "codex_or_openai_high_reasoning"
     task_routes: dict[str, TaskRouteConfig] = field(default_factory=dict)
 
@@ -155,13 +155,13 @@ def load_config(path: Path) -> AppConfig:
     return parse_config(data)
 
 
-def parse_config(data: dict[str, Any]) -> AppConfig:
-    """Parse an already-loaded configuration mapping."""
+def parse_config(data: dict[str, Any], *, require_topics: bool = True) -> AppConfig:
+    """Parse a configuration mapping, optionally allowing onboarding without topics."""
 
     _reject_removed_settings(data)
     project_data = _mapping(data.get("project", {}), "project")
     topics_data = data.get("topics")
-    if not isinstance(topics_data, list) or not topics_data:
+    if not isinstance(topics_data, list) or (require_topics and not topics_data):
         raise ConfigError("Config must contain at least one topic.")
 
     topics = []
@@ -366,8 +366,8 @@ def _model_config(data: dict[str, Any]) -> ModelConfig:
     if unknown:
         raise ConfigError(f"Unknown models keys: {', '.join(unknown)}")
     return ModelConfig(
-        scout=str(data.get("scout", "deepseek-v4-flash")),
-        analyst=str(data.get("analyst", "deepseek-v4-flash")),
+        scout=str(data.get("scout", "deepseek-flash")),
+        analyst=str(data.get("analyst", "deepseek-flash")),
         verifier=str(data.get("verifier", "codex_or_openai_high_reasoning")),
         task_routes=routes,
     )
@@ -390,7 +390,7 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
                 f"model_providers.{name}.thinking is only valid for openai_compatible."
             )
         reasoning_effort = _provider_reasoning_effort(
-            item.get("reasoning_effort", "high" if kind == "codex_cli" else None),
+            item.get("reasoning_effort", "xhigh" if kind == "codex_cli" else None),
             f"model_providers.{name}.reasoning_effort",
             kind=kind,
         )
@@ -438,7 +438,7 @@ def _default_model_providers() -> dict[str, ModelProviderConfig]:
             kind="codex_cli",
             command="/Applications/ChatGPT.app/Contents/Resources/codex",
             timeout_seconds=900,
-            reasoning_effort="high",
+            reasoning_effort="xhigh",
         ),
         "claude": ModelProviderConfig(
             kind="claude_code_cli",
