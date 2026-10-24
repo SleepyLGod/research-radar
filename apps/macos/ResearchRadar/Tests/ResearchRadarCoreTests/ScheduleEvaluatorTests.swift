@@ -3,6 +3,47 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct ScheduleEvaluatorTests {
+    @Test(arguments: [Calendar.Identifier.gregorian, .buddhist, .hebrew, .japanese, .islamicCivil])
+    func changingReportIdentityDoesNotChangeLocalScheduleTime(identifier: Calendar.Identifier) throws {
+        var calendar = Calendar(identifier: identifier)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Hong_Kong"))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-12-31T23:30:00Z"))
+        let expected = try #require(ISO8601DateFormatter().date(from: "2027-01-01T01:00:00Z"))
+        let schedule = DailyScheduleV1(topicID: "llm-inference", hour: 9, minute: 0)
+        let evaluator = ScheduleEvaluator()
+        #expect(evaluator.dueResearchJobs(schedules: [schedule], topics: [topicRecord()],
+            reports: [], queuedJobs: [], now: now, calendar: calendar).isEmpty)
+        #expect(evaluator.nextFireDate(schedules: [schedule], topics: [topicRecord()],
+            after: now, calendar: calendar) == expected)
+    }
+
+    @Test(arguments: [Calendar.Identifier.gregorian, .buddhist, .hebrew, .japanese, .islamicCivil],
+          ["Asia/Hong_Kong", "America/Los_Angeles", "UTC"])
+    func reportIdentityUsesGregorianDateInTheSchedulesTimeZone(
+        identifier: Calendar.Identifier, timeZoneID: String
+    ) throws {
+        var calendar = Calendar(identifier: identifier)
+        calendar.locale = Locale(identifier: "th_TH")
+        calendar.timeZone = try #require(TimeZone(identifier: timeZoneID))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-12-31T23:30:00Z"))
+        let expected = timeZoneID == "Asia/Hong_Kong" ? "2027-01-01" : "2026-12-31"
+        let schedule = DailyScheduleV1(topicID: "llm-inference", hour: 0, minute: 0)
+        let evaluator = ScheduleEvaluator()
+        let jobs = evaluator.dueResearchJobs(schedules: [schedule], topics: [topicRecord()],
+            reports: [], queuedJobs: [], now: now, calendar: calendar)
+        #expect(jobs.map(\.reportDate) == [expected])
+
+        let failed = try JobRecordV1(kind: .research, topicID: "llm-inference", reportDate: expected,
+            trigger: .schedule, state: .failed, jobDirectory: "/jobs/failed", createdAt: now)
+        #expect(evaluator.dueResearchJobs(schedules: [schedule], topics: [topicRecord()],
+            reports: [], queuedJobs: [failed], now: now, calendar: calendar).isEmpty)
+        let report = ReportRecordV1(topicID: "llm-inference", reportDate: expected, runDirectory: "/run",
+            articleDraftPath: "/a", reportHTMLPath: "/h", title: "Report", summary: "",
+            sourceCount: 1, deepReadCount: 1, publishableClaimCount: 1, deliveries: [], createdAt: now)
+        #expect(evaluator.dueResearchJobs(schedules: [schedule], topics: [topicRecord()],
+            reports: [report], queuedJobs: [], now: now, calendar: calendar).isEmpty)
+    }
+
     @Test(arguments: [ResearchOutcomeV1.Status.noNewContent, .incomplete])
     func emptyOutcomeDoesNotTriggerImmediateScheduleRetry(status: ResearchOutcomeV1.Status) throws {
         let calendar = utcCalendar()
