@@ -1,6 +1,41 @@
 # ResearchRadar macOS Menu Bar App v1 Implementation Plan (Lightweight v2.3)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use superpowers:executing-plans for remaining implementation. This
+> document also preserves the original design blueprint; its Step descriptions are not a current
+> work queue. Read the current closeout below and the dated evidence in the TODO before repeating
+> a task or claiming acceptance. Do not infer permission for live services, delivery or commits.
+
+## Current Local Beta Closeout (2026-10-24)
+
+The implementation has progressed past the original three-task blueprint. The authoritative
+remaining list is [macOS Local Beta: Current Closeout](../../todo.md#macos-local-beta-current-closeout-2026-10-24).
+Foundation, bridge, durable workflow and the editorial interface are implemented. Gmail,
+WeChat drafts, cover upload and native notifications have scoped real acceptance; keyboard,
+sidebar, file-picker and draft retention have bounded native/user acceptance. Preserve the dated
+evidence rather than rerunning all earlier blocked attempts.
+
+The local DMG `ResearchRadar-local-beta-arm64-20261024-21b464a.dmg` now contains the three P2
+repairs and Gregorian report identity repair. Read-only checks establish identical source/copied
+App bytes and signing requirement, contained symlinks/dependencies, clean embedded build metadata
+and no private configuration, reports, credentials or build caches. This is still a local
+development image, not a notarized public release; normal launch uses the development data root.
+
+The current production App completed 300 s idle, 30 s reading, 30 s collapsed and 60 s final-idle
+samples plus 20 report reopen/dismiss cycles. Native RSS ended at 55.27 / 106.45 / 103.31 /
+82.62 MiB respectively, with no App descendants in those phases. Twenty standalone non-live
+engine success/cancel cycles left no process groups; separate frozen-fake native research and
+post-start cancellation also ended without descendants. Six reader lifecycle tests passed.
+The TODO records the failed QA setup/early-cancel attempts and exact scope. These are not a
+live-workload memory profile, cold-first-frame measurement or zero-leak proof; `leaks` inspection
+was restricted, and native RSS excludes WebKit XPC memory. No product implementation changed.
+
+This closeout does not authorize real providers, searches, credential-value reads or sends.
+Real npm Codex and a fresh first-use-to-report run remain a separate, explicitly scoped check.
+Prior delivery acceptance need not be repeated. VoiceOver speech/activation, multi-display and
+remaining accessibility-display checks are deferred by the user, not passed or local-beta blockers.
+Repeated Keychain authorization remains a known limitation; local signing is not proof that
+authorization survives every update. No new background service, signing permission change,
+notarization, release or automatic update is part of this closeout.
 
 **Goal:** Build a native, menu-bar-first macOS app that lets a non-CLI user configure reviewed research topics, run or schedule evidence-gated daily reports, read the resulting local article, and independently deliver it to WeChat Drafts and private email.
 
@@ -1492,7 +1527,7 @@ public actor EngineProcessSupervisor {
 
 Task 2 maps `JobRecordV1` to this low-level interface; the supervisor never owns the durable queue model.
 
-- [ ] **Step 1: Define the foundation protocol envelope and prove strict decoding**
+- **Step 1: Define the foundation protocol envelope and prove strict decoding**
 
 Write failing Python and Swift tests for exact schema version, the single `preflight` command/payload, unknown keys, secret-value keys, request/job UUID equality, and nullable `config_path` only for local foundation preflight.
 
@@ -1521,7 +1556,7 @@ swift test --package-path apps/macos/ResearchRadar --filter EngineProtocolTests
 
 Expected before implementation: missing-module/type failures. Expected after implementation: both suites pass and encode identical snake-case fixtures.
 
-- [ ] **Step 2: Implement the localization foundation before user-facing AppKit copy**
+- **Step 2: Implement the localization foundation before user-facing AppKit copy**
 
 Implement `AppLanguagePreference`, `ResolvedAppLanguage`, `AppLanguageResolver`, `AppStringKey`, `LocalizationStore`, and the foundation entries in `UserFacingErrorCatalog`.
 
@@ -1538,7 +1573,7 @@ swift test --package-path apps/macos/ResearchRadar --filter AppLanguageTests
 
 Expected: PASS without changing any report language field.
 
-- [ ] **Step 3: Implement local-only preflight and the process-session handshake**
+- **Step 3: Implement local-only preflight and the process-session handshake**
 
 `runner.py` handles only `preflight(live_probe=false)` in Task 1. It verifies the writable owner-only App Support root, engine version, sanitized environment, terminal-artifact paths, and real frozen imports for `cryptography`, `keyring` plus macOS backend discovery, `PIL`, `pypdf`, `yaml`, and the ResearchRadar foundation bridge. The result records each dependency as available without exposing private paths. It does not inspect providers, secrets, Codex, PDFKit, or delivery settings, and it does not import the full CLI or research pipeline.
 
@@ -1557,7 +1592,7 @@ Run: `uv run --extra dev pytest tests/test_app_bridge_events.py tests/test_app_b
 
 Expected: PASS for successful preflight, crash before `started`, cancellation, redaction, monotonic events, and mutually exclusive terminal files.
 
-- [ ] **Step 4: Write process-tree supervision tests before implementing the supervisor**
+- **Step 4: Write process-tree supervision tests before implementing the supervisor**
 
 The Python test fixture bundled only as a Swift test resource accepts explicit modes: `normal`, `crash-before-started`, `wait-before-started`, `term-process-tree`, and `ignore-term-process-tree`. In process-tree modes it launches a child and grandchild, writes their PIDs to a test artifact, and never enters an App bundle allowlist. A separate Python proxy-parent fixture simulates an App crash without terminating the test process.
 
@@ -1578,7 +1613,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter EngineProcessS
 
 Expected: FAIL because the supervisor does not exist.
 
-- [ ] **Step 5: Implement the final PID/process-group cancellation contract**
+- **Step 5: Implement the final PID/process-group cancellation contract**
 
 Launch the engine directly with `Process`, never through a shell. Save the engine PID immediately. A job-scoped started-event handshake marks session establishment only after reading the fsynced `started` event; then verify `getpgid(pid) == pid`.
 
@@ -1590,7 +1625,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter EngineProcessS
 
 Expected: PASS, including the ignored-TERM fixture and a second run after cancellation.
 
-- [ ] **Step 6: Build the minimal NSStatusItem App and singleton window**
+- **Step 6: Build the minimal NSStatusItem App and singleton window**
 
 `AppDelegate` sets activation policy `.accessory`, owns one `NSStatusItem`, and receives `LocalizationStore`, `EngineProcessSupervisor`, and `WindowCoordinator` from `AppContainer`. The status button uses SF Symbol `dot.radiowaves.left.and.right` and a dynamic localized tooltip.
 
@@ -1602,7 +1637,7 @@ Run: `./script/swift_test.sh --filter AppShellTests`
 
 Expected: PASS for left/right click dispatch, singleton reuse, tooltip refresh, and no raw engine message in an alert.
 
-- [ ] **Step 7: Freeze, copy, inspect, measure, and ad-hoc sign the minimal bundle**
+- **Step 7: Freeze, copy, inspect, measure, and ad-hoc sign the minimal bundle**
 
 Add `.build/`, `.swiftpm/`, and `*.xcresult` to `.gitignore`. Create a new `app-build` optional dependency containing `pyinstaller>=6.22,<7` and lock the exact version. Fail early unless the toolchain preflight reports arm64, Swift 6.3 or newer, and a macOS 26 SDK. Build scripts set SwiftPM and Clang module-cache paths inside ignored project `.build/` directories; they do not populate an additional App-specific environment under the user's home directory. `build_macos_engine.sh` creates the complete arm64 `onedir` tree under ignored `build/` and `dist/` paths. `assemble_macos_app.sh` uses `/usr/bin/ditto` for the engine tree and copies only the Swift app executable, the deterministic SwiftPM resource bundle `ResearchRadar_ResearchRadarAppFeature.bundle`, and the engine allowlist into `dist/ResearchRadar.app`. Place the resource bundle under `Contents/Resources/` and fail assembly when it is absent; otherwise `Bundle.module` localization would work in `swift run` but fail in the staged App.
 
@@ -1638,7 +1673,7 @@ PATH=/usr/bin:/bin ./script/verify_macos_bundle.py \
 
 Tests create synthetic safe/escaping symlink trees and mocked `otool` output. Run: `uv run --extra dev pytest tests/test_macos_bundle_verifier.py -q`.
 
-- [ ] **Step 8: Run the staged foundation App on the macOS 26 arm64 development machine**
+- **Step 8: Run the staged foundation App on the macOS 26 arm64 development machine**
 
 `stage_macos_app.sh` builds release Swift products, freezes the engine, assembles with `ditto`, verifies, signs, runs a sanitized frozen-engine smoke, and writes `dist/ResearchRadar.app`. Foundation tests use temporary roots; the manual App launch uses `~/Library/Application Support/ResearchRadar-Dev/`. Launch from Finder semantics with `/usr/bin/open -n`, trigger preflight from the window, and confirm the localized result. Automated Swift and Python fixtures cover long-running cancellation and proxy-parent loss without relying on UI automation permissions. The staged preflight must prove every required dependency import resolves from the frozen bundle, not the project environment.
 
@@ -1654,7 +1689,7 @@ PATH=/usr/bin:/bin .venv/bin/python script/run_macos_engine_smoke.py \
 
 Expected: the App starts without the repository on `PATH`, the window displays localized Ready, and bundle inspection reports no private dependency.
 
-- [ ] **Step 9: Run Task 1 gates and create the first signed-off commit**
+- **Step 9: Run Task 1 gates and create the first signed-off commit**
 
 ```bash
 .venv/bin/pytest tests/test_app_bridge_protocol.py tests/test_app_bridge_events.py \
@@ -2590,7 +2625,7 @@ protocol NotificationScheduling: Sendable {
 
 `ReportReaderPolicy` validates navigation and pins the configured workspace directory for descriptor-relative resource reads. The read-only scheme handler serves the existing report bytes; neither reads raw engine logs. `NotificationService`, deferred to Task 3B, is the only type that talks to `UNUserNotificationCenter`.
 
-- [ ] **Step 1: Write full localization and presentation-state tests before building views**
+- **Step 1: Write full localization and presentation-state tests before building views**
 
 ```swift
 func testCompletedPresentationUsesPaperHeadlineAndTwoLineSummary() async
@@ -2618,7 +2653,7 @@ swift test --package-path apps/macos/ResearchRadar --filter AppStorePresentation
 
 Expected before implementation: FAIL because presentation mapping is missing.
 
-- [ ] **Step 2: Implement compact Today and the expandable operational timeline**
+- **Step 2: Implement compact Today and the expandable operational timeline**
 
 Compact Today contains, in order:
 
@@ -2644,7 +2679,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter AppStorePresen
 
 Expected: PASS.
 
-- [ ] **Step 3: Implement full workspace without a card wall**
+- **Step 3: Implement full workspace without a card wall**
 
 Use native Today, Topics, Reports, Settings, and Diagnostics navigation and one open detail surface inside the expanded popover. The sidebar toggle stays leading and expand/collapse stays trailing; Today owns Run Now and Cancel. Task 3A reads reports inside the same popover and does not add an Open in Browser or delivery-action toolbar. Mode changes, outside click, and Escape retain unsaved topic/settings input; they do not trigger discard confirmation merely to hide the surface. Explicit discard remains a separate action.
 
@@ -2661,7 +2696,7 @@ Settings requests `StorageUsageService.snapshot()` only when the storage section
 
 Verify compact `400 x 480 pt`, expanded `900 x 660 pt`, and screen-clamped variants with long English paper titles and Chinese topic names. Verify both leading/trailing controls through real native action labels and clicks. Text must wrap rather than overlap controls; auxiliary labels must remain at least `12 pt`.
 
-- [ ] **Step 4: Implement a restricted local report reader**
+- **Step 4: Implement a restricted local report reader**
 
 `ReportReaderView` wraps `WKWebView` through `NSViewRepresentable`. Task 3A uses a private `radar-report://run/` scheme instead of granting WebKit file-directory access:
 
@@ -2697,7 +2732,7 @@ The final full Swift run passed all 235 reported tests with the frozen workflow 
 enabled. Its test-only engine was freshly rebuilt from current source after an older binary
 rejected `ui_appearance`; no production compatibility code was introduced for stale test builds.
 
-- [ ] **Step 5: Implement independent delivery jobs and recovery**
+- **Step 5: Implement independent delivery jobs and recovery**
 
 Task 3B email-entry slice (2026-10-20): the full report reader now exposes scoped email state,
 saved next recipient, Settings navigation and an explicit sender/recipient confirmation sheet.
@@ -2787,7 +2822,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter DeliveryRecove
 
 Expected: PASS for WeChat-only failure, Email-only failure, both success, no enabled channels, and unknown-after-crash behavior.
 
-- [ ] **Step 6: Implement notifications and useful diagnostics**
+- **Step 6: Implement notifications and useful diagnostics**
 
 Diagnostics-copy slice (2026-10-21): implemented an App-only allowlist export and bilingual
 copy/success/failure controls, reusing existing AppStore state and local platform metadata.
@@ -2847,7 +2882,7 @@ Run: `swift test --package-path apps/macos/ResearchRadar --filter NotificationSe
 
 Expected: PASS.
 
-- [ ] **Step 7: Extend the proven staging workflow to the complete App**
+- **Step 7: Extend the proven staging workflow to the complete App**
 
 Keep Task 1's build/freeze/assemble/verify/sign sequence. Extend it to include the PDF helper, final localized resources, icon, and complete feature target, then call:
 
@@ -2884,7 +2919,7 @@ Run: `./script/stage_macos_app.sh`
 
 Expected: one self-contained arm64 `.app` with both nested helpers, intact `onedir` symlinks, and no runtime dependency on Python, `uv`, Homebrew, or Poppler.
 
-- [ ] **Step 8: Add one build/run entrypoint and Codex desktop action**
+- **Step 8: Add one build/run entrypoint and Codex desktop action**
 
 `script/build_and_run.sh` supports:
 
@@ -2899,7 +2934,7 @@ It stops only the existing ResearchRadar app process, stages the bundle, launche
 
 `.codex/environments/environment.toml` defines one Run action invoking `./script/build_and_run.sh --verify`.
 
-- [ ] **Step 9: Perform visual and accessibility QA on deterministic states**
+- **Step 9: Perform visual and accessibility QA on deterministic states**
 
 Build and inspect idle, running, complete, partial, and failed states in Light and Dark mode. Use the Product Design audit/design-QA workflow and the macOS SwiftUI, AppKit interop, Liquid Glass, build-run-debug, and telemetry guidance.
 
@@ -2925,17 +2960,27 @@ Acceptance checklist:
 
 Save approved screenshots under `docs/assets/macos-app/` only after checking that they contain no account names, email addresses, local paths, API identifiers, or unpublished report content.
 
-- [ ] **Step 10: Add local beta signing and DMG packaging**
+- **Step 10: Add local beta signing and DMG packaging**
 
-`script/package_macos_beta.sh` stages the app and reuses `sign_macos_bundle.py` identity selection: explicit CLI identity, environment, gitignored local configuration, then ad-hoc only when no identity was selected. It must not override an opted-in certificate with `-`. Sign nested code deepest-first and the outer app last, with hardened-runtime disabled for the local-only beta, then run:
+Current local-beta packaging copies the already staged and signed App using `/usr/bin/ditto`,
+without rebuilding or signing it again. It refuses to overwrite an existing image, compares the
+full file/symlink manifest and designated requirement, audits embedded Python archives, creates
+a new UDZO image, and repeats the checks from a read-only mount before detaching. The current
+ignored acceptance driver is `.build/beta-closeout-20261024/package.py`; this is not a shipped
+user-facing packaging command. The originally proposed `script/package_macos_beta.sh` was not
+implemented and is not a remaining requirement for this local beta.
+
+App staging uses the existing `sign_macos_bundle.py` identity selection: explicit CLI identity,
+environment, gitignored local configuration, then ad-hoc only when no identity was selected.
+It must not override an opted-in certificate with `-`. Sign nested code deepest-first and the
+outer app last, with hardened-runtime disabled for the local-only beta. Verification includes:
 
 ```bash
 codesign --verify --deep --strict --verbose=2 dist/ResearchRadar.app
-hdiutil create -volname ResearchRadar -srcfolder dist/ResearchRadar.app \
-  -ov -format UDZO dist/ResearchRadar-local-beta.dmg
 ```
 
-Do not use `codesign --deep` to perform signing. There is currently no Developer ID identity, so the script must label the artifact local beta and must not claim Gatekeeper/notarization readiness.
+Do not use `codesign --deep` to perform signing. There is currently no Developer ID identity,
+so label the artifact local beta and do not claim Gatekeeper/notarization readiness.
 
 A user-approved local self-signed identity is now available for development. It stabilizes the designated requirement but did not preserve noninteractive Keychain access across changed builds in the two-version acceptance test. Keep repeated authorization as an unresolved limitation; never relax credential ACLs or claim that local signing solves it.
 
@@ -2943,7 +2988,7 @@ Public distribution is a separate release gate: obtain a Developer ID Applicatio
 
 Hardened Runtime and App Sandbox are separate decisions. Before a future Developer ID build is accepted, rerun the complete Task 1 process-tree suite against the hardened signed bundle. App Sandbox remains disabled in v1 and requires a separate capability design for bundled-engine and user-selected Codex execution.
 
-- [ ] **Step 11: Run the final macOS 26 arm64 resource and lifecycle gate**
+- **Step 11: Run the final macOS 26 arm64 resource and lifecycle gate**
 
 Retain the Task 1 foundation measurements and regenerate `dist/macos-resource-report.json` from the complete staged App. Record final App and helper sizes, cold launch, fake preflight, five-minute idle RSS/CPU sample, visible-report RSS/child-process sample, and active fake-run process inventory. Compare each value with the Task 1 and Task 2 measurements and name the feature responsible for every meaningful increase; do not convert unmeasured assumptions into hard release numbers.
 
@@ -2955,8 +3000,10 @@ collapsed (81.23 MiB) samples. Collapse released the reader host and WebView, pr
 and left no descendants/helper. Original App data and release inputs were unchanged. Native RSS
 excludes WebKit XPC processes; these two launches are not one continuous memory curve or a
 long-term leak test. No product-code fix was needed. Evidence and full variations are in
-`.build/resource-three-state-20261022/` and `docs/todo.md`. This does not close the full staged
-production-bootstrap, active-job, repeated-cycle or final-beta gates below.
+`.build/resource-three-state-20261022/` and `docs/todo.md`. This historical host-only checkpoint
+did not close staged production-bootstrap, active-job or repeated-cycle checks. Those scoped
+offline checks now have newer evidence in the current closeout above; real providers, exhaustive
+leak/cold-start profiling and deferred manual acceptance must not be inferred from either record.
 
 The functional lightweight gate is strict:
 
@@ -2969,7 +3016,7 @@ The functional lightweight gate is strict:
 
 This local beta supports only the platform named above. Any compatibility expansion requires a separate approved plan and build/test environment rather than compatibility branches in v1.
 
-- [ ] **Step 12: Document installation and preserve existing product boundaries**
+- **Step 12: Document installation and preserve existing product boundaries**
 
 Create `docs/macos-app.md` covering the macOS 26 Apple Silicon requirement, local beta installation, the distinction between App UI language and per-topic report language, Keychain setup, topic onboarding, provider preflight, one-shot schedules, Run Now, cancellation, demand-loaded report reading, WeChat/Email retries, diagnostics, storage categories, optional user cache limit, explicit cache cleanup, Start at Login, Quit semantics, data locations, and uninstall steps that move app-owned durable files to Trash only after explicit confirmation.
 
@@ -2977,14 +3024,13 @@ README links to the app document without replacing CLI instructions. Architectur
 
 Run the repo hygiene and privacy tests after documentation changes.
 
-- [ ] **Step 13: Run full regression, real local beta smoke, and the third signed-off commit**
+- **Step 13: Run full regression, real local beta smoke, and the third signed-off commit**
 
 ```bash
 uv run --extra dev pytest
 uv run --extra dev ruff check src tests
 swift test --package-path apps/macos/ResearchRadar
 ./script/stage_macos_app.sh
-./script/package_macos_beta.sh
 uv run research-radar privacy scan
 git diff --check
 codesign --verify --deep --strict --verbose=2 dist/ResearchRadar.app

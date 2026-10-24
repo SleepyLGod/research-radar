@@ -111,9 +111,105 @@ drive the research model.
 
 ## Prioritized TODO
 
+### macOS Local Beta: Current Closeout (2026-10-24)
+
+This is the current work list. Dated checkpoints below retain their original evidence and limits;
+their unchecked items are not a second backlog. A later scoped acceptance supersedes an earlier
+blocked attempt only for the behavior it actually exercised.
+
+- **Implemented and accepted within the recorded scope:** topic/provider setup, durable research
+  queue, one-shot schedules, appearance/language, native popover, report reader, independent
+  WeChat/Email operations, cover selection/upload, diagnostics and opt-in notifications.
+  Real Gmail, WeChat draft and cover operations were already accepted; do not repeat them merely
+  to finish this checklist. Keyboard/focus/sidebar and draft-retention acceptance are recorded
+  below. Recent bootstrap/npm launcher/PDF error-boundary and Gregorian-date repairs have offline
+  and bounded native acceptance, not new real-provider acceptance.
+- **Latest local DMG checked:** `ResearchRadar-local-beta-arm64-20261024-21b464a.dmg` includes those
+  repairs, copies the existing signed development App unchanged, and passed read-only packaging,
+  signature, dependency and embedded-archive/privacy checks. It contains no user configuration,
+  credentials, reports or development caches. Existing Apps and old images were not replaced.
+- **Current offline resource check completed within scope:** production App idle/reader samples
+  and 20 report reopen/dismiss cycles, 20 standalone non-live engine cycles, and separate frozen
+  fake App research/post-start cancellation. See the measurements below; this is not a real-model
+  memory profile, cold-first-frame benchmark, exhaustive leak proof or all manual acceptance.
+- **Separate next live check, not authorized by this closeout:** one real npm-installed Codex
+  check and a fresh first-use flow through one useful report. Confirm scope and any service cost
+  first; disable delivery so this does not repeat previously accepted sends. An offline fake
+  launcher or successful model probe alone does not establish this complete path.
+- **Deferred by the user, not passed:** VoiceOver speech/activation, multi-display interaction,
+  Reduce Transparency/Increase Contrast and remaining broader accessibility/manual coverage.
+  These are not blockers for this scoped local beta; do not claim full accessibility acceptance.
+- **Known limits:** Keychain authorization can recur across builds/items; the local certificate
+  does not establish prompt-free updates. Normal launch uses `ResearchRadar-Dev`, even from a
+  copied App. The image is locally signed, not notarized; downloaded/quarantined Gatekeeper
+  acceptance and public distribution are not established. No automatic update/release is added.
+
 ### macOS App Checkpoint
 
 Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
+
+#### Current App: Offline Resource And Lifecycle Check (2026-10-24)
+
+- [x] Measured the unchanged signed production development App at `21b464a` with isolated
+  per-instance data, disabled delivery/login/notifications/schedules and an unchanged existing
+  offline report. External QA sampling, not App background polling, recorded:
+
+  | Phase | Duration | Native App RSS at end | CPU at end | App descendants observed |
+  | --- | --- | --- | --- | --- |
+  | Hidden, before reading | 300 s | 55.27 MiB | 0% | None |
+  | Report visible | 30 s | 106.45 MiB | 0% | None |
+  | Hidden after reading | 30 s | 103.31 MiB | 0% | None |
+  | Hidden after 20 report cycles | 60 s | 82.62 MiB | 0% | None |
+
+  Initial idle RSS ranged from 52.98 to 83.42 MiB and CPU from 0 to 7.5%; the last samples above
+  are not constant-resource guarantees. Native RSS excludes WebKit XPC processes and does not
+  measure the total cost of live model/Codex research.
+- [x] Twenty real-popover report reopen/dismiss cycles used alternating Escape and status-item
+  clicks. The selected report remained available; inspected first/last captures were not blank.
+  Per-cycle hidden RSS ranged from 103.97 to 106.33 MiB, ending at 104.38 MiB before the final
+  idle period. No persistent monotonic rise or App helper was observed. Six existing Swift
+  reader lifecycle tests passed, including dropping the last App WebView reference and mixed
+  Chinese/image/formula/anchor rendering. The native measurement does not directly inspect weak
+  references or prove that system WebKit processes exit immediately.
+- [x] Twenty standalone production-engine non-live preflights (10 success / 10 cancellation)
+  left no process groups. These are not App-queue cancellation tests. A separate signed QA App
+  with the frozen offline engine completed one native Run Now report with no delivery jobs;
+  engine/helper descendants were observed during work and absent afterward. Its sampled native
+  App peak was 79.11 MiB, not the aggregate engine/helper peak. A fresh isolated run cancelled
+  after `started` finished as `cancelled` and left no descendants; this separate App peaked at
+  81.31 MiB. These launches are not one continuous memory curve.
+- The earlier native cancellation happened before the engine wrote any terminal/event artifact
+  and retained the existing conservative `interrupted` / `terminal_unconfirmed` outcome. It is
+  not counted as the successful post-start cancellation. Initial AXPress and test-root permission
+  failures were QA-driver/setup issues; only the ignored driver/data were adjusted, not product
+  code. The failed attempt artifacts remain available.
+- Limits: `/usr/bin/leaks` reported restricted inspection for the signed process; its output is
+  not a zero-leak result or an attributable product leak finding. LaunchServices returned the
+  production App PID in about 0.61 s, not a measured cold first frame. A later true cold-start or
+  long-duration/live-workload profile remains separate; no new performance threshold is claimed.
+- [x] The production App is 50,930,309 logical bytes (51,068,928 allocated); its engine is
+  46,180,760 logical bytes. Source App, five normal configuration/state files, source report and
+  copied report stayed unchanged; the reader test created no jobs, and all QA instances exited.
+  Evidence: ignored `.build/beta-closeout-20261024/resources.json`, `summary.json`, native captures,
+  engine terminal artifacts and separate fake-job data. No real service, secret-value read,
+  upload or send was requested. This does not supersede the explicitly deferred manual gates.
+
+#### Updated Local DMG: Read-only Closeout (2026-10-24)
+
+- [x] At `21b464a`, copied the current signed production development App without rebuilding or
+  re-signing it. The new image is `dist/ResearchRadar-local-beta-arm64-20261024-21b464a.dmg`,
+  **24,797,977 bytes**, SHA-256
+  `524aeae0045d5ec63cb4140c1ba9ccb654bfc4233d561ddd49f3b28f39977fe2`.
+  Old images and the existing App were not replaced.
+- [x] Image verification and a read-only mount passed. Source, payload and mounted App file/link
+  manifests and designated requirements matched; deep/strict signature, arm64 dependency,
+  contained-symlink and embedded-archive/private-path checks passed. The mounted volume contained
+  only `ResearchRadar.app` and a generic local-beta note. The audit inspected 61 regular files
+  and 882 archive entries, with no build-prefix exception or user-data/signing-material inclusion.
+- [x] The volume was detached, and the normal App manifest plus five normal configuration/state
+  hashes stayed unchanged. This was packaging/read-only inspection, not a new Finder,
+  quarantined-download, real-provider or delivery test. Evidence: ignored
+  `.build/beta-closeout-20261024/package-result.json` and packaging driver.
 
 #### Gregorian Report Identity: Offline Repair (2026-10-24)
 
@@ -141,8 +237,8 @@ Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding
   without creating another job. All test instances exited; no App/helper remained. The five
   normal configuration/state hashes and system AppleLocale stayed unchanged. Evidence: ignored
   `.build/date-native-20261024/result.json`, requests, terminal artifacts and native captures.
-- [ ] DMG refresh and real-provider acceptance remain separate. No live model/search,
-  credential-value access or sending was used for this repair or its native acceptance.
+- The DMG refresh is covered by the current closeout above; real-provider acceptance remains
+  separate. No live model/search, credential-value access or sending was used for this repair.
 
 #### Three P2 Repairs: Offline And Native Acceptance (2026-10-24)
 
@@ -191,8 +287,8 @@ Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding
   integrations enabled. Ruff, privacy, bundle/dependency/private-path checks, strict signing,
   diff checks and normal-data preservation checks passed. Evidence: ignored
   `.build/p2-closeout-20261024/`.
-- [ ] Actual npm/provider acceptance remains separate. The earlier DMG has not been regenerated
-  with these repairs. No API-key values, real providers or sending were used in this checkpoint;
+- Actual npm/provider acceptance remains separate. The latest closeout image now includes
+  these repairs. No API-key values, real providers or sending were used in this checkpoint;
   it adds no UI, protocol command, dependency or auto-retry.
 
 #### System Launch And Initial PR Review Verification (2026-10-24)
@@ -763,7 +859,9 @@ Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding
   credential, model, search or delivery operation was invoked. Product code is unchanged.
 - Reader load, weak-reference release, memory trend and final idle-resource gates were **not
   reached**. Do not reuse previous idle measurements as evidence for this attempt.
-- [ ] Resume with user-assisted input on isolated offline data: open the report, dismiss with
+- The original user-assisted retry request is superseded for the bounded production-App
+  reopen/dismiss resource loop by **Current App: Offline Resource And Lifecycle Check** above.
+  The original broader interaction request was: open the report, dismiss with
   Escape/outside click, reopen from the status item and alternate compact/full mode for 20
   cycles. Record retained selection, Chinese text, image/formula/anchor rendering and any
   blank page. Couple the session with resource/reader-lifetime observations; manual clicks
@@ -945,11 +1043,11 @@ alone is not treated as proof that the frozen research engine can produce a repo
 
 - [x] Implement one native `NSPopover` anchored to the status item: compact `400 x 480 pt`,
   expanded `900 x 660 pt`, clamped to the current screen's available frame.
-- [ ] Verify outside click and Escape dismiss without losing form drafts, navigation, topic/report
-  selection, or background jobs. Reopening and compact/expanded changes retain that state;
-  dismissal is not discard, cancellation, or Quit.
-- [ ] Verify the sidebar toggle stays fixed leading and expand/collapse trailing, including when the
-  sidebar is hidden. Verify the actual native action labels and clicks in the staged App.
+- Draft retention across outside click, Escape and compact/expanded changes is covered by the
+  later **Unsaved Draft Retention** checkpoint. Background-job and broader accessibility claims
+  remain limited to their separately recorded checks; dismissal is not cancellation or Quit.
+- Sidebar and bounded Chinese/English keyboard acceptance are covered by the later **Keyboard
+  Navigation** checkpoint, not an outstanding duplicate of this original visual checklist.
 - [x] Confirm backdrop blur in current compositor output and review compact/full/missing-config
   layouts without overlap, as reported by the main agent. Native glass/materials must retain
   the no-opacity/custom-blur-hacks contract; Tuneful, Dato, and OpenUsage remain references,
@@ -958,8 +1056,8 @@ alone is not treated as proof that the frozen research engine can produce a repo
   labels at least `12 pt`, and system monospaced text for technical information only.
   No external fonts. English/Chinese and Light/Dark captures are available; full manual
   visual acceptance and accessibility-display checks remain pending.
-- [ ] Complete manual physical clicks, keyboard/VoiceOver, multi-display movement, file-picker,
-  and supported accessibility-display checks in the production staged app.
+- Native file-picker and bounded keyboard checks have later acceptance records. VoiceOver,
+  multi-display and remaining accessibility-display checks are now explicitly deferred above.
 - [x] Implement configuration admission and credential presence through metadata-only,
   noninteractive checks. Appearance,
   reopening, and settings navigation must not read secret values or prompt for Keychain
@@ -980,7 +1078,7 @@ alone is not treated as proof that the frozen research engine can produce a repo
   read fresh values, and denied reads produce a redacted failure artifact and remain retryable.
   This does not verify native Keychain dialogs; isolated staged-engine authorization
   acceptance still requires user interaction and must not use real API credentials.
-- [ ] Keep explicit live model/search checks separate from delivery checks, with scoped
+- Keep explicit live model/search checks separate from delivery checks, with scoped
   results. Appearance starts neither; development acceptance authorizes no live call or send.
 - [x] Show autodetected Codex candidates for confirmation and provide an explicit
   run-configuration check. Do not launch Codex on appearance, silently switch verifier
