@@ -1,4 +1,7 @@
 import json
+import shlex
+import subprocess
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -7,6 +10,67 @@ from uuid import uuid4
 import pytest
 
 from research_radar.app_bridge.runner import BridgeDependencies, run_bridge
+
+
+def test_codex_failure_keeps_terminal_reason_across_pipeline_and_bridge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    from research_radar.analysis.cli_providers import CodexCliProvider
+    from research_radar.analysis.providers import Message
+    from research_radar.app_bridge.handlers import _progress_listener
+    from research_radar.exceptions import AnalysisError
+    from research_radar.pipeline.progress import ProgressWriter
+
+    request, events, result, error, root = _job(
+        tmp_path, command="run_daily", payload={
+            "topic_id": "llm-inference", "report_date": "2026-08-30",
+            "limit": 5, "deep_limit": 2, "language": "zh", "model_cache": True,
+            "model_cache_limit_bytes": None,
+        },
+    )
+
+    def command_failed(command: list[str], **kwargs: object) -> None:
+        raise subprocess.CalledProcessError(
+            19, command,
+            stderr="startup\n" + command[-1] + "\n" + "chatter\n" * 1000
+            + "token=offline-private-canary\nERROR: OFFLINE_TERMINAL_REASON",
+        )
+
+    monkeypatch.setattr(subprocess, "run", command_failed)
+
+    def fail(*args: object, **kwargs: object) -> None:
+        progress = ProgressWriter(
+            root / "progress.jsonl", listener=_progress_listener(kwargs["events"]),
+        )
+        progress.record("verifier", "started")
+        provider = CodexCliProvider(name="codex", command=shlex.quote(sys.executable))
+        try:
+            provider.complete(
+                [Message(role="user", content="PRIVATE_READING_PACKET " * 1000)], model="offline",
+            )
+        except AnalysisError as exc:
+            progress.record("verifier", "failed", error=str(exc))
+            raise
+
+    dependencies = replace(
+        BridgeDependencies.testing(), run_daily=fail,
+        clock=lambda: datetime(2026, 8, 30, 10, tzinfo=UTC),
+    )
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 1
+    terminal = json.loads(error.read_text())
+    stream = [json.loads(line) for line in events.read_text().splitlines()]
+    progress = [json.loads(line) for line in (root / "progress.jsonl").read_text().splitlines()]
+    assert terminal["code"] == "research_failed" and terminal["stage"] == "verifier"
+    assert "exit 19" in terminal["message"] and "OFFLINE_TERMINAL_REASON" in terminal["message"]
+    assert len(terminal["message"]) <= 500
+    assert terminal["message"] == stream[-1]["message"] == stream[-1]["error"]["message"]
+    assert terminal["message"] == progress[-1]["error"]
+    for artifact in (error, events, root / "progress.jsonl"):
+        assert "PRIVATE_READING_PACKET" not in artifact.read_text()
+        assert "offline-private-canary" not in artifact.read_text()
+    assert not result.exists()
 
 
 @pytest.mark.parametrize("length", [100, 500, 501, 2000])

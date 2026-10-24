@@ -15,7 +15,8 @@ SECRET_PATTERNS = [
 ]
 
 LOCAL_PATH_PATTERN = re.compile(
-    r"(?:/Users/[^/\s]+|/private/tmp|/tmp|/var/folders)(?:/[^\s]+)*(?=\s|$)"
+    # Paths can contain spaces; do not guess where an unquoted path ends on its line.
+    r"(?:/Users/|/private/tmp(?=/|\s|$)|/tmp(?=/|\s|$)|/var/folders(?=/|\s|$))[^\r\n]*"
 )
 PORT_PATTERN = re.compile(r"\b(?:127\.0\.0\.1|localhost):\d{2,5}\b")
 
