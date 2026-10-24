@@ -13,10 +13,12 @@ Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unv
 The latest local image includes the bootstrap/npm Codex/PDF error-boundary and Gregorian-date
 repairs as well as the Python build-metadata fix, but retains development-data behavior;
 see the [roadmap](todo.md). Existing installed/development Apps are not automatically replaced.
-There is no notarized or approved public installer.
+That image predates the Codex diagnostic repair described below. There is no notarized or
+approved public installer.
 Bounded English/Chinese keyboard acceptance passed. VoiceOver, multi-display and remaining
-accessibility-display checks are deferred, not passed. Real npm Codex and fresh first-use report
-acceptance remain separate from offline checks.
+accessibility-display checks are deferred, not passed. A separately authorized native App run
+reused two cached readings, verified them with real npm Codex, and opened a Chinese report with
+85 publishable claims. This is not acceptance of a complete fresh first-use run or new figures.
 See the [roadmap](todo.md) for the remaining checks.
 
 ## 1. Open the App
@@ -295,6 +297,10 @@ Inspect screenshots before sharing them for email addresses, keys, private paths
   CLI configuration still supports [commands with arguments](providers.md#cli-agent-providers).
 - **Connection check failed:** check the named service's credentials, access, quota, and network.
   You do not need to re-enter every provider's key.
+- **Codex requires a newer version:** update the Codex installation at the selected path, then
+  explicitly run the connection check again. A valid executable path alone does not establish
+  model compatibility. Failure details retain redacted startup and trailing output within 500
+  characters; they are not a complete transcript, and old truncated output cannot be recovered.
 - **Research stopped:** use the latest attempt's time, stage, and reason, not statistics from an older report.
 - **Zero reads or accepted claims:** distinguish no candidates, insufficient full text, reader failure,
   and actual verifier rejection before blaming Codex.

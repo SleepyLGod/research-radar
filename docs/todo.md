@@ -128,14 +128,18 @@ blocked attempt only for the behavior it actually exercised.
   repairs, copies the existing signed development App unchanged, and passed read-only packaging,
   signature, dependency and embedded-archive/privacy checks. It contains no user configuration,
   credentials, reports or development caches. Existing Apps and old images were not replaced.
+  This image predates the Codex diagnostic repair below; it has not been refreshed for that repair.
 - **Current offline resource check completed within scope:** production App idle/reader samples
   and 20 report reopen/dismiss cycles, 20 standalone non-live engine cycles, and separate frozen
   fake App research/post-start cancellation. See the measurements below; this is not a real-model
   memory profile, cold-first-frame benchmark, exhaustive leak proof or all manual acceptance.
-- **Separate next live check, not authorized by this closeout:** one real npm-installed Codex
-  check and a fresh first-use flow through one useful report. Confirm scope and any service cost
-  first; disable delivery so this does not repeat previously accepted sends. An offline fake
-  launcher or successful model probe alone does not establish this complete path.
+- **Real Codex verification and Chinese reading passed with cached inputs:** after updating the
+  selected npm Codex client, one isolated native App run reused both original readings, reviewed
+  89 eligible claims with `gpt-5.6-luna/high`, and generated a two-paper Chinese report with 85
+  publishable claims. The native reader opened it without garbled Chinese; no delivery ran.
+  This closes the cache-to-verification/report/reader check, not a fresh discovery-to-report run.
+  The earlier first-use attempt generated a topic and completed reading but failed at verification;
+  a complete fresh first-use run is still unverified and needs separate authorization.
 - **Deferred by the user, not passed:** VoiceOver speech/activation, multi-display interaction,
   Reduce Transparency/Increase Contrast and remaining broader accessibility/manual coverage.
   These are not blockers for this scoped local beta; do not claim full accessibility acceptance.
@@ -147,6 +151,52 @@ blocked attempt only for the behavior it actually exercised.
 ### macOS App Checkpoint
 
 Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
+
+#### Codex Diagnostics And Scoped Live Acceptance (2026-10-24)
+
+- **Repair:** shared CLI failures now include the exit code and redacted head/tail excerpts from
+  stderr and stdout within the existing 500-character limit. Known Codex input echoes are removed
+  before redaction and clipping. Connection-check excerpts include their truncation marker within
+  that same budget, retaining both ends after newline escaping. Local-path redaction omits the
+  rest of a path-bearing line, including paths with spaces. This changes diagnostics, not model
+  calls, retries, evidence rules or rendering. Previously truncated records cannot recover their
+  missing tail. Raw launch/timeout/nonzero-exit exceptions are not chained into tracebacks, so
+  their original command/input cannot bypass the redacted message.
+- **Offline coverage:** regressions cover long echoed prompts, both output streams, empty output,
+  Unicode/CRLF, secret/path/port redaction and small excerpt budgets. The same bounded failure
+  reaches pipeline progress and bridge events/error artifacts with the verifier stage preserved.
+- **Client compatibility:** the original first-use run completed two readings but its verifier
+  command failed. A separately authorized native short probe preserved the explicit server error
+  requiring a newer Codex. After updating only the selected npm package from 0.142.1 to 0.164.0,
+  a native short probe succeeded. Node, npm, other installations and normal configuration were
+  unchanged. This is a tested version, not a universal minimum-version guarantee.
+- **Preparation limits:** the first cache replay used a PDF page excerpt instead of its abstract
+  and was stopped before any model call. Correcting that input restored both papers' eligibility.
+  A terminal-launched replay then stopped during Codex initialization because the terminal sandbox
+  blocked its state-directory writes. Neither attempt established model rejection or an App defect;
+  neither was silently retried. Subsequent runs had separate authorization.
+- **Native result:** the final isolated App copy retained the production UI, queue, supervisor,
+  protocol and research pipeline. Its test-only engine supplied the original local PDFs and
+  PDF-backed metadata, blocked new reader/anchor requests and omitted optional figure extraction.
+  An offline check inside that App first confirmed Codex state-directory access without making
+  model calls. No global permissions, credential ACLs or real configuration were changed.
+- **One research run passed:** both reading and anchor-repair caches hit; no paper was reread.
+  One real `gpt-5.6-luna/high` call reviewed 89 eligible claims and retained 85 publishable claims.
+  Three successful localization chunks produced a two-paper Chinese report. The native App saved
+  its report record and opened the report with readable Chinese. File hashes were unchanged by
+  reading; the isolated App exited with no observed research helpers remaining.
+- **Boundaries:** no search, WeChat or email delivery ran in that final replay. Normal App/config
+  and original cache hashes were unchanged. This is cache-to-verification/report/reader acceptance,
+  not a fresh end-to-end first-use run, image acceptance, or a public installer release. Raw requests,
+  reports, screenshots, logs, local paths and receipts stay in ignored local acceptance data; only
+  this summary is public. Final evidence: ignored `.build/cache-native-20261024/final-result.json`.
+- **Closeout checks:** 946 Python tests and 283 Swift tests passed, with frozen offline workflow
+  tests explicitly enabled. Ruff, privacy, bundle/signature and diff checks passed. All 13 public
+  Markdown documents and 45 local links were checked; no personal paths, non-example email/IP
+  values or credential-like material were found. Read-only review caught and verified the
+  newline-clipping and space-containing-path regressions above. Those final diagnostic-only
+  follow-ups were tested offline; no live provider or delivery was called again, and the normal
+  development App and DMG were not rebuilt during closeout.
 
 #### Current App: Offline Resource And Lifecycle Check (2026-10-24)
 
@@ -307,7 +357,7 @@ Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding
   presence queries. Unlike the earlier sandbox-entry test, this was a normal system launch,
   not a claim that LaunchServices inherited the earlier deny-network sandbox.
   Evidence: ignored `.build/system-launch-20261024/result.json` and native captures under
-  `/private/tmp/research-radar-system-launch-20261024/`.
+  an isolated temporary directory outside the repository.
 - [ ] The local image had no quarantine attribute before this test. No attribute was removed,
   no Gatekeeper rule was changed, and no App was rebuilt or re-signed. This proves the scoped
   local system-launch path, not a physical Finder double-click, downloaded/quarantined
@@ -353,7 +403,7 @@ Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding
   normal configuration/state hashes, copied report bytes and test App signature stayed unchanged.
   Test-driver compile/label/post-exit inspection errors were corrected; no product-code fix was
   warranted. Evidence: ignored `.build/dmg-launch-20261024/result.json`; native captures and the
-  stopped copy remain under `/private/tmp/research-radar-dmg-launch-20261024/`.
+  stopped copy remain in an isolated temporary directory outside the repository.
 - [ ] This sandboxed entry launch does not establish Finder/LaunchServices, quarantine or
   Gatekeeper installation acceptance, public distribution, or active-research/resource gates.
   Hidden-state AX captures are not proof of weak-reference release or all system WebKit process
