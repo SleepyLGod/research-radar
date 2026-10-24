@@ -10,10 +10,13 @@ This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
 A local test DMG has passed read-only packaging checks and isolated offline startup/reader checks.
 System launch through LaunchServices also passed with isolated per-instance test data.
 Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unverified.
-The latest test image fixes the Python build-metadata path but retains development-data behavior;
+The latest local image includes the bootstrap/npm Codex/PDF error-boundary and Gregorian-date
+repairs as well as the Python build-metadata fix, but retains development-data behavior;
 see the [roadmap](todo.md). Existing installed/development Apps are not automatically replaced.
 There is no notarized or approved public installer.
-Final resource, keyboard, VoiceOver, and multi-display acceptance is still incomplete.
+Bounded English/Chinese keyboard acceptance passed. VoiceOver, multi-display and remaining
+accessibility-display checks are deferred, not passed. Real npm Codex and fresh first-use report
+acceptance remain separate from offline checks.
 See the [roadmap](todo.md) for the remaining checks.
 
 ## 1. Open the App
