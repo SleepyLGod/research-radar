@@ -19,6 +19,7 @@ repairs and Gregorian report identity repair. Read-only checks establish identic
 App bytes and signing requirement, contained symlinks/dependencies, clean embedded build metadata
 and no private configuration, reports, credentials or build caches. This is still a local
 development image, not a notarized public release; normal launch uses the development data root.
+The image predates the later Codex diagnostic repair; do not treat source changes as an updated DMG.
 
 The current production App completed 300 s idle, 30 s reading, 30 s collapsed and 60 s final-idle
 samples plus 20 report reopen/dismiss cycles. Native RSS ended at 55.27 / 106.45 / 103.31 /
@@ -29,8 +30,18 @@ The TODO records the failed QA setup/early-cancel attempts and exact scope. Thes
 live-workload memory profile, cold-first-frame measurement or zero-leak proof; `leaks` inspection
 was restricted, and native RSS excludes WebKit XPC memory. No product implementation changed.
 
-This closeout does not authorize real providers, searches, credential-value reads or sends.
-Real npm Codex and a fresh first-use-to-report run remain a separate, explicitly scoped check.
+The separately authorized Codex follow-up repaired bounded failure diagnostics and established
+real verification-to-report acceptance in a normally launched isolated App. Its test-only engine
+reused two original PDF readings and anchor caches without new reader calls or relaxed evidence
+gates. One `gpt-5.6-luna/high` call reviewed 89 eligible claims; 85 remained publishable, three
+localization chunks succeeded, and the native reader opened the two-paper Chinese report.
+The production UI, durable queue, supervisor, protocol and research pipeline were retained;
+only source acquisition/cache guards were substituted, with optional figures omitted. This does
+not close a complete fresh discovery-to-report first-use run or image acceptance. Earlier failed
+preparations remain recorded in the TODO and are not model-rejection evidence.
+
+This closeout does not authorize further providers, searches, credential-value reads or sends.
+A complete fresh first-use-to-report run still needs a separate, explicitly scoped check.
 Prior delivery acceptance need not be repeated. VoiceOver speech/activation, multi-display and
 remaining accessibility-display checks are deferred by the user, not passed or local-beta blockers.
 Repeated Keychain authorization remains a known limitation; local signing is not proof that
