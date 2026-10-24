@@ -12,7 +12,7 @@ public struct ScheduleEvaluator: Sendable {
         calendar: Calendar
     ) -> [DueResearchJob] {
         let topicByID = Dictionary(uniqueKeysWithValues: topics.map { ($0.id, $0) })
-        let reportDate = Self.reportDate(now, calendar: calendar)
+        let reportDate = ReportDate.string(for: now, timeZone: calendar.timeZone)
         return schedules.compactMap { schedule in
             guard schedule.isEnabled,
                   let topic = topicByID[schedule.topicID],
@@ -67,15 +67,5 @@ public struct ScheduleEvaluator: Sendable {
                 of: tomorrow
             )
         }.min()
-    }
-
-    private static func reportDate(_ date: Date, calendar: Calendar) -> String {
-        let components = calendar.dateComponents([.year, .month, .day], from: date)
-        return String(
-            format: "%04d-%02d-%02d",
-            components.year ?? 0,
-            components.month ?? 0,
-            components.day ?? 0
-        )
     }
 }

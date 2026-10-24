@@ -517,8 +517,7 @@ public final class AppStore {
 
     public func runSelectedTopicNow() async {
         guard let topicID = runtime.selectedTopicID ?? configuration.topics.first?.id else { return }
-        let formatter = DateFormatter(); formatter.calendar = .current; formatter.dateFormat = "yyyy-MM-dd"
-        await runNow(topicID: topicID, reportDate: formatter.string(from: Date()))
+        await runNow(topicID: topicID, reportDate: ReportDate.string(for: Date()))
     }
 
     public func startScheduling() async {

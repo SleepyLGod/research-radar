@@ -60,7 +60,7 @@ struct TodayContentView: View {
     private var today: TodayPresentation { store.todayPresentation }
     private var report: ReportRecordV1? { today.latestReport }
     private var hasEffectiveAttemptToday: Bool {
-        today.latestAttemptReport?.reportDate == Self.reportDate()
+        today.latestAttemptReport?.reportDate == ReportDate.string(for: Date())
             && today.latestAttemptReport?.isEffectiveDeepReport == true
     }
     private var isResearchActive: Bool { today.job.map { $0.kind == .research && [.running, .cancelling, .pending].contains($0.state) } ?? false }
@@ -297,12 +297,7 @@ struct TodayContentView: View {
 
     func confirmRunAgain() async {
         guard let topic = store.selectedTopic else { return }
-        await store.runAgain(topicID: topic.id, reportDate: Self.reportDate(), confirmed: true)
-    }
-
-    private static func reportDate() -> String {
-        let formatter = DateFormatter(); formatter.calendar = .current
-        formatter.dateFormat = "yyyy-MM-dd"; return formatter.string(from: Date())
+        await store.runAgain(topicID: topic.id, reportDate: ReportDate.string(for: Date()), confirmed: true)
     }
 }
 

@@ -121,7 +121,8 @@ import Testing
         config.delivery.email = .init(enabled: emailEnabled, smtpHost: "smtp.example.test",
             username: "test", fromAddress: "from@example.test", toAddress: "to@example.test")
         config.delivery.wechat.enabled = false
-        let formatter = DateFormatter(); formatter.calendar = .current; formatter.dateFormat = "yyyy-MM-dd"
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian); formatter.dateFormat = "yyyy-MM-dd"
         let date = formatter.string(from: Date())
         let report = ReportRecordV1(topicID: "one", reportDate: date, runDirectory: root.path,
             articleDraftPath: root.appending(path: "article.json").path,
