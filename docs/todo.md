@@ -115,6 +115,35 @@ drive the research model.
 
 Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
 
+#### Gregorian Report Identity: Offline Repair (2026-10-24)
+
+- [x] Reproduced the PR bot's date defect: non-Gregorian schedule calendars generated era/year
+  identities rejected by the engine and failed to match existing same-day reports/jobs.
+- [x] Added one Core `ReportDate.string(for:timeZone:)` function using Gregorian dates and
+  `en_US_POSIX`. Scheduling, Run Now, confirmed Run Again and today's-report comparison reuse
+  it. The user's time zone is retained; scheduling hours and display calendars are unchanged.
+- [x] Offline regressions cover Gregorian, Buddhist, Hebrew, Japanese and Islamic civil calendars,
+  Hong Kong/Los Angeles/UTC day and year boundaries, leap day, same-day report/job suppression,
+  unchanged local schedule time and the existing confirmed-retry flow. No system calendar,
+  existing report, saved configuration, Python date validation or delivery behavior was changed.
+- [x] Full offline Swift regression passed **283 tests**, including the enabled frozen workflow;
+  repo hygiene passed **15 tests**. Privacy scan and diff checks passed.
+- [x] Rebuilt the development App with the existing signing identity; the designated requirement,
+  strict signature, bundle/dependency/private-path checks and non-live frozen preflight passed.
+  Its production engine contains no offline fixture modules. The previous App went to Trash.
+- [x] Native RED/GREEN acceptance used `-AppleLocale th_TH@calendar=buddhist` only on isolated
+  test processes, not system settings. The old native Run Now sent `2569-10-24` and received
+  `invalid_report_date`. The updated frontend with a separate frozen offline engine sent
+  `2026-10-24` for Run Now, the native Run Again confirmation and the due schedule. The first
+  fake report had 1 read / 6 public claims; the explicit rerun normally returned no new content.
+  Same-day Run Now reused the scheduled report, and restarting kept exactly one scheduled job.
+- [x] The actual updated development App also launched with the isolated completed-report data
+  without creating another job. All test instances exited; no App/helper remained. The five
+  normal configuration/state hashes and system AppleLocale stayed unchanged. Evidence: ignored
+  `.build/date-native-20261024/result.json`, requests, terminal artifacts and native captures.
+- [ ] DMG refresh and real-provider acceptance remain separate. No live model/search,
+  credential-value access or sending was used for this repair or its native acceptance.
+
 #### Three P2 Repairs: Offline And Native Acceptance (2026-10-24)
 
 - [x] App topic bootstrap now resolves the configured provider/model through the existing shared
