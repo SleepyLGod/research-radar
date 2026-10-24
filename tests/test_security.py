@@ -1,3 +1,5 @@
+import pytest
+
 from research_radar.security.crypto import EnvelopeEncryptor, InMemoryMasterKeyProvider
 from research_radar.security.redaction import redact_text
 from research_radar.security.secrets import EnvSecretBackend, InMemorySecretBackend, SecretManager
@@ -59,6 +61,16 @@ def test_redact_text_does_not_overmatch_tmp_prefix() -> None:
 
     assert "/tmpfile" in redacted
     assert "/tmp/research-radar" not in redacted
+
+
+@pytest.mark.parametrize(
+    "prefix", ["/" + "Users/offline/", "/private/tmp/", "/tmp/", "/var/folders/"],
+)
+@pytest.mark.parametrize("folder", ["Private Project", '"Private Project"', "研究 项目"])
+def test_redact_text_omits_space_containing_path_until_next_line(prefix: str, folder: str) -> None:
+    redacted = redact_text(f"cwd: {prefix}{folder}/secret.txt\nERROR: reason retained")
+
+    assert redacted == "cwd: [LOCAL_PATH]\nERROR: reason retained"
 
 
 def test_redact_text_removes_common_quoted_and_dotted_secret_forms() -> None:

@@ -91,7 +91,11 @@ def probe_excerpt(value: str, *, limit: int = 500) -> str:
     text = redact_text(value).replace("\n", "\\n")
     if len(text) <= limit:
         return text
-    return text[:limit].rstrip() + "..."
+    marker = "..."[:limit]
+    remaining = limit - len(marker)
+    head = remaining // 3
+    tail = remaining - head
+    return text[:head].rstrip() + marker + (text[-tail:] if tail else "")
 
 
 def load_probe_json(value: str) -> dict[str, object]:

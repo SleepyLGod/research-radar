@@ -15,7 +15,7 @@ def test_progress_writer_redacts_and_truncates_sensitive_metadata(tmp_path: Path
         "failed",
         error=(
             'app_secret="fake-secret-value-12345" token=fake-token-value-12345 '
-            "/private/tmp/research-radar-smoke/run prompt follows: "
+            "/private/tmp/research-radar-smoke/run\nprompt follows: "
             f"{long_prompt}"
         ),
     )

@@ -1,6 +1,33 @@
+import pytest
+
 from research_radar.analysis.providers import ModelResponse
 from research_radar.analysis.routing import TaskModelRoute
-from research_radar.application.provider_probe import load_probe_json, probe_provider
+from research_radar.application.provider_probe import load_probe_json, probe_excerpt, probe_provider
+
+
+def test_probe_excerpt_includes_truncation_marker_in_wire_budget() -> None:
+    value = "x" * 250 + "\n" + "y" * 249
+    excerpt = probe_excerpt(value)
+    assert len(excerpt) <= 500
+    assert "\\n" in excerpt
+    assert "..." in excerpt
+    assert excerpt.endswith("y" * 20)
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3, 50, 500])
+def test_probe_excerpt_respects_custom_budget(limit: int) -> None:
+    assert len(probe_excerpt("x" * 1000, limit=limit)) <= limit
+
+
+def test_probe_excerpt_preserves_failure_tail_after_newline_escaping() -> None:
+    message = "startup\n" + "chatter\n" * 57 + "ERROR: OFFLINE_TERMINAL_REASON"
+    assert len(message) <= 500
+
+    excerpt = probe_excerpt(message)
+
+    assert len(excerpt) <= 500
+    assert excerpt.startswith("startup\\n")
+    assert excerpt.endswith("ERROR: OFFLINE_TERMINAL_REASON")
 
 
 class _Provider:

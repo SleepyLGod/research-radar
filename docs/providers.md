@@ -171,6 +171,20 @@ ResearchRadar splits this string into an argument array; it does not run it thro
 The macOS App instead stores one literal executable path selected in the file picker. Spaces and
 Chinese characters are supported without manually adding quotes or arguments.
 
+Nonzero CLI exits produce a redacted diagnostic of at most 500 characters, including the exit
+code and bounded head/tail excerpts from nonempty stderr and stdout. Codex's known input echo is
+omitted before redaction and truncation. This keeps trailing failure details from being displaced
+by startup chatter when progress and App messages apply their existing limits; it is not a full
+command transcript. Already-truncated historical artifacts cannot recover their missing output,
+and a visible startup warning alone does not establish the final cause of a failed command.
+Raw subprocess exceptions are not chained into error tracebacks, avoiding a second copy of the
+command and input that would bypass message redaction.
+Connection-check excerpts retain both ends after newline escaping, with the truncation marker
+included in the same 500-character budget. Local paths may contain spaces, so redaction omits
+the rest of an affected line rather than risk exposing a private path suffix; a reason on that
+same line may also be omitted. A server response requiring a newer Codex version means the selected
+executable needs updating; finding its path alone does not establish model compatibility.
+
 Claude Code compatible CLI:
 
 ```yaml
