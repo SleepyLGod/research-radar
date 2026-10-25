@@ -7,10 +7,10 @@ drive the research model.
 
 ## Current State
 
-- **Version preparation, not a release:** source metadata is aligned at `0.3.0b1` for CLI and
+- **Versioned local package, not a release:** source metadata is aligned at `0.3.0b1` for CLI and
   bundled engine, with App short version `0.3.0`, build `2`, and the same full beta identifier.
-  Existing accepted App/DMG artifacts still carry `0.1.0`; no replacement was built for this
-  metadata update. Architecture/security boundaries and the [local beta draft](releases/v0.3.0b1.md)
+  The rebuilt development App and versioned DMG passed the scoped offline checks below; earlier
+  versions remain unchanged. Architecture/security boundaries and the [local beta draft](releases/v0.3.0b1.md)
   describe the two distributions, completed checks, and remaining acceptance. No tag or release
   has been created.
 
@@ -131,9 +131,9 @@ blocked attempt only for the behavior it actually exercised.
   to finish this checklist. Keyboard/focus/sidebar and draft-retention acceptance are recorded
   below. Recent bootstrap/npm launcher/PDF error-boundary and Gregorian-date repairs have offline
   and bounded native acceptance, not new real-provider acceptance.
-- **Latest local App and DMG refreshed:** `ResearchRadar-local-beta-arm64-20261025-e906f95.dmg`
-  includes the Codex diagnostic/privacy repair and preceding fixes. Its production engine was
-  rebuilt from current source with the unchanged native UI/helper and existing signing identity.
+- **Latest local App and DMG refreshed:** `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg`
+  includes version `0.3.0b1`, the Codex diagnostic/privacy repair and preceding fixes. The native
+  App, PDF helper and production engine were rebuilt with the existing signing identity.
   Read-only package, signature, dependency and embedded-archive/privacy checks passed, followed
   by isolated native startup, existing Chinese-report reading and exit. The old App and DMGs were
   retained; normal configuration was unchanged. No credentials, reports or developer caches are packaged.
@@ -162,6 +162,28 @@ blocked attempt only for the behavior it actually exercised.
 Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
 
 #### App And DMG Refresh: Offline Acceptance (2026-10-25)
+
+##### Versioned Refresh From `276a62f`
+
+- Built the native App, PDF helper and Python engine as `0.3.0b1`; App and nested engine metadata
+  use short version `0.3.0`, build `2`, and full release identifier `0.3.0b1`. The same signing
+  identity and designated requirements were retained. Sanitized-PATH non-live frozen preflight
+  confirmed the engine's runtime version.
+- `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg` is 23.7 MiB; the App is 48.6 MiB logically.
+  Package audit inspected 61 regular files and 882 archive entries, with no private-metadata
+  waiver, test engine, configuration, credentials, reports or developer caches. Read-only mounted
+  and copied App manifests matched the signed candidate; the image was detached afterward.
+- A copy from the image launched through the normal system App entrypoint using isolated local-only
+  routes, a paused topic, no schedules and disabled delivery. The existing two-paper/85-claim Chinese
+  report opened without garbling; source and copied report bytes were unchanged. Normal exit left
+  no App-owned descendants. No GUI engine request, research, live model check, search or delivery ran.
+- After acceptance, the old development App was retained by rename and the candidate installed in
+  its place. Previous App bytes, all existing DMG hashes and normal configuration remained unchanged.
+  Local ignored evidence is under `.build/app-version-20261025-276a62f/`; the release draft records
+  the DMG hash. This is not new resource, fresh first-use or downloaded/quarantined Gatekeeper
+  acceptance, and no tag or release was created.
+
+##### Earlier Refresh From `e906f95`
 
 - Refreshed the production Python engine from `e906f95`; native source was unchanged, so its
   previously verified UI/resources/PDF helper were reused. App and engine signing requirements
