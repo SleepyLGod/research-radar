@@ -6,12 +6,24 @@ vendors and local servers, see [Provider Configuration](providers.md).
 
 ## Setup
 
-Install dependencies and create local config:
+For the native menu-bar App, use the [App download and guide](macos-app.md). It includes its Python
+engine and does not require the CLI. The steps below install the CLI from the published
+`v0.3.0b1` source tag; no standalone CLI executable, wheel or PyPI package was published for this beta.
+You need Git, Python 3.12+ and `uv`.
+
+Clone into a new directory, install runtime dependencies, and create local config:
 
 ```bash
-uv sync --extra dev
+git clone --branch v0.3.0b1 --depth 1 https://github.com/SleepyLGod/research-radar.git
+cd research-radar
+uv sync --locked
 uv run research-radar init
 ```
+
+This pins the source version; do not copy these commands into an existing configured checkout.
+For development and tests, use `uv sync --locked --extra dev` in your checkout instead.
+Building the App is a separate developer workflow described in the [App guide](macos-app.md).
+See the [release notes](releases/v0.3.0b1.md) for the published package and known limits.
 
 `config.example.yaml` is a small public template. Put reviewed topics and daily preferences in
 local `config.yaml`. `config.yaml`, `.env`, `runs/`, `data/`, `cache/`, and scheduler outputs are
@@ -65,8 +77,9 @@ Different items or requesting programs may require separate authorization. Use A
 only after checking that the program and credential belong to ResearchRadar; do not allow all
 applications or save keys as plaintext to avoid the dialog.
 
-The development App and bundled engine default to ad-hoc signatures. Their identity is tied to
-the specific build, so rebuilding can require authorization again. A stable certificate-based
+Builds without an explicitly selected signing identity default to ad-hoc signatures. The published
+`v0.3.0b1` App uses the existing local certificate, not Apple notarization. Rebuilding an ad-hoc App
+changes its identity, so it can require authorization again. A stable certificate-based
 identity addresses that build-identity problem; it does not bypass first-use permission, locked
 keychains or item access controls. A local self-signed certificate is **not sufficient** to
 preserve Keychain authorization across updates: macOS can still use a per-build `cdhash`

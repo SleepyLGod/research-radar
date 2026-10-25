@@ -7,12 +7,13 @@ drive the research model.
 
 ## Current State
 
-- **Versioned local package, not a release:** source metadata is aligned at `0.3.0b1` for CLI and
+- **v0.3.0b1 Pre-release published (2026-10-25):** source metadata is aligned at `0.3.0b1` for CLI and
   bundled engine, with App short version `0.3.0`, build `2`, and the same full beta identifier.
-  The rebuilt development App and versioned DMG passed the scoped offline checks below; earlier
-  versions remain unchanged. Architecture/security boundaries and the [local beta draft](releases/v0.3.0b1.md)
-  describe the two distributions, completed checks, and remaining acceptance. No tag or release
-  has been created.
+  PR #1 was merged using Rebase and merge; tag `v0.3.0b1` points to merged `main` commit `e1eca67`.
+  The [Release](https://github.com/SleepyLGod/research-radar/releases/tag/v0.3.0b1) provides the final
+  DMG and checksum; CLI installation uses the source tag, not a standalone executable or PyPI package.
+  Earlier versions remain unchanged. [Release notes](releases/v0.3.0b1.md) describe the packages,
+  completed checks, and known limits. Publication is not notarization or complete first-use acceptance.
 
 - Paper-first source selection for research briefs.
 - Topic concept gates for precision-sensitive discovery.
@@ -131,8 +132,9 @@ blocked attempt only for the behavior it actually exercised.
   to finish this checklist. Keyboard/focus/sidebar and draft-retention acceptance are recorded
   below. Recent bootstrap/npm launcher/PDF error-boundary and Gregorian-date repairs have offline
   and bounded native acceptance, not new real-provider acceptance.
-- **Latest local App and DMG refreshed:** `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg`
-  includes version `0.3.0b1`, the Codex diagnostic/privacy repair and preceding fixes. The native
+- **Final App and DMG published:** `ResearchRadar-v0.3.0b1-macos26-arm64.dmg` comes from merged `main`
+  commit `e1eca67` and includes version `0.3.0b1`, the Codex diagnostic/privacy repair and preceding
+  fixes. The native
   App, PDF helper and production engine were rebuilt with the existing signing identity.
   Read-only package, signature, dependency and embedded-archive/privacy checks passed, followed
   by isolated native startup, existing Chinese-report reading and exit. The old App and DMGs were
@@ -155,13 +157,36 @@ blocked attempt only for the behavior it actually exercised.
 - **Known limits:** Keychain authorization can recur across builds/items; the local certificate
   does not establish prompt-free updates. Normal launch uses `ResearchRadar-Dev`, even from a
   copied App. The image is locally signed, not notarized; downloaded/quarantined Gatekeeper
-  acceptance and public distribution are not established. No automatic update/release is added.
+  acceptance and suitability for general distribution remain unverified. Publishing this limited
+  Pre-release does not change those limits. No automatic updater or release automation was added.
 
 ### macOS App Checkpoint
 
 Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
 
 #### App And DMG Refresh: Offline Acceptance (2026-10-25)
+
+##### Final Package And Pre-release From Merged `main` (`e1eca67`)
+
+- PR #1 passed CodeRabbit and DCO checks and was merged using Rebase and merge. The resulting
+  tree matched the checked PR exactly. Python regression passed 945 tests with 2 opt-in frozen
+  tests skipped; Swift reported 283 tests passed. Merged-tree Python regression, Ruff and privacy
+  checks also passed. No research, provider/search call or report delivery ran for this release.
+- Rebuilt native App, PDF helper and production engine from `e1eca67`, retaining the existing
+  local signing identity. Versions match: full release `0.3.0b1`, short version `0.3.0`, build `2`.
+  Non-live frozen preflight, signatures, dependency/symlink, package/privacy and read-only DMG
+  checks passed. The audit inspected 61 regular files and 882 archive entries, without a private
+  metadata waiver. The package contains no configuration, credentials, reports or developer caches.
+- The final App is 48.6 MiB logically; the DMG is 24,802,070 bytes (23.7 MiB). Its published name is
+  `ResearchRadar-v0.3.0b1-macos26-arm64.dmg`; [release notes](releases/v0.3.0b1.md) record its SHA-256.
+  An independent DMG copy passed isolated normal startup, existing Chinese-report reading and exit
+  without App-owned helpers. No GUI engine request was created. Old Apps/DMGs, normal configuration
+  and source/copied report bytes were preserved. This was not a new resource benchmark.
+- At 16:20 Asia/Hong_Kong on 2026-10-25, `v0.3.0b1` was published as a Pre-release, not Latest/stable.
+  Only the DMG and `SHA256SUMS` were attached. A draft-stage download matched both local files
+  byte-for-byte before publication; this does not establish downloaded Gatekeeper acceptance.
+  Local ignored evidence is under `.build/release-v0.3.0b1-20261025-e1eca67/`.
+  Earlier package/checkpoint records below remain historical and are not the current download.
 
 ##### Versioned Refresh From `276a62f`
 
@@ -1072,9 +1097,12 @@ Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding
   automation remains blocked on Accessibility not exposing the compact expand control, so it
   does not establish successful settings clicks or reproduce the earlier Codex UI failure.
 
-The macOS 26 Apple Silicon App remains in a Draft PR, not a released replacement for the CLI.
-The bundled engine, application services, queue, scheduling, and basic onboarding exist. Task 2
-has passed the frozen offline workflow and native App restart checks. A Swift fake-runner test
+#### Historical Task 2 And Early Task 3A Summary
+
+The following records describe the earlier pre-release checkpoint, not the current release status.
+At that checkpoint, the macOS 26 Apple Silicon App was in a Draft PR, not a released replacement
+for the CLI. The bundled engine, application services, queue, scheduling, and basic onboarding existed.
+Task 2 had passed the frozen offline workflow and native App restart checks. A Swift fake-runner test
 alone is not treated as proof that the frozen research engine can produce a report.
 
 - Implemented: terminal recovery, unknown delivery protection, serialized engine access,

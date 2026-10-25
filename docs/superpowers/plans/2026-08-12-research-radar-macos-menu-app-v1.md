@@ -14,12 +14,18 @@ WeChat drafts, cover upload and native notifications have scoped real acceptance
 sidebar, file-picker and draft retention have bounded native/user acceptance. Preserve the dated
 evidence rather than rerunning all earlier blocked attempts.
 
-The local DMG `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg` includes version `0.3.0b1`, the Codex diagnostic
-and privacy repair alongside the earlier P2 and Gregorian fixes. Read-only checks establish
+PR #1 was merged using Rebase and merge. **v0.3.0b1 was published as a Pre-release on 2026-10-25**,
+from merged `main` commit `e1eca67a93986ee569b28c83ee08711d309b6905`.
+The [Release](https://github.com/SleepyLGod/research-radar/releases/tag/v0.3.0b1) attaches
+`ResearchRadar-v0.3.0b1-macos26-arm64.dmg` and `SHA256SUMS`; CLI users install the same source tag.
+No standalone CLI executable, wheel or PyPI package was published.
+
+The final DMG includes version `0.3.0b1`, the Codex diagnostic and privacy repair alongside the
+earlier P2 and Gregorian fixes. Read-only checks establish
 identical packaged/copied App bytes and signing requirements, contained symlinks/dependencies,
-clean embedded build metadata
-and no private configuration, reports, credentials or build caches. This is still a local
-development image, not a notarized public release; normal launch uses the development data root.
+clean embedded build metadata and no private configuration, reports, credentials or build caches.
+This is still a local beta image, not a stable or Apple-notarized installer; normal launch still
+uses the development data root.
 The native App, PDF helper and production engine were rebuilt with the existing identity. App
 and nested engine use short version `0.3.0`, build `2`, and full release identifier `0.3.0b1`;
 standalone non-live preflight confirmed the frozen runtime version with a sanitized `PATH`. A copy
@@ -30,8 +36,10 @@ behavior or a new memory/performance profile.
 
 The versioned App is 48.6 MiB logically and its DMG is 23.7 MiB. The previous development App
 was retained by rename and earlier DMGs remained unchanged. Scoped evidence is ignored under
-`.build/app-version-20261025-276a62f/`; the [release draft](../../releases/v0.3.0b1.md) records
-the image hash and acceptance limits. Packaging is complete locally, not a tag or public release.
+`.build/release-v0.3.0b1-20261025-e1eca67/`; the [release notes](../../releases/v0.3.0b1.md) record
+the final image hash and acceptance limits. A draft-stage download matched the installer and
+checksum byte-for-byte before publication; this is not downloaded/quarantined Gatekeeper acceptance.
+Earlier development-image records remain in the dated TODO checkpoints, not as the current download.
 
 The preceding signed App's 2026-10-24 resource check completed 300 s idle, 30 s reading,
 30 s collapsed and 60 s final-idle samples plus 20 report reopen/dismiss cycles.
@@ -59,7 +67,8 @@ Prior delivery acceptance need not be repeated. VoiceOver speech/activation, mul
 remaining accessibility-display checks are deferred by the user, not passed or local-beta blockers.
 Repeated Keychain authorization remains a known limitation; local signing is not proof that
 authorization survives every update. No new background service, signing permission change,
-notarization, release or automatic update is part of this closeout.
+notarization or automatic updater was added. The limited Pre-release is published; outstanding
+first-use, trust-policy and accessibility checks remain unverified or deferred as described above.
 
 **Goal:** Build a native, menu-bar-first macOS app that lets a non-CLI user configure reviewed research topics, run or schedule evidence-gated daily reports, read the resulting local article, and independently deliver it to WeChat Drafts and private email.
 
