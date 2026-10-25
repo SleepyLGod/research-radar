@@ -180,7 +180,7 @@ def test_architecture_contains_canonical_e2e_flow() -> None:
         "Synthesis outline / prewriting",
         "`ArticleDraft`",
         "Rendering transforms that draft",
-        "Publishing is explicit",
+        "Delivery is user-configured",
         "Audit artifacts",
     ]:
         assert phrase in architecture
