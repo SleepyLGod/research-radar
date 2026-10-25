@@ -7,6 +7,13 @@ drive the research model.
 
 ## Current State
 
+- **Version preparation, not a release:** source metadata is aligned at `0.3.0b1` for CLI and
+  bundled engine, with App short version `0.3.0`, build `2`, and the same full beta identifier.
+  Existing accepted App/DMG artifacts still carry `0.1.0`; no replacement was built for this
+  metadata update. Architecture/security boundaries and the [local beta draft](releases/v0.3.0b1.md)
+  describe the two distributions, completed checks, and remaining acceptance. No tag or release
+  has been created.
+
 - Paper-first source selection for research briefs.
 - Topic concept gates for precision-sensitive discovery.
 - Outcome-based source history so daily reports suppress a paper only after a successful report

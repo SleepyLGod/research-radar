@@ -22,6 +22,29 @@ policy before any channel can render them.
 WeChat, Archive/RSS, Zhihu, and email are sibling outputs. They consume the same filtered
 `ArticleDraft`; no renderer gets to create new research claims.
 
+## CLI And macOS App
+
+The CLI and native menu-bar App are two entry points to the same Python application services,
+research pipeline, evidence policy, and renderers. The App does not parse CLI output or read the
+CLI's YAML configuration. Its typed JSON configuration is converted into the shared `AppConfig`.
+The CLI's configuration and the App's workspace remain separate. Only source-history import is
+offered, on explicit request; it does not import the CLI configuration, secrets, or reports.
+
+Swift owns the interface, durable serialized job queue, report index, and one-shot schedule timer.
+Versioned JSON requests, events, and terminal artifacts connect it to a bundled Python engine.
+Only one engine job runs at a time. The engine and PDF helper start on demand; cancellation and
+parent-process loss stop the process group. No Python engine or fixed polling loop remains idle.
+The restricted report WebView is created only for reading and released when the panel is hidden.
+
+The App uses a PDFKit helper for PDF geometry/rendering; the CLI retains its Poppler fallback.
+Both use the shared figure eligibility policy. An optional figure failure omits the image rather
+than discarding an otherwise usable report.
+
+App schedules require the App to remain running; the CLI launchd scheduler is a separate option.
+Legacy scheduler conflicts must be resolved before enabling an overlapping App schedule.
+Research and delivery are independent jobs: after an eligible report is saved, explicitly enabled
+channels may enqueue delivery automatically. An uncertain delivery is never automatically resent.
+
 ## Canonical E2E Flow
 
 1. Topic setup defines a topic id, queries, paper queries, and concept signals.
@@ -43,8 +66,10 @@ WeChat, Archive/RSS, Zhihu, and email are sibling outputs. They consume the same
 11. `ArticleDraft` assembles the filtered public content once.
 12. Rendering transforms that draft into Markdown, WeChat HTML, Archive/RSS, Zhihu Markdown, or
    email without changing the evidence decision.
-13. Publishing is explicit: ResearchRadar may create a WeChat draft, update a reviewed Git
-   checkout, or send a configured private email, but it never auto-publishes or mass-sends.
+13. Delivery is user-configured: CLI publishing is explicit; the App can queue enabled channels
+   after an eligible report. WeChat creates a draft, Archive updates a reviewed Git checkout,
+   and private email sends to the configured recipient. No WeChat public publishing or mass-send
+   is performed. Archive publishing remains a CLI feature.
 14. Audit artifacts preserve manifests, sources, readings, claims, evidence, output, and review
    reports in a unique owner-only run directory. Source history suppresses a paper only after a
    successful daily outcome, not merely because discovery saw it.

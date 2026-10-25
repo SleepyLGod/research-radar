@@ -23,6 +23,10 @@ reused two cached readings, verified them with real npm Codex, and opened a Chin
 85 publishable claims. This is not acceptance of a complete fresh first-use run or new figures.
 See the [roadmap](todo.md) for the remaining checks.
 
+Source metadata now targets **0.3.0b1**; the existing accepted App/DMG still carries the earlier
+**0.1.0** version. It has not been rebuilt for this version change. See the
+[local beta release draft](releases/v0.3.0b1.md) for package formats and acceptance limits.
+
 ## 1. Open the App
 
 If a maintainer has given you a built `ResearchRadar.app`, double-click it.
@@ -252,8 +256,8 @@ The App does not automatically resend an unknown delivery.
 Daily times use the Mac's current calendar and time zone. The App must remain running;
 closing its panel is fine. **Quitting stops scheduling.**
 App scheduling does not install a persistent helper or launchd job.
-This development version still has a report-date bug with non-Gregorian system calendars.
-Check dates before relying on unattended scheduling with such a setting.
+Report dates use Gregorian `YYYY-MM-DD` in the user's time zone, independently of the system's
+display calendar. The non-Gregorian report-date issue has been fixed and covered by offline tests.
 The CLI's launchd scheduler is separate. Resolve detected legacy conflicts first;
 the App does not delete those jobs for you.
 
