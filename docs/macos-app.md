@@ -10,11 +10,13 @@ This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
 A local test DMG has passed read-only packaging checks and isolated offline startup/reader checks.
 System launch through LaunchServices also passed with isolated per-instance test data.
 Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unverified.
-The latest local image includes the bootstrap/npm Codex/PDF error-boundary and Gregorian-date
-repairs as well as the Python build-metadata fix, but retains development-data behavior;
-see the [roadmap](todo.md). Existing installed/development Apps are not automatically replaced.
-That image predates the Codex diagnostic repair described below. There is no notarized or
-approved public installer.
+The latest local image, built from `e906f95` on 2026-10-25, includes the Codex diagnostic/privacy
+repairs as well as the earlier bootstrap/npm Codex/PDF, Gregorian-date and build-metadata fixes.
+It still uses the development data folder; see the [roadmap](todo.md).
+Opening the image does not automatically replace installed or development Apps.
+The refreshed image passed read-only package checks and isolated startup, existing Chinese-report
+reading and exit through the normal App entrypoint. The previous App and DMGs were retained;
+normal settings and report bytes stayed unchanged. There is no notarized or approved public installer.
 Bounded English/Chinese keyboard acceptance passed. VoiceOver, multi-display and remaining
 accessibility-display checks are deferred, not passed. A separately authorized native App run
 reused two cached readings, verified them with real npm Codex, and opened a Chinese report with

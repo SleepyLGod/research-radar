@@ -5,24 +5,30 @@
 > work queue. Read the current closeout below and the dated evidence in the TODO before repeating
 > a task or claiming acceptance. Do not infer permission for live services, delivery or commits.
 
-## Current Local Beta Closeout (2026-10-24)
+## Current Local Beta Closeout (2026-10-25)
 
 The implementation has progressed past the original three-task blueprint. The authoritative
-remaining list is [macOS Local Beta: Current Closeout](../../todo.md#macos-local-beta-current-closeout-2026-10-24).
+remaining list is [macOS Local Beta: Current Closeout](../../todo.md#macos-local-beta-current-closeout-2026-10-25).
 Foundation, bridge, durable workflow and the editorial interface are implemented. Gmail,
 WeChat drafts, cover upload and native notifications have scoped real acceptance; keyboard,
 sidebar, file-picker and draft retention have bounded native/user acceptance. Preserve the dated
 evidence rather than rerunning all earlier blocked attempts.
 
-The local DMG `ResearchRadar-local-beta-arm64-20261024-21b464a.dmg` now contains the three P2
-repairs and Gregorian report identity repair. Read-only checks establish identical source/copied
-App bytes and signing requirement, contained symlinks/dependencies, clean embedded build metadata
+The local DMG `ResearchRadar-local-beta-arm64-20261025-e906f95.dmg` includes the Codex diagnostic
+and privacy repair alongside the earlier P2 and Gregorian fixes. Read-only checks establish
+identical packaged/copied App bytes and signing requirements, contained symlinks/dependencies,
+clean embedded build metadata
 and no private configuration, reports, credentials or build caches. This is still a local
 development image, not a notarized public release; normal launch uses the development data root.
-The image predates the later Codex diagnostic repair; do not treat source changes as an updated DMG.
+The production engine was rebuilt with the existing identity; native code was unchanged. A copy
+from the image passed isolated normal startup, existing Chinese-report reading and exit without
+an engine request or delivery. The prior App and images were retained, and normal configuration
+was unchanged. This refresh did not test live model requests, downloaded/quarantined Gatekeeper
+behavior or a new memory/performance profile.
 
-The current production App completed 300 s idle, 30 s reading, 30 s collapsed and 60 s final-idle
-samples plus 20 report reopen/dismiss cycles. Native RSS ended at 55.27 / 106.45 / 103.31 /
+The preceding signed App's 2026-10-24 resource check completed 300 s idle, 30 s reading,
+30 s collapsed and 60 s final-idle samples plus 20 report reopen/dismiss cycles.
+Native RSS ended at 55.27 / 106.45 / 103.31 /
 82.62 MiB respectively, with no App descendants in those phases. Twenty standalone non-live
 engine success/cancel cycles left no process groups; separate frozen-fake native research and
 post-start cancellation also ended without descendants. Six reader lifecycle tests passed.

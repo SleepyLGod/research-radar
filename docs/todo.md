@@ -111,7 +111,7 @@ drive the research model.
 
 ## Prioritized TODO
 
-### macOS Local Beta: Current Closeout (2026-10-24)
+### macOS Local Beta: Current Closeout (2026-10-25)
 
 This is the current work list. Dated checkpoints below retain their original evidence and limits;
 their unchecked items are not a second backlog. A later scoped acceptance supersedes an earlier
@@ -124,12 +124,14 @@ blocked attempt only for the behavior it actually exercised.
   to finish this checklist. Keyboard/focus/sidebar and draft-retention acceptance are recorded
   below. Recent bootstrap/npm launcher/PDF error-boundary and Gregorian-date repairs have offline
   and bounded native acceptance, not new real-provider acceptance.
-- **Latest local DMG checked:** `ResearchRadar-local-beta-arm64-20261024-21b464a.dmg` includes those
-  repairs, copies the existing signed development App unchanged, and passed read-only packaging,
-  signature, dependency and embedded-archive/privacy checks. It contains no user configuration,
-  credentials, reports or development caches. Existing Apps and old images were not replaced.
-  This image predates the Codex diagnostic repair below; it has not been refreshed for that repair.
-- **Current offline resource check completed within scope:** production App idle/reader samples
+- **Latest local App and DMG refreshed:** `ResearchRadar-local-beta-arm64-20261025-e906f95.dmg`
+  includes the Codex diagnostic/privacy repair and preceding fixes. Its production engine was
+  rebuilt from current source with the unchanged native UI/helper and existing signing identity.
+  Read-only package, signature, dependency and embedded-archive/privacy checks passed, followed
+  by isolated native startup, existing Chinese-report reading and exit. The old App and DMGs were
+  retained; normal configuration was unchanged. No credentials, reports or developer caches are packaged.
+- **Recorded offline resource check completed within scope:** the preceding signed App's
+  idle/reader samples
   and 20 report reopen/dismiss cycles, 20 standalone non-live engine cycles, and separate frozen
   fake App research/post-start cancellation. See the measurements below; this is not a real-model
   memory profile, cold-first-frame benchmark, exhaustive leak proof or all manual acceptance.
@@ -151,6 +153,26 @@ blocked attempt only for the behavior it actually exercised.
 ### macOS App Checkpoint
 
 Checkpoint dates use Asia/Hong_Kong (UTC+08:00); raw logs may show the preceding UTC date.
+
+#### App And DMG Refresh: Offline Acceptance (2026-10-25)
+
+- Refreshed the production Python engine from `e906f95`; native source was unchanged, so its
+  previously verified UI/resources/PDF helper were reused. App and engine signing requirements
+  matched the prior build. Static comparison confirmed the frozen diagnostic functions match
+  current source; non-live engine preflight passed.
+- The App is 48.6 MiB logically and the compressed DMG is 23.7 MiB. Audit inspected 61 regular
+  files and 882 archive entries, with no private build-metadata waiver, test engine, configuration,
+  credentials, reports or developer caches. A read-only mount and copied App matched the signed
+  candidate. These are package sizes, not a new RSS or startup-performance measurement.
+- The DMG copy launched normally with isolated, local-only routes, a paused topic, no schedules
+  and disabled delivery. It opened an unchanged existing Chinese report; the screenshot showed
+  readable text, contents and the original two-paper/85-claim summary. It exited normally without
+  App-owned descendants. No GUI engine request, research, model check, search or delivery ran.
+- Installed the verified candidate as the development App only after acceptance. The previous
+  App was retained by rename, not deleted; its manifest and old DMG hashes stayed identical.
+  Normal configuration and source/copied report hashes were unchanged. The image was detached.
+  This remains a locally signed development beta, not notarized or downloaded/quarantined
+  Gatekeeper acceptance. Evidence is local and ignored under `.build/app-refresh-20261025/`.
 
 #### Codex Diagnostics And Scoped Live Acceptance (2026-10-24)
 
