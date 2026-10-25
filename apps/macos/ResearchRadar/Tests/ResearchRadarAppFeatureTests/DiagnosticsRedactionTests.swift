@@ -78,7 +78,9 @@ import Testing
 
     @Test func engineVersionAcceptsOnlyTheRecordedVersionGrammarNotArbitraryMessages() {
         #expect(RedactedDiagnostics.engineVersion(from: "ResearchRadar 0.1.0 on Python 3.13.") == "0.1.0")
+        #expect(RedactedDiagnostics.engineVersion(from: "ResearchRadar 0.3.0b1 on Python 3.13.") == "0.3.0b1")
         for message in [nil, "ResearchRadar /Users/someone/private_canary on Python 3.13.",
+                        "ResearchRadar 0.3.0b/private_canary on Python 3.13.",
                         "ResearchRadar 0.1.0 on Python 3.13. Bearer sk-private-canary", "Original evidence quote"] {
             #expect(RedactedDiagnostics.engineVersion(from: message) == "not_recorded")
         }

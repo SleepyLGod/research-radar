@@ -22,7 +22,8 @@ enum RedactedDiagnostics {
         var report: [String: Any] = [
             "diagnostics_version": 1,
             "scope": "selected_topic",
-            "app_version": version(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String),
+            "app_version": version((Bundle.main.object(forInfoDictionaryKey: "ResearchRadarReleaseVersion")
+                ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")) as? String),
             "engine_version": engineVersion(from: store.preflight?.checks.first { $0.id == "engine" }?.message),
             "macos_version": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
             "architecture": architecture,
@@ -63,14 +64,14 @@ enum RedactedDiagnostics {
 
     static func engineVersion(from message: String?) -> String {
         guard let message, message.utf8.count < 100,
-              message.range(of: #"\AResearchRadar [0-9]+(?:\.[0-9]+){1,3} on Python [0-9]+(?:\.[0-9]+){1,2}\.\z"#,
+              message.range(of: #"\AResearchRadar [0-9]+(?:\.[0-9]+){1,3}(?:b[1-9][0-9]*)? on Python [0-9]+(?:\.[0-9]+){1,2}\.\z"#,
                 options: .regularExpression) != nil else { return "not_recorded" }
         return version(String(message.split(separator: " ")[1]))
     }
 
     private static func version(_ value: String?) -> String {
         guard let value, value.utf8.count <= 32,
-              value.range(of: #"\A[0-9]+(?:\.[0-9]+){0,3}\z"#, options: .regularExpression) != nil
+              value.range(of: #"\A[0-9]+(?:\.[0-9]+){0,3}(?:b[1-9][0-9]*)?\z"#, options: .regularExpression) != nil
         else { return "not_recorded" }
         return value
     }

@@ -1,9 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import plistlib
 from pathlib import Path
 from runpy import run_path
 
 project_root = Path(SPECPATH).parents[1]
+app_info = plistlib.loads((Path(SPECPATH) / "Info.plist").read_bytes())
 frozen_stdlib = run_path(str(Path(SPECPATH) / "frozen_sysconfig.py"))["prepare_sysconfig"](Path(workpath))
 hidden_imports = [
     "cryptography",
@@ -57,5 +59,10 @@ engine_app = BUNDLE(
     collection,
     name="ResearchRadarEngine.app",
     bundle_identifier="com.researchradar.engine",
-    info_plist={"LSUIElement": True},
+    info_plist={
+        "LSUIElement": True,
+        **{key: app_info[key] for key in (
+            "CFBundleShortVersionString", "CFBundleVersion", "ResearchRadarReleaseVersion"
+        )},
+    },
 )

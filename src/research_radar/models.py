@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-__version__ = "0.1.0"
+__version__ = "0.3.0b1"
 
 
 def utc_now() -> datetime:

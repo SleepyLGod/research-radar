@@ -1,5 +1,10 @@
+import plistlib
+import runpy
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from research_radar import __version__
 
@@ -37,6 +42,34 @@ def test_version_metadata_matches_package() -> None:
 
     assert pyproject["project"]["version"] == __version__
     assert __version__
+
+    lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
+    package = next(item for item in lock["package"] if item["name"] == "research-radar")
+    assert package["version"] == __version__
+    info = plistlib.loads(Path("packaging/macos/Info.plist").read_bytes())
+    assert info["ResearchRadarReleaseVersion"] == __version__
+    assert info["CFBundleShortVersionString"] == __version__.split("b")[0]
+    assert info["CFBundleVersion"].isdigit()
+
+
+def test_frozen_engine_inherits_app_version_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    execute_spec = runpy.run_path
+    monkeypatch.setattr(
+        runpy, "run_path", lambda *_: {"prepare_sysconfig": lambda _: Path("unused")}
+    )
+    analysis = SimpleNamespace(pure=[], scripts=[], binaries=[], datas=[])
+    result = execute_spec("packaging/macos/research-radar-engine.spec", init_globals={
+        "SPECPATH": str(Path("packaging/macos").resolve()),
+        "workpath": "unused",
+        "Analysis": lambda *args, **kwargs: analysis,
+        "PYZ": lambda *args, **kwargs: None,
+        "EXE": lambda *args, **kwargs: None,
+        "COLLECT": lambda *args, **kwargs: None,
+        "BUNDLE": lambda *args, **kwargs: kwargs,
+    })
+    info = plistlib.loads(Path("packaging/macos/Info.plist").read_bytes())
+    for key in ("CFBundleShortVersionString", "CFBundleVersion", "ResearchRadarReleaseVersion"):
+        assert result["engine_app"]["info_plist"][key] == info[key]
 
 
 def test_readme_is_concise_project_entrypoint() -> None:
