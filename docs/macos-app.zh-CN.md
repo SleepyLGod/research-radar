@@ -268,7 +268,7 @@ App 不会自动删除它们。
 
 ## 8. 本地数据、缓存与当前边界
 
-当前默认开发版的数据在 `~/Library/Application Support/ResearchRadar-Dev/`：
+已发布的 v0.3.0b1 App 把数据保存在 `~/Library/Application Support/ResearchRadar-Dev/`：
 
 - `config/app-config.json`：App 设置、主题和收发配置，不含 secret 值。
 - `state/`：队列、报告索引、计划和界面状态。

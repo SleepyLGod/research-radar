@@ -329,7 +329,7 @@ A notification failure does not change the research result.
 
 ## 8. Local Data and Current Limits
 
-The default development build stores data under `~/Library/Application Support/ResearchRadar-Dev/`:
+The published v0.3.0b1 App stores data under `~/Library/Application Support/ResearchRadar-Dev/`:
 
 - `config/app-config.json`: App settings, topics, and delivery configuration, without secret values.
 - `state/`: queue, report index, schedules, and interface state.
