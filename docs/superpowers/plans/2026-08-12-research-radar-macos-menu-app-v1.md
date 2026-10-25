@@ -14,17 +14,24 @@ WeChat drafts, cover upload and native notifications have scoped real acceptance
 sidebar, file-picker and draft retention have bounded native/user acceptance. Preserve the dated
 evidence rather than rerunning all earlier blocked attempts.
 
-The local DMG `ResearchRadar-local-beta-arm64-20261025-e906f95.dmg` includes the Codex diagnostic
+The local DMG `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg` includes version `0.3.0b1`, the Codex diagnostic
 and privacy repair alongside the earlier P2 and Gregorian fixes. Read-only checks establish
 identical packaged/copied App bytes and signing requirements, contained symlinks/dependencies,
 clean embedded build metadata
 and no private configuration, reports, credentials or build caches. This is still a local
 development image, not a notarized public release; normal launch uses the development data root.
-The production engine was rebuilt with the existing identity; native code was unchanged. A copy
+The native App, PDF helper and production engine were rebuilt with the existing identity. App
+and nested engine use short version `0.3.0`, build `2`, and full release identifier `0.3.0b1`;
+standalone non-live preflight confirmed the frozen runtime version with a sanitized `PATH`. A copy
 from the image passed isolated normal startup, existing Chinese-report reading and exit without
 an engine request or delivery. The prior App and images were retained, and normal configuration
 was unchanged. This refresh did not test live model requests, downloaded/quarantined Gatekeeper
 behavior or a new memory/performance profile.
+
+The versioned App is 48.6 MiB logically and its DMG is 23.7 MiB. The previous development App
+was retained by rename and earlier DMGs remained unchanged. Scoped evidence is ignored under
+`.build/app-version-20261025-276a62f/`; the [release draft](../../releases/v0.3.0b1.md) records
+the image hash and acceptance limits. Packaging is complete locally, not a tag or public release.
 
 The preceding signed App's 2026-10-24 resource check completed 300 s idle, 30 s reading,
 30 s collapsed and 60 s final-idle samples plus 20 report reopen/dismiss cycles.

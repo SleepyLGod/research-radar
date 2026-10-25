@@ -10,7 +10,7 @@ This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
 A local test DMG has passed read-only packaging checks and isolated offline startup/reader checks.
 System launch through LaunchServices also passed with isolated per-instance test data.
 Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unverified.
-The latest local image, built from `e906f95` on 2026-10-25, includes the Codex diagnostic/privacy
+The latest local image, built from `276a62f` on 2026-10-25, includes the Codex diagnostic/privacy
 repairs as well as the earlier bootstrap/npm Codex/PDF, Gregorian-date and build-metadata fixes.
 It still uses the development data folder; see the [roadmap](todo.md).
 Opening the image does not automatically replace installed or development Apps.
@@ -23,8 +23,13 @@ reused two cached readings, verified them with real npm Codex, and opened a Chin
 85 publishable claims. This is not acceptance of a complete fresh first-use run or new figures.
 See the [roadmap](todo.md) for the remaining checks.
 
-Source metadata now targets **0.3.0b1**; the existing accepted App/DMG still carries the earlier
-**0.1.0** version. It has not been rebuilt for this version change. See the
+The development App and `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg` now use
+**0.3.0b1** (App short version `0.3.0`, build `2`), matching the bundled engine. Both native
+products and the engine were rebuilt with the existing signing identity. An isolated DMG copy
+passed normal startup, existing Chinese-report reading and exit with no GUI engine request,
+research or delivery. Package/signature and read-only image checks passed; previous versions,
+normal configuration and report bytes were preserved. This is not a new resource benchmark.
+See the
 [local beta release draft](releases/v0.3.0b1.md) for package formats and acceptance limits.
 
 ## 1. Open the App
