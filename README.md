@@ -17,6 +17,14 @@ or your private inbox.
 
 `Local-first` · `Full-paper reading` · `Evidence-gated` · `No auto-publish`
 
+**v0.3.0b1 is available as a pre-release.**
+[Download macOS App](https://github.com/SleepyLGod/research-radar/releases/download/v0.3.0b1/ResearchRadar-v0.3.0b1-macos26-arm64.dmg) ·
+[CLI installation](#try-it-once) · [Release notes and checksum](docs/releases/v0.3.0b1.md)
+
+The App requires **macOS 26 and Apple Silicon** and includes its Python engine; it does not require
+the CLI, Python or `uv`. It is locally signed, not notarized; downloaded Gatekeeper behavior and
+a complete fresh first-use run remain unverified. See the [App guide](docs/macos-app.md) before installing.
+
 ## What You Get
 
 - **A focused daily read.** Paper-first discovery and topic-aware ranking keep the brief centered on
@@ -49,15 +57,22 @@ after full-text acquisition, claim splitting, anchor checks, and verifier review
 
 ## Try It Once
 
-You need Python 3.12+, `uv`, a configured reader API, and the Codex CLI used by the default verifier.
+These steps install the **CLI from the fixed `v0.3.0b1` source tag**. There is no standalone CLI
+executable or PyPI release for this beta. App users can follow the [App guide](docs/macos-app.md) instead.
+You need Git, Python 3.12+, `uv`, a configured reader API, and the Codex CLI used by the default verifier.
 WeChat credentials are optional until you create a WeChat draft.
 
 Install the project and create a private local config:
 
 ```bash
-uv sync --extra dev
+git clone --branch v0.3.0b1 --depth 1 https://github.com/SleepyLGod/research-radar.git
+cd research-radar
+uv sync --locked
 uv run research-radar init
 ```
+
+Use a new directory for this checkout. Development/test dependencies are optional; see
+[Detailed Usage](docs/usage.md) if you want to work on the project rather than just run it.
 
 Edit `config.yaml` and replace `example-topic` with a topic you have reviewed. The file is gitignored;
 keep real topics and provider settings there rather than in `config.example.yaml`.
@@ -93,7 +108,11 @@ archive, and publishing commands. Start with `<RUN_DIR>/wechat.html` or `<RUN_DI
   [live archive](https://sleepylgod.github.io/research-radar/archive/) is one deployment.
 - **Zhihu:** export constrained Markdown with local or public image URLs for manual import.
 - **Private email:** send the same verified report to one personal inbox through TLS-protected SMTP.
-- **Daily scheduler:** generate a local macOS launchd job that runs reviewed topics and creates drafts.
+- **Daily scheduler:** the CLI generates a macOS launchd job. The App uses its own schedule while
+  it remains running; quitting stops App scheduling. Resolve overlapping schedules before enabling both.
+
+App delivery is off by default. Enabling a channel allows independent delivery jobs after eligible
+research: WeChat creates drafts only, but private email actually sends to the configured recipient.
 
 See [Detailed Usage](docs/usage.md) for the exact commands and deployment steps.
 

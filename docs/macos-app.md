@@ -6,41 +6,41 @@ ResearchRadar lives in your Mac's menu bar. It finds papers, reads full texts, c
 and lets you read the report without using the terminal.
 For your first run, **make one local report. Set up delivery and scheduling later.**
 
-This is a development-only local beta for **macOS 26 on Apple Silicon (arm64)**.
-A local test DMG has passed read-only packaging checks and isolated offline startup/reader checks.
-System launch through LaunchServices also passed with isolated per-instance test data.
-Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unverified.
-The latest local image, built from `276a62f` on 2026-10-25, includes the Codex diagnostic/privacy
-repairs as well as the earlier bootstrap/npm Codex/PDF, Gregorian-date and build-metadata fixes.
-It still uses the development data folder; see the [roadmap](todo.md).
-Opening the image does not automatically replace installed or development Apps.
-The refreshed image passed read-only package checks and isolated startup, existing Chinese-report
-reading and exit through the normal App entrypoint. The previous App and DMGs were retained;
-normal settings and report bytes stayed unchanged. There is no notarized or approved public installer.
-Bounded English/Chinese keyboard acceptance passed. VoiceOver, multi-display and remaining
-accessibility-display checks are deferred, not passed. A separately authorized native App run
-reused two cached readings, verified them with real npm Codex, and opened a Chinese report with
-85 publishable claims. This is not acceptance of a complete fresh first-use run or new figures.
-See the [roadmap](todo.md) for the remaining checks.
+**[v0.3.0b1 Pre-release](https://github.com/SleepyLGod/research-radar/releases/tag/v0.3.0b1)
+was published on 2026-10-25** for **macOS 26 on Apple Silicon (arm64)**.
+It is a locally signed beta, not a stable or Apple-notarized installer.
 
-The development App and `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg` now use
-**0.3.0b1** (App short version `0.3.0`, build `2`), matching the bundled engine. Both native
-products and the engine were rebuilt with the existing signing identity. An isolated DMG copy
-passed normal startup, existing Chinese-report reading and exit with no GUI engine request,
-research or delivery. Package/signature and read-only image checks passed; previous versions,
-normal configuration and report bytes were preserved. This is not a new resource benchmark.
-See the
-[local beta release draft](releases/v0.3.0b1.md) for package formats and acceptance limits.
+The final `ResearchRadar-v0.3.0b1-macos26-arm64.dmg` was built from merged `main` commit `e1eca67`.
+The App and bundled engine use full version `0.3.0b1`; App short version is `0.3.0`, build `2`.
+Package/signature, dependency, privacy and read-only image checks passed. An isolated copy launched
+through the normal system App entrypoint, opened an existing Chinese report and exited without
+App-owned helpers. Old versions, normal configuration and report bytes were preserved.
+Final packaging used no research, live provider check or delivery and was not a new resource benchmark.
+
+Direct Finder launch and downloaded/quarantined Gatekeeper acceptance remain unverified;
+macOS may block the beta. Bounded English/Chinese keyboard acceptance passed. VoiceOver,
+multi-display and remaining accessibility-display checks are deferred, not passed.
+Earlier real npm Codex verification reused two cached readings and produced a Chinese report
+with 85 publishable claims. A complete fresh first-use run and new figures remain unverified.
+See the [release notes](releases/v0.3.0b1.md) and [roadmap](todo.md) for scope and history.
 
 ## 1. Open the App
 
-If a maintainer has given you a built `ResearchRadar.app`, double-click it.
+1. [Download the v0.3.0b1 DMG](https://github.com/SleepyLGod/research-radar/releases/download/v0.3.0b1/ResearchRadar-v0.3.0b1-macos26-arm64.dmg).
+   The release also provides [SHA256SUMS](https://github.com/SleepyLGod/research-radar/releases/download/v0.3.0b1/SHA256SUMS);
+   the [release notes](releases/v0.3.0b1.md) record the expected hash.
+2. Open the image and copy `ResearchRadar.app` to your chosen location, such as Applications.
+   Opening the image does not replace another App. Back up an existing copy before replacing it;
+   do not run two copies together, as this beta uses the shared `ResearchRadar-Dev` data folder.
+3. Open the copied App and look for its menu-bar icon. If macOS blocks it, verify its source and
+   ask the maintainer to inspect signing. Do not disable Gatekeeper or remove quarantine to bypass it.
+
 The App includes its Python engine; you do not need to install Python, `uv`, or Homebrew to run it.
 Codex is separate: choosing it for verification requires an available executable and an existing
 sign-in. The App does not bundle Codex.
 
-If you are developing from source, switch to the branch containing the App and run these commands
-from the repository root:
+For developers, App source is now on `main` and at tag `v0.3.0b1`; the old feature branch is not
+required. In a checkout of the version you want to build, run from the repository root:
 
 ```bash
 ./script/stage_macos_app.sh
@@ -350,8 +350,8 @@ and account permissions; the App is not an encrypted document vault.
 
 Archive/RSS and Zhihu export remain available through the [CLI guide](usage.md).
 There are no App pages for those channels. A true multi-run weekly report is outside this version.
-The local test DMG is not a notarized release, and final acceptance is still incomplete.
-A development build is not a release.
+The published DMG is a locally signed Pre-release, not a stable or notarized installer.
+Publishing the download does not complete the outstanding acceptance checks above.
 
 To uninstall, quit first and move the chosen `.app` to Trash.
 Reports, App data, and Keychain items remain by default.

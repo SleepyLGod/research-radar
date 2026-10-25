@@ -5,33 +5,37 @@
 ResearchRadar App 把搜索论文、阅读全文、核验证据和阅读报告放进 macOS 菜单栏。
 第一次使用先做一件事：**生成一份本地报告。微信、邮件和定时任务稍后再配。**
 
-当前是开发中的本地 beta，只支持 **macOS 26、Apple Silicon（arm64）**。
-本地测试 DMG 已通过只读打包检查和隔离的离线启动、阅读验收。
-通过 LaunchServices 的系统正常启动也已使用独立测试数据验收。
-直接 Finder 启动及下载后带隔离标记的 Gatekeeper 验收仍未完成。
-最新本地测试包于 2026-10-25 基于 `276a62f` 构建，已包含 Codex 诊断与隐私修复，以及此前的
-主题生成、npm Codex、PDF 图片、公历日期和构建元数据修复；它仍沿用开发数据目录，
-详见[路线图](todo.md)。
-它不会自动替换现有开发 App 或已安装的 App。
-更新后的测试包已通过只读检查，并用隔离配置验收正常启动、已有中文报告阅读和退出。
-旧 App 与旧 DMG 已保留，真实配置和报告字节未变；目前仍没有公证或获准公开分发的安装包。
-中英文核心键盘操作已验收。VoiceOver、多屏及剩余辅助显示检查按用户决定暂缓，不算通过。
-另行授权的原生 App 验收已复用两篇阅读缓存，完成真实 npm Codex 核验，并打开包含
-85 条可公开结论的中文报告。这不等于从零首次使用的完整流程或新图片提取已验收。
+**[v0.3.0b1 Pre-release](https://github.com/SleepyLGod/research-radar/releases/tag/v0.3.0b1)
+已于 2026-10-25 发布**，要求 **macOS 26、Apple Silicon（arm64）**。
+这是本地签名的 beta，不是正式稳定版，也未经过 Apple 公证。
 
-开发 App 和 `ResearchRadar-0.3.0b1-arm64-20261025-276a62f.dmg` 已更新为 **0.3.0b1**，
-App 显示版本为 `0.3.0`、构建号 `2`，与内置引擎一致。原生 App、PDF helper 和引擎均已
-重新构建，沿用原签名。从 DMG 复制出的隔离 App 已验收正常启动、已有中文报告阅读及退出，
-没有触发界面引擎请求、研究或投递；包内容、签名及只读挂载检查通过。旧版本、真实配置和报告
-字节均保留不变。这不是新的资源性能测量。两种安装方式与限制见[本地 beta 发布草稿](releases/v0.3.0b1.md)。
+最终包 `ResearchRadar-v0.3.0b1-macos26-arm64.dmg` 来自合并后的 `main` 提交 `e1eca67`。
+App 和内置引擎完整版本为 `0.3.0b1`，App 显示版本为 `0.3.0`、构建号 `2`。
+包内容、签名、依赖、隐私及只读挂载检查通过；从 DMG 复制出的隔离 App 已通过系统正常入口
+验收启动、已有中文报告阅读和退出，没有 App 所属 helper 残留。旧版本、真实配置和报告字节未变。
+最终打包验收没有跑研究、调用真实服务或投递，也不是新的资源性能测量。
+
+直接 Finder 启动及下载后带隔离标记的 Gatekeeper 验收仍未完成，macOS 可能阻止打开。
+中英文核心键盘操作已验收；VoiceOver、多屏及剩余辅助显示检查按用户决定暂缓，不算通过。
+此前真实 npm Codex 验收复用了两篇阅读缓存，并生成包含 85 条可公开结论的中文报告；
+从零首次使用完整流程和新图片提取仍未验收。范围及历史记录见[发布说明](releases/v0.3.0b1.md)
+与[路线图](todo.md)。
 
 ## 1. 打开 App
 
-如果维护者已经给了你构建好的 `ResearchRadar.app`，双击即可。
+1. [下载 v0.3.0b1 DMG](https://github.com/SleepyLGod/research-radar/releases/download/v0.3.0b1/ResearchRadar-v0.3.0b1-macos26-arm64.dmg)。
+   Release 同时提供 [SHA256SUMS](https://github.com/SleepyLGod/research-radar/releases/download/v0.3.0b1/SHA256SUMS)，
+   [发布说明](releases/v0.3.0b1.md)也记录了预期校验值。
+2. 打开 DMG，把 `ResearchRadar.app` 复制到选定位置，例如「应用程序」。打开镜像不会自动替换已有 App；
+   替换前先保留旧副本。当前 beta 仍共用 `ResearchRadar-Dev` 数据目录，不要同时运行多个副本。
+3. 打开复制出的 App，在顶栏找图标。若 macOS 拦截，请先核对来源并让维护者检查签名；
+   不要关闭 Gatekeeper 或移除隔离属性来绕过。
+
 App 自带 Python engine，运行它不需要另装 Python、`uv` 或 Homebrew。
 选择 Codex 核验时，仍需要可用的 Codex 可执行程序和已有登录；它不包含在 App 里。
 
-如果你从源码开发，请先切到包含 App 的开发分支，在仓库根目录执行：
+开发者可使用 `main` 或固定标签 `v0.3.0b1` 的源码，不再需要旧功能分支。
+在所选版本的仓库根目录执行：
 
 ```bash
 ./script/stage_macos_app.sh
@@ -283,7 +287,8 @@ App 不会自动删除它们。
 
 当前 App 没有 Archive/RSS 或知乎导出的操作页面；这两个现有渠道继续使用
 [CLI 使用说明](usage.md)，不代表 App 已经内置这些按钮。真正的周报聚合不在本版范围内。
-本地测试 DMG 不等于正式 release；安装、公开分发、公证和全部最终验收尚未完成。
+DMG 已作为 Pre-release 提供下载，但仍是本地签名、未公证的 beta，不是正式稳定版。
+发布下载不代表上述未完成的验收已经通过。
 
 若要卸载，先退出，再把选中的 `.app` 移入废纸篓。默认保留报告、App 数据和钥匙串项目；
 要清理它们时，先备份并逐项确认，不要按不明路径批量删除。

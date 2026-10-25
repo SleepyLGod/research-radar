@@ -16,6 +16,14 @@ ResearchRadar 会寻找新工作，挑出真正值得读的论文，读取全文
 
 `本地运行` · `读取论文全文` · `证据核验` · `不会自动发布`
 
+**v0.3.0b1 已作为预发布版本提供。**
+[下载 macOS App](https://github.com/SleepyLGod/research-radar/releases/download/v0.3.0b1/ResearchRadar-v0.3.0b1-macos26-arm64.dmg) ·
+[安装 CLI](#先跑通一次) · [发布说明与校验值](docs/releases/v0.3.0b1.md)
+
+App 要求 **macOS 26、Apple Silicon**，自带 Python 引擎，不用另装 CLI、Python 或 `uv`。
+当前是本地签名、未公证的 beta；下载后的 Gatekeeper 行为及从零首次使用完整流程仍未验收。
+安装前请看 [App 入门](docs/macos-app.zh-CN.md)。
+
 ## 你会得到什么
 
 - **一份重点明确的日报。** 搜索会尽量找全，但选源优先考虑论文是否真正切中研究方向，不拿一堆
@@ -48,15 +56,22 @@ claim 拆分、原文锚定和 verifier 检查，最后才生成给读者看的�
 
 ## 先跑通一次
 
-你需要 Python 3.12+、`uv`、一个可用的 reader API，以及默认 verifier 使用的 Codex CLI。
+下面是 **CLI 的 `v0.3.0b1` 固定版本源码安装步骤**；本次没有独立 CLI 可执行包或 PyPI 发布。
+使用 App 请直接看 [App 入门](docs/macos-app.zh-CN.md)，不用执行下面的安装命令。
+CLI 需要 Git、Python 3.12+、`uv`、一个可用的 reader API，以及默认 verifier 使用的 Codex CLI。
 微信公众号配置可以晚一点再做，不影响先生成本地日报。
 
 安装依赖并创建本地配置：
 
 ```bash
-uv sync --extra dev
+git clone --branch v0.3.0b1 --depth 1 https://github.com/SleepyLGod/research-radar.git
+cd research-radar
+uv sync --locked
 uv run research-radar init
 ```
+
+请在新目录中安装，不要覆盖已有配置。普通使用不需要开发测试依赖；需要参与开发时，
+再按[详细使用说明](docs/usage.md)安装。
 
 打开 `config.yaml`，把 `example-topic` 换成你已经确认过的研究方向。这个文件已被 gitignore，
 正式 topic 和 provider 设置都应该留在这里，不要写进公开模板。
@@ -91,7 +106,11 @@ uv run research-radar run daily \
   [在线 Archive](https://sleepylgod.github.io/research-radar/archive/) 是一个真实部署示例。
 - **知乎：** 生成专门适配知乎标题和列表层级的 Markdown，并支持本地图片包或公网图片 URL，供人工导入。
 - **私人邮件：** 通过 TLS 保护的 SMTP，把同一份已核验日报发到自己的邮箱。
-- **本地 scheduler：** 生成 macOS launchd 任务，定时运行审核过的 topic 并创建公众号草稿。
+- **本地 scheduler：** CLI 生成 macOS launchd 任务；App 用自己的计划，退出后不再调度。
+  不要为同一任务同时启用两套计划。
+
+App 投递默认关闭；启用渠道后，合格报告可以自动进入独立投递队列。
+微信只创建草稿，私人邮件会实际发到配置的收件地址。
 
 具体命令和部署步骤见[详细使用说明](docs/usage.md)。
 
