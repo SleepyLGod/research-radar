@@ -88,7 +88,7 @@ struct WorkspaceSettingsView: View {
                 }
             }
             .onAppear { store.refreshStorageUsage() }
-        }.formStyle(.grouped).padding(20)
+        }.formStyle(.grouped).scrollContentBackground(.hidden)
         .confirmationDialog(localization.text("confirm.clear_cache"), isPresented: $showClearCacheConfirmation) {
             Button(localization.text("action.clear_cache"), role: .destructive) { store.clearModelCache() }
             Button(localization.text("action.cancel"), role: .cancel) {}
