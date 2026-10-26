@@ -7,6 +7,109 @@ drive the research model.
 
 ## Current State
 
+- **Native reading closeout for Draft review (2026-10-26):** the accumulated overview, public
+  paper browsing, evidence and pane/typography changes were independently reviewed as one set of
+  34 files, with no verified production defect. The user explicitly deferred the remaining physical
+  reading-click confirmation; it is not passed and is not a Ready/release gate claimed by this work.
+  Chinese/light and English/dark new-topic sheets have bounded native open/cancel acceptance,
+  with unchanged fixture topic/job counts and no credential-value reads. Source commits and a
+  Draft PR are the authorized closeout; no beta package or release changes are included.
+  [Acceptance scope and remaining checks](superpowers/plans/2026-10-26-native-reading-polish.md#authorized-closeout).
+
+- **Native pane/typography follow-up (2026-10-26, unreleased):** grouped settings and diagnostics
+  now fill the shared adaptive detail surface instead of adding an outer inset rectangle. Native
+  grouping and navigation materials remain. Topic/report toolbar insets are aligned; paper reading
+  uses system proportional 15-point body text, clearer section spacing and primary-color card
+  questions, with no added font asset or dependency. The English HTML entry now says Full daily
+  report. A bilingual hosted regression reproduced the 20-point form inset and passed after the fix;
+  long native reading at narrow widths also passed. Full Python/Swift regression passed, with the
+  existing opt-in frozen-engine checks still skipped, followed by nine focused UI tests after the
+  last text-style adjustment. Bundle, signing and fresh read-only review passed. Isolated native
+  captures cover English/dark and Chinese/light pages; scroll, return, Escape and compact/full
+  restoration passed without new jobs or credential reads. Extended repeated-menu automation hit
+  a tracking/focus limit and is not claimed complete. Reports and prior Apps remain unchanged;
+  physical input, onboarding/sheets, VoiceOver and multiple displays remain separate manual checks.
+  [Details and bounds](superpowers/plans/2026-10-26-native-reading-polish.md#follow-up-consistent-content-panes-and-reading-typography).
+
+- **Native reading polish candidate (2026-10-26, unreleased):** fixed reading navigation now adds
+  report-scoped paper switching and jumps to existing sections, including repeat selection of the
+  same chapter. Evidence keeps verbatim quotes with leading alignment, distinct locations and
+  tinted safe source links. Friendly topic headings are shared across home, history and report
+  overview; original report titles remain available in report information and delivery confirmations.
+  Preview cards prioritize existing research questions, then core ideas, then summaries; claim counts
+  are secondary and explicitly not independent replication or quality rankings. Delivery is shown
+  only in report overview, with report-level fold state retained while reading. Full Python regression,
+  317 Swift tests in 57 suites, Ruff, privacy, bundle/signature and a fresh read-only review passed.
+  Controlled native input verified repeated jumps, paper switching to the top, return, Escape/reopen,
+  compact/full restoration, retained delivery folding, native picker arrow/Return selection and both
+  channel confirmation cancellations. Fresh system-window captures cover cards, reading and evidence
+  in both languages and appearances; full HTML opens and returns without a persistent delivery block.
+  Original and isolated report artifacts are
+  byte unchanged; no new jobs or credential-value reads occurred. Physical keyboard, VoiceOver,
+  multi-display and external-click acceptance are not implied by these local-input checks.
+  The separately signed candidate preserves both prior Apps and real configuration; no published
+  package has been replaced. [Scope and verification](superpowers/plans/2026-10-26-native-reading-polish.md).
+
+- **Native paper browsing candidate (2026-10-26, unreleased):** opening a report now starts with
+  previews of its existing public deep reads, then a selectable native paper detail with sectioned
+  explanations, claims and original evidence. Additional discovered sources are listed separately,
+  not presented as verified papers. The dated report list and explicit full-HTML report remain.
+  Previews and native detail do not preload WebKit. Safe local raster images are decoded on demand;
+  legacy PDF page screenshots and unsafe/missing images remain excluded. Existing report files,
+  research/evidence behavior, channel confirmations and published packages are unchanged.
+  Python regression, Swift regression (313 tests in 55 suites), focused data/image checks, privacy,
+  bundle/signature and read-only review passed. Isolated native input exercised both papers,
+  scrolling, return, Escape/reopen and full HTML
+  in both languages and appearances, with no new jobs or credential-value reads; all original/copied
+  artifacts were byte unchanged. Physical status-item routing and figure-load hide/remount stress
+  remain distinct from this bounded acceptance. Cross-day paper accumulation, relation graphs,
+  incremental research judgments and per-paper live progress are still future work.
+  [Scope, layers and acceptance](superpowers/plans/2026-10-26-native-paper-reading.md).
+
+- **Home hierarchy candidate (2026-10-26, unreleased):** secondary report titles, a clearer native
+  reading action and less completed-task repetition improve the full and compact homes without
+  changing their dimensions. Active/failure/empty/configuration attention stays visible; channel
+  attention remains with the report. Existing same-day read and confirmed regeneration behavior
+  is preserved without showing a second equivalent Run Now entry. Full Swift regression passed
+  (301 tests in 52 suites); fresh bilingual light/dark and edge-state native captures were checked.
+  Both new reader actions opened the existing report and returned without new jobs or secret reads.
+  This is presentation polish, not completed paper cards, short research briefs or evidence views.
+  [Scope and acceptance](superpowers/plans/2026-10-25-native-visual-alignment.md#home-hierarchy-follow-up-2026-10-26).
+
+- **Reader return/scroll follow-up (2026-10-26, unreleased):** reproduced the expanded Delivery
+  disclosure inflating native split-view minimum height and pushing navigation outside the window.
+  A presentation-only minimum content width fixes that measurement without changing window size,
+  HTML, the research pipeline or sending policy. Regression now exercises actual direct/retained
+  workspaces in both languages, smaller content bounds and bidirectional scrolling; full Swift
+  regression passed with 299 tests in 52 suites. Isolated native clicks verified expand, return,
+  reopen, both confirmation cancellations, Escape and compact/full restoration with no new jobs
+  or credential-value reads. Four system-window captures cover bilingual light/dark readers.
+  Controlled local outside-click routing passed; physical cross-application mouse/trackpad checks
+  remain manual. Old App, real configuration and published beta are unchanged.
+  [Cause, scope and evidence](superpowers/plans/2026-10-25-native-visual-alignment.md#reader-follow-up-2026-10-26).
+
+- **Unreleased native visual-alignment candidate (2026-10-25):** home typography and adaptive
+  reading backgrounds are implemented; the reader now groups existing WeChat/email controls in
+  one Delivery disclosure with independent summary states and one-time attention expansion.
+  Full Swift regression (297 tests), Python regression, Ruff, privacy, bundle/signature checks
+  and a local read-only review passed. Original report artifacts and isolated copies are byte
+  unchanged. Own-view snapshots cover bilingual light/dark layouts, not system glass rendering.
+  System capture and popover focus initially blocked native click/cancel/Escape acceptance; the
+  reader follow-up above records what subsequently passed without substituting state tests. Old App and published beta remain
+  unchanged. [Scope and acceptance](superpowers/plans/2026-10-25-native-visual-alignment.md).
+
+- **Unreleased native overview candidate (2026-10-25):** the first product-prototype slice adapts
+  the homepage and four coarse phases to existing App state. It separates current attempts,
+  retained effective reports and channel attention without changing the research pipeline or
+  renderers. [Scope and layer boundaries](superpowers/plans/2026-10-25-native-research-overview.md).
+  Offline Python and Swift regression, privacy, bundle and signing checks passed. Native fixture
+  captures cover 32 bilingual light/dark home states and 24 outcome states. They verify layout,
+  not live research. Automated button navigation stopped at an unrecognized expand control;
+  fresh manual interaction and visual acceptance remain pending. This is not part of the
+  published beta. Paper cards,
+  per-paper progress, automatic question briefs and a persistent relationship graph remain future
+  work, not hidden functionality behind the new layout.
+
 - **v0.3.0b1 Pre-release published (2026-10-25):** source metadata is aligned at `0.3.0b1` for CLI and
   bundled engine, with App short version `0.3.0`, build `2`, and the same full beta identifier.
   PR #1 was merged using Rebase and merge; tag `v0.3.0b1` points to merged `main` commit `e1eca67`.
