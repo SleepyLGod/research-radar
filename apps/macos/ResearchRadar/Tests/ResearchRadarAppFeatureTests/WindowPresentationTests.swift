@@ -6,7 +6,7 @@ import WebKit
 @testable import ResearchRadarAppFeature
 
 @MainActor @Suite struct WindowPresentationTests {
-    @Test func compactModeStillReleasesReaderInsideRetainedWorkspace() async throws {
+    @Test func reportPreviewsDoNotPreloadReaderInsideRetainedWorkspace() async throws {
         _ = NSApplication.shared
         let root = try task3Root()
         let fixture = try ReaderFixture()
@@ -31,19 +31,11 @@ import WebKit
         func descendants(_ view: NSView) -> [NSView] {
             [view] + view.subviews.flatMap { descendants($0) }
         }
-        for _ in 0..<100 {
-            if descendants(host).contains(where: { $0 is WKWebView }) { break }
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        weak var web = descendants(host).compactMap { $0 as? WKWebView }.first
-        try #require(web != nil)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(!descendants(host).contains(where: { $0 is WKWebView }))
 
         try store.setWindowMode(.compact)
-        for _ in 0..<100 {
-            if web == nil { break }
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        #expect(web == nil)
+        try await Task.sleep(for: .milliseconds(200))
         #expect(!descendants(host).contains(where: { $0 is WKWebView }))
         #expect(store.selectedReportID == report.id)
         #expect(try Data(contentsOf: fixture.root.appending(path: "wechat.html")) == Data(fixture.html.utf8))

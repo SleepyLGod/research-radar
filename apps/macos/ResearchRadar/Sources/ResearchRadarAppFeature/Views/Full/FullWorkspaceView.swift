@@ -71,6 +71,7 @@ struct FullWorkspaceView: View {
                 }
             } detail: {
                 detail
+                    .background(Color(nsColor: .textBackgroundColor))
             }
             .toolbar(removing: .sidebarToggle)
         }
@@ -117,29 +118,10 @@ struct FullWorkspaceView: View {
     @ViewBuilder private var reports: some View {
         if navigation.isReading,
            let report = store.reports.first(where: { $0.id == navigation.reportID && $0.topicID == store.selectedTopic?.id }) {
-            VStack(spacing: 0) {
-                HStack {
-                    Button { navigation.showReportList() } label: {
-                        Label(localization.text("action.back_reports"), systemImage: "chevron.left")
-                    }
-                    Spacer()
-                    Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-                }.padding(16)
-                Divider()
-                ReportWeChatView(store: store, report: report, localization: localization) {
+            ReportBrowserView(store: store, report: report, localization: localization,
+                presentation: presentation, back: { navigation.showReportList() }, configure: {
                     navigation.section = .settings
-                }
-                Divider()
-                ReportEmailView(store: store, report: report, localization: localization) {
-                    navigation.section = .settings
-                }
-                Divider()
-                if presentation.isVisible && presentation.windowMode(saved: store.runtime.windowMode) == .full {
-                    ReportReaderView(report: report, workspaceRoot: URL(fileURLWithPath: store.configuration.workspaceRoot), localization: localization).id(report.id)
-                } else {
-                    Color.clear
-                }
-            }
+                }).id(report.id)
         } else {
             ReportListView(store: store, localization: localization) { report in
                 store.selectReport(report.id)
@@ -160,7 +142,8 @@ private struct ReportListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopicSelectionView(store: store, localization: localization).padding(20)
+            TopicSelectionView(store: store, localization: localization)
+                .padding(.horizontal, 20).padding(.vertical, 14)
             Divider()
             if reports.isEmpty {
                 ContentUnavailableView(localization.text("empty.reports"), systemImage: "doc.text")
@@ -169,7 +152,7 @@ private struct ReportListView: View {
                     Button { open(report) } label: {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-                            Text(report.title).font(.headline).foregroundStyle(.primary)
+                            Text(ReportHeading.title(report: report, topic: store.selectedTopic)).font(.headline).foregroundStyle(.primary)
                                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                             Text(report.summary).font(.callout).foregroundStyle(.secondary)
                                 .lineLimit(2).multilineTextAlignment(.leading)
@@ -179,6 +162,6 @@ private struct ReportListView: View {
                     }.buttonStyle(.plain)
                 }.listStyle(.inset)
             }
-        }
+        }.background(Color(nsColor: .textBackgroundColor))
     }
 }
