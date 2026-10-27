@@ -160,3 +160,107 @@ read, upload or delivery is authorized. Existing user data and prior Apps remain
   workspace test) and `dfc920d` (research progress and grouped workspace surfaces). The final
   documentation commit records this evidence and the manual deferral. Push/PR outcome is recorded
   by the feature branch and Draft PR itself; no merge or Release is authorized.
+
+## Follow-up: Public Content And Available Figure Chapters (2026-10-27)
+
+Approved scope: fix only the two presentation findings from the final PR review, add offline
+regression and record the actual verification. Keep this follow-up uncommitted and unpushed.
+Do not change research, evidence policy, report files, engine protocol or channel renderers;
+do not call live services, read real credentials, send, rebuild an App/DMG or update a Release.
+
+### Implementation
+
+- The public draft projection now preserves legacy motivation, assumptions, mechanism, prior-work
+  notes, inferred weaknesses, future work, assessment details and the plain-language example.
+  Existing narrative keeps its main-section priority. Optional supplemental details have distinct
+  bilingual headings; empty values produce no chapters and exact duplicate prose is shown once.
+  Only saved public fields are projected, never raw readings or audit metadata. Original claim
+  text and evidence remain unchanged.
+- Native figures retain their existing public explanation and expose a distinct original caption
+  under a disclosure when a translated caption is shown. No new explanation or claim is generated.
+- One ephemeral visible-paper model calls the existing bounded, descriptor-rooted raster loader.
+  The body and chapter menu use the same successfully decoded images, not figure metadata alone.
+  Missing, malformed, unsafe or excluded images cannot leave a heading, chapter action, caption
+  or explanation. A mixture of valid and invalid images keeps only the valid image blocks.
+- Hide, compact mode, leaving a paper and changing papers cancel the view-owned load and release
+  its thumbnails. A generation check rejects stale completions; an already-cancelled load cannot
+  clear a newer selection. There is no report-wide image preload, permanent image cache, polling
+  or new dependency. A synchronous image decode already in flight remains bounded and completes
+  before cancellation can discard it; this is not a new peak-memory or resource-soak acceptance.
+
+### Verification And Limits
+
+- Regression first reproduced omitted public prose, missing figure explanation and a metadata-only
+  figure chapter. The focused checks passed after the fix, including all-invalid and mixed image
+  sets, unsafe/symlink paths, hide/switch release, pre-cancellation and recovery after cancellation.
+- A narrow regression also reproduced a cancelled stale hide clearing current thumbnails; the
+  early cancellation guard fixes it. Existing report and delivery state are not part of this model.
+- Hosted native view checks observe figure explanations only when a local image loads. Their
+  temporary draft and HTML bytes remain unchanged. These checks use generated offline data and
+  fake credential metadata; they are not physical menu input, VoiceOver or live research evidence.
+- Final full Python regression passed. Final Swift regression passed with 327 tests in 59 suites;
+  the two existing opt-in frozen-engine workflow/upload tests remain skipped, not newly accepted.
+  Ruff, both localization catalogs, privacy scan and whitespace checks passed. Scoped source
+  review found no additional actionable issue; no external review service was used for this slice.
+- The user's deferred physical reading-click confirmation remains pending. No candidate App,
+  DMG, real report, configuration or published package is replaced by this source-only follow-up.
+
+### Independent Candidate And Bounded Native Check
+
+The user subsequently authorized building a separate candidate with the existing signing identity
+and checking these two fixes against isolated reports. This supersedes the source-only packaging
+stop above for this local candidate only; commit, push, merge and Release updates remain forbidden.
+
+- The current release-mode native product builds successfully. The existing frozen engine is reused;
+  no new environment or dependency is installed. Bundle verification and deep/strict signing pass,
+  with the same designated requirement as the retained candidate. Complete retained-candidate and
+  normal-App file-tree checks show no changes. The new package is about 49.6 MiB on this machine;
+  this is not a new runtime resource measurement.
+- The isolated host compiles the current production views directly from source, uses fake secrets
+  and a rejecting runner, and contains no research engine. A conservative object timestamp check
+  rejected cached inputs, so those inputs were not used for its acceptance. No product build rule
+  or production view was changed to accommodate the test.
+- Chinese/light and English/dark owned-window captures were inspected. Existing mechanism prose,
+  plain-language examples and a valid raster's public explanation are visible. The original-caption
+  disclosure entry is present; its physical expansion is not newly accepted. A second paper with
+  only missing or malformed rasters has no figure heading and no figure action in the real native
+  chapter menu. Native menu selection, returning to previews and opening the second paper used
+  controlled local input, not user hardware input. AX labels were unavailable in this host; capture
+  inspection and observed native menu actions are recorded rather than claiming AX traversal passed.
+- Generated report fixtures stayed byte-identical, secret-value read count stayed zero and the
+  one historical fixture job was unchanged. The host started no engine or channel operation and
+  was closed after the check. Existing optional frozen-engine checks remain skipped; four focused
+  image-visibility tests also passed with the App-bundle build definition.
+- The separate production candidate was launched with an isolated data root, paused topic/schedules,
+  notifications disabled and both delivery channels disabled. Process startup, an empty queue,
+  no child processes, unchanged isolated config/reports and normal process exit were verified.
+  Automated checks did not observe its popover, including with a popover-aware observer. This is
+  explicitly **not accepted as visible packaged-reader startup**. Actual status-item interaction
+  and the user's earlier deferred physical reading confirmation remain pending. There is no
+  production workaround, permission change or claim that a running PID proves working navigation.
+- The candidate and safe isolated launcher are retained locally. No normal App, real configuration,
+  report, installed task, DMG or published package was replaced, and no live service was called.
+
+### Authorized Source Closeout (2026-10-27)
+
+The user subsequently authorized the pre-commit scope/privacy/status review, signed-off commits
+and push to the existing Draft PR. Earlier uncommitted/unpushed stop points above remain historical
+records, not current publication instructions. No new functionality, live research, external review
+service submission, upload/send, merge, package publication or Release change is authorized.
+
+- Keep the App-only fixes and their regression tests together so each source commit builds.
+- Commit the bounded acceptance notes separately, retaining the deferred physical input and
+  unaccepted candidate-popover visibility. Process startup is not visual or reading acceptance.
+- Include only the 13 reviewed code, localization, test and document files. Exclude App/DMG bundles,
+  screenshots, local launchers, configuration, credentials, certificates and raw runtime artifacts.
+- Run fresh offline Python/Swift regression, Ruff, localization, privacy and whitespace checks.
+  Existing optional frozen-engine skips remain skips, not passed checks or live-service evidence.
+- Push only the feature branch to the existing Draft PR. Do not merge, update main or publish;
+  remote check results belong to the actual PR rather than being inferred from local tests.
+
+The 13-file local review found no further actionable issue or unintended configuration/runtime
+artifact in the change set. Fresh full Python/Swift regression, Ruff, localization, privacy and
+diff checks passed; the Swift summary remains 327 tests in 59 suites with two existing optional
+frozen-engine skips. The source/test slice is signed-off commit `7419e92`; this separate document
+commit retains the acceptance limits. Push status is recorded by the feature branch and PR history,
+not by converting any pending manual check into a pass.

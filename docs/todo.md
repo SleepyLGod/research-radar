@@ -7,6 +7,31 @@ drive the research model.
 
 ## Current State
 
+- **Native reading content/figure repair (2026-10-27, unreleased):** the App now retains the
+  previously omitted public legacy details and figure explanations. Distinct original captions
+  remain available without replacing their translations. The figure heading and chapter menu
+  share the actually loaded thumbnails, so missing, unsafe or undecodable images cannot leave an
+  empty chapter or floating notes. Loading remains limited to the visible paper; hide/switch and
+  cancellation checks cover releasing images and ignoring cancelled stale work. Full Python and
+  Swift regression passed (327 Swift tests in 59 suites; two existing optional frozen-engine
+  tests skipped), along with Ruff, localization, privacy and diff checks. Physical reading-click
+  confirmation remains deferred. Research, generated reports, channel renderers, true configuration
+  and retained App/DMG packages are unchanged.
+  [Scope and verification](superpowers/plans/2026-10-26-native-reading-polish.md#follow-up-public-content-and-available-figure-chapters-2026-10-27).
+
+  A subsequent independent candidate build reused the existing local signing selection and frozen
+  engine. Bundle/signature checks passed and retained App file trees stayed unchanged. Controlled
+  native checks of the current production views covered Chinese/light and English/dark fixture
+  reports: supplementary prose and valid figure explanations are visible; all-unavailable figures
+  leave no body heading or chapter menu action. Fixture files stayed unchanged with zero secret
+  value reads or new jobs. The candidate process separately started and quit with isolated paused
+  configuration, an empty queue and no child processes. Its popover visibility was **not accepted**
+  by the automated startup checks; actual status-item input remains pending. This is not complete
+  packaged-reader acceptance, a new DMG or a published update.
+  The authorized source closeout keeps the fixes/tests and acceptance documents in separate
+  signed-off commits on the existing PR branch. Local App/DMG files, screenshots, fixture data and
+  raw acceptance logs are excluded. The PR remains Draft; merge and release are not authorized.
+
 - **Native reading closeout for Draft review (2026-10-26):** the accumulated overview, public
   paper browsing, evidence and pane/typography changes were independently reviewed as one set of
   34 files, with no verified production defect. The user explicitly deferred the remaining physical
