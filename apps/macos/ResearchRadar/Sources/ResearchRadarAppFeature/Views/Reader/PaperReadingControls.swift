@@ -3,6 +3,7 @@ import SwiftUI
 struct PaperReadingControls: View {
     let papers: [ReportContents.Paper]
     let selected: ReportContents.Paper
+    let sections: [PaperReadingSection]
     let localization: LocalizationStore
     let select: (Int) -> Void
     let jump: (PaperReadingSection.ID) -> Void
@@ -20,7 +21,7 @@ struct PaperReadingControls: View {
             .help(selected.title)
             .accessibilityIdentifier("paper.switch")
             Menu {
-                ForEach(selected.readingSections) { section in
+                ForEach(sections) { section in
                     Button(localization.text(section.titleKey)) { jump(section.id) }
                 }
             } label: {

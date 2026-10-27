@@ -5,6 +5,57 @@ import Testing
 @testable import ResearchRadarAppFeature
 
 struct ReportContentsTests {
+    @Test func figureKeepsItsExplanationAndBothDistinctCaptions() throws {
+        let paper = try ReportContents.decode(paperDraft(overrides: ["figures": [[
+            "relative_path": "figures/pixel.png", "caption": "Architecture 42%",
+            "localized_caption": "架构 42%", "explanation": "已有的公开读图说明 42%",
+            "reuse_status": "PRIVATE AUDIT", "score": 42
+        ]]]), topicID: "reader").papers[0]
+        let figure = try #require(paper.figures.first)
+        #expect(figure.displayCaption == "架构 42%")
+        #expect(figure.originalCaption == "Architecture 42%")
+        #expect(figure.explanation == "已有的公开读图说明 42%")
+        #expect(!String(describing: figure).contains("PRIVATE AUDIT"))
+    }
+
+    @Test func blankLegacyDetailsDoNotCreateChaptersAndDuplicateTextIsShownOnce() throws {
+        let paper = try ReportContents.decode(paperDraft(overrides: [
+            "solution": ["core": "方法解释。", "mechanism": "方法解释。"],
+            "problem": ["why_it_matters": "  ", "hidden_assumptions": ["", "\n"]],
+            "limitations": ["future_work": []], "plain_language_example": " "
+        ]), topicID: "reader").papers[0]
+        #expect(paper.paragraphs.map(\.key) == ["thesis", "method"])
+        #expect(paper.paragraphs.filter { $0.text == "方法解释。" }.count == 1)
+    }
+
+    @Test func takeawayDoesNotReplaceADistinctPublishedAssessment() throws {
+        let paper = try ReportContents.decode(paperDraft(overrides: [
+            "reader_explanation": ["reader_takeaway": "读者要点"],
+            "critical_assessment": ["bottom_line": "不同的已有判断"]
+        ]), topicID: "reader").papers[0]
+        #expect(paper.paragraphs.first { $0.key == "assessment" }?.text == "不同的已有判断")
+        #expect(paper.paragraphs.first { $0.key == "takeaway" }?.text == "读者要点")
+    }
+
+    @Test func preservesPublishedLegacyDetailsAlongsideNarrative() throws {
+        let contents = try ReportContents.decode(paperDraft(overrides: [
+            "problem": ["core": "研究问题", "why_it_matters": "为什么重要", "hidden_assumptions": ["假设 A", "假设 B"]],
+            "solution": ["core": "方法摘要", "mechanism": "公开机制说明"],
+            "related_work": ["novelty": "公开差异", "prior_work": ["先前方法 A"], "repackaging_risk": "复用边界"],
+            "limitations": ["explicit_limitations": ["作者局限"], "inferred_weaknesses": ["推断局限"], "future_work": ["未来工作"]],
+            "critical_assessment": ["bottom_line": "已有判断", "overclaiming_risk": "过度主张风险",
+                "weak_evaluations": ["评估不足"], "missing_ablations": ["消融缺失"]],
+            "plain_language_example": "已有通俗例子"
+        ]), topicID: "reader")
+        let texts = contents.papers[0].paragraphs.map(\.text).joined(separator: "\n")
+        for expected in ["为什么重要", "假设 A", "假设 B", "公开机制说明", "先前方法 A", "复用边界",
+                         "作者局限", "推断局限", "未来工作", "已有判断", "过度主张风险", "评估不足", "消融缺失", "已有通俗例子"] {
+            #expect(texts.contains(expected), "Missing public detail: \(expected)")
+        }
+        #expect(!texts.contains("PRIVATE AUDIT"))
+        #expect(contents.papers[0].claims[0].evidence[0].quote == "Original evidence 42%")
+    }
+
     @Test func readsOnlyPublicPaperEntriesAndKeepsSourcesSeparate() throws {
         let contents = try ReportContents.decode(paperDraft(), topicID: "reader")
         #expect(contents.papers.map(\.title) == ["第一篇 Paper A", "Paper B"])

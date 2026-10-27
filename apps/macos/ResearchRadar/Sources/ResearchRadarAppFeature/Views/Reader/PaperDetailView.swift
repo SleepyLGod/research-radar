@@ -4,10 +4,8 @@ import SwiftUI
 
 struct PaperDetailView: View {
     let paper: ReportContents.Paper
-    let report: ReportRecordV1
-    let workspace: URL
+    let figures: [PaperFiguresModel.Figure]
     let localization: LocalizationStore
-    let visible: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -25,13 +23,11 @@ struct PaperDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }.id(PaperReadingSection.ID.paragraph(paragraph.key))
         }
-        if !paper.figures.isEmpty {
+        if !figures.isEmpty {
             Text(localization.text("paper.figures")).font(.system(size: 16, weight: .semibold))
                 .id(PaperReadingSection.ID.figures)
-            ForEach(paper.figures.indices, id: \.self) { index in
-                if visible {
-                    PaperFigureView(figure: paper.figures[index], report: report, workspace: workspace)
-                }
+            ForEach(figures) { figure in
+                PaperFigureView(figure: figure, localization: localization)
             }
         }
         if !paper.claims.isEmpty {
@@ -47,30 +43,24 @@ struct PaperDetailView: View {
 }
 
 private struct PaperFigureView: View {
-    let figure: ReportContents.Figure
-    let report: ReportRecordV1
-    let workspace: URL
-    @State private var image: NSImage?
+    let figure: PaperFiguresModel.Figure
+    let localization: LocalizationStore
 
     var body: some View {
-        Group {
-            if let image {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(nsImage: image).resizable().scaledToFit().accessibilityLabel(figure.displayCaption)
-                    Text(figure.displayCaption).font(.system(size: 13))
-                    if let attribution = figure.attribution {
-                        Text(attribution).font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            Image(nsImage: figure.image).resizable().scaledToFit().accessibilityLabel(figure.content.displayCaption)
+            Text(figure.content.displayCaption).font(.system(size: 13)).textSelection(.enabled)
+            if let explanation = figure.content.explanation, !explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(explanation).font(.system(size: 14)).lineSpacing(5).textSelection(.enabled)
+            }
+            if let original = figure.content.originalCaption {
+                DisclosureGroup(localization.text("paper.original_caption")) {
+                    Text(original).font(.system(size: 13)).textSelection(.enabled)
                 }
             }
-        }
-        .task(id: figure.relativePath) {
-            let task = Task.detached(priority: .userInitiated) {
-                try ReportFigureLoader.thumbnailData(path: figure.relativePath, report: report, workspace: workspace)
+            if let attribution = figure.content.attribution {
+                Text(attribution).font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            // Optional figures fail closed; captions never float without their image.
-            guard let data = try? await task.value, !Task.isCancelled else { return }
-            image = NSImage(data: data)
         }
     }
 }

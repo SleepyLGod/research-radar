@@ -27,11 +27,17 @@ struct ReportContents: Sendable {
         let relativePath: String
         let caption: String
         let localizedCaption: String?
+        let explanation: String?
         let attribution: String?
         let renderable: Bool?
         private let originalPath: String?
 
         var displayCaption: String { ReportContents.nonempty(localizedCaption) ?? caption }
+        var originalCaption: String? {
+            guard let localized = ReportContents.nonempty(localizedCaption),
+                  let original = ReportContents.nonempty(caption), localized != original else { return nil }
+            return caption
+        }
         var isPublicFigure: Bool {
             // Match the existing public renderers' exclusion of legacy page screenshots.
             renderable != false &&
@@ -80,11 +86,22 @@ struct ReportContents: Sendable {
                 ("context", explanation["opening_context"]),
                 ("thesis", explanation["core_thesis"] ?? nonempty(entry.essence)),
                 ("problem", explanation["problem_walkthrough"] ?? entry.problem?.core),
+                ("why_it_matters", entry.problem?.whyItMatters),
+                ("assumptions", listText(entry.problem?.hiddenAssumptions)),
                 ("method", explanation["solution_walkthrough"] ?? entry.solution?.core),
+                ("mechanism", entry.solution?.mechanism),
                 ("experiments", explanation["experiment_interpretation"] ?? entry.experiments?.summary),
                 ("related", explanation["related_work_context"] ?? entry.relatedWork?.novelty),
+                ("prior_work", listText(entry.relatedWork?.priorWork)),
+                ("repackaging_risk", entry.relatedWork?.repackagingRisk),
                 ("limitations", explanation["limitations_discussion"] ?? entry.limitations?.explicitLimitations?.joined(separator: "\n\n")),
-                ("example", explanation["plain_language_story"]),
+                ("inferred_weaknesses", listText(entry.limitations?.inferredWeaknesses)),
+                ("future_work", listText(entry.limitations?.futureWork)),
+                ("assessment", explanation["reader_takeaway"] == nil ? nil : entry.criticalAssessment?.bottomLine),
+                ("overclaiming_risk", entry.criticalAssessment?.overclaimingRisk),
+                ("weak_evaluations", listText(entry.criticalAssessment?.weakEvaluations)),
+                ("missing_ablations", listText(entry.criticalAssessment?.missingAblations)),
+                ("example", explanation["plain_language_story"] ?? entry.plainLanguageExample),
                 ("takeaway", explanation["reader_takeaway"] ?? entry.criticalAssessment?.bottomLine)
             ]
             var seen = Set<String>()
@@ -115,6 +132,11 @@ struct ReportContents: Sendable {
         return text
     }
 
+    private static func listText(_ values: [String]?) -> String? {
+        let items = (values ?? []).compactMap(nonempty)
+        return items.isEmpty ? nil : items.joined(separator: "\n\n")
+    }
+
     private struct Draft: Decodable {
         let topicId: String
         let sections: [Section]
@@ -127,10 +149,20 @@ struct ReportContents: Sendable {
     }
     private struct Fields: Decodable {
         let core: String?
+        let whyItMatters: String?
+        let hiddenAssumptions: [String]?
+        let mechanism: String?
         let summary: String?
         let novelty: String?
+        let priorWork: [String]?
+        let repackagingRisk: String?
         let explicitLimitations: [String]?
+        let inferredWeaknesses: [String]?
+        let futureWork: [String]?
         let bottomLine: String?
+        let overclaimingRisk: String?
+        let weakEvaluations: [String]?
+        let missingAblations: [String]?
     }
     private struct Entry: Decodable {
         let title: String
@@ -143,6 +175,7 @@ struct ReportContents: Sendable {
         let relatedWork: Fields?
         let limitations: Fields?
         let criticalAssessment: Fields?
+        let plainLanguageExample: String?
         let claims: [Claim]
         let figures: [Figure]?
     }

@@ -10,6 +10,7 @@ struct ReportBrowserView: View {
     let back: () -> Void
     let configure: () -> Void
     @State var browser = ReportBrowserModel()
+    @State private var figures = PaperFiguresModel()
     @State private var deliveryDisclosure: ReportDeliveryDisclosureState
 
     private var workspace: URL { URL(fileURLWithPath: store.configuration.workspaceRoot) }
@@ -18,6 +19,10 @@ struct ReportBrowserView: View {
     }
     private var deliverySnapshot: ReportDeliverySnapshot {
         .init(report: report, jobs: store.jobs, settings: store.configuration.delivery, busy: store.behaviorChangesBlocked)
+    }
+    private var selectedFigures: [PaperFiguresModel.Figure] {
+        guard visible, let paper = browser.selectedPaper else { return [] }
+        return figures.images(for: paper.id)
     }
 
     init(store: AppStore, report: ReportRecordV1, localization: LocalizationStore,
@@ -41,7 +46,8 @@ struct ReportBrowserView: View {
                     Divider()
                 }
                 if let paper = browser.selectedPaper, let contents = browser.contents {
-                    PaperReadingControls(papers: contents.papers, selected: paper, localization: localization,
+                    PaperReadingControls(papers: contents.papers, selected: paper,
+                        sections: paper.readingSections(hasAvailableFigures: !selectedFigures.isEmpty), localization: localization,
                         select: browser.openPaper, jump: { proxy.scrollTo($0, anchor: .top) })
                     Divider()
                 }
@@ -53,8 +59,7 @@ struct ReportBrowserView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             if let paper = browser.selectedPaper {
-                                PaperDetailView(paper: paper, report: report, workspace: workspace,
-                                    localization: localization, visible: visible)
+                                PaperDetailView(paper: paper, figures: selectedFigures, localization: localization)
                             } else {
                                 overview
                             }
@@ -69,6 +74,9 @@ struct ReportBrowserView: View {
         }
         .background(Color(nsColor: .textBackgroundColor))
         .task(id: report.id) { await browser.load(report: report, workspaceRoot: workspace) }
+        .task(id: visible ? browser.selectedPaper?.id : nil) {
+            await figures.load(paper: visible ? browser.selectedPaper : nil, report: report, workspace: workspace)
+        }
         .onChange(of: deliverySnapshot, initial: true) { _, snapshot in deliveryDisclosure.update(snapshot) }
     }
 

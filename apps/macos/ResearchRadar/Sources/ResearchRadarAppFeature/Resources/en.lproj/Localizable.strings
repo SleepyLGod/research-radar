@@ -404,3 +404,15 @@
 "paper.limitations" = "Limitations";
 "paper.example" = "Example";
 "paper.takeaway" = "What to remember";
+"paper.why_it_matters" = "Why it matters";
+"paper.assumptions" = "Assumptions";
+"paper.mechanism" = "Mechanism";
+"paper.prior_work" = "Prior work";
+"paper.repackaging_risk" = "Reuse of existing ideas";
+"paper.inferred_weaknesses" = "Inferred weaknesses";
+"paper.future_work" = "Future work";
+"paper.assessment" = "Critical assessment";
+"paper.overclaiming_risk" = "Overclaiming risk";
+"paper.weak_evaluations" = "Evaluation gaps";
+"paper.missing_ablations" = "Missing ablations";
+"paper.original_caption" = "Original caption";

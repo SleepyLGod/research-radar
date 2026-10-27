@@ -38,13 +38,13 @@ struct ReportReadingPresentationTests {
 
     @Test func chapterMenuContainsOnlyTheExistingPublicSections() throws {
         let contents = try ReportContents.decode(paperDraft(), topicID: "reader")
-        #expect(contents.papers[0].readingSections.map(\.id) == [.paragraph("thesis"), .paragraph("method"), .evidence])
-        #expect(contents.papers[1].readingSections.map(\.id) == [.paragraph("method"), .evidence])
+        #expect(contents.papers[0].readingSections().map(\.id) == [.paragraph("thesis"), .paragraph("method"), .evidence])
+        #expect(contents.papers[1].readingSections().map(\.id) == [.paragraph("method"), .evidence])
         let withFigure = try ReportContents.decode(paperDraft(overrides: ["figures": [[
             "relative_path": "figures/pixel.png", "caption": "Safe figure", "renderable": true
         ]]]), topicID: "reader").papers[0]
-        #expect(withFigure.readingSections.map(\.id) == [.paragraph("thesis"), .paragraph("method"), .figures, .evidence])
-        #expect(Set(withFigure.readingSections.map(\.id)).count == withFigure.readingSections.count)
+        #expect(withFigure.readingSections(hasAvailableFigures: true).map(\.id) == [.paragraph("thesis"), .paragraph("method"), .figures, .evidence])
+        #expect(Set(withFigure.readingSections().map(\.id)).count == withFigure.readingSections().count)
     }
 }
 

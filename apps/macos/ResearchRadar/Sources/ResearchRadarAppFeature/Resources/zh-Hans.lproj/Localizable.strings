@@ -404,3 +404,15 @@
 "paper.limitations" = "局限与边界";
 "paper.example" = "通俗例子";
 "paper.takeaway" = "读完可以记住什么";
+"paper.why_it_matters" = "为什么重要";
+"paper.assumptions" = "前提假设";
+"paper.mechanism" = "具体机制";
+"paper.prior_work" = "先前工作";
+"paper.repackaging_risk" = "已有思路的复用";
+"paper.inferred_weaknesses" = "推断的不足";
+"paper.future_work" = "未来工作";
+"paper.assessment" = "批判性判断";
+"paper.overclaiming_risk" = "过度主张风险";
+"paper.weak_evaluations" = "评估不足";
+"paper.missing_ablations" = "缺少的消融实验";
+"paper.original_caption" = "原始图注";

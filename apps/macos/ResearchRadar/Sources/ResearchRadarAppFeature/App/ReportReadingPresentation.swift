@@ -38,9 +38,9 @@ extension ReportContents.Paper {
         return .init(titleKey: "paper.preview_summary", text: summary)
     }
 
-    var readingSections: [PaperReadingSection] {
+    func readingSections(hasAvailableFigures: Bool = false) -> [PaperReadingSection] {
         var sections = paragraphs.map { PaperReadingSection(id: .paragraph($0.key)) }
-        if !figures.isEmpty { sections.append(.init(id: .figures)) }
+        if hasAvailableFigures && !figures.isEmpty { sections.append(.init(id: .figures)) }
         if !claims.isEmpty { sections.append(.init(id: .evidence)) }
         return sections
     }
