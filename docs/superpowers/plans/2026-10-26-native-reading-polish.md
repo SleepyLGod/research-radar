@@ -264,3 +264,90 @@ diff checks passed; the Swift summary remains 327 tests in 59 suites with two ex
 frozen-engine skips. The source/test slice is signed-off commit `7419e92`; this separate document
 commit retains the acceptance limits. Push status is recorded by the feature branch and PR history,
 not by converting any pending manual check into a pass.
+
+### Offline Popover Startup Diagnosis (2026-10-27)
+
+The user authorized offline investigation and a minimal fix only after reproducing a real problem.
+This follow-up permits neither commit/push nor real services, credential-value access or delivery.
+
+- **Detection limitation:** the older `script/macos_window_probe.swift` accepts only layer-zero
+  windows. The existing unchanged candidate's popover was observed at layer 25 after an AX press
+  of its own uniquely identified status item. Process startup and a layer-zero timeout alone are
+  therefore not valid evidence that this menu-bar UI cannot display.
+- **Separate production defect:** the unchanged candidate did not show a popover before status
+  input. A minimal native reproduction using the current production coordinator/status-item
+  classes showed the startup anchor window initially at zero height and then offscreen. Its
+  ordinary bounds and `isVisible` were already populated, but the first `show()` did not present.
+  After AppKit positioned the same anchor on a display, a later show succeeded. Merely dispatching
+  once to the next main-queue turn or checking application-launch completion did not establish
+  anchor readiness; no delay, polling loop or launch-state workaround was added to the product.
+- **Minimal fix:** `WindowCoordinator` waits only while its anchor window is empty/offscreen,
+  observing that window's move, resize and screen-change notifications. It removes the observers
+  once positioned or on close/toggle cancellation. Visibility is reported only if the popover
+  actually shows. No model, pipeline, protocol, reader content, renderer, delivery or config changes.
+- **Regression:** an offscreen-anchor test first failed against the old implementation. The fixed
+  suite covers both zero-height/offscreen setup and cancellation via close or toggle. Full Swift
+  regression passed (329 tests in 59 suites; two existing optional frozen-engine skips). Ruff,
+  privacy and whitespace checks passed. No skipped test or earlier manual gap is relabelled as passed.
+  The default offline Python regression also passed.
+- **Bounded runtime verification:** a separate temporary native-only App runs the production
+  application entry point with paused schedules/topics, disabled notifications/channels, an empty
+  queue and unique test credential names. No research engine or PDF helper is included. A
+  popover-aware external observer detected its layer-25 window before any status-button action;
+  subsequent AX status-button actions could show it again. This debug fixture uses ad-hoc signing,
+  not a new certificate or access to the user's signing key. It is not an independently packaged
+  release, an installer update or sustained-focus/physical-reader acceptance.
+- The test App exited normally with no remaining ResearchRadar processes. Full retained-candidate
+  file hashes and both old/new isolated-data checks remained unchanged; no jobs were created.
+  Retained/installed Apps, real configuration, reports, DMG and Release remain untouched. The
+  user's physical reading confirmation, VoiceOver and multi-display checks remain deferred.
+  After exit verification, the temporary QA App, test executables and newly created temporary
+  Swift build/module caches were moved to Trash. Small diagnostic records remain local only;
+  no runtime artifact is part of the source changes.
+
+#### Signed Packaged Candidate Startup Check
+
+The user subsequently authorized a separate candidate update with the existing local signing
+identity and isolated startup/hide/reopen/quit checks. Retained Apps and real configuration must
+stay unchanged; no live services, API credential-value reads, sends or source publication.
+
+- The native release-mode product was rebuilt in the existing Swift cache. A new independent
+  candidate copied the unchanged frozen engine from the retained candidate; no Python environment,
+  dependency, signing certificate or product feature was added. Static bundle verification and
+  deep/strict codesign checks passed, with the same designated requirement as the old candidate.
+- Fresh isolated data contains one paused fixture topic with an existing offline report, no
+  schedules or queued jobs, disabled channels/notifications and unique test credential names.
+  The observer verifies the
+  exact launched bundle path and operates only on that process's unique native status item.
+- The first on-screen layer-25 popover was observed before any status action, and an owned-window
+  capture confirmed the isolated home screen rather than a launch-error view. Two AX status-button
+  hide/reopen cycles passed. A right-click opened that process's native menu and its Quit action
+  exited the App normally; no ResearchRadar or helper process remained.
+- The initial observer stopped at a directory-URL equality check because of trailing-slash form;
+  its isolated process was explicitly closed. Comparing resolved path values fixed only that local
+  observer, not product code. The complete subsequent run passed all five visibility checks and
+  native-menu exit. This observer setup failure is not a candidate failure or a passed partial run.
+- Full file/link hashes of both retained and normal Apps stayed unchanged, as did all isolated
+  config/state/report files. No job was created, no connection check/research/upload/send was
+  requested, and only metadata for fresh test credential names is part of normal UI startup.
+- The separate signed candidate and a private launcher with an explicit isolated data root remain
+  local. No installed App, DMG, Release, real configuration or Git history was replaced. Physical
+  reading input, sustained-focus/resource checks, VoiceOver and multi-display acceptance remain
+  separate pending work. This packaging check does not relabel them as passed, rerun the research
+  regression, or supersede the current no-commit/no-push boundary.
+
+#### Authorized Startup Fix Closeout
+
+The user subsequently authorized pre-commit checks, a read-only code/privacy/status review,
+and a signed-off source commit pushed to the existing Draft PR. This supersedes the earlier
+no-commit/no-push stop for these four source, test and acceptance-document files only.
+
+- Review only the anchor-readiness/cancellation change, its window regressions and these two
+  acceptance documents. No pipeline, renderer, provider, protocol or configuration change.
+- Run fresh offline Swift/Python regression, Ruff, privacy and whitespace checks. Keep the
+  existing optional test skips and deferred physical reading checks explicit.
+- Exclude candidates, installers, screenshots, local launchers, raw diagnostic logs, isolated
+  data, credentials and signing material. No external review-service upload is part of this work.
+- Keep the PR Draft. Do not merge, update Release, rebuild packages or trigger research/delivery.
+  Current source-publication status belongs to the actual commit/branch/PR history, not to a
+  retrospective claim that any pending manual acceptance passed.

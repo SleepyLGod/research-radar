@@ -7,6 +7,35 @@ drive the research model.
 
 ## Current State
 
+- **Popover startup fix (2026-10-27, unreleased):** the earlier missing-window check
+  had two separate causes. The old layer-zero observer cannot recognize the native layer-25
+  popover. Independently, the production App requested its first presentation while AppKit's
+  status-item window was still zero-height or offscreen; it did not reopen after positioning.
+  The minimal App-only fix waits for that window's move/resize/screen notifications, then releases
+  those observers when the anchor is ready or presentation is cancelled. There is no timer,
+  polling, new engine behavior or change to report content. Regression tests cover zero-height
+  and offscreen anchors plus close/toggle cancellation. Full offline Python and Swift regression
+  passed: 329 Swift tests in 59 suites, with the same two optional frozen-engine tests skipped.
+  A disposable native-only App using the production entry point, paused isolated fixture data
+  and no engine/helper observed an on-screen popover before any status-button action; subsequent
+  AX status-button actions could open it again. This is controlled automation, not physical input
+  or sustained reading acceptance. It exited normally, with no jobs/descendants and unchanged
+  isolated files and retained candidate. The retained candidate was not rebuilt, no installed App
+  or DMG was replaced, and manual reading/VoiceOver/multi-display checks remain deferred.
+  [Cause and verification bounds](superpowers/plans/2026-10-26-native-reading-polish.md#offline-popover-startup-diagnosis-2026-10-27).
+
+  A subsequently authorized independent packaged candidate reused the existing local signing
+  identity and unchanged frozen engine. Release-mode build, static bundle verification and
+  deep/strict signature checks passed; its designated requirement matches the retained candidate.
+  With fresh paused isolated fixture data, the real signed candidate automatically showed its
+  layer-25 popover before input, completed two AX status-button hide/reopen cycles, and exited
+  through its own native Quit menu. Owned-window capture confirmed the isolated home screen.
+  No jobs or descendants remained, and all isolated data plus retained/normal App file hashes
+  were unchanged. This is packaged startup acceptance, not physical reading, extended resource
+  measurement or a Release/DMG update. The user subsequently authorized reviewed signed-off
+  source closeout to the existing Draft PR; manual reading checks remain pending, and merge
+  or Release updates are not authorized.
+
 - **Native reading content/figure repair (2026-10-27, unreleased):** the App now retains the
   previously omitted public legacy details and figure explanations. Distinct original captions
   remain available without replacing their translations. The figure heading and chapter menu

@@ -6,6 +6,53 @@ import WebKit
 @testable import ResearchRadarAppFeature
 
 @MainActor @Suite struct WindowPresentationTests {
+    @Test(arguments: [CGFloat(0), CGFloat(30)])
+    func popoverWaitsForAnchorToReachScreen(initialHeight: CGFloat) async throws {
+        _ = NSApplication.shared
+        let screen = try #require(NSScreen.main)
+        let anchorWindow = NSWindow(contentRect: NSRect(x: screen.frame.minX, y: screen.frame.minY - 50,
+            width: 38, height: initialHeight), styleMask: .borderless, backing: .buffered, defer: false)
+        anchorWindow.isReleasedWhenClosed = false
+        let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 22, height: 27))
+        anchorWindow.contentView = anchor
+        anchorWindow.orderFront(nil)
+        let coordinator = WindowCoordinator { AnyView(Text("Offline anchor check")) }
+        coordinator.attach(to: anchor)
+        var visibility: [Bool] = []
+        coordinator.onVisibilityChange = { visibility.append($0) }
+        defer { coordinator.close(); anchorWindow.close() }
+
+        coordinator.show()
+        #expect(!coordinator.popover.isShown)
+        #expect(!visibility.contains(true))
+        anchorWindow.setFrame(NSRect(x: screen.frame.midX, y: screen.frame.maxY - 30,
+            width: 38, height: 30), display: false)
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(coordinator.popover.isShown)
+        #expect(visibility == [true])
+    }
+
+    @Test(arguments: [false, true])
+    func closingWhileAnchorIsOffscreenCancelsPendingPresentation(usingToggle: Bool) async throws {
+        _ = NSApplication.shared
+        let screen = try #require(NSScreen.main)
+        let anchorWindow = NSWindow(contentRect: NSRect(x: screen.frame.minX, y: screen.frame.minY - 50,
+            width: 38, height: 30), styleMask: .borderless, backing: .buffered, defer: false)
+        anchorWindow.isReleasedWhenClosed = false
+        let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 22, height: 27))
+        anchorWindow.contentView = anchor
+        anchorWindow.orderFront(nil)
+        let coordinator = WindowCoordinator { AnyView(Text("Offline cancellation check")) }
+        coordinator.attach(to: anchor)
+        defer { coordinator.close(); anchorWindow.close() }
+
+        coordinator.show()
+        if usingToggle { coordinator.toggle() } else { coordinator.close() }
+        anchorWindow.setFrameOrigin(NSPoint(x: screen.frame.midX, y: screen.frame.maxY - 30))
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(!coordinator.popover.isShown)
+    }
+
     @Test func reportPreviewsDoNotPreloadReaderInsideRetainedWorkspace() async throws {
         _ = NSApplication.shared
         let root = try task3Root()
