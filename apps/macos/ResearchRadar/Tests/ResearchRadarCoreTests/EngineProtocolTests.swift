@@ -3,6 +3,32 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct EngineProtocolTests {
+    @Test func paperLedgerCanonicalFixtureRoundTripsAndVersionStatusStaysSeparate() throws {
+        let data = try CanonicalFixture.data(named: "paper-ledger-result.json")
+        let result = try EngineProtocolCodec.decodeResult(data)
+        #expect(result.command == .readPaperLedger)
+        let paper = try #require(result.paperLedger?.papers.first)
+        #expect(paper.firstIncluded == "2026-10-26" && paper.lastIncluded == "2026-10-27")
+        #expect(paper.hasPublicReading)
+        #expect(paper.occurrences[0].version == "v2" && paper.occurrences[0].paperIndex == nil)
+        #expect(try CanonicalFixture.object(from: EngineProtocolCodec.encode(result)) == CanonicalFixture.object(from: data))
+    }
+
+    @Test func paperLedgerRejectsUnsafeLinksUnknownFieldsAndInvalidIndices() throws {
+        let fixture = try CanonicalFixture.objectDictionary(named: "paper-ledger-result.json")
+        for (key, value): (String, Any) in [("paper_index", true), ("paper_index", -1),
+            ("source_url", "file:///private/report"), ("source_url", "https://user:pass@example.org"),
+            ("report_id", UUID().uuidString), ("report_date", "2026-02-30"), ("extra", true)] {
+            var object = fixture
+            var ledger = try #require(object["paper_ledger"] as? [String: Any])
+            var papers = try #require(ledger["papers"] as? [[String: Any]])
+            var occurrences = try #require(papers[0]["occurrences"] as? [[String: Any]])
+            occurrences[0][key] = value; papers[0]["occurrences"] = occurrences
+            ledger["papers"] = papers; object["paper_ledger"] = ledger
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeResult(CanonicalFixture.data(from: object)) }
+        }
+    }
+
     @Test func paperProgressFixtureRoundTripsWithoutChangingLegacyEvents() throws {
         let data = try CanonicalFixture.data(named: "paper-progress-event.json")
         let event = try EngineProtocolCodec.decodeEvent(data)

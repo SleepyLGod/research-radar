@@ -21,6 +21,7 @@ from research_radar.app_bridge.protocol import (
     BootstrapTopicPayloadV1,
     EngineRequestV1,
     PreflightPayloadV1,
+    ReadPaperLedgerPayloadV1,
     RetryDeliveryPayloadV1,
     RunDailyPayloadV1,
     UploadWeChatCoverPayloadV1,
@@ -37,7 +38,26 @@ from research_radar.pipeline.progress import ProgressListener
 from research_radar.publishers.wechat.client import WeChatDraftClient
 from research_radar.security.secrets import SecretBackend, SecretManager
 from research_radar.storage.files import read_json
+from research_radar.storage.paper_ledger import build_paper_ledger
 from research_radar.topic_bootstrap import bootstrap_topic_draft, lint_topic_draft
+
+
+def handle_read_paper_ledger(
+    request: EngineRequestV1, *, config: LoadedAppConfigurationV1 | None,
+    secrets: object, events: EventWriter, pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
+) -> dict[str, object]:
+    """Project saved public report metadata without credentials or research calls."""
+
+    if config is None:
+        raise ValueError("read_paper_ledger requires App configuration.")
+    payload = cast(ReadPaperLedgerPayloadV1, request.payload)
+    if payload.topic_id not in {topic.id for topic in config.research.topics}:
+        raise ValueError("Paper ledger topic is not configured.")
+    return build_paper_ledger(
+        config.workspace_root, payload.topic_id, payload.reports,
+        cancelled=cancellation_event.is_set if cancellation_event else lambda: False,
+    )
 
 
 def handle_preflight(

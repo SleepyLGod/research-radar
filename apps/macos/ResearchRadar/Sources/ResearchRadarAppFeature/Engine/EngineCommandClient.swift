@@ -58,6 +58,17 @@ public actor EngineCommandClient {
 
     public func cancel() async { await gate.cancel() }
 
+    public func readPaperLedger(topicID: String, reports: [LedgerReportReferenceV1]) async throws -> TopicPaperLedgerV1 {
+        let request = try EngineRequestV1(requestID: UUID(), command: .readPaperLedger, createdAt: clock(),
+            appSupportRoot: appSupportRoot.path,
+            configPath: appSupportRoot.appending(path: "config/app-config.json").path,
+            payload: .readPaperLedger(.init(topicID: topicID, reports: reports)))
+        guard let ledger = try await execute(request).paperLedger else {
+            throw EngineJobCoordinatorError.invalidTerminalArtifact
+        }
+        return ledger
+    }
+
     public func uploadWeChatCover(data: Data, fileExtension: String, sha256: String) async throws -> WeChatCoverResultV1 {
         let requestID = UUID()
         let path = appSupportRoot.appending(path: "jobs/\(requestID.uuidString.lowercased())/cover.\(fileExtension)")

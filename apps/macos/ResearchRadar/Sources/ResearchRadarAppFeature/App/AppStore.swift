@@ -306,6 +306,22 @@ public final class AppStore {
         topicDraft = nil
     }
 
+    public func readPaperLedger(topicID: String, reports: [LedgerReportReferenceV1]) async throws -> TopicPaperLedgerV1 {
+        guard !behaviorChangesBlocked else { throw AppStoreError.busy }
+        guard configuration.topics.contains(where: { $0.id == topicID }) else { throw AppStoreError.invalidTopic }
+        if reports.isEmpty { return .init(topicID: topicID, reportIDs: [], papers: []) }
+        guard let commandClient else {
+            throw AppStoreError.invalidTopic
+        }
+        let saved = self.reports.filter { $0.topicID == topicID }
+        guard reports.allSatisfy({ reference in saved.contains {
+            $0.id == reference.reportID && $0.reportDate == reference.reportDate && $0.runDirectory == reference.runDirectory
+        } }) else { throw EngineProtocolError.invalidValue }
+        commandActive = true; isEngineRunning = true; cancellationRequested = false
+        defer { finishCommand() }
+        return try await commandClient.readPaperLedger(topicID: topicID, reports: reports)
+    }
+
     public func bootstrapTopic(description: String, language: ReportLanguageV1) async {
         guard !behaviorChangesBlocked else { lastErrorCode = "engine_busy"; return }
         guard let commandClient, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

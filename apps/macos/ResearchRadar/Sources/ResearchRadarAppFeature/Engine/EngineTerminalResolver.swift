@@ -74,6 +74,13 @@ enum EngineTerminalResolver {
                 guard result.preflight != nil else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
             case .bootstrapTopic:
                 guard result.topicDraft != nil else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
+            case .readPaperLedger:
+                guard let ledger = result.paperLedger, case .readPaperLedger(let payload) = request.payload,
+                      ledger.topicID == payload.topicID,
+                      Set(ledger.reportIDs) == Set(payload.reports.map(\.reportID)),
+                      ledger.papers.flatMap(\.occurrences).allSatisfy({ occurrence in
+                          payload.reports.contains { $0.reportID == occurrence.reportID && $0.reportDate == occurrence.reportDate }
+                      }) else { throw EngineJobCoordinatorError.requestMismatch }
             case .uploadWeChatCover:
                 guard let cover = result.cover, case .uploadWeChatCover(let payload) = request.payload,
                       cover.imageSHA256 == payload.imageSHA256 else {

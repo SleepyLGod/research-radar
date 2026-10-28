@@ -75,6 +75,7 @@ class BridgeDependencies:
     run_daily: CommandHandler
     retry_delivery: CommandHandler
     upload_wechat_cover: CommandHandler
+    read_paper_ledger: CommandHandler
     clock: Callable[[], datetime]
     config_loader: Callable[[Path, bool], object]
     secret_manager_factory: Callable[[], object]
@@ -86,6 +87,7 @@ class BridgeDependencies:
         from research_radar.app_bridge.handlers import (
             handle_bootstrap_topic,
             handle_preflight,
+            handle_read_paper_ledger,
             handle_retry_delivery,
             handle_run_daily,
             handle_upload_wechat_cover,
@@ -97,6 +99,7 @@ class BridgeDependencies:
             run_daily=handle_run_daily,
             retry_delivery=handle_retry_delivery,
             upload_wechat_cover=handle_upload_wechat_cover,
+            read_paper_ledger=handle_read_paper_ledger,
             clock=lambda: datetime.now(UTC),
             config_loader=lambda path, require_topics: load_app_configuration(
                 path, require_topics=require_topics
@@ -117,6 +120,7 @@ class BridgeDependencies:
             run_daily=unexpected,
             retry_delivery=unexpected,
             upload_wechat_cover=unexpected,
+            read_paper_ledger=unexpected,
             clock=lambda: datetime.now(UTC),
             config_loader=lambda path, require_topics: object(),
             secret_manager_factory=lambda: object(),
@@ -296,7 +300,8 @@ def run_bridge(
         output = handler(
             request,
             config=config,
-            secrets=active_dependencies.secret_manager_factory(),
+            secrets=(None if request.command is EngineCommand.READ_PAPER_LEDGER
+                     else active_dependencies.secret_manager_factory()),
             events=writer,
             pdf_helper_path=pdf_helper_path,
             cancellation_event=cancelled,
@@ -453,6 +458,7 @@ def _handler_for(command: EngineCommand, dependencies: BridgeDependencies) -> Co
         EngineCommand.RUN_DAILY: dependencies.run_daily,
         EngineCommand.RETRY_DELIVERY: dependencies.retry_delivery,
         EngineCommand.UPLOAD_WECHAT_COVER: dependencies.upload_wechat_cover,
+        EngineCommand.READ_PAPER_LEDGER: dependencies.read_paper_ledger,
     }[command]
 
 
@@ -464,6 +470,7 @@ def _stage_for_request(request: EngineRequestV1) -> str:
         EngineCommand.BOOTSTRAP_TOPIC: "topic_bootstrap",
         EngineCommand.RUN_DAILY: "discovery",
         EngineCommand.UPLOAD_WECHAT_COVER: "wechat_cover",
+        EngineCommand.READ_PAPER_LEDGER: "preflight",
     }[request.command]
 
 
@@ -479,6 +486,7 @@ def _result_envelope(
         EngineCommand.RUN_DAILY: "report",
         EngineCommand.RETRY_DELIVERY: "delivery",
         EngineCommand.UPLOAD_WECHAT_COVER: "cover",
+        EngineCommand.READ_PAPER_LEDGER: "paper_ledger",
     }[request.command]
     payloads: dict[str, object | None] = {
         "preflight": None,

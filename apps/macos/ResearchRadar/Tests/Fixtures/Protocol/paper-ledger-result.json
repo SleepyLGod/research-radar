@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "request_id": "00000000-0000-0000-0000-000000000003",
+  "command": "read_paper_ledger",
+  "status": "succeeded",
+  "completed_at": "2026-10-28T09:00:00Z",
+  "report": null,
+  "preflight": null,
+  "topic_draft": null,
+  "delivery": null,
+  "paper_ledger": {
+    "schema_version": 1,
+    "topic_id": "memory",
+    "report_ids": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "unavailable_reports": [],
+    "papers": [
+      {
+        "paper_id": "11e56cd8a66eef7453c83dcf918342d5fbf34a7ef589539600a164218d8500ff",
+        "title": "Memory evidence",
+        "occurrences": [
+          {
+            "occurrence_id": "f748a7fee9779084a277ef0e756b5582422b328b29f768ac319acfa042fdab6d",
+            "report_id": "00000000-0000-0000-0000-000000000002",
+            "report_date": "2026-10-27",
+            "version": "v2",
+            "source_url": "https://arxiv.org/abs/2601.01234v2",
+            "title": "Memory evidence",
+            "paper_index": null
+          },
+          {
+            "occurrence_id": "103439a6dd996b23b7fb1fb56e322e298472ad6394d670143978d6efae83bd7c",
+            "report_id": "00000000-0000-0000-0000-000000000001",
+            "report_date": "2026-10-26",
+            "version": "v1",
+            "source_url": "https://arxiv.org/abs/2601.01234v1",
+            "title": "Memory evidence",
+            "paper_index": 0
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -14,6 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from research_radar.app_bridge import BRIDGE_SCHEMA_VERSION
+from research_radar.storage.paper_ledger import LedgerReport
 
 _REQUEST_FIELDS = {
     "schema_version",
@@ -25,6 +26,7 @@ _REQUEST_FIELDS = {
     "payload",
 }
 _PAYLOAD_FIELDS = {
+    "read_paper_ledger": {"topic_id", "reports"},
     "upload_wechat_cover": {"image_path", "image_sha256"},
     "preflight": {"live_probe"},
     "bootstrap_topic": {"description", "language"},
@@ -68,6 +70,7 @@ class EngineCommand(StrEnum):
     RUN_DAILY = "run_daily"
     RETRY_DELIVERY = "retry_delivery"
     UPLOAD_WECHAT_COVER = "upload_wechat_cover"
+    READ_PAPER_LEDGER = "read_paper_ledger"
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,12 +119,21 @@ class UploadWeChatCoverPayloadV1:
     image_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class ReadPaperLedgerPayloadV1:
+    """Saved report references for an offline topic paper projection."""
+
+    topic_id: str
+    reports: list[LedgerReport]
+
+
 EnginePayloadV1 = (
     PreflightPayloadV1
     | BootstrapTopicPayloadV1
     | RunDailyPayloadV1
     | RetryDeliveryPayloadV1
     | UploadWeChatCoverPayloadV1
+    | ReadPaperLedgerPayloadV1
 )
 
 
@@ -224,6 +236,28 @@ def _parse_payload(
         raise ProtocolError(f"Invalid {command.value} payload: {detail}.")
     if command is EngineCommand.PREFLIGHT:
         return PreflightPayloadV1(live_probe=_require_bool(value, "live_probe"))
+    if command is EngineCommand.READ_PAPER_LEDGER:
+        references = value["reports"]
+        if not isinstance(references, list):
+            raise ProtocolError("reports must be an array.")
+        reports = []
+        for reference in references:
+            if not isinstance(reference, dict) or set(reference) != {
+                "report_id", "report_date", "run_dir",
+            }:
+                raise ProtocolError("Invalid paper ledger report reference.")
+            try:
+                identifier = _require_str(reference, "report_id")
+                UUID(identifier)
+                path = Path(_require_str(reference, "run_dir"))
+                if not path.is_absolute():
+                    raise ValueError("run_dir must be absolute.")
+                reports.append(LedgerReport(
+                    identifier, _require_str(reference, "report_date"), path,
+                ))
+            except ValueError as exc:
+                raise ProtocolError("Invalid paper ledger report reference.") from exc
+        return ReadPaperLedgerPayloadV1(_require_str(value, "topic_id"), reports)
     if command is EngineCommand.UPLOAD_WECHAT_COVER:
         image = Path(_require_str(value, "image_path"))
         digest = _require_str(value, "image_sha256")

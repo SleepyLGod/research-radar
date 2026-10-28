@@ -115,11 +115,21 @@ public enum EngineProtocolCodec {
             guard let path = payload["image_path"] as? String, path.hasPrefix("/"),
                   validDigest(payload["image_sha256"]) else { throw EngineProtocolError.invalidValue }
         }
+        if command == .readPaperLedger {
+            guard let topic = payload["topic_id"] as? String, !topic.isEmpty,
+                  let reports = payload["reports"] as? [[String: Any]] else { throw EngineProtocolError.invalidValue }
+            for report in reports {
+                try requireExactKeys(report, ["report_id", "report_date", "run_dir"])
+                guard let id = report["report_id"] as? String, UUID(uuidString: id) != nil,
+                      validReportDate(report["report_date"]),
+                      let path = report["run_dir"] as? String, path.hasPrefix("/") else { throw EngineProtocolError.invalidValue }
+            }
+        }
     }
 
     private static func validateResult(_ data: Data) throws {
         let object = try protocolObject(data)
-        try requireExactKeys(object, object["cover"] == nil ? resultKeys : resultKeys.union(["cover"]))
+        try requireExactKeys(object, resultKeys.union(["cover", "paper_ledger"].filter { object[$0] != nil }))
         try requireSchemaVersion(object)
         let command = try requireEnum(EngineCommand.self, object["command"])
         _ = try requireEnum(EngineResultStatus.self, object["status"])
@@ -163,7 +173,60 @@ public enum EngineProtocolCodec {
             guard let mediaID = cover["media_id"] as? String,
                   !mediaID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   validDigest(cover["image_sha256"]) else { throw EngineProtocolError.invalidValue }
+        case .readPaperLedger:
+            try validatePaperLedger(try requireObject(object[expected]))
         }
+    }
+
+    private static func validReportDate(_ value: Any?) -> Bool {
+        guard let text = value as? String, text.count == 10 else { return false }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard let date = formatter.date(from: text) else { return false }
+        return formatter.string(from: date) == text
+    }
+
+    private static func validatePaperLedger(_ ledger: [String: Any]) throws {
+        try requireExactKeys(ledger, ["schema_version", "topic_id", "report_ids", "papers", "unavailable_reports"])
+        try requireSchemaVersion(ledger)
+        guard let topic = ledger["topic_id"] as? String, !topic.isEmpty,
+              let reports = ledger["report_ids"] as? [String],
+              Set(reports).count == reports.count, reports.allSatisfy({ UUID(uuidString: $0) != nil }),
+              let missing = ledger["unavailable_reports"] as? [String],
+              Set(missing).count == missing.count, Set(missing).isSubset(of: Set(reports)),
+              let papers = ledger["papers"] as? [[String: Any]] else { throw EngineProtocolError.invalidValue }
+        var identities = Set<String>(), occurrences = Set<String>()
+        for paper in papers {
+            try requireExactKeys(paper, ["paper_id", "title", "occurrences"])
+            guard validDigest(paper["paper_id"]), let id = paper["paper_id"] as? String,
+                  identities.insert(id).inserted, validLedgerTitle(paper["title"]),
+                  let entries = paper["occurrences"] as? [[String: Any]], !entries.isEmpty else { throw EngineProtocolError.invalidValue }
+            for entry in entries {
+                try requireExactKeys(entry, ["occurrence_id", "report_id", "report_date", "version", "source_url", "title", "paper_index"])
+                guard validDigest(entry["occurrence_id"]), let id = entry["occurrence_id"] as? String,
+                      occurrences.insert(id).inserted,
+                      let report = entry["report_id"] as? String, reports.contains(report), !missing.contains(report),
+                      validReportDate(entry["report_date"]), validLedgerTitle(entry["title"]),
+                      let rawURL = entry["source_url"] as? String,
+                      let url = URLComponents(string: rawURL), ["http", "https"].contains(url.scheme?.lowercased()),
+                      url.host?.isEmpty == false, url.user == nil, url.password == nil else { throw EngineProtocolError.invalidValue }
+                if !(entry["version"] is NSNull) {
+                    guard let version = entry["version"] as? String, !version.isEmpty else { throw EngineProtocolError.invalidValue }
+                }
+                if !(entry["paper_index"] is NSNull) {
+                    guard let index = entry["paper_index"] as? NSNumber, !isJSONBoolean(index),
+                          index.int64Value >= 0, index.doubleValue == Double(index.int64Value) else { throw EngineProtocolError.invalidValue }
+                }
+            }
+        }
+    }
+
+    private static func validLedgerTitle(_ value: Any?) -> Bool {
+        guard let title = value as? String else { return false }
+        return !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 500
     }
 
     private static func validDigest(_ value: Any?) -> Bool {
@@ -323,18 +386,20 @@ public enum EngineProtocolCodec {
             "run_dir", "channel", "allow_resend", "acknowledge_unknown_outcome",
         ],
         .uploadWeChatCover: ["image_path", "image_sha256"],
+        .readPaperLedger: ["topic_id", "reports"],
     ]
     private static let resultKeys: Set<String> = [
         "schema_version", "request_id", "command", "status", "completed_at",
         "report", "preflight", "topic_draft", "delivery",
     ]
-    private static let resultPayloadKeys = ["report", "preflight", "topic_draft", "delivery", "cover"]
+    private static let resultPayloadKeys = ["report", "preflight", "topic_draft", "delivery", "cover", "paper_ledger"]
     private static let resultPayloadKey: [EngineCommand: String] = [
         .preflight: "preflight",
         .bootstrapTopic: "topic_draft",
         .runDaily: "report",
         .retryDelivery: "delivery",
         .uploadWeChatCover: "cover",
+        .readPaperLedger: "paper_ledger",
     ]
     private static let preflightKeys: Set<String> = ["checks", "ready"]
     private static let preflightCheckKeys: Set<String> = [
