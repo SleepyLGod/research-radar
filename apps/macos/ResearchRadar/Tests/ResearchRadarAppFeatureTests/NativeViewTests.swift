@@ -6,6 +6,48 @@ import Testing
 @testable import ResearchRadarAppFeature
 
 @MainActor @Suite struct NativeViewTests {
+    @Test func capturePaperLedgerWhenRequested() async throws {
+        guard let path = ProcessInfo.processInfo.environment["RESEARCH_RADAR_LEDGER_EVIDENCE_ROOT"],
+              path.hasPrefix("/") else { return }
+        let output = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let root = try task3Root(); defer { task3Trash(root) }
+        let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().appending(path: "Fixtures/Protocol/paper-ledger-result.json")
+        let snapshot = try #require(EngineProtocolCodec.decodeResult(Data(contentsOf: fixtureURL)).paperLedger)
+        let reports = snapshot.reportIDs.enumerated().map { index, id in
+            ReportRecordV1(id: id, topicID: "memory", reportDate: "2026-10-\(26 + index)",
+                runDirectory: root.appending(path: id.uuidString).path,
+                articleDraftPath: root.appending(path: "\(id)/article_draft.json").path,
+                reportHTMLPath: root.appending(path: "\(id)/wechat.html").path, title: "Offline report", summary: "",
+                sourceCount: 1, deepReadCount: index == 0 ? 1 : 0, publishableClaimCount: index == 0 ? 1 : 0,
+                deliveries: [], createdAt: Date())
+        }
+        var config = AppConfigurationDefaults.make(workspaceRoot: root, codexExecutable: nil)
+        config.topics = [.init(id: "memory", displayName: "Agent memory / 智能体记忆", researchFocus: "Offline",
+            queries: ["memory"], paperQueries: ["memory"], reportLanguage: .chinese)]
+        let store = AppStore(configuration: config, reportSnapshot: .init(reports: reports),
+            runtime: .init(windowMode: .full, selectedTopicID: "memory", updatedAt: Date()),
+            appSupportRoot: root, secretStore: ViewTestSecrets())
+        let model = PaperLedgerModel()
+        await model.load(topicID: "memory", reports: reports.map {
+            .init(reportID: $0.id, reportDate: $0.reportDate, runDirectory: $0.runDirectory)
+        }) { _, _ in snapshot }
+        let presentation = WindowPresentationState()
+        for language in [AppLanguagePreference.english, .simplifiedChinese] {
+            for dark in [false, true] {
+                for history in [false, true] {
+                    model.select(history ? snapshot.papers[0].id : nil)
+                    try await capture(PaperLedgerView(store: store,
+                        localization: LocalizationStore(preference: language), presentation: presentation,
+                        model: model, open: { _, _, _ in }), size: NSSize(width: 620, height: 600),
+                        to: output.appending(path: "ledger-\(language.rawValue)-\(dark ? "dark" : "light")-\(history ? "history" : "list").png"), dark: dark)
+                }
+            }
+        }
+        #expect(store.jobs.isEmpty && !store.isEngineRunning)
+    }
+
     @Test func capturePaperProgressWhenRequested() async throws {
         guard let path = ProcessInfo.processInfo.environment["RESEARCH_RADAR_PAPER_PROGRESS_EVIDENCE_ROOT"],
               path.hasPrefix("/") else { return }

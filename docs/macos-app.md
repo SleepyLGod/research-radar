@@ -183,6 +183,23 @@ Research continues when the panel closes. Use the task's cancel action to stop i
 Use the menu-bar right-click menu to quit. Quitting cancels current work and stops App scheduling;
 it does not leave a hidden scheduler running.
 
+### Unreleased Candidate: Papers Across Reports
+
+The current source candidate adds **Papers** to the full workspace. It is not in the published
+`v0.3.0b1` download. Select a topic, search its saved papers, or filter for **With reading** and
+**Source only**. Open a paper to see its inclusion dates and recorded versions. Each occurrence
+links back to its original report; a public reading also offers its text and evidence.
+
+Dates mean inclusion in a saved report, not publication or the first search result. A reading of
+v1 does not mark a source-only v2 as read. Missing version information remains unknown. Identity
+uses identifiers in saved source URLs; similar titles alone are not merged. Unavailable reports
+are flagged rather than treated as empty history.
+
+The ledger reads existing report metadata on demand without models, searches, credentials, or
+delivery. It can be rebuilt after restart; it does not rewrite reports or keep a second copy of
+their prose. Topic graphs, automatic classification, and relationship inference are not included.
+Offline projection/protocol/navigation checks do not replace physical-input acceptance.
+
 ## 4. Optional: WeChat Drafts and Private Email
 
 Settings has two switches: **Create a WeChat draft after research** and **Send email after research**.

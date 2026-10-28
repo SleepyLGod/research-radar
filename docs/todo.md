@@ -330,10 +330,72 @@ drive the research model.
   from inspected screenshots, not AX-text assertions. Zero real credential reads, no live services
   or delivery, and unchanged report bytes. The test App exited. This feature remains unreleased;
   VoiceOver and other deferred manual checks remain open.
-- **Confirmed next scope: cross-day topic research workspace, with a graph as well as a list.**
+- **Cross-day paper ledger (2026-10-28, unreleased source):** a shared Python projection
+  reads saved public report metadata on demand. Paper identities exclude version; occurrences
+  retain report, date, version, safe source URL and report-local reading locator. Native Papers
+  adds search, all/with-reading/source-only filters, inclusion history and return navigation to
+  the original report, public reading and evidence. A v1 reading does not mark source-only v2 as
+  read; similar titles do not merge. Missing versions remain unknown and unavailable reports
+  are flagged. An in-memory topic/report-reference cache avoids duplicate reads; there is no
+  database, idle scan, model stage, copied prose or relationship inference. Offline checks use
+  two dated reports, including the production frozen engine and restart loader; report/delivery
+  artifacts are not rewritten. Native snapshots are layout evidence, not physical-input proof.
+  Candidate-App control-path acceptance is recorded below; physical keyboard search entry,
+  help dismissal/focus, VoiceOver and other deferred manual checks remain unaccepted.
+  Normal App/configuration and the published Release are unchanged.
+  Python **985 passed, 2 opt-in checks skipped**; Swift reported **350 tests in 61 suites passed**,
+  with the ledger frozen-engine test enabled and the older frozen-daily/cover opt-ins left off.
+  Ruff, localization syntax, privacy, diff and independent frozen-engine bundle/signature checks
+  passed. Eight rendered list/history layouts were inspected in both languages and appearances.
+  Read-only review findings and its refresh follow-up were reproduced, fixed and rechecked.
+- **Independent ledger candidate acceptance (2026-10-28, unreleased):** rebuilt native code and
+  the production frozen engine into a separate 50.08 MiB App using the existing certificate and
+  unchanged designated signing requirement. Real candidate controls, not a replacement test
+  host, exercised two explicitly synthetic dated reports: merged papers, v1 reading vs v2
+  source-only, unknown versions, both filters, both original reports, full HTML, public reading,
+  evidence quote/location, and return to the selected paper's history. Menu-bar collapse/reopen,
+  compact/full retention and restart reconstruction/evidence lookup passed. Draft/HTML/index and
+  isolated configuration bytes were unchanged; the normal App and both earlier candidate App
+  trees were retained byte-for-byte. Within one session, reopening/navigation reused the ledger
+  request; restart rebuilt it. All requests were offline ledger reads, with no research/delivery
+  job, real service call or credential-value access. The candidate exited without helper residue.
+  Keyboard search remains unaccepted: AX value assignment did not update the binding and
+  synthesized text input was inconclusive. Successful filtering is not a keyboard-search claim.
+  Native AXPress/owned-control mouse events are bounded automation, not physical-user,
+  VoiceOver, multi-display or appearance-accessibility acceptance. No product-code repair,
+  replacement of the normal App, Git staging, commit, push or Release update occurred.
+  An initial post-acceptance ledger check passed seven tests but failed the evidence-entry
+  scroll-offset test; an isolated repeat also observed zero offset. The bounded follow-up below
+  diagnoses and fixes that failure rather than dismissing it based on the native control path.
+- **Evidence-entry positioning follow-up (2026-10-28, unreleased source):** traced a native reader
+  lifecycle race: the one-shot scroll request could run before the scroll layout was ready.
+  Waiting longer in the assertion did not replay the missed request. The App now uses the
+  scroll-content geometry update for initial positioning and consumes that request once; no
+  fixed delay, polling, repeated scroll attempts, protocol or research change was added.
+  Native regression cases cover English/Chinese and fresh/preloaded report contents, reaching
+  the evidence section, retaining manual scrolling across resize, and switching papers at the
+  top. Draft and HTML bytes remain unchanged. Python **985 passed, 2 existing opt-in checks
+  skipped**; Swift **350 tests in 61 suites passed**, with the ledger frozen-engine check enabled.
+  Ruff, privacy, diff, candidate bundle and existing-signature checks passed. A separately signed
+  candidate reused the unchanged frozen engine: actual popover controls reached visible evidence
+  without scroll-wheel input, expanded the quote and returned to the original report/history.
+  Protected fixture files and old Apps were unchanged; only an offline ledger read was created,
+  and the candidate exited without helper residue. This is bounded native automation, not human
+  input or accessibility acceptance. Earlier manual limitations remain open. No live services,
+  credential-value reads, delivery, staging, commit, push or Release update.
+- **Approved source closeout (2026-10-28):** after checks and review, commit the shared ledger
+  and protocol separately from native browsing, evidence positioning and acceptance documents,
+  then push to the existing Draft PR. Exclude Apps and acceptance artifacts. This does not accept
+  the pending manual checks or authorize merging, a Release update, live research or delivery.
+  Review regressions additionally cover raw query identity, encoded/non-ASCII reading links and
+  evidence positioning after local images settle. Eight native positioning cases use real scroll
+  events for user-scroll checks. A fresh isolated native/frozen-engine bundle retains the old
+  Apps; earlier manual acceptance limits are unchanged. See the dated ledger plan for details.
+- **Confirmed scope: cross-day topic research workspace, with a graph as well as a list.**
   For one topic, accumulate papers across reports, preserve versions and first/latest inclusion,
   and return from each paper to its report, public reading and evidence. This is requested work,
-  not an optional visual enhancement, but it is not implemented in the current progress slice.
+  not an optional visual enhancement. The ledger source candidate above is implemented separately
+  from the earlier per-paper progress slice; native graph/link records are still future work.
 - **Topic paper map / research-question map:** browse the same accumulated records as a list and
   an interactive graph. Paper nodes, question/category groupings and explicitly recorded links
   should support selection, filtering and source/evidence lookup. Incremental updates must retain
@@ -352,7 +414,7 @@ drive the research model.
   candidate acceptance and then source closeout in the existing Draft PR. Split per-paper progress
   and copy reduction into signed-off commits; exclude Apps, installers and acceptance artifacts.
   This approval does not authorize live research, credential-value access, delivery, merging or a
-  Release update. The graph/index work and deferred manual checks remain separate next steps.
+  Release update. Graph/link records and deferred manual checks remain separate next steps.
 
 ### macOS Local Beta: Current Closeout (2026-10-25)
 

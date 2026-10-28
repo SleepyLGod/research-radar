@@ -9,6 +9,7 @@ struct ReportBrowserView: View {
     @Bindable var presentation: WindowPresentationState
     let back: () -> Void
     let configure: () -> Void
+    let ledgerEntry: PaperLedgerEntry?
     @State var browser = ReportBrowserModel()
     @State private var figures = PaperFiguresModel()
     @State private var deliveryDisclosure: ReportDeliveryDisclosureState
@@ -27,9 +28,11 @@ struct ReportBrowserView: View {
 
     init(store: AppStore, report: ReportRecordV1, localization: LocalizationStore,
          presentation: WindowPresentationState, back: @escaping () -> Void,
-         configure: @escaping () -> Void, browser: ReportBrowserModel = ReportBrowserModel()) {
+         configure: @escaping () -> Void, browser: ReportBrowserModel = ReportBrowserModel(),
+         ledgerEntry: PaperLedgerEntry? = nil) {
         self.store = store; self.report = report; self.localization = localization
         self.presentation = presentation; self.back = back; self.configure = configure
+        self.ledgerEntry = ledgerEntry
         _browser = State(initialValue: browser)
         _deliveryDisclosure = State(initialValue: .init(snapshot: .init(report: report,
             jobs: store.jobs, settings: store.configuration.delivery, busy: store.behaviorChangesBlocked)))
@@ -68,12 +71,26 @@ struct ReportBrowserView: View {
                         .padding(.horizontal, 20).padding(.vertical, 24)
                         .frame(maxWidth: .infinity, alignment: .top)
                     }
+                    // Local figures must settle before the evidence's final layout is usable.
+                    .onScrollGeometryChange(for: Bool.self) { geometry in
+                        guard let paper = browser.selectedPaper else { return false }
+                        return geometry.contentSize.height > 0 && figures.settledPaperID == paper.id
+                            && browser.initialEvidenceTarget == paper.id
+                    } action: { _, ready in
+                        guard ready, let paper = browser.selectedPaper,
+                              browser.initialEvidenceTarget == paper.id else { return }
+                        proxy.scrollTo(PaperReadingSection.ID.evidence, anchor: .top)
+                        browser.finishInitialEvidenceNavigation()
+                    }
                     .id(browser.page)
                 }
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
-        .task(id: report.id) { await browser.load(report: report, workspaceRoot: workspace) }
+        .task(id: report.id) {
+            await browser.load(report: report, workspaceRoot: workspace)
+            if let ledgerEntry, ledgerEntry.reportID == report.id { browser.openLedgerEntry(ledgerEntry) }
+        }
         .task(id: visible ? browser.selectedPaper?.id : nil) {
             await figures.load(paper: visible ? browser.selectedPaper : nil, report: report, workspace: workspace)
         }
@@ -85,7 +102,8 @@ struct ReportBrowserView: View {
             Button {
                 if browser.page == .overview { back() } else { browser.back() }
             } label: {
-                Label(localization.text(browser.page == .overview ? "action.back_reports" : "paper.back"), systemImage: "chevron.left")
+                Label(localization.text(browser.page == .overview
+                    ? (ledgerEntry == nil ? "action.back_reports" : "ledger.back") : "paper.back"), systemImage: "chevron.left")
             }
             Spacer(minLength: 8)
             Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)

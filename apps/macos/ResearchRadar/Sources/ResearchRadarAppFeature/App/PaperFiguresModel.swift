@@ -19,6 +19,7 @@ import ResearchRadarCore
     private var generation = UUID()
     private var paperID: Int?
     private var figures: [Figure] = []
+    private(set) var settledPaperID: Int?
 
     func images(for paperID: Int) -> [Figure] { self.paperID == paperID ? figures : [] }
 
@@ -28,6 +29,7 @@ import ResearchRadarCore
         generation = token
         paperID = paper?.id
         figures = []
+        settledPaperID = nil
         guard let paper else { return }
         let task = Task.detached(priority: .userInitiated) {
             var thumbnails: [Thumbnail] = []
@@ -48,5 +50,6 @@ import ResearchRadarCore
             guard let image = NSImage(data: thumbnail.data) else { return nil }
             return Figure(id: thumbnail.id, content: thumbnail.content, image: image)
         }
+        settledPaperID = paper.id
     }
 }

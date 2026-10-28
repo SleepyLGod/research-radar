@@ -3,12 +3,13 @@ import ResearchRadarCore
 import SwiftUI
 
 enum WorkspaceSection: String, CaseIterable, Identifiable {
-    case overview, topics, reports, settings, diagnostics
+    case overview, topics, papers, reports, settings, diagnostics
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .overview: "sun.max"
         case .topics: "text.magnifyingglass"
+        case .papers: "books.vertical"
         case .reports: "doc.richtext"
         case .settings: "gearshape"
         case .diagnostics: "stethoscope"
@@ -21,9 +22,20 @@ struct WorkspaceNavigation {
         didSet { if section != .reports { showingReport = false } }
     }
     private(set) var reportID: UUID?
+    private(set) var ledgerEntry: PaperLedgerEntry?
     private var showingReport = false
     var isReading: Bool { section == .reports && showingReport && reportID != nil }
-    mutating func openReport(_ id: UUID) { section = .reports; reportID = id; showingReport = true }
+    mutating func openReport(_ id: UUID) {
+        section = .reports; reportID = id; showingReport = true; ledgerEntry = nil
+    }
+    mutating func openOccurrence(_ occurrence: PaperOccurrenceV1, evidence: Bool, reading: Bool = true) {
+        openReport(occurrence.reportID)
+        ledgerEntry = .init(reportID: occurrence.reportID, paperIndex: reading ? occurrence.paperIndex : nil,
+            sourceURL: occurrence.sourceURL, evidence: evidence)
+    }
+    mutating func leaveReport() {
+        if ledgerEntry != nil { section = .papers } else { showReportList() }
+    }
     mutating func showReportList() { showingReport = false }
 }
 
@@ -34,6 +46,7 @@ struct FullWorkspaceView: View {
     @State private var navigation = WorkspaceNavigation()
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var restoredSelection = false
+    @State private var ledger = PaperLedgerModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,7 +97,9 @@ struct FullWorkspaceView: View {
             restoredSelection = true
         }
         .onChange(of: store.selectedReportID) { _, id in
-            if let id { navigation.openReport(id) } else { navigation.showReportList() }
+            if let id {
+                if navigation.reportID != id { navigation.openReport(id) }
+            } else { navigation.showReportList() }
         }
         .onChange(of: store.runtime.selectedTopicID) { _, _ in navigation.showReportList() }
         .onChange(of: presentation.requestedSection) { _, section in
@@ -106,6 +121,12 @@ struct FullWorkspaceView: View {
             }
         case .topics:
             TopicsView(store: store, localization: localization)
+        case .papers:
+            PaperLedgerView(store: store, localization: localization, presentation: presentation, model: ledger) {
+                occurrence, evidence, reading in
+                store.selectReport(occurrence.reportID)
+                navigation.openOccurrence(occurrence, evidence: evidence, reading: reading)
+            }
         case .reports:
             reports
         case .settings:
@@ -119,9 +140,9 @@ struct FullWorkspaceView: View {
         if navigation.isReading,
            let report = store.reports.first(where: { $0.id == navigation.reportID && $0.topicID == store.selectedTopic?.id }) {
             ReportBrowserView(store: store, report: report, localization: localization,
-                presentation: presentation, back: { navigation.showReportList() }, configure: {
+                presentation: presentation, back: { navigation.leaveReport() }, configure: {
                     navigation.section = .settings
-                }).id(report.id)
+                }, ledgerEntry: navigation.ledgerEntry).id(navigation.ledgerEntry?.sourceURL ?? report.id.uuidString)
         } else {
             ReportListView(store: store, localization: localization) { report in
                 store.selectReport(report.id)

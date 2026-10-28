@@ -5,6 +5,15 @@
 > work queue. Read the current closeout below and the dated evidence in the TODO before repeating
 > a task or claiming acceptance. Do not infer permission for live services, delivery or commits.
 
+## Unreleased Topic Paper Ledger (2026-10-28)
+
+The next source slice is documented in [Topic Paper Ledger](2026-10-28-topic-paper-ledger.md).
+It adds one offline `read_paper_ledger` bridge command and a native Papers entry, reusing saved
+public reports and the existing reader. The older four-command task descriptions below remain
+historical implementation checkpoints, not the current complete command inventory. This slice
+does not add relationships, classification, live research or a new Release. Candidate-App input
+acceptance remains separate from the offline projection, frozen-engine and layout checks.
+
 ## Current Local Beta Closeout (2026-10-25)
 
 The implementation has progressed past the original three-task blueprint. The authoritative

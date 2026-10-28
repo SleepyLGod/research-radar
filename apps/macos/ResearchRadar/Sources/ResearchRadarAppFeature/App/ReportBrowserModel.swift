@@ -7,6 +7,7 @@ import ResearchRadarCore
     var page: Page = .overview
     private(set) var contents: ReportContents?
     private(set) var loadFailed = false
+    private(set) var initialEvidenceTarget: Int?
     var showsDelivery: Bool { page == .overview }
 
     var selectedPaper: ReportContents.Paper? {
@@ -33,7 +34,19 @@ import ResearchRadarCore
     func openPaper(_ id: Int) {
         guard contents?.papers.contains(where: { $0.id == id }) == true else { return }
         page = .paper(id)
+        initialEvidenceTarget = nil
     }
 
-    func back() { page = .overview }
+    func openLedgerEntry(_ entry: PaperLedgerEntry) {
+        guard let index = entry.paperIndex,
+              let paper = contents?.papers.first(where: { $0.id == index }),
+              let sourceURL = paper.sourceURL,
+              sourceURL == URL(string: entry.sourceURL) else { return }
+        openPaper(index)
+        initialEvidenceTarget = entry.evidence ? index : nil
+    }
+
+    func finishInitialEvidenceNavigation() { initialEvidenceTarget = nil }
+
+    func back() { page = .overview; initialEvidenceTarget = nil }
 }
