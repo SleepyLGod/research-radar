@@ -92,10 +92,6 @@ struct TodayContentView: View {
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                     if let focus = today.topic?.researchFocus, !focus.isEmpty {
-                        if !compact {
-                            Text(localization.text("label.research_focus"))
-                                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 8)
-                        }
                         Text(focus)
                             .font(.system(size: compact ? 18 : 22, weight: .medium))
                             .fixedSize(horizontal: false, vertical: true)
@@ -167,7 +163,7 @@ struct TodayContentView: View {
     private var researchFailure: some View {
         VStack(alignment: .leading, spacing: 8) {
             statusLine
-            if let time = today.researchFailureTime {
+            if compact, let time = today.researchFailureTime {
                 Text(time, format: .dateTime.year().month().day().hour().minute())
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
@@ -175,7 +171,7 @@ struct TodayContentView: View {
                 Label(localization.text(stageKey), systemImage: "exclamationmark.circle")
                     .font(.system(size: 13))
             }
-            if let code = today.failureCode {
+            if let code = today.failureCode, !(today.status == .cancelled && code == "cancelled") {
                 Text(UserFacingErrorCatalog(localization: localization).message(for: code))
                     .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
             }
@@ -224,6 +220,7 @@ struct TodayContentView: View {
         Label(localization.text(statusKey), systemImage: isResearchActive ? "waveform.path" : attentionCode != nil ? "exclamationmark.circle" : report != nil ? "doc.text" : "sparkle.magnifyingglass")
             .font(.system(size: 15, weight: .medium)).foregroundStyle(isResearchActive ? .teal : .primary)
             .accessibilityAddTraits(.updatesFrequently)
+            .help(today.status == .cancelling ? localization.text("progress.stopping") : "")
     }
 
     private var actions: some View {

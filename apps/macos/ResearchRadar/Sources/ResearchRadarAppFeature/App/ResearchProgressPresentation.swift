@@ -40,16 +40,18 @@ struct ResearchProgressPresentation: Equatable {
         isActive = job.map { [.pending, .running, .cancelling].contains($0.state) } ?? false
         hasAttempt = job != nil || today.latestAttemptReport != nil
         // Channel attention belongs to the report, not the research phase strip.
-        statusKey = today.status == .partialSuccess ? "today.succeeded"
-            : job == nil && today.latestAttemptReport == nil ? "today.idle" : today.statusKey
+        if job?.state == .running, let stage = job?.stage {
+            statusKey = "progress.\(stage.rawValue)"
+        } else {
+            statusKey = today.status == .partialSuccess ? "today.succeeded"
+                : job == nil && today.latestAttemptReport == nil ? "today.idle" : today.statusKey
+        }
         attemptDate = today.latestResearchJob.flatMap {
             $0.id == job?.id ? ($0.completedAt ?? $0.startedAt ?? $0.createdAt) : nil
         } ?? (job == nil ? today.latestAttemptReport?.createdAt : nil)
         if job?.state == .pending { detailKey = "progress.queued" }
-        else if job?.state == .cancelling { detailKey = "progress.stopping" }
-        else if job?.state == .running {
-            detailKey = job?.stage.map { "progress.\($0.rawValue)" } ?? "progress.waiting_stage"
-        } else { detailKey = nil }
+        else if job?.state == .running && job?.stage == nil { detailKey = "progress.waiting_stage" }
+        else { detailKey = nil }
         steps = ResearchStage.allCases.map { stage in
             let state: StepState
             if job?.stage != stage { state = .unreported }

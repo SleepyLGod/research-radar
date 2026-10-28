@@ -9,10 +9,29 @@ import Testing
         let today = projection(jobs: [reading])
         let progress = today.researchProgress
         #expect(progress.isActive)
-        #expect(progress.statusKey == "today.running")
+        #expect(progress.statusKey == "progress.reading")
+        #expect(progress.detailKey == nil)
         #expect(progress.steps.map(\.state) == [.unreported, .current, .unreported, .unreported])
         #expect(progress.attemptDate == reading.createdAt)
         #expect(today.latestReport == nil)
+    }
+
+    @Test func knownStageIsTheHeadlineWithoutASecondDescription() throws {
+        let stages: [(EngineStage, String)] = [
+            (.discovery, "progress.discover"), (.sourceGist, "progress.discover"),
+            (.acquisition, "progress.reading"), (.deepReading, "progress.reading"),
+            (.anchorRepair, "progress.reading"), (.verifier, "progress.verifying"),
+            (.localization, "progress.composing"), (.compose, "progress.composing")
+        ]
+        for (stage, headline) in stages {
+            let progress = projection(jobs: [try job(state: .running, stage: stage)]).researchProgress
+            #expect(progress.statusKey == headline)
+            #expect(progress.detailKey == nil)
+            #expect(progress.steps.filter { $0.state == .current }.count == 1)
+        }
+        let cancelling = projection(jobs: [try job(state: .cancelling, stage: .deepReading)]).researchProgress
+        #expect(cancelling.statusKey == "today.cancelling")
+        #expect(cancelling.detailKey == nil)
     }
 
     @Test func pendingAndUnknownStageDoNotDefaultToDiscovery() throws {

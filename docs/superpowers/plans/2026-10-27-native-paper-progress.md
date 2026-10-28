@@ -134,3 +134,69 @@ to the next approved slice; do not add it to this feature.
 The user also confirmed that the next topic workspace must include cross-day accumulation and
 a paper/question graph, not a list alone. TODO records the shared-index, provenance and explicit
 relation prerequisites. No cross-day index, graph or automatic classification was implemented here.
+
+## Overview Copy Reduction (2026-10-28, Unreleased)
+
+- Removed the repeated research-focus label. A known running stage now supplies one short
+  headline rather than a generic running headline plus a second description. Queue/waiting
+  information, actual failure reasons, observed failure stages and retry/configuration actions
+  remain. A failure timestamp is shown once in each mode; ordinary cancellation no longer adds
+  the generic check-cancelled sentence beneath the research-cancelled status.
+- The four-stage strip keeps its names, symbols and active styling; the repeated visible
+  in-progress caption is omitted while its accessibility value remains. Stopped/stopping
+  captions remain visible. No stage completion is inferred.
+- Paper reading/acquisition/failure states remain explicit. The scope and reading-versus-
+  verification explanation is available from a labeled information button instead of a permanent
+  footer. The original explanation is retained, not rewritten as a verification guarantee.
+- This change is limited to App presentation and bilingual copy. Workflow, protocol, evidence,
+  source links, report files, delivery, glass and window layout are unchanged. The earlier
+  per-paper implementation remains in the working tree.
+- Offline verification: Python **963 passed, 2 opt-in integrations skipped**; Swift **339 tests
+  in 60 suites passed**; Ruff, localization-file validation, privacy and diff checks passed.
+  Regression tests cover all observed public stages, unknown-stage/queued states, cancellation,
+  retained reports and independent delivery attention. Eight rendered native captures cover
+  both languages, appearances and compact/full sizes; the captures were inspected.
+- These are source/build and rendered-view checks, not a newly signed candidate, Release or
+  physical-input/VoiceOver acceptance. The installed/development App and real configuration
+  were not replaced. No real service, credential-value read, upload or delivery was performed;
+  no staging, commit or push was performed. Existing manual acceptance gaps remain open.
+
+## Updated Copy Candidate And Bounded Acceptance (2026-10-28)
+
+- Built a new independent 49.6 MiB candidate from the current native sources and freshly frozen
+  engine, with the existing local certificate and designated requirement. Bundle, symlink,
+  Mach-O, private-path and deep/strict signature checks passed. No configuration, credentials,
+  reports, signing settings or QA inputs are included. Previous development/candidate Apps were
+  retained; the development App's full file fingerprint is unchanged.
+- An independently signed, isolated QA executable linked the current production views, queue and
+  observer with offline events and a rejecting fake secret store/runner. All delivery channels
+  were disabled. Its test code and data are absent from the deliverable candidate; it is not a
+  live-provider or production-engine workflow test.
+- Inspected actual owned-popover screenshots for 16 running/failure combinations: English and
+  Chinese, compact/full, light/dark. The reduced running headline and explicit paper states are
+  present; no permanent rule footer appears. Failure screens retain the specific reason, observed
+  stage, timestamp, retry/diagnostic actions and the distinct prior successful report. Lower
+  content in compact mode remains scrollable rather than being forced into the first viewport.
+- Clicking the actual information glyph opened the native help containing the unchanged scope
+  and reading-versus-verification rule in both languages and both sizes. This environment's AX
+  tree omits static text, so screenshots, not AX-text assertions, establish those visible results.
+- Help dismissal/focus is not fully accepted: one synthesized Escape sequence did not dismiss the
+  help as expected, and a later repeated-click attempt was rejected when the parent window was
+  not visible to the local input driver. These observations do not distinguish a physical-input
+  defect from the existing synthetic-input limitation. Retain this manual check; do not mark it
+  passed or change production window handling solely to accommodate the driver.
+- Test credential-value reads were zero; report bytes were unchanged. The QA App exited. No real
+  research, search, credential access, upload or delivery occurred, and no product code changed
+  during this acceptance. The old App, real configuration, DMG and Release were not replaced.
+  No stage, commit or push was performed. VoiceOver and other deferred manual checks remain open.
+
+## Source Closeout
+
+Close out the approved source changes in two responsibility groups: the shared per-paper event,
+protocol and native projection first; App-only copy reduction and its acceptance record second.
+Both use signed-off commits on the existing Draft PR branch. No App, DMG, screenshot, local
+configuration, credential, certificate or raw acceptance artifact belongs in either commit.
+
+This is not a merge or Release update. Help dismissal/focus remains a manual acceptance item,
+along with the other explicitly deferred checks. Successful source tests and code review must not
+be described as physical-input or live-service acceptance.

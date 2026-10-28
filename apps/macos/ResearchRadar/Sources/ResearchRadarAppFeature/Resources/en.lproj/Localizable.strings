@@ -246,10 +246,10 @@
 "progress.queued" = "Waiting for the current task to finish.";
 "progress.waiting_stage" = "Waiting for the engine's first phase update.";
 "progress.stopping" = "Stopping the current task. Your existing reports are kept.";
-"progress.discover" = "Finding and selecting relevant sources.";
-"progress.reading" = "Reading full text and preparing evidence.";
-"progress.verifying" = "Checking claims against their source evidence.";
-"progress.composing" = "Preparing the report from publishable content.";
+"progress.discover" = "Finding papers";
+"progress.reading" = "Reading full text";
+"progress.verifying" = "Verifying evidence";
+"progress.composing" = "Preparing report";
 "delivery.not_requested" = "Not requested";
 "delivery.pending" = "Queued";
 "delivery.sending" = "Sending";
@@ -416,7 +416,8 @@
 "paper.weak_evaluations" = "Evaluation gaps";
 "paper.missing_ablations" = "Missing ablations";
 "paper.original_caption" = "Original caption";
-"paper_progress.heading" = "Papers processed in this attempt";
+"paper_progress.heading" = "Papers in this attempt";
+"paper_progress.about" = "About paper progress";
 "paper_progress.acquiring" = "Getting full text";
 "paper_progress.acquired" = "Paper content acquired";
 "paper_progress.reading" = "Reading paper";

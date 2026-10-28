@@ -313,6 +313,23 @@ drive the research model.
   real research. AX button presses were unavailable; public AppStore actions drove run/stop, and
   Escape/controller show drove hide/reopen after local status-item click simulation bounced open.
   Physical pointer, live-service, VoiceOver and multi-screen acceptance are not inferred from it.
+- **Overview copy reduction (2026-10-28, unreleased):** removed the repeated research-focus label,
+  merged a known running stage into one short headline, and moved the standing paper-progress
+  rule into an information popover. Per-paper states, failure reasons/actions, report provenance
+  and the reading/verification distinction remain; the active phase keeps an accessibility value.
+  No research, protocol, report file or delivery behavior changed. Swift **339 tests in 60 suites**
+  and Python **963 passed, 2 opt-in checks skipped**, Ruff, localization validation, privacy and
+  diff checks passed. Eight bilingual light/dark compact/full rendered captures were inspected.
+  A separate 49.6 MiB candidate has since been built with the existing signing identity; the old
+  development App and real configuration were not replaced. An isolated QA executable using
+  current production views/workflow and offline replacements supplied 16 owned-popover running/
+  failure captures, covering both languages, appearances and sizes. The actual information glyph
+  opened the unchanged rule in both languages and sizes. Help dismissal/focus remains unaccepted:
+  synthesized Escape/repeated-click handling was inconsistent, and no physical-input defect was
+  established. Static text is absent from this environment's AX tree, so visual conclusions come
+  from inspected screenshots, not AX-text assertions. Zero real credential reads, no live services
+  or delivery, and unchanged report bytes. The test App exited. This feature remains unreleased;
+  VoiceOver and other deferred manual checks remain open.
 - **Confirmed next scope: cross-day topic research workspace, with a graph as well as a list.**
   For one topic, accumulate papers across reports, preserve versions and first/latest inclusion,
   and return from each paper to its report, public reading and evidence. This is requested work,

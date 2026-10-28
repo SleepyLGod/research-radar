@@ -13,7 +13,7 @@ struct ResearchProgressView: View {
                     Text(localization.text(compact ? "stage_short.\(step.stage.rawValue)" : step.stage.localizationKey))
                         .font(.system(size: 12, weight: step.state == .unreported ? .regular : .medium))
                         .fixedSize(horizontal: false, vertical: true)
-                    if let key = step.statusKey {
+                    if step.state != .current, let key = step.statusKey {
                         Text(localization.text(key)).font(.system(size: 12))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -26,6 +26,7 @@ struct ResearchProgressView: View {
                         .frame(height: 2).accessibilityHidden(true)
                 }
                 .accessibilityElement(children: .combine)
+                .accessibilityValue(step.state == .current ? localization.text("timeline.current") : "")
             }
         }
         .accessibilityLabel(localization.text("label.research_progress"))
