@@ -33,6 +33,7 @@ public final class AppStore {
     public private(set) var selectedReportID: UUID?
     public private(set) var isShuttingDown = false
     public private(set) var cancellationRequested = false
+    var paperProgressByTopic: [String: PaperProgressSnapshot] = [:]
     @ObservationIgnored private var commandActive = false
     @ObservationIgnored private var wechatCredentialRevision = UUID()
     private(set) var selectedWeChatCover: WeChatCoverImage?
@@ -1012,6 +1013,7 @@ public final class AppStore {
                 guard try await coordinator.executeNext(
                     configuration: configuration,
                     onJobsChanged: { [weak self] snapshot in await self?.receiveJobs(snapshot) },
+                    onPaperProgress: { [weak self] event in await self?.receivePaperProgress(event) },
                     onObservationFailure: { [weak self] in await self?.recordObservationFailure() }
                 ) != nil else {
                     break

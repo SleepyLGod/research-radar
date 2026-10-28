@@ -15,7 +15,7 @@ from research_radar import __version__
 from research_radar.analysis.research_outcome import parse_research_outcome
 from research_radar.analysis.routing import resolve_task_route
 from research_radar.app_bridge.configuration import LoadedAppConfigurationV1
-from research_radar.app_bridge.events import EventWriter
+from research_radar.app_bridge.events import EventWriter, PaperProgressV1
 from research_radar.app_bridge.pdf_helper import PDFHelperClient, app_figure_extractor
 from research_radar.app_bridge.protocol import (
     BootstrapTopicPayloadV1,
@@ -33,6 +33,7 @@ from research_radar.application.wechat import WeChatDraftOptions, publish_wechat
 from research_radar.application.wechat_cover import upload_wechat_cover
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.exceptions import ResearchRadarError
+from research_radar.pipeline.progress import ProgressListener
 from research_radar.publishers.wechat.client import WeChatDraftClient
 from research_radar.security.secrets import SecretBackend, SecretManager
 from research_radar.storage.files import read_json
@@ -366,7 +367,7 @@ def _configured_route_checks(
     return checks
 
 
-def _progress_listener(events: EventWriter):
+def _progress_listener(events: EventWriter) -> ProgressListener:
     stage_map = {
         "discovery": "discovery",
         "relevance": "discovery",
@@ -390,9 +391,32 @@ def _progress_listener(events: EventWriter):
             "progress",
             stage=stage,
             message=str(event.get("message") or "Research in progress."),
+            paper=_paper_progress(event),
         )
 
     return listener
+
+
+def _paper_progress(event: dict[str, object]) -> PaperProgressV1 | None:
+    statuses = {
+        ("ingestion", "started"): "acquiring",
+        ("ingestion", "succeeded"): "acquired",
+        ("ingestion", "failed"): "acquisition_failed",
+        ("paper_text_quality", "passed"): "acquired",
+        ("paper_text_quality", "failed"): "skipped",
+        ("reader", "started"): "reading",
+        ("reader", "succeeded"): "read",
+        ("reader", "failed"): "reading_failed",
+    }
+    status = statuses.get((str(event.get("stage")), str(event.get("status"))))
+    title, source_id = event.get("source_title"), event.get("source_id")
+    if status is None or not isinstance(title, str) or not title.strip():
+        return None
+    if (not isinstance(source_id, str) or len(source_id) != 64
+            or any(char not in "0123456789abcdef" for char in source_id)):
+        return None
+    # A runtime key only: no URL or error body crosses into the progress UI.
+    return PaperProgressV1(source_id, title, status)
 
 
 def _optional_json(path: Path) -> dict[str, object]:

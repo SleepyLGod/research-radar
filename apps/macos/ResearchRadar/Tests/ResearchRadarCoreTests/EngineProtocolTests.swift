@@ -3,6 +3,34 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct EngineProtocolTests {
+    @Test func paperProgressFixtureRoundTripsWithoutChangingLegacyEvents() throws {
+        let data = try CanonicalFixture.data(named: "paper-progress-event.json")
+        let event = try EngineProtocolCodec.decodeEvent(data)
+        #expect(try CanonicalFixture.object(from: EngineProtocolCodec.encode(event)) == CanonicalFixture.object(from: data))
+        let legacy = try EngineProtocolCodec.decodeEvents(CanonicalFixture.data(named: "engine-events.jsonl"))
+        let old = try CanonicalFixture.object(from: EngineProtocolCodec.encode(legacy[0]))
+        #expect((old as? [String: Any])?["paper"] == nil)
+    }
+
+    @Test func malformedPaperProgressIsRejectedWithoutRelaxingEventKeys() throws {
+        let valid = try CanonicalFixture.objectDictionary(named: "paper-progress-event.json")
+        let malformed: [Any] = [
+            [:], ["source_id": "local path", "title": "Paper", "status": "reading"],
+            ["source_id": String(repeating: "a", count: 64), "title": "Paper", "status": "verified"],
+            ["source_id": String(repeating: "a", count: 64), "title": "", "status": "read"],
+            ["source_id": String(repeating: "a", count: 64), "title": String(repeating: "x", count: 501), "status": "read"],
+            ["source_id": String(repeating: "a", count: 64), "title": "Paper", "status": "reading", "extra": true],
+        ]
+        for paper in malformed {
+            var object = valid; object["paper"] = paper
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeEvent(CanonicalFixture.data(from: object)) }
+        }
+        for (key, value) in [("stage", "email"), ("type", "completed"), ("status", "succeeded")] {
+            var object = valid; object[key] = value
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeEvent(CanonicalFixture.data(from: object)) }
+        }
+    }
+
     @Test func codexConfigurationFailurePreservesItsActionableCode() throws {
         let error = try EngineProtocolCodec.decodeError(
             CanonicalFixture.data(named: "codex-configuration-error.json")

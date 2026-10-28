@@ -276,6 +276,67 @@ drive the research model.
 
 ## Prioritized TODO
 
+### Research Workspace: Next Product Slice (2026-10-27)
+
+- The native overview, paper previews, reading navigation and source-evidence views are already
+  implemented in PR #3. Do not repeatedly reopen accepted presentation work as a prerequisite for
+  adding features. Deferred manual checks remain explicit, not an automatic block on all development.
+- The user permits continuing related features in the current PR; merge, release or a new branch
+  is not a prerequisite. Keep individual feature changes understandable and separately committed
+  when authorized.
+- **Per-paper research progress: implemented locally; offline tests and review passed.** Reuse
+  existing acquisition/reader events, an additive typed protocol field and an App snapshot scoped
+  to the current request and topic. Only attempted papers appear; reading completion is not verifier
+  acceptance. Stop retains observed results, and a new attempt starts with empty progress. No
+  candidate totals or message parsing are used. See the
+  [implementation contract](superpowers/plans/2026-10-27-native-paper-progress.md).
+- Verification: Python regression **963 passed, 2 opt-in frozen checks skipped**; Swift regression
+  **338 tests in 60 suites passed** in the normal macOS graphical environment; Ruff, privacy and
+  diff checks passed. Eight native rendered-view captures cover both UI languages, appearances
+  and compact/full sizes, using fake queue/engine events. These are not a signed-App popover test.
+- Read-only review identified and fixed URL-in-title leakage and identity collisions after audit
+  URL truncation/redaction. Regression checks first reproduced both failures, then passed. Runtime
+  source IDs are now computed before those transformations. No research, evidence or renderer rule
+  was changed; sample Markdown/WeChat HTML stay byte-identical with/without progress forwarding.
+- Source-closeout review reproduced an additional URL-redaction gap when a title URL contains an
+  apostrophe in its path or query. The complete URL token is now removed before wire output;
+  both new regressions first failed and then passed. Final Python checks: **965 passed, 2 opt-in
+  checks skipped**; Swift: **339 tests in 60 suites passed**. Earlier signed candidates predate
+  this source-only fix and were not rebuilt or replaced by the closeout.
+- The per-topic snapshot is in-memory only. Popover/mode/topic changes retain it, but App restart
+  does not reconstruct historical paper progress. Queue, reports and existing event artifacts keep
+  their current persistence. A fresh separately signed candidate and bounded native offline
+  acceptance were completed on 2026-10-28, without changing the old App or real configuration.
+  The isolated QA popover showed independent paper states, retained them after stop/reopen, and
+  cleared them for a new request; the prior offline report bytes stayed unchanged. It used current
+  production views/workflow with a test-only runner and fake credentials (zero value reads), not
+  real research. AX button presses were unavailable; public AppStore actions drove run/stop, and
+  Escape/controller show drove hide/reopen after local status-item click simulation bounced open.
+  Physical pointer, live-service, VoiceOver and multi-screen acceptance are not inferred from it.
+- **Confirmed next scope: cross-day topic research workspace, with a graph as well as a list.**
+  For one topic, accumulate papers across reports, preserve versions and first/latest inclusion,
+  and return from each paper to its report, public reading and evidence. This is requested work,
+  not an optional visual enhancement, but it is not implemented in the current progress slice.
+- **Topic paper map / research-question map:** browse the same accumulated records as a list and
+  an interactive graph. Paper nodes, question/category groupings and explicitly recorded links
+  should support selection, filtering and source/evidence lookup. Incremental updates must retain
+  prior provenance; stopping a new run cannot erase earlier topic knowledge. The graph is not just
+  a network-shaped decoration or a second independent copy of the ledger.
+- **Separate the prerequisites:** first define stable paper-family/version identity and a
+  provenance-preserving cross-report index; then define link/group records and their origin;
+  finally render the native list/graph from those records. Human groupings, explicit citations,
+  model-suggested relations and verified research judgments must remain distinguishable. Graph
+  proximity or an automatic cluster is not proof of support, contradiction or scientific consensus.
+- Automatic classification, cross-paper summaries and periodic topic-wide consolidation remain
+  later, separately specified steps. They must be traceable/reviewable rather than silently
+  replacing original paper evidence. Evaluate Graphify only if it helps those defined contracts;
+  no mandatory Graphify dependency or automatic inference is approved by this TODO update.
+- The original roadmap-only change was followed by explicit approval for offline implementation,
+  candidate acceptance and then source closeout in the existing Draft PR. Split per-paper progress
+  and copy reduction into signed-off commits; exclude Apps, installers and acceptance artifacts.
+  This approval does not authorize live research, credential-value access, delivery, merging or a
+  Release update. The graph/index work and deferred manual checks remain separate next steps.
+
 ### macOS Local Beta: Current Closeout (2026-10-25)
 
 This is the current work list. Dated checkpoints below retain their original evidence and limits;

@@ -188,7 +188,7 @@ public enum EngineProtocolCodec {
 
     private static func validateEvent(_ data: Data) throws {
         let object = try protocolObject(data)
-        try requireExactKeys(object, eventKeys)
+        try requireExactKeys(object, eventKeys.union(object.keys.contains("paper") ? ["paper"] : []))
         try requireSchemaVersion(object)
         let type = try requireEnum(EngineEventType.self, object["type"])
         if let stage = object["stage"], !(stage is NSNull) {
@@ -208,6 +208,18 @@ public enum EngineProtocolCodec {
         }
         if type == .failed, object["error"] is NSNull {
             throw EngineProtocolError.invalidValue
+        }
+        if let value = object["paper"] {
+            let paper = try requireObject(value)
+            try requireExactKeys(paper, ["source_id", "title", "status"])
+            let status = try requireEnum(EnginePaperStatus.self, paper["status"])
+            guard let id = paper["source_id"] as? String, id.count == 64,
+                  id.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+                  let title = paper["title"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  title.count <= 500, type == .progress,
+                  object["status"] as? String == EngineEventStatus.running.rawValue,
+                  object["stage"] as? String == status.stage.rawValue
+            else { throw EngineProtocolError.invalidValue }
         }
     }
 

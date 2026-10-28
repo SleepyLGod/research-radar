@@ -416,3 +416,15 @@
 "paper.weak_evaluations" = "评估不足";
 "paper.missing_ablations" = "缺少的消融实验";
 "paper.original_caption" = "原始图注";
+"paper_progress.heading" = "本轮处理的论文";
+"paper_progress.acquiring" = "正在获取全文";
+"paper_progress.acquired" = "已获取论文内容";
+"paper_progress.reading" = "正在精读";
+"paper_progress.read" = "精读已完成";
+"paper_progress.acquisition_failed" = "获取全文失败";
+"paper_progress.reading_failed" = "精读失败";
+"paper_progress.skipped" = "全文不足，已跳过";
+"paper_progress.stopping" = "正在停止";
+"paper_progress.stopped" = "已停止";
+"paper_progress.unconfirmed" = "未观察到后续结果";
+"paper_progress.boundary" = "这里只列已开始处理的论文。精读完成不等于证据核验已通过。";

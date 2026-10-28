@@ -323,6 +323,31 @@ public struct RedactedEngineErrorV1: Codable, Equatable, Sendable {
     }
 }
 
+public enum EnginePaperStatus: String, Codable, Equatable, CaseIterable, Sendable {
+    case acquiring, acquired, skipped, reading, read
+    case acquisitionFailed = "acquisition_failed"
+    case readingFailed = "reading_failed"
+
+    public var stage: EngineStage {
+        switch self {
+        case .reading, .read, .readingFailed: .deepReading
+        default: .acquisition
+        }
+    }
+}
+
+/// Runtime source identity only; not a cross-report paper-family or version contract.
+public struct EnginePaperProgressV1: Codable, Equatable, Sendable {
+    public let sourceID: String
+    public let title: String
+    public let status: EnginePaperStatus
+
+    private enum CodingKeys: String, CodingKey {
+        case sourceID = "source_id"
+        case title, status
+    }
+}
+
 public struct EngineEventV1: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let sequence: Int
@@ -337,6 +362,7 @@ public struct EngineEventV1: Codable, Equatable, Sendable {
     public let deliveryChannel: DeliveryChannel?
     public let runDirectory: String?
     public let error: RedactedEngineErrorV1?
+    public let paper: EnginePaperProgressV1?
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -352,6 +378,7 @@ public struct EngineEventV1: Codable, Equatable, Sendable {
         case deliveryChannel = "delivery_channel"
         case runDirectory = "run_dir"
         case error
+        case paper
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -369,6 +396,7 @@ public struct EngineEventV1: Codable, Equatable, Sendable {
         try container.encode(deliveryChannel, forKey: .deliveryChannel)
         try container.encode(runDirectory, forKey: .runDirectory)
         try container.encode(error, forKey: .error)
+        try container.encodeIfPresent(paper, forKey: .paper)
     }
 }
 

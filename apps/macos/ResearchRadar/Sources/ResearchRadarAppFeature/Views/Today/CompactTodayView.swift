@@ -67,6 +67,7 @@ struct TodayContentView: View {
     private var configurationCode: String? { store.isEngineRunning ? nil : store.researchConfigurationErrorCode }
     var showsAttemptDetails: Bool {
         !today.prefersReportFirst || configurationCode != nil || store.isEngineRunning
+            || !store.selectedTopicPaperProgress.isEmpty
     }
     var showsResearchFailure: Bool { today.researchFailureTime != nil }
     var attentionCode: String? {
@@ -159,6 +160,7 @@ struct TodayContentView: View {
             }
             ResearchProgressView(progress: today.researchProgress, compact: compact, localization: localization)
             actions
+            PaperProgressView(rows: store.selectedTopicPaperProgress, compact: compact, localization: localization)
         }
     }
 

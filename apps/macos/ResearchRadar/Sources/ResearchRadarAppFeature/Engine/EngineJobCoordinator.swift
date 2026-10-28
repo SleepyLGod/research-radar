@@ -65,6 +65,7 @@ public actor EngineJobCoordinator {
     public func executeNext(
         configuration: AppConfigurationV1,
         onJobsChanged: @escaping @Sendable ([JobRecordV1]) async -> Void = { _ in },
+        onPaperProgress: @escaping @Sendable (EngineEventV1) async -> Void = { _ in },
         onObservationFailure: @escaping @Sendable () async -> Void = {}
     ) async throws -> EngineResultV1? {
         let lease = try gate.acquire()
@@ -94,6 +95,7 @@ public actor EngineJobCoordinator {
             let observer = EngineEventObserver(eventsURL: paths.events, requestID: job.id)
             await observer.start(onEvent: { [weak self] event in
                 await self?.observe(event, jobID: job.id, onJobsChanged: onJobsChanged,
+                    onPaperProgress: onPaperProgress,
                     onFailure: onObservationFailure)
             }, onFailure: onObservationFailure)
             launched = true
@@ -151,6 +153,7 @@ public actor EngineJobCoordinator {
     private func observe(
         _ event: EngineEventV1, jobID: UUID,
         onJobsChanged: @Sendable ([JobRecordV1]) async -> Void,
+        onPaperProgress: @Sendable (EngineEventV1) async -> Void,
         onFailure: @Sendable () async -> Void
     ) async {
         guard event.requestID == jobID,
@@ -158,7 +161,9 @@ public actor EngineJobCoordinator {
               event.status == nil || event.status == .running,
               let stage = event.stage, stage != .complete,
               let job = await queue.jobs().first(where: { $0.id == jobID }),
-              [.running, .cancelling].contains(job.state), job.stage != stage else { return }
+              [.running, .cancelling].contains(job.state) else { return }
+        if job.kind == .research, event.paper != nil { await onPaperProgress(event) }
+        guard job.stage != stage else { return }
         do {
             // Only stage changes are durable. Events never supply terminal state or errors.
             try await queue.transition(jobID: jobID, to: job.state, stage: stage)

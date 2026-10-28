@@ -6,6 +6,56 @@ import Testing
 @testable import ResearchRadarAppFeature
 
 @MainActor @Suite struct NativeViewTests {
+    @Test func capturePaperProgressWhenRequested() async throws {
+        guard let path = ProcessInfo.processInfo.environment["RESEARCH_RADAR_PAPER_PROGRESS_EVIDENCE_ROOT"],
+              path.hasPrefix("/") else { return }
+        let output = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        for language in [AppLanguagePreference.english, .simplifiedChinese] {
+            let root = try task3Root(); defer { task3Trash(root) }
+            var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"),
+                codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+            config.topics = [.init(id: "memory", displayName: "Agent memory", researchFocus: "智能体的长期记忆",
+                queries: ["memory"], paperQueries: ["memory"], reportLanguage: .chinese)]
+            let runner = CancellingPaperRunner(twoPapers: true)
+            let store = AppStore(configuration: config,
+                runtime: .init(selectedTopicID: "memory", updatedAt: Date()), appSupportRoot: root,
+                engineURL: root.appending(path: "fixture-engine"), runner: runner,
+                secretStore: AdmissionSecrets())
+            let execution = Task { await store.runSelectedTopicNow() }
+            for _ in 0..<200 {
+                if store.selectedTopicPaperProgress.count == 2 { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let localization = LocalizationStore(preference: language)
+            do {
+                for compact in [false, true] {
+                    for dark in [false, true] {
+                        let appearance: ColorScheme = dark ? .dark : .light
+                        try await capture(
+                            TodayContentView(store: store, localization: localization, compact: compact, openReport: { _ in })
+                                .environment(\.colorScheme, appearance)
+                                .preferredColorScheme(appearance),
+                            size: NSSize(width: compact ? 400 : 700, height: compact ? 480 : 660),
+                            to: output.appending(path: "progress-\(language.rawValue)-\(compact ? "compact" : "full")-\(dark ? "dark" : "light").png"),
+                            dark: dark
+                        )
+                    }
+                }
+            } catch {
+                try await runner.finishCancellation()
+                await execution.value
+                throw error
+            }
+            #expect(store.jobs.count == 1 && store.jobs.first?.state == .running)
+            #expect(store.reports.isEmpty)
+            #expect(store.selectedTopicPaperProgress.count == 2)
+            try await runner.finishCancellation()
+            await execution.value
+            await store.shutdown()
+        }
+    }
+
     @Test func captureBilingualNativeLayoutsWhenRequested() async throws {
         guard let path = ProcessInfo.processInfo.environment["RESEARCH_RADAR_UI_EVIDENCE_ROOT"],
               !path.isEmpty else { return }
@@ -57,13 +107,13 @@ import Testing
     }
 
     // These are rendered view snapshots, not input-event or end-to-end tests.
-    private func capture<Content: View>(_ content: Content, size: NSSize, to url: URL) async throws {
+    private func capture<Content: View>(_ content: Content, size: NSSize, to url: URL, dark: Bool = false) async throws {
         _ = NSApplication.shared
         let bounds = NSRect(origin: .zero, size: size)
-        let hosting = NSHostingView(rootView: content.environment(\.colorScheme, .light))
+        let hosting = NSHostingView(rootView: content.environment(\.colorScheme, dark ? .dark : .light))
         let window = NSWindow(contentRect: bounds, styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = hosting
         window.setContentSize(size)
         window.orderBack(nil)

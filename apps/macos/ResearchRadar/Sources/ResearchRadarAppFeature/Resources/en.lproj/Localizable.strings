@@ -416,3 +416,15 @@
 "paper.weak_evaluations" = "Evaluation gaps";
 "paper.missing_ablations" = "Missing ablations";
 "paper.original_caption" = "Original caption";
+"paper_progress.heading" = "Papers processed in this attempt";
+"paper_progress.acquiring" = "Getting full text";
+"paper_progress.acquired" = "Paper content acquired";
+"paper_progress.reading" = "Reading paper";
+"paper_progress.read" = "Reading complete";
+"paper_progress.acquisition_failed" = "Full-text acquisition failed";
+"paper_progress.reading_failed" = "Reading failed";
+"paper_progress.skipped" = "Insufficient full text; skipped";
+"paper_progress.stopping" = "Stopping";
+"paper_progress.stopped" = "Stopped";
+"paper_progress.unconfirmed" = "No later result observed";
+"paper_progress.boundary" = "Only papers that started processing are listed. Reading complete does not mean evidence verification passed.";
