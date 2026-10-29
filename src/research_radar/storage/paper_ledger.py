@@ -56,7 +56,7 @@ def build_paper_ledger(
         if cancelled():
             raise OperationCancelled("Paper ledger read cancelled.")
         try:
-            draft = _read_draft(root, report.run_dir)
+            draft, _ = read_saved_draft(root, report.run_dir)
             if draft.get("topic_id") != topic_id or not isinstance(draft.get("sections"), list):
                 raise ValueError("Report topic or sections do not match.")
         except (OSError, ValueError, UnicodeError):
@@ -105,9 +105,9 @@ def build_paper_ledger(
     known_papers = set(papers)
     for _, source in source_records:
         if _is_paper(source) and (url := _safe_url(source.get("url"))):
-            known_papers.add(_paper_id(url))
+            known_papers.add(paper_id_for_url(url))
     for report, source in source_records:
-        if (url := _safe_url(source.get("url"))) and _paper_id(url) in known_papers:
+        if (url := _safe_url(source.get("url"))) and paper_id_for_url(url) in known_papers:
             _include(papers, report, source, None)
     result = []
     for paper in papers.values():
@@ -133,7 +133,8 @@ def build_paper_ledger(
     }
 
 
-def _read_draft(root: Path, run: Path) -> dict[str, Any]:
+def read_saved_draft(root: Path, run: Path) -> tuple[dict[str, Any], str]:
+    """Read a contained public draft and hash the exact bytes that were parsed."""
     resolved = run.resolve(strict=True)
     resolved.relative_to(root)
     parent = run.absolute()
@@ -144,10 +145,11 @@ def _read_draft(root: Path, run: Path) -> dict[str, Any]:
     path = resolved / "article_draft.json"
     if path.is_symlink() or not path.is_file():
         raise ValueError("Ledger draft must be a regular file.")
-    value = json.loads(path.read_text(encoding="utf-8"))
+    data = path.read_bytes()
+    value = json.loads(data.decode("utf-8"))
     if not isinstance(value, dict):
         raise ValueError("Ledger draft must be an object.")
-    return value
+    return value, hashlib.sha256(data).hexdigest()
 
 
 def _safe_url(value: object) -> str | None:
@@ -202,7 +204,7 @@ def _include(
         source_name="saved_report",
         source_type=SourceType.PAPER,
     )
-    paper_id = _paper_id(url)
+    paper_id = paper_id_for_url(url)
     explicit = source.get("version")
     version = (
         explicit if isinstance(explicit, str) and explicit.strip() else source_version(candidate)
@@ -228,7 +230,8 @@ def _include(
         paper["occurrences"][occurrence_id] = occurrence
 
 
-def _paper_id(url: str) -> str:
+def paper_id_for_url(url: str) -> str:
+    """Return the ledger family identity without collapsing generic query IDs."""
     candidate = SourceCandidate(
         url=url,
         title="",

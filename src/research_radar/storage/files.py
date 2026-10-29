@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Any
@@ -19,11 +19,20 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
-def write_json(path: Path, value: Any) -> None:
-    """Atomically write JSON to a file."""
+def write_json(
+    path: Path,
+    value: Any,
+    *,
+    before_replace: Callable[[], None] | None = None,
+) -> None:
+    """Atomically write JSON, optionally checking a precondition just before replacement."""
 
     serializable = dataclass_to_dict(value) if is_dataclass(value) else value
-    _atomic_write(path, json.dumps(serializable, indent=2, ensure_ascii=False) + "\n")
+    _atomic_write(
+        path,
+        json.dumps(serializable, indent=2, ensure_ascii=False) + "\n",
+        before_replace=before_replace,
+    )
 
 
 def read_json(path: Path) -> Any:
@@ -56,8 +65,15 @@ def write_text(path: Path, value: str) -> None:
     _atomic_write(path, value if value.endswith("\n") else value + "\n")
 
 
-def _atomic_write(path: Path, value: str) -> None:
+def _atomic_write(
+    path: Path,
+    value: str,
+    *,
+    before_replace: Callable[[], None] | None = None,
+) -> None:
     ensure_dir(path.parent)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     tmp_path.write_text(value, encoding="utf-8")
+    if before_replace is not None:
+        before_replace()
     os.replace(tmp_path, path)
