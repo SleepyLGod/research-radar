@@ -97,7 +97,9 @@ npm 安装目录或常见 Homebrew／本地 bin 目录中寻找 Node；不会加
 原生 Codex 可执行文件继续按原来的方式启动。
 
 默认 DeepSeek 模型是 `deepseek-flash`，显式开启 thinking，强度为 `high`。
-默认 verifier 是 Codex `gpt-5.6-luna` / `xhigh`，App 可选择「高 / high」或「极高 / xhigh」。
+默认 verifier 是 Codex `gpt-6-luna` / `xhigh`，App 可选择「高 / high」或「极高 / xhigh」。
+更新后的 App 启动时会迁移原有 `gpt-5.6-luna` 核验路线，保留已选推理强度；
+自定义模型和已选 DeepSeek 核验不变。本次源码修改不会更新已安装 App 或现有 beta 下载包。
 这不修改全局 Codex 配置，也不保证你的 Codex 账户能使用某个模型。
 
 Codex 不可用时，可以**明确选择 DeepSeek 核验并确认提示**。

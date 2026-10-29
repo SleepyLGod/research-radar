@@ -154,7 +154,7 @@ models:
   task_routes:
     verifier:
       provider: codex
-      model: gpt-5.6-luna
+      model: gpt-6-luna
 ```
 
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a

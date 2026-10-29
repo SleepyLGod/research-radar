@@ -112,7 +112,10 @@ widen the engine's PATH. If Node cannot be found, the check reports that require
 Native Codex executables keep their existing launch behavior.
 
 The default reader is DeepSeek `deepseek-flash`, with thinking explicitly enabled and
-`reasoning_effort: high`. The default verifier is Codex `gpt-5.6-luna` with `xhigh` effort.
+`reasoning_effort: high`. The default verifier is Codex `gpt-6-luna` with `xhigh` effort.
+On startup, the updated App migrates its former `gpt-5.6-luna` verifier route while preserving
+the chosen effort. Custom models and a selected DeepSeek verifier are left unchanged. This
+source change does not update an already installed App or the existing beta download.
 The App offers `high` and `xhigh`. These settings do not change your global Codex configuration
 or guarantee that your account can use a particular model.
 

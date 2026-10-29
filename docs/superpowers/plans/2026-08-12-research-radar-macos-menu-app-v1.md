@@ -231,7 +231,7 @@ interaction acceptance remain open. These captures are isolated fixture UI, not 
 
 ### Codex and Schedule Follow-up Contract (2026-09-20)
 
-Shared Python configuration defaults to `gpt-5.6-luna/xhigh`; the bridge reuses
+At this checkpoint, shared Python configuration defaulted to `gpt-5.6-luna/xhigh`; the bridge reuses
 `probe_provider()` and returns bounded, redacted failure detail through the existing check
 `message`. No new transport, wire command, model stage or renderer behavior is introduced.
 App settings offer high/xhigh and invalidate prior checks after a route, executable or effort
@@ -241,6 +241,11 @@ based on English exception text. The global Codex configuration is not modified.
 Only the old built-in App Codex verifier Terra/high combination migrates, using the existing
 validated atomic save. Custom routes and a selected DeepSeek verifier remain unchanged. CLI YAML
 is explicit user configuration; newly generated defaults change, installed snapshots do not.
+
+Source follow-up (2026-10-28, unreleased): App/CLI defaults now use `gpt-6-luna/xhigh`.
+App startup also migrates a former `gpt-5.6-luna` verifier, preserving its chosen effort and
+all other settings. The older Terra/high migration is retained. No installed App, prior snapshot,
+cache, report, historical live result or published beta is changed by this source update.
 
 Schedule lifecycle distinguishes active, fault-blocked and stopped-for-Quit. Fault recovery is
 explicit, validates disk state against current snapshots, and reconciles terminal artifacts
@@ -793,7 +798,7 @@ non-queued command uses the same engine gate as preflight/bootstrap; it is not a
   ],
   "routes": [
     {"task": "deep_reading", "provider_id": "deepseek", "model": "deepseek-flash"},
-    {"task": "verifier", "provider_id": "codex", "model": "gpt-5.6-luna"}
+    {"task": "verifier", "provider_id": "codex", "model": "gpt-6-luna"}
   ],
   "topics": [],
   "discovery": {

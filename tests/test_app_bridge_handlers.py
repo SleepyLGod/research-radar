@@ -23,7 +23,7 @@ class _Provider:
 def test_probe_failure_is_bounded_redacted_and_retains_diagnostic(monkeypatch) -> None:
     secret = "sk-" + "abcdefghijklmnopqrst"
     private_path = "/" + "Users/test/private.txt"
-    route = SimpleNamespace(provider="codex", model="gpt-5.6-luna")
+    route = SimpleNamespace(provider="codex", model="gpt-6-luna")
     config = SimpleNamespace(research=SimpleNamespace(
         models=SimpleNamespace(task_routes={"verifier": route})
     ))

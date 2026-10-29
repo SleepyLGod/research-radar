@@ -156,7 +156,7 @@ The default quality path is:
 
 - Deep reading: `deepseek/deepseek-flash` with explicit thinking and `high` reasoning effort
 - Source gist and report localization: `deepseek-flash` through the same configured DeepSeek provider
-- Verification: `codex/gpt-5.6-luna` with `xhigh` reasoning effort
+- Verification: `codex/gpt-6-luna` with `xhigh` reasoning effort
 - Web search: Tavily when the web-search secret is present
 
 Existing YAML remains authoritative: change both the verifier model and the Codex provider's

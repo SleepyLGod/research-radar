@@ -26,7 +26,7 @@ import Testing
 
         #expect(config.providers.first(where: { $0.id == "deepseek" })?.thinking == "enabled")
         #expect(config.routes.first(where: { $0.task == "deep_reading" })?.model == "deepseek-flash")
-        #expect(config.routes.first(where: { $0.task == "verifier" })?.model == "gpt-5.6-luna")
+        #expect(config.routes.first(where: { $0.task == "verifier" })?.model == "gpt-6-luna")
         #expect(config.providers.first(where: { $0.id == "codex" })?.reasoningEffort == "xhigh")
         #expect(config.delivery.wechat.appIDSecret == "wechat.app_id")
     }
@@ -38,7 +38,7 @@ import Testing
         original.providers[provider].reasoningEffort = "high"
         original.routes[route].model = "gpt-5.6-terra"
         let migrated = AppConfigurationDefaults.updatingLegacyCodexDefaults(original)
-        #expect(migrated.routes[route].model == "gpt-5.6-luna")
+        #expect(migrated.routes[route].model == "gpt-6-luna")
         #expect(migrated.providers[provider].reasoningEffort == "xhigh")
         #expect(AppConfigurationDefaults.updatingLegacyCodexDefaults(migrated) == migrated)
         let fallback = AppConfigurationDefaults.useDeepSeekVerifier(original)
@@ -47,6 +47,26 @@ import Testing
         #expect(AppConfigurationDefaults.updatingLegacyCodexDefaults(original) == original)
         original.routes[route].model = "gpt-5.6-terra"
         original.providers[provider].reasoningEffort = "medium"
+        #expect(AppConfigurationDefaults.updatingLegacyCodexDefaults(original) == original)
+    }
+
+    @Test(arguments: ["high", "xhigh"])
+    func formerLunaMigrationPreservesEffortAndOtherSettings(effort: String) {
+        var original = AppConfigurationDefaults.make(
+            workspaceRoot: URL(fileURLWithPath: "/app/workspace"), codexExecutable: nil
+        )
+        let provider = original.providers.firstIndex { $0.id == "codex" }!
+        let route = original.routes.firstIndex { $0.task == "verifier" }!
+        original.providers[provider].reasoningEffort = effort
+        original.routes[route].model = "gpt-5.6-luna"
+        var expected = original
+        expected.routes[route].model = "gpt-6-luna"
+        let migrated = AppConfigurationDefaults.updatingLegacyCodexDefaults(original)
+        #expect(migrated == expected)
+        #expect(AppConfigurationDefaults.updatingLegacyCodexDefaults(migrated) == migrated)
+        let fallback = AppConfigurationDefaults.useDeepSeekVerifier(original)
+        #expect(AppConfigurationDefaults.updatingLegacyCodexDefaults(fallback) == fallback)
+        original.routes[route].model = "custom-model"
         #expect(AppConfigurationDefaults.updatingLegacyCodexDefaults(original) == original)
     }
 
