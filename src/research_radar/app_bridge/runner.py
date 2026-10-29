@@ -76,6 +76,8 @@ class BridgeDependencies:
     retry_delivery: CommandHandler
     upload_wechat_cover: CommandHandler
     read_paper_ledger: CommandHandler
+    organize_topic: CommandHandler
+    read_topic_knowledge: CommandHandler
     clock: Callable[[], datetime]
     config_loader: Callable[[Path, bool], object]
     secret_manager_factory: Callable[[], object]
@@ -86,8 +88,10 @@ class BridgeDependencies:
 
         from research_radar.app_bridge.handlers import (
             handle_bootstrap_topic,
+            handle_organize_topic,
             handle_preflight,
             handle_read_paper_ledger,
+            handle_read_topic_knowledge,
             handle_retry_delivery,
             handle_run_daily,
             handle_upload_wechat_cover,
@@ -100,6 +104,8 @@ class BridgeDependencies:
             retry_delivery=handle_retry_delivery,
             upload_wechat_cover=handle_upload_wechat_cover,
             read_paper_ledger=handle_read_paper_ledger,
+            organize_topic=handle_organize_topic,
+            read_topic_knowledge=handle_read_topic_knowledge,
             clock=lambda: datetime.now(UTC),
             config_loader=lambda path, require_topics: load_app_configuration(
                 path, require_topics=require_topics
@@ -121,6 +127,8 @@ class BridgeDependencies:
             retry_delivery=unexpected,
             upload_wechat_cover=unexpected,
             read_paper_ledger=unexpected,
+            organize_topic=unexpected,
+            read_topic_knowledge=unexpected,
             clock=lambda: datetime.now(UTC),
             config_loader=lambda path, require_topics: object(),
             secret_manager_factory=lambda: object(),
@@ -300,13 +308,14 @@ def run_bridge(
         output = handler(
             request,
             config=config,
-            secrets=(None if request.command is EngineCommand.READ_PAPER_LEDGER
+            secrets=(None if request.command in {EngineCommand.READ_PAPER_LEDGER,
+                                                EngineCommand.READ_TOPIC_KNOWLEDGE}
                      else active_dependencies.secret_manager_factory()),
             events=writer,
             pdf_helper_path=pdf_helper_path,
             cancellation_event=cancelled,
         )
-        if cancelled.is_set():
+        if cancelled.is_set() and request.command is not EngineCommand.ORGANIZE_TOPIC:
             raise _Cancelled
         terminal = _result_envelope(request, output, completed_at=active_dependencies.clock())
         if not write_result_once(terminal):
@@ -392,6 +401,8 @@ def run_bridge(
         code = {
             EngineCommand.RETRY_DELIVERY: "delivery_failed",
             EngineCommand.UPLOAD_WECHAT_COVER: "cover_upload_failed",
+            EngineCommand.ORGANIZE_TOPIC: "knowledge_failed",
+            EngineCommand.READ_TOPIC_KNOWLEDGE: "knowledge_failed",
         }.get(request.command if request else None, "research_failed")
         write_error_once(
             code=code,
@@ -459,6 +470,8 @@ def _handler_for(command: EngineCommand, dependencies: BridgeDependencies) -> Co
         EngineCommand.RETRY_DELIVERY: dependencies.retry_delivery,
         EngineCommand.UPLOAD_WECHAT_COVER: dependencies.upload_wechat_cover,
         EngineCommand.READ_PAPER_LEDGER: dependencies.read_paper_ledger,
+        EngineCommand.ORGANIZE_TOPIC: dependencies.organize_topic,
+        EngineCommand.READ_TOPIC_KNOWLEDGE: dependencies.read_topic_knowledge,
     }[command]
 
 
@@ -471,6 +484,8 @@ def _stage_for_request(request: EngineRequestV1) -> str:
         EngineCommand.RUN_DAILY: "discovery",
         EngineCommand.UPLOAD_WECHAT_COVER: "wechat_cover",
         EngineCommand.READ_PAPER_LEDGER: "preflight",
+        EngineCommand.ORGANIZE_TOPIC: "knowledge",
+        EngineCommand.READ_TOPIC_KNOWLEDGE: "knowledge",
     }[request.command]
 
 
@@ -487,6 +502,8 @@ def _result_envelope(
         EngineCommand.RETRY_DELIVERY: "delivery",
         EngineCommand.UPLOAD_WECHAT_COVER: "cover",
         EngineCommand.READ_PAPER_LEDGER: "paper_ledger",
+        EngineCommand.ORGANIZE_TOPIC: "knowledge",
+        EngineCommand.READ_TOPIC_KNOWLEDGE: "knowledge",
     }[request.command]
     payloads: dict[str, object | None] = {
         "preflight": None,

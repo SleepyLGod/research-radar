@@ -200,8 +200,33 @@ are flagged rather than treated as empty history.
 
 The ledger reads existing report metadata on demand without models, searches, credentials, or
 delivery. It can be rebuilt after restart; it does not rewrite reports or keep a second copy of
-their prose. Topic graphs, automatic classification, and relationship inference are not included.
+their prose. Reading the ledger does not generate classifications or relationships.
 Offline projection/protocol/navigation checks do not replace physical-input acceptance.
+
+### Unreleased Candidate: Organize Saved Papers
+
+In **Papers**, choose **Organize** (or **Reorganize**) and review the confirmation. This uses
+the configured reader model and may incur charges. It organizes the topic's saved public deep
+reads, not new search results or PDFs; it does not start research or delivery. Each operation
+uses all saved reports for the selected topic; there is no report/date-range picker yet.
+Automatic/incremental organization is not implemented. Serialized input above 512,000 characters
+is rejected before the model call rather than silently truncated; the previous snapshot remains.
+Long-running topics may reach this limit, and larger-topic use has not been accepted.
+
+**Classification** groups papers by the saved AI-proposed facets and supports text/keyword
+filters. One paper can appear in several groups. **Relations** shows saved, typed paper-to-paper
+connections; selecting an edge reveals its reason and evidence from both papers. **View evidence
+in report** opens the original reading at the cited claim. Report fingerprints prevent silently
+opening changed source content. Returning keeps the selected relation and current graph view.
+Saved views need no model or credential access. A failed or stopped operation retains the previous
+snapshot; a snapshot already committed before stopping is not rolled back.
+
+These are research aids, not independent verification or scientific consensus. A two-paper real
+comparison improved some categories and citations, but still exposed weak relationship labels,
+lost qualifications and incomplete citation coverage. Review the evidence before relying on a
+connection. User-edited facets, structure diagrams, periodic consolidation and larger-topic quality
+remain future work; physical keyboard, VoiceOver and multiple-display checks remain incomplete.
+These changes are source candidates, not an update to the existing beta download.
 
 ## 4. Optional: WeChat Drafts and Private Email
 

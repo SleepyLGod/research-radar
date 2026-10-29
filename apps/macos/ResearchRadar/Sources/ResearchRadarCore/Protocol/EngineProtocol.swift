@@ -16,6 +16,8 @@ public enum EngineCommand: String, Codable, Equatable, Sendable {
     case retryDelivery = "retry_delivery"
     case uploadWeChatCover = "upload_wechat_cover"
     case readPaperLedger = "read_paper_ledger"
+    case organizeTopic = "organize_topic"
+    case readTopicKnowledge = "read_topic_knowledge"
 }
 
 public enum ReportLanguageV1: String, Codable, Equatable, Sendable {
@@ -132,6 +134,8 @@ public enum EnginePayloadV1: Equatable, Sendable {
     case retryDelivery(RetryDeliveryPayloadV1)
     case uploadWeChatCover(UploadWeChatCoverPayloadV1)
     case readPaperLedger(ReadPaperLedgerPayloadV1)
+    case organizeTopic(OrganizeTopicPayloadV1)
+    case readTopicKnowledge(ReadTopicKnowledgePayloadV1)
 
     public var command: EngineCommand {
         switch self {
@@ -141,6 +145,8 @@ public enum EnginePayloadV1: Equatable, Sendable {
         case .retryDelivery: .retryDelivery
         case .uploadWeChatCover: .uploadWeChatCover
         case .readPaperLedger: .readPaperLedger
+        case .organizeTopic: .organizeTopic
+        case .readTopicKnowledge: .readTopicKnowledge
         }
     }
 }
@@ -238,6 +244,10 @@ public struct EngineRequestV1: Codable, Equatable, Sendable {
             .uploadWeChatCover(try container.decode(UploadWeChatCoverPayloadV1.self, forKey: .payload))
         case .readPaperLedger:
             .readPaperLedger(try container.decode(ReadPaperLedgerPayloadV1.self, forKey: .payload))
+        case .organizeTopic:
+            .organizeTopic(try container.decode(OrganizeTopicPayloadV1.self, forKey: .payload))
+        case .readTopicKnowledge:
+            .readTopicKnowledge(try container.decode(ReadTopicKnowledgePayloadV1.self, forKey: .payload))
         }
         try self.init(
             schemaVersion: container.decode(Int.self, forKey: .schemaVersion),
@@ -274,6 +284,10 @@ public struct EngineRequestV1: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .payload)
         case let .readPaperLedger(value):
             try container.encode(value, forKey: .payload)
+        case let .organizeTopic(value):
+            try container.encode(value, forKey: .payload)
+        case let .readTopicKnowledge(value):
+            try container.encode(value, forKey: .payload)
         }
     }
 }
@@ -303,6 +317,7 @@ public enum EngineStage: String, Codable, Equatable, Sendable {
     case wechatCover = "wechat_cover"
     case email
     case complete
+    case knowledge
 }
 
 public enum EngineEventStatus: String, Codable, Equatable, Sendable {
@@ -572,19 +587,21 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
     public let delivery: DeliveryResultV1?
     public let cover: WeChatCoverResultV1?
     public let paperLedger: TopicPaperLedgerV1?
+    public let knowledge: TopicKnowledgeV1?
 
     public init(
         schemaVersion: Int = 1, requestID: UUID, command: EngineCommand,
         status: EngineResultStatus, completedAt: Date, report: EngineReportSummaryV1? = nil,
         preflight: PreflightSummaryV1? = nil, topicDraft: TopicDraftV1? = nil,
         delivery: DeliveryResultV1? = nil, cover: WeChatCoverResultV1? = nil,
-        paperLedger: TopicPaperLedgerV1? = nil
+        paperLedger: TopicPaperLedgerV1? = nil, knowledge: TopicKnowledgeV1? = nil
     ) {
         self.schemaVersion = schemaVersion; self.requestID = requestID; self.command = command
         self.status = status; self.completedAt = completedAt; self.report = report
         self.preflight = preflight; self.topicDraft = topicDraft; self.delivery = delivery
         self.cover = cover
         self.paperLedger = paperLedger
+        self.knowledge = knowledge
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -599,6 +616,7 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
         case delivery
         case cover
         case paperLedger = "paper_ledger"
+        case knowledge
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -614,6 +632,7 @@ public struct EngineResultV1: Codable, Equatable, Sendable {
         try container.encode(delivery, forKey: .delivery)
         try container.encodeIfPresent(cover, forKey: .cover)
         try container.encodeIfPresent(paperLedger, forKey: .paperLedger)
+        try container.encodeIfPresent(knowledge, forKey: .knowledge)
     }
 }
 

@@ -33,6 +33,14 @@ struct WorkspaceNavigation {
         ledgerEntry = .init(reportID: occurrence.reportID, paperIndex: reading ? occurrence.paperIndex : nil,
             sourceURL: occurrence.sourceURL, evidence: evidence)
     }
+    mutating func openKnowledgeEvidence(_ target: KnowledgeEvidenceTarget) {
+        // The validated knowledge pointer ends in the claim's index within this paper.
+        guard let component = target.reference.jsonPointer.split(separator: "/").last,
+              let claimIndex = Int(component), claimIndex >= 0 else { return }
+        openOccurrence(target.occurrence, evidence: true)
+        ledgerEntry?.reportSHA256 = target.reference.reportSHA256
+        ledgerEntry?.evidenceClaimIndex = claimIndex
+    }
     mutating func leaveReport() {
         if ledgerEntry != nil { section = .papers } else { showReportList() }
     }
@@ -122,7 +130,11 @@ struct FullWorkspaceView: View {
         case .topics:
             TopicsView(store: store, localization: localization)
         case .papers:
-            PaperLedgerView(store: store, localization: localization, presentation: presentation, model: ledger) {
+            PaperLedgerView(store: store, localization: localization, presentation: presentation, model: ledger,
+                openEvidence: { target in
+                    store.selectReport(target.occurrence.reportID)
+                    navigation.openKnowledgeEvidence(target)
+                }) {
                 occurrence, evidence, reading in
                 store.selectReport(occurrence.reportID)
                 navigation.openOccurrence(occurrence, evidence: evidence, reading: reading)
@@ -167,7 +179,7 @@ private struct ReportListView: View {
                 .padding(.horizontal, 20).padding(.vertical, 14)
             Divider()
             if reports.isEmpty {
-                ContentUnavailableView(localization.text("empty.reports"), systemImage: "doc.text")
+                WorkspaceEmptyState(title: localization.text("empty.reports"), symbol: "doc.text")
             } else {
                 List(reports) { report in
                     Button { open(report) } label: {
@@ -183,6 +195,7 @@ private struct ReportListView: View {
                     }.buttonStyle(.plain)
                 }.listStyle(.inset)
             }
-        }.background(Color(nsColor: .textBackgroundColor))
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color(nsColor: .textBackgroundColor))
     }
 }

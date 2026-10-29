@@ -7,6 +7,13 @@ struct PaperLedgerEntry: Equatable {
     let paperIndex: Int?
     let sourceURL: String
     let evidence: Bool
+    var reportSHA256: String? = nil
+    var evidenceClaimIndex: Int? = nil
+}
+
+struct KnowledgeEvidenceTarget {
+    let occurrence: PaperOccurrenceV1
+    let reference: KnowledgeReferenceV1
 }
 
 /// Keeps only presentation state; Python alone assigns paper and occurrence identity.
@@ -23,6 +30,7 @@ struct PaperLedgerEntry: Equatable {
     private var generation = UUID()
     private var topicRequests: [String: UUID] = [:]
     private var pending: [String: (id: UUID, reports: [LedgerReportReferenceV1])] = [:]
+    private var deferredTopicID: String?
     private(set) var topicID: String?
     private(set) var loading = false
     private(set) var errorKey: String?
@@ -39,9 +47,23 @@ struct PaperLedgerEntry: Equatable {
             && (query.isEmpty || paper.title.localizedCaseInsensitiveContains(query))
         }
     }
+    func deferLoad(for topicID: String?) { deferredTopicID = topicID }
+    func takeDeferredLoad(topicID: String?, visible: Bool) -> Bool {
+        guard visible, let topicID, deferredTopicID == topicID else { return false }
+        deferredTopicID = nil
+        return true
+    }
     func select(_ id: String?) { if let topicID { topics[topicID, default: .init()].selectedID = id } }
     func setQuery(_ value: String) { if let topicID { topics[topicID, default: .init()].query = value } }
     func setFilter(_ value: Filter) { if let topicID { topics[topicID, default: .init()].filter = value } }
+
+    func evidenceTarget(reference: KnowledgeReferenceV1, graph: KnowledgeGraphV1) -> KnowledgeEvidenceTarget? {
+        guard let paper = graph.papers.first(where: { $0.id == reference.paperKey }),
+              let occurrence = snapshot?.papers.first(where: { $0.id == paper.paperID })?.occurrences.first(where: { occurrence in
+                  occurrence.reportID == reference.reportID && occurrence.version == paper.version && occurrence.paperIndex != nil
+              }) else { return nil }
+        return .init(occurrence: occurrence, reference: reference)
+    }
 
     func load(topicID: String, reports: [LedgerReportReferenceV1], force: Bool = false,
               fetch: (String, [LedgerReportReferenceV1]) async throws -> TopicPaperLedgerV1) async {

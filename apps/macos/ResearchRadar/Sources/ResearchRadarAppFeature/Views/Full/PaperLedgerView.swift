@@ -7,7 +7,12 @@ struct PaperLedgerView: View {
     let localization: LocalizationStore
     @Bindable var presentation: WindowPresentationState
     @Bindable var model: PaperLedgerModel
+    var openEvidence: ((KnowledgeEvidenceTarget) -> Void)? = nil
     let open: (PaperOccurrenceV1, Bool, Bool) -> Void
+    private var knowledge: TopicKnowledgeModel { store.topicKnowledge }
+    var organizationControlsVisible: Bool {
+        model.selectedPaper == nil || TopicKnowledgePresentation(topicID: store.selectedTopic?.id ?? "", jobs: store.jobs).isActive
+    }
 
     private var references: [LedgerReportReferenceV1] {
         store.selectedTopicReports.map {
@@ -18,10 +23,12 @@ struct PaperLedgerView: View {
         let topic: String?
         let reports: [LedgerReportReferenceV1]
         let visible: Bool
+        let organization: JobRecordV1?
     }
     private var loadKey: LoadKey {
         .init(topic: store.selectedTopic?.id, reports: references,
-            visible: presentation.isVisible && presentation.windowMode(saved: store.runtime.windowMode) == .full)
+            visible: presentation.isVisible && presentation.windowMode(saved: store.runtime.windowMode) == .full,
+            organization: store.selectedTopic.flatMap { TopicKnowledgePresentation(topicID: $0.id, jobs: store.jobs).job })
     }
 
     var body: some View {
@@ -29,12 +36,16 @@ struct PaperLedgerView: View {
             HStack {
                 TopicSelectionView(store: store, localization: localization)
                 Spacer()
+                if organizationControlsVisible {
+                    TopicKnowledgeView(store: store, model: knowledge, localization: localization)
+                }
                 Button { Task { await load(force: true) } } label: {
                     Image(systemName: "arrow.clockwise")
                 }.help(localization.text("ledger.refresh"))
                     .accessibilityLabel(localization.text("ledger.refresh"))
                     .disabled(model.loading || store.behaviorChangesBlocked)
-            }.padding(.horizontal, 20).padding(.vertical, 14)
+            }.controlSize(.small).padding(.horizontal, 20).padding(.vertical, 10)
+            TopicKnowledgeNotice(store: store, model: knowledge, localization: localization)
             Divider()
             if let key = model.errorKey {
                 Label(localization.text(key), systemImage: "exclamationmark.circle")
@@ -45,32 +56,98 @@ struct PaperLedgerView: View {
                     .font(.system(size: 12)).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.vertical, 8)
             }
             if model.topicID != store.selectedTopic?.id {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                if store.behaviorChangesBlocked {
+                    Text(localization.text("ledger.busy")).font(.system(size: 13)).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else if let paper = model.selectedPaper {
                 paperHistory(paper)
+            } else if knowledge.graph(for: store.selectedTopic?.id ?? "") != nil {
+                knowledgeWorkspace
             } else {
                 paperList
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .textBackgroundColor))
         .task(id: loadKey) { if loadKey.visible { await load() } }
+        .onChange(of: store.behaviorChangesBlocked) { _, blocked in
+            if !blocked, model.takeDeferredLoad(topicID: store.selectedTopic?.id, visible: loadKey.visible) {
+                Task { await load() }
+            }
+        }
+    }
+
+    private var knowledgeWorkspace: some View {
+        VStack(spacing: 0) {
+            if let topicID = store.selectedTopic?.id {
+                HStack(spacing: 14) {
+                    Picker(localization.text("graph.view"), selection: Binding(
+                        get: { knowledge.graphSelection(for: topicID).mode },
+                        set: { knowledge.setGraphMode($0, topicID: topicID) })) {
+                        Label(localization.text("graph.relations"), systemImage: "point.3.connected.trianglepath.dotted")
+                            .tag(KnowledgeGraphSelection.Mode.relations)
+                        Label(localization.text("graph.classification"), systemImage: "square.grid.2x2")
+                            .tag(KnowledgeGraphSelection.Mode.classification)
+                        Label(localization.text("graph.ledger"), systemImage: "list.bullet")
+                            .tag(KnowledgeGraphSelection.Mode.ledger)
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
+                    if knowledge.graphSelection(for: topicID).mode != .ledger {
+                        if knowledge.graphSelection(for: topicID).paperKey == nil {
+                            KnowledgeGraphControls(topicID: topicID, model: knowledge, localization: localization)
+                        } else { Spacer() }
+                    } else { ledgerFilters }
+                }.controlSize(.small).padding(.horizontal, 20).padding(.vertical, 12)
+                Divider()
+                if knowledge.graphSelection(for: topicID).mode != .ledger {
+                    KnowledgeGraphView(topicID: topicID, model: knowledge, localization: localization,
+                        historyPaperIDs: Set(model.snapshot?.papers.map(\.id) ?? []), openHistory: { paper in
+                        model.select(paper.paperID)
+                    }, availableReferences: availableReferenceIDs(topicID: topicID), openEvidence: { reference in
+                        guard let graph = knowledge.graph(for: topicID),
+                              let target = model.evidenceTarget(reference: reference, graph: graph) else { return }
+                        openEvidence?(target)
+                    })
+                } else { paperResults }
+            }
+        }
     }
 
     private var paperList: some View {
         VStack(spacing: 0) {
-            HStack {
-                TextField(localization.text("ledger.search"), text: Binding(get: { model.query }, set: { model.setQuery($0) }))
-                    .textFieldStyle(.roundedBorder)
-                Picker(localization.text("ledger.filter"), selection: Binding(get: { model.filter }, set: { model.setFilter($0) })) {
-                    ForEach(PaperLedgerModel.Filter.allCases, id: \.self) { filter in
-                        Text(localization.text("ledger.filter.\(filter.rawValue)")).tag(filter)
-                    }
-                }.pickerStyle(.segmented).frame(maxWidth: 310).labelsHidden()
-            }.padding(.horizontal, 20).padding(.vertical, 12)
+            ledgerFilters.padding(.horizontal, 20).padding(.vertical, 12)
+            paperResults
+        }
+    }
+
+    private func availableReferenceIDs(topicID: String) -> Set<String> {
+        guard openEvidence != nil, let graph = knowledge.graph(for: topicID) else { return [] }
+        return Set(graph.references.filter { model.evidenceTarget(reference: $0, graph: graph) != nil }.map(\.id))
+    }
+
+    private var ledgerFilters: some View {
+        HStack {
+            TextField(localization.text("ledger.search"), text: Binding(get: { model.query }, set: { model.setQuery($0) }))
+                .textFieldStyle(.roundedBorder)
+            Picker(localization.text("ledger.filter"), selection: Binding(get: { model.filter }, set: { model.setFilter($0) })) {
+                ForEach(PaperLedgerModel.Filter.allCases, id: \.self) { filter in
+                    Text(localization.text("ledger.filter.\(filter.rawValue)")).tag(filter)
+                }
+            }.pickerStyle(.segmented).frame(maxWidth: 310).labelsHidden()
+        }
+    }
+
+    private var paperResults: some View {
+        Group {
             if model.loading && model.snapshot == nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.papers.isEmpty {
-                ContentUnavailableView(localization.text("ledger.empty"), systemImage: "books.vertical")
+                WorkspaceEmptyState(title: localization.text("ledger.empty"), symbol: "books.vertical",
+                    clearTitle: localization.text("action.clear_filters"), clearFilters: model.query.isEmpty && model.filter == .all ? nil : {
+                        model.setQuery(""); model.setFilter(.all)
+                    })
             } else {
                 List(model.papers) { paper in
                     Button { model.select(paper.id) } label: {
@@ -134,8 +211,12 @@ struct PaperLedgerView: View {
 
     private func load(force: Bool = false) async {
         guard let topicID = store.selectedTopic?.id else { return }
+        guard !store.behaviorChangesBlocked else { model.deferLoad(for: topicID); return }
+        model.deferLoad(for: nil)
         await model.load(topicID: topicID, reports: references, force: force) { topic, reports in
             try await store.readPaperLedger(topicID: topic, reports: reports)
         }
+        guard store.selectedTopic?.id == topicID, loadKey.visible else { return }
+        await knowledge.load(topicID: topicID) { try await store.readTopicKnowledge(topicID: $0) }
     }
 }

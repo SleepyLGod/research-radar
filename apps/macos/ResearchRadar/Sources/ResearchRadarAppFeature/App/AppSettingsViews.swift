@@ -49,25 +49,29 @@ struct ProviderSettingsView: View {
 
     var body: some View {
         Section(localization.text("onboarding.providers")) {
-            Text(localization.text("setting.deepseek_purpose")).font(.callout).foregroundStyle(.secondary)
-            Text(localization.text("setting.deepseek_fees")).font(.callout).foregroundStyle(.secondary)
-            Link(localization.text("action.manage_api_key"), destination: URL(string: "https://platform.deepseek.com/api_keys")!)
+            secretStatus("DeepSeek", name: "deepseek.api_key")
+            if onboarding { deepSeekHelp }
+            else { DisclosureGroup(localization.text("setting.deepseek_help")) { deepSeekHelp } }
             SecureField(localization.text(store.secretPresence["deepseek.api_key"] == true
                 ? "setting.replace_key" : "setting.deepseek_key"), text: $credentials.deepSeekKey)
-            secretStatus("DeepSeek", name: "deepseek.api_key")
             Button(localization.text("action.save_deepseek")) {
                 store.performAction { try credentials.saveDeepSeek { try store.saveSecret(name: $0, value: $1) } }
             }.disabled(credentials.deepSeekKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.behaviorChangesBlocked)
-            Text(localization.text("setting.tavily_purpose")).font(.callout).foregroundStyle(.secondary)
-            Text(localization.text("setting.tavily_fees")).font(.callout).foregroundStyle(.secondary)
-            Link(localization.text("action.manage_api_key"), destination: URL(string: "https://app.tavily.com/")!)
+            secretStatus("Tavily", name: "web_search.api_key")
+            if onboarding { tavilyHelp }
+            else { DisclosureGroup(localization.text("setting.tavily_help")) { tavilyHelp } }
             SecureField(localization.text(store.secretPresence["web_search.api_key"] == true
                 ? "setting.replace_key" : "setting.tavily_key"), text: $credentials.searchKey)
-            secretStatus("Tavily", name: "web_search.api_key")
             Button(localization.text("action.save_tavily")) {
                 store.performAction { try credentials.saveSearch { try store.saveSecret(name: $0, value: $1) } }
             }.disabled(credentials.searchKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.behaviorChangesBlocked)
-            Text(localization.text("status.saved_not_verified")).font(.callout).foregroundStyle(.secondary)
+            if onboarding {
+                Text(localization.text("status.saved_not_verified")).font(.callout).foregroundStyle(.secondary)
+            } else {
+                DisclosureGroup(localization.text("setting.keychain_help")) {
+                    Text(localization.text("status.saved_not_verified")).font(.callout).foregroundStyle(.secondary)
+                }
+            }
             Button(localization.text("action.refresh_credentials"), systemImage: "arrow.clockwise") {
                 store.refreshSecretPresence()
             }
@@ -122,7 +126,13 @@ struct ProviderSettingsView: View {
                     } else { effortPicker }
                 }
             }
-            Text(localization.text("setting.codex_connection_detail")).font(.callout).foregroundStyle(.secondary)
+            if onboarding {
+                Text(localization.text("setting.codex_connection_detail")).font(.callout).foregroundStyle(.secondary)
+            } else {
+                DisclosureGroup(localization.text("setting.codex_help")) {
+                    Text(localization.text("setting.codex_connection_detail")).font(.callout).foregroundStyle(.secondary)
+                }
+            }
             if !onboarding { ConnectionChecksView(store: store, localization: localization) }
         }
         .onAppear {
@@ -134,6 +144,18 @@ struct ProviderSettingsView: View {
                 store.performAction { try store.useDeepSeekVerifier() }
             }
         } message: { Text(localization.text("confirm.verifier_fallback_detail")) }
+    }
+
+    @ViewBuilder private var deepSeekHelp: some View {
+        Text(localization.text("setting.deepseek_purpose")).font(.callout).foregroundStyle(.secondary)
+        Text(localization.text("setting.deepseek_fees")).font(.callout).foregroundStyle(.secondary)
+        Link(localization.text("action.manage_api_key"), destination: URL(string: "https://platform.deepseek.com/api_keys")!)
+    }
+
+    @ViewBuilder private var tavilyHelp: some View {
+        Text(localization.text("setting.tavily_purpose")).font(.callout).foregroundStyle(.secondary)
+        Text(localization.text("setting.tavily_fees")).font(.callout).foregroundStyle(.secondary)
+        Link(localization.text("action.manage_api_key"), destination: URL(string: "https://app.tavily.com/")!)
     }
 
     private var effortPicker: some View {

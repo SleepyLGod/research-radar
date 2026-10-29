@@ -36,6 +36,7 @@ struct PaperDetailView: View {
                 Text(localization.text("paper.claims")).font(.system(size: 16, weight: .semibold))
                 ForEach(paper.claims.indices, id: \.self) { index in
                     PaperEvidenceView(claim: paper.claims[index], localization: localization)
+                        .id(PaperReadingSection.ID.claim(index))
                 }
             }.id(PaperReadingSection.ID.evidence)
         }

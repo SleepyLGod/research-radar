@@ -34,6 +34,7 @@ public final class AppStore {
     public private(set) var isShuttingDown = false
     public private(set) var cancellationRequested = false
     var paperProgressByTopic: [String: PaperProgressSnapshot] = [:]
+    let topicKnowledge = TopicKnowledgeModel()
     @ObservationIgnored private var commandActive = false
     @ObservationIgnored private var wechatCredentialRevision = UUID()
     private(set) var selectedWeChatCover: WeChatCoverImage?
@@ -320,6 +321,40 @@ public final class AppStore {
         commandActive = true; isEngineRunning = true; cancellationRequested = false
         defer { finishCommand() }
         return try await commandClient.readPaperLedger(topicID: topicID, reports: reports)
+    }
+
+    public var selectedTopicOrganization: OrganizeTopicPayloadV1? {
+        guard let topic = selectedTopic,
+              selectedTopicReports.contains(where: \.isEffectiveDeepReport) else { return nil }
+        return .init(topicID: topic.id, reports: selectedTopicReports.map {
+            .init(reportID: $0.id, reportDate: $0.reportDate, runDirectory: $0.runDirectory)
+        }, researchQuestion: topic.researchFocus, language: topic.reportLanguage)
+    }
+
+    public func organizeSelectedTopic(expectedScope: OrganizeTopicPayloadV1? = nil) async {
+        guard !behaviorChangesBlocked else { lastErrorCode = "engine_busy"; return }
+        guard let payload = selectedTopicOrganization else { lastErrorCode = "knowledge_no_material"; return }
+        guard expectedScope == nil || expectedScope == payload else {
+            lastErrorCode = "knowledge_confirmation_changed"; return
+        }
+        admissionCount += 1
+        defer { admissionCount -= 1 }
+        do {
+            _ = try await queue.enqueueOrganization(payload: payload, reportDate: ReportDate.string(for: Date()))
+            jobs = await queue.jobs()
+            lastErrorCode = nil
+            await executePendingJobs()
+        } catch { lastErrorCode = "configuration_write_failed" }
+    }
+
+    public func readTopicKnowledge(topicID: String) async throws -> TopicKnowledgeV1 {
+        guard !behaviorChangesBlocked else { throw AppStoreError.busy }
+        guard configuration.topics.contains(where: { $0.id == topicID }), let commandClient else {
+            throw AppStoreError.invalidTopic
+        }
+        commandActive = true; isEngineRunning = true; cancellationRequested = false
+        defer { finishCommand() }
+        return try await commandClient.readTopicKnowledge(topicID: topicID)
     }
 
     public func bootstrapTopic(description: String, language: ReportLanguageV1) async {
@@ -1026,14 +1061,15 @@ public final class AppStore {
                         continue
                     }
                 }
-                guard try await coordinator.executeNext(
+                guard let result = try await coordinator.executeNext(
                     configuration: configuration,
                     onJobsChanged: { [weak self] snapshot in await self?.receiveJobs(snapshot) },
                     onPaperProgress: { [weak self] event in await self?.receivePaperProgress(event) },
                     onObservationFailure: { [weak self] in await self?.recordObservationFailure() }
-                ) != nil else {
+                ) else {
                     break
                 }
+                if let knowledge = result.knowledge { topicKnowledge.accept(knowledge) }
             } catch let failure as EngineCommandFailure {
                 lastErrorCode = failure.error.code
                 jobs = await queue.jobs()

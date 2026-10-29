@@ -11,14 +11,14 @@ enum ReportHeading {
 }
 
 struct PaperReadingSection: Identifiable {
-    enum ID: Hashable { case paragraph(String), figures, evidence }
+    enum ID: Hashable { case paragraph(String), figures, evidence, claim(Int) }
     let id: ID
 
     var titleKey: String {
         switch id {
         case .paragraph(let key): "paper.\(key)"
         case .figures: "paper.figures"
-        case .evidence: "paper.claims"
+        case .evidence, .claim: "paper.claims"
         }
     }
 }

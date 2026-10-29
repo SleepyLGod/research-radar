@@ -26,6 +26,7 @@ _EVENT_TYPES = {
     "cancelled",
 }
 _STAGES = {
+    "knowledge",
     "preflight",
     "topic_bootstrap",
     "discovery",

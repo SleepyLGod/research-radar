@@ -133,7 +133,7 @@ public actor EngineJobCoordinator {
             let redacted = RedactedEngineErrorV1(
                 code: prelaunch ? "engine_launch_failed" : "terminal_invalid",
                 message: prelaunch ? "The engine could not start." : "The terminal artifact could not be confirmed.",
-                retryable: job.kind == .research || prelaunch
+                retryable: job.kind != .delivery || prelaunch
             )
             let cancelled = error as? EngineExecutionGateError == .cancelled
             let state: JobState = cancelled ? .cancelled : prelaunch ? .failed
@@ -210,9 +210,9 @@ public actor EngineJobCoordinator {
     private func resolve(job: JobRecordV1) async throws -> EngineTerminalResolution {
         let resolution = try EngineTerminalResolver.resolve(
             directory: URL(fileURLWithPath: job.jobDirectory), requestID: job.id,
-            command: job.kind == .research ? .runDaily : .retryDelivery,
+            command: job.kind == .research ? .runDaily : job.kind == .delivery ? .retryDelivery : .organizeTopic,
             runDirectory: job.runDirectory, channel: job.deliveryChannel, reportDate: job.reportDate,
-            topicID: job.topicID, appSupportRoot: appSupportRoot
+            topicID: job.topicID, appSupportRoot: appSupportRoot, organization: job.organization?.payload
         )
         if case .success(let result) = resolution, let summary = result.report {
             let run = try containedDirectory(summary.runDirectory)
@@ -231,7 +231,7 @@ public actor EngineJobCoordinator {
             job.kind == .delivery ? .deliveryUnknown : .interrupted,
             RedactedEngineErrorV1(
                 code: "terminal_invalid", message: "The terminal artifact could not be confirmed.",
-                retryable: job.kind == .research
+                retryable: job.kind != .delivery
             ), job.stage
         )
     }
@@ -261,6 +261,13 @@ public actor EngineJobCoordinator {
                 runDirectory: runDirectory, channel: channel, allowResend: job.allowResend,
                 acknowledgeUnknownOutcome: job.acknowledgeUnknownOutcome
             ))
+        case .organization:
+            guard let captured = job.organization,
+                  configuration.topics.contains(where: { $0.id == job.topicID }) else {
+                throw EngineJobCoordinatorError.requestMismatch
+            }
+            command = .organizeTopic
+            payload = .organizeTopic(captured.payload)
         }
         return try EngineRequestV1(
             requestID: job.id, command: command, createdAt: clock(),
@@ -390,6 +397,9 @@ public actor EngineJobCoordinator {
                 stage: .complete
             )
             try await restoreMissingDeliveryJobs()
+        } else if job.kind == .organization {
+            guard result.knowledge?.current != nil else { throw EngineJobCoordinatorError.invalidTerminalArtifact }
+            try await queue.transition(jobID: job.id, to: .succeeded, stage: .complete)
         } else {
             guard let delivery = result.delivery else {
                 throw EngineJobCoordinatorError.invalidTerminalArtifact

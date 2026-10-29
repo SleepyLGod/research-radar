@@ -79,7 +79,7 @@ struct ReportBrowserView: View {
                     } action: { _, ready in
                         guard ready, let paper = browser.selectedPaper,
                               browser.initialEvidenceTarget == paper.id else { return }
-                        proxy.scrollTo(PaperReadingSection.ID.evidence, anchor: .top)
+                        proxy.scrollTo(browser.initialEvidenceAnchor, anchor: .top)
                         browser.finishInitialEvidenceNavigation()
                     }
                     .id(browser.page)
@@ -88,7 +88,7 @@ struct ReportBrowserView: View {
         }
         .background(Color(nsColor: .textBackgroundColor))
         .task(id: report.id) {
-            await browser.load(report: report, workspaceRoot: workspace)
+            await browser.load(report: report, workspaceRoot: workspace, expectedSHA256: ledgerEntry?.reportSHA256)
             if let ledgerEntry, ledgerEntry.reportID == report.id { browser.openLedgerEntry(ledgerEntry) }
         }
         .task(id: visible ? browser.selectedPaper?.id : nil) {

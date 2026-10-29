@@ -245,6 +245,8 @@ def test_runner_dispatches_only_selected_handler(tmp_path: Path) -> None:
         retry_delivery=unexpected,
         upload_wechat_cover=unexpected,
         read_paper_ledger=unexpected,
+        organize_topic=unexpected,
+        read_topic_knowledge=unexpected,
         clock=lambda: datetime(2026, 8, 30, 10, tzinfo=UTC),
         config_loader=lambda path, require_topics: object(),
         secret_manager_factory=lambda: object(),

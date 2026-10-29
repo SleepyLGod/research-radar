@@ -7,6 +7,28 @@ drive the research model.
 
 ## Current State
 
+- **Topic knowledge source closeout (2026-10-29, unreleased):** explicit organization of saved
+  public deep reads, native multi-label classification, typed semantic relations and exact cited
+  claim navigation are implemented. Source-only ledger entries are not given invented features.
+  Saved browsing is local; explicit organization uses the configured reader model and cost
+  confirmation, without discovery, PDF rereading or delivery. Failed/cancelled organization retains
+  committed knowledge. Two real organizations on the same paper pair give partial quality evidence,
+  not an autonomous-knowledge accuracy guarantee. Automatic/incremental organization, user-edited
+  facets, periodic consolidation and broader-topic quality remain unimplemented or unaccepted.
+  The App currently submits all reports for the selected topic, without a date/report picker;
+  serialized input above 512,000 characters is rejected before a model call, not truncated.
+  Physical keyboard/focus, help dismissal, VoiceOver, multiple displays and larger-graph/resource
+  acceptance remain open. Existing beta downloads are unchanged. The dated checkpoints below retain
+  their original scope; an early "not implemented" or "no live calls" statement is historical, not
+  the final cumulative status. [Current user guide](macos-app.md#unreleased-candidate-organize-saved-papers).
+
+- **Codex default model update (2026-10-28, unreleased):** source App/CLI defaults and newly
+  generated scheduler snapshots use `gpt-6-luna/xhigh`. Updated App startup migrates the former
+  built-in Luna verifier model while preserving the selected effort, custom models and DeepSeek
+  selection. The existing Terra/high migration still applies. Installed Apps, existing scheduler
+  snapshots, reports, caches and past live acceptance records are unchanged. No live validation
+  of the new model or package rebuild is included in this update.
+
 - **Popover startup fix (2026-10-27, unreleased):** the earlier missing-window check
   had two separate causes. The old layer-zero observer cannot recognize the native layer-25
   popover. Independently, the production App requested its first presentation while AppKit's
@@ -197,7 +219,7 @@ drive the research model.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
 - Source centrality reranking and curated public daily source lists.
 - DeepSeek `deepseek-flash` with explicit thinking and `high` reasoning effort as the default reader route.
-- Codex `gpt-5.6-luna` with `xhigh` reasoning effort as the default verifier route; other
+- Codex `gpt-6-luna` with `xhigh` reasoning effort as the default verifier route; other
   command-backed providers remain optional.
 - Opt-in model call cache and runtime summaries for reader/verifier cost audit.
 - Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
@@ -406,10 +428,197 @@ drive the research model.
   finally render the native list/graph from those records. Human groupings, explicit citations,
   model-suggested relations and verified research judgments must remain distinguishable. Graph
   proximity or an automatic cluster is not proof of support, contradiction or scientific consensus.
-- Automatic classification, cross-paper summaries and periodic topic-wide consolidation remain
-  later, separately specified steps. They must be traceable/reviewable rather than silently
-  replacing original paper evidence. Evaluate Graphify only if it helps those defined contracts;
-  no mandatory Graphify dependency or automatic inference is approved by this TODO update.
+- **Next agreed direction: topic knowledge organization, not a citation-first graph.** AI proposes
+  topic-specific classification facets that the user can adjust. Papers may belong to multiple
+  groups; features, reasoned associations and group/topic summaries should help research judgment.
+  Keep AI synthesis distinct from verified paper claims, with stable paper/version and source
+  provenance. The graph, cards and feature table are views of these records, not separate knowledge.
+- Offer automatic organization off/on plus an explicit reorganize action, using one shared job.
+  Automatic work processes changed inputs and affected summaries; explicit reorganization may
+  reconsider the whole topic without restarting discovery or deep reading. No input changes mean
+  no automatic model call. Failed/cancelled organization retains the last successful snapshot.
+  Start with an explicitly requested organization of existing materials before automatic updates
+  and the native graph. Periodic consolidation may later reuse the same job. This is agreed design,
+  not implemented functionality or approval for live calls. Evaluate Graphify against these needs;
+  no mandatory dependency or additional background service is approved.
+- **Shared knowledge service, offline implementation (2026-10-28):** an explicit Python
+  operation now adapts saved public deep reads, reuses ledger paper identity with separate
+  version keys, and retains exact report/claim provenance. An injected existing provider returns
+  keywords, features, proposed facets, multi-label groups, conservative paper associations,
+  bounded synthesis and open questions. Strict validation rejects unknown/cross-paper references;
+  cancellation, invalid output, changed inputs or failed promotion retain the previous snapshot.
+  This first operation organizes the supplied complete report scope, not an incremental update.
+  That service slice did not wire an App/CLI/bridge entry, automatic trigger, confirmed-facet
+  editing or native graph; the subsequent manual App connection is recorded below.
+  Offline fixtures and a retained two-paper report exercise adaptation/storage only; no real
+  model-quality acceptance, secret access, search, rereading or delivery is implied. See the
+  [service plan](superpowers/plans/2026-10-28-topic-knowledge-service.md).
+- **Manual App organization, offline source candidate (2026-10-28):** the paper ledger now has
+  an explicit organization action/status backed by that same service, the existing serialized
+  engine queue and terminal-artifact recovery. It uses the configured reader route, not the
+  verifier, with a cost confirmation; it does not rediscover/read papers or create delivery jobs.
+  Saved snapshot reads are local and do not construct a secret manager. The App shows typed
+  snapshot metadata/counts while full source-backed records remain in the Python snapshot.
+  Original reports/delivery records stay separate. A separate signed candidate subsequently
+  passed automated native-button acceptance with an offline model boundary: cancel confirmation,
+  success, stop, failure retaining the old snapshot, and quit/reopen. One untranslated cancel
+  label was corrected using the existing translation. Old Apps and saved reports were unchanged;
+  no idle test engine/PDF helper remained. This does not establish live organization quality or
+  a new resource benchmark. The following slice adds native classification; automatic refresh, a separate organizer-model picker,
+  live organization quality and manual keyboard/focus/VoiceOver/multi-display checks remain pending.
+  See the [native manual slice](superpowers/plans/2026-10-28-native-manual-knowledge.md).
+- **Native classification graph, offline candidate (2026-10-28):** the existing saved-snapshot
+  commands now project facets, multi-label group membership, versioned paper cards, features
+  and exact saved claim/quote references. Native node connectors represent stored classification
+  only, not citations, consensus or verified scientific relationships. Users can select a facet,
+  filter by text/multiple keywords, open paper details and their membership/keyword/feature
+  evidence, or return through ledger history. Unclassified and source-only papers remain
+  accessible; source-only records are not given invented features. Topic selection/filter and
+  graph scroll state stay in the existing App presentation model, not a new database.
+  Read-only review identified and corrected long-source-quote rejection and inaccessible keyword
+  citations. Existing reports and snapshots are not rewritten. Real organization quality,
+  automatic/incremental refresh, relation/structure views, facet editing and manual accessibility
+  checks are still separate work. An independently signed candidate passed automated Chinese
+  native graph/detail, keyword/membership evidence, ledger-history return and close/reopen checks
+  using a saved offline snapshot; zero model/research/organization/delivery jobs were created.
+  English/dark graph layout was observed, but English-detail automation was blocked, not passed.
+  Full Python regression and 372 Swift tests passed; larger-topic/long-scroll and remaining manual
+  interaction checks are pending. See the [classification plan](superpowers/plans/2026-10-28-native-classification-graph.md)
+  for the exact offline scope; this is not live model-quality or full Demo-parity acceptance.
+- **Classification workspace layout, offline candidate (2026-10-29):** aligned topic/view controls
+  and node columns, reduced the normal header to two rows, moved snapshot details into on-demand
+  information, and replaced dashed edges with shared-stem connectors for stored membership only.
+  Six synthetic papers cover two facets, overlapping groups, an unclassified paper and long
+  bilingual titles. Eight native hosted layouts cover both languages/appearances at two widths;
+  a separate read-only QA App exercised Chinese/light facet switching, empty-result group clearing,
+  retained search and unclassified-paper evidence/return. Review corrections preserve stop/notices
+  in history and the group clear action when no paper matches. Full Swift regression (377 tests),
+  Python regression (two existing opt-in skips), Ruff, privacy, static bundle/signature and diff
+  checks passed. Existing reports, bottom-layer sources and old Apps were preserved; no research,
+  organization or delivery job ran. Long-list scrolling/restoration, physical keyboard focus/input,
+  information-popover dismissal and accessibility/multi-display checks remain manual pending;
+  do not treat transient/blocked automation as acceptance. No live classification quality or new
+  resource benchmark is claimed. See the [layout plan](superpowers/plans/2026-10-29-classification-workspace-layout.md).
+- **Partitioned classification and empty states, offline candidate (2026-10-29):** supersedes the
+  connector display above with unframed classification sections and individual paper cards.
+  Multi-membership cards retain the same versioned identity and saved evidence; an unclassified
+  section remains available. Composite App-only scroll targets distinguish repeated cards without
+  changing the protocol or stored knowledge. Classification/ledger/report empty states now keep
+  navigation at the top, use a compact message and allow clearing active filters. Regular settings
+  collapse repeated explanations; first-use provider guidance, errors and connection-check cost
+  warnings remain visible. Full Swift regression passed 380 tests, followed by 22 focused final
+  checks; Python regression passed with two existing opt-in skips. Native hosted layouts cover both
+  languages/appearances at 640/720-point widths. The separate read-only candidate exercised native
+  empty-state positioning/clear actions, multi-membership evidence/return, default-collapsed settings
+  and English/dark layout; further scenario details are in the
+  [partition plan](superpowers/plans/2026-10-29-partitioned-classification-workspace.md).
+  Help expansion/closing and keyboard focus remain manually pending after unreliable automation;
+  exact scroll restoration, VoiceOver and multiple displays also remain pending. Fixture labels are
+  synthetic, not accepted AI classification. Real organization quality is the next separate task;
+  no service call, credential-value read, delivery, Release update or new resource benchmark is implied.
+- **Saved semantic relations, local offline slice (2026-10-29):** projects existing undirected
+  relations and exact endpoint references to Swift, rather than deriving edges from classification
+  membership or similarity. The native paper workspace adds a separate Relations view; classification
+  and the ledger remain available. Nodes use actual versioned paper keys, with transient deterministic
+  layout, type filtering, relation details and topic-scoped camera/selection. Existing report evidence
+  navigation pins the saved report fingerprint and uses the ledger's paper index; changed reports
+  cannot silently replace the snapshot source. Python saved-snapshot read and Swift decoding/hosted
+  windows were exercised with isolated offline fixtures, not the independent HTML Demo data.
+  English/Chinese light/dark captures and local AppKit edge clicks are observed; source-button physical
+  input, full popover reopening, accessibility and multiple displays remain manually pending.
+  Full regression and final review results are recorded in the
+  [relation slice plan](superpowers/plans/2026-10-29-native-semantic-relations.md).
+  Final checks passed 1,043 Python tests (two existing opt-in skips), 391 Swift tests, Ruff,
+  privacy and diff checks. Read-only review's reversed-endpoint lane overlap was reproduced,
+  corrected and re-reviewed. This is still uncommitted local source, not an updated installed App.
+  No live model, credential-value read, delivery, shipping App/DMG or Release acceptance is implied.
+  Real organization quality, automatic refresh and larger-graph layout remain separate work.
+- **Saved semantic relations, independent candidate acceptance (2026-10-29):** supersedes the
+  source-only packaging/popover status above. A separate arm64 QA App uses the existing local
+  signing identity and isolated synthetic snapshots, preserving previous Apps and real configuration.
+  Actual native accessibility button actions opened both endpoint reports and explicitly expanded
+  their correct saved quotations. Returning from each paper retained the selected relation, 115%
+  zoom and measured node positions; Escape and status-item reopening retained the same view.
+  Normal exit left no candidate App/helper process. Read-only engine auditing recorded nine ledger/
+  knowledge reads, no forbidden-I/O attempts and no queued/scheduled jobs. Protected report/snapshot
+  and source/previous-App hashes stayed unchanged; signature, symlink, arm64 dependency and native
+  code/resource path checks passed. The candidate intentionally embeds an isolated QA root and is
+  not a shipping package. Only QA setup/timing corrections were needed, not product changes.
+  Physical keyboard/VoiceOver, multiple displays, larger graphs and real organization quality remain
+  pending; this does not claim Quit/relaunch camera persistence or a new full regression/resource
+  benchmark. No real credential, model, search or delivery was accessed; no commit/push or Release
+  update occurred. See the [relation slice plan](superpowers/plans/2026-10-29-native-semantic-relations.md).
+- **First real knowledge-quality check (2026-10-29):** one isolated native organization job used
+  existing MemConflict v1/MemGuide v2 public deep reads and 85 anchored claims. The actual development
+  route was DeepSeek `deepseek-flash`, thinking enabled/high; one model HTTP request succeeded without
+  research or delivery. Native classification, all four relation reasons/both-paper references and
+  both local report/quotation routes were checked against the saved real output. Previous Apps,
+  normal configuration and reports remained unchanged; package checks and clean exit passed.
+  This supersedes the earlier wholly-unverified real-provider status, not the content-quality gate:
+  three of six facets have no groups, two relationship types are overly broad, and some explanation
+  clauses omit their specific supporting references despite those facts existing in the input.
+  The output is useful for assisted reading, not accepted as a reliable autonomous knowledge map.
+  Next: tighten classification/relationship/evidence criteria before a separately approved comparison;
+  do not solve weak interpretation with decorative edges or silently rewrite this snapshot. No prompt
+  or product changes, second organization, commit/push or Release update occurred. Broader-topic,
+  automatic/incremental and manual accessibility gates remain separate. See the
+  [quality checkpoint](superpowers/plans/2026-10-29-native-semantic-relations.md#first-real-organization-quality-check).
+- **Knowledge prompt revision 2, offline regression (2026-10-29):** tightened populated-facet,
+  concrete-relation and clause-to-reference instructions without changing the schema, validator,
+  model routes, evidence gate or App. The first real snapshot and its acceptance files remain
+  unchanged. A public 34-reference excerpt retains the original weak output; a separate hand-edited
+  replay tests the service/storage/projection path, not model quality. Six added cases protect
+  revision provenance, legacy readability, exact evidence, and previous-snapshot retention on bad
+  citations. Focused/full Python passed (64 focused; 1,049 full with two existing opt-in skips),
+  plus Ruff, privacy and whitespace checks. Prompt constraints are not deterministic semantic
+  validation: real classification/relationship improvement still needs a separately approved
+  comparison. No live call, credential read, UI change, App rebuild, delivery or commit/push occurred.
+  See the [prompt revision record](superpowers/plans/2026-10-28-topic-knowledge-service.md#prompt-revision-after-the-first-real-check).
+- **Single real knowledge prompt comparison (2026-10-29):** reused v1; ran only v2 once in a
+  separate signed candidate. Same two public deep reads, 85 references, question/language and
+  input fingerprint; same DeepSeek `deepseek-flash` thinking/high. One organization job/HTTP
+  request succeeded. Empty facets decreased 3→0; the broad shared_evaluation edge disappeared;
+  specific protocol/metric citations improved. This is partial, not uniform semantic acceptance:
+  different_assumption remains weak, an example K=5 became an unqualified setting, and some
+  clause references/interpretation labels are still insufficient. Native classification, three
+  relation reasons/both source sets and correct endpoint report/quote content were observed.
+  Automatic quote positioning is not accepted: final frame review found a target below the visible
+  window despite correct accessibility text; follow-up scroll automation lost the transient popover.
+  Its cause/manual scroll are separate pending checks, not a UI fix in this slice.
+  Protected old results/reports, real configuration, previous Apps and source stayed unchanged;
+  bundle/privacy/diff checks and clean exit passed. No research, second organization, delivery,
+  product change, commit/push or Release update. One pair does not establish stable model-quality
+  improvement or large-topic quality; see the [real comparison record](superpowers/plans/2026-10-28-topic-knowledge-service.md#single-real-v1v2-comparison).
+- **Exact knowledge-reference positioning repair (2026-10-29, offline):** the failed comparison
+  route discarded the claim index and scrolled only to the evidence section header. This was a
+  real App target-selection defect, not resolved by a longer test wait. App navigation now retains
+  and range-checks the exact claim index, using the existing post-image-layout scroll; generic
+  ledger evidence still targets the section. No prompt, protocol, report or research-policy change.
+  Four native reproduction cases first failed and then passed; three new methods cover nine
+  parameter combinations including first/late claims, invalid indices and navigation reset.
+  Full gates: Python 1,049 passed / two existing opt-in skips, Swift 394 passed, Ruff, privacy and
+  whitespace checks. A separately signed read-only candidate opened the saved relation's MemGuide
+  claim 7 and MemConflict claim 36 inside the actual visible viewport without manual scrolling;
+  explicit disclosure showed each original quote, and return preserved the selected relation.
+  New/old organization workspaces, prompt, reports, real configuration and previous Apps retained
+  their hashes. No model, search, credential or delivery access; no commit/push or Release update.
+  This supersedes the specific automatic-positioning pending item above, not content-quality,
+  physical keyboard/VoiceOver or multi-display acceptance. See the
+  [repair checkpoint](superpowers/plans/2026-10-29-native-semantic-relations.md#exact-evidence-navigation-repair).
+- **Cumulative source review (2026-10-29):** the reviewed set contains 91 allowlisted code,
+  test and documentation files, excluding private configuration, certificates, Apps and raw
+  acceptance output. Two independent local reviews found no confirmed actionable defect.
+  CodeRabbit raised one scope/capacity suggestion: add report/date selection and validate
+  multi-week input. The current contract is explicit full-topic organization with a fail-before-call
+  size guard; neither scope selection nor large-topic acceptance is implemented. The suggestion is
+  retained as follow-up, not reported as an implemented fix or as zero review issues. Bilingual
+  guides now make this limitation and the unreleased/partial-quality status explicit. Existing
+  report, prompt, result/configuration and previous-App preservation checks passed. No new research,
+  credentials or delivery were used for closeout; physical input/accessibility gates remain open.
+  Fresh full checks passed: Python 1,049 / two existing skips and Swift 394, plus Ruff, privacy
+  and whitespace checks. The first permission-restricted Swift invocation failed at Trash/AppKit
+  boundaries; a normal-permission rerun passed without product changes. Intermediate model/service
+  source trees also passed their bounded Python checks; optional frozen-workflow gates remain opt-in.
 - The original roadmap-only change was followed by explicit approval for offline implementation,
   candidate acceptance and then source closeout in the existing Draft PR. Split per-paper progress
   and copy reduction into signed-off commits; exclude Apps, installers and acceptance artifacts.

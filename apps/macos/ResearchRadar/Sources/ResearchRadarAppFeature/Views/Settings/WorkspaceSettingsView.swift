@@ -17,7 +17,9 @@ struct WorkspaceSettingsView: View {
                 ))
                 .disabled(store.notifications.isChangingPreference || store.isShuttingDown)
                 .accessibilityIdentifier("notifications.enable")
-                Text(localization.text("notification.detail")).font(.callout).foregroundStyle(.secondary)
+                DisclosureGroup(localization.text("notification.about")) {
+                    Text(localization.text("notification.detail")).font(.callout).foregroundStyle(.secondary)
+                }
                 if let issue = store.notifications.issue {
                     Text(localization.text("notification.issue.\(issue.rawValue)"))
                         .font(.callout).foregroundStyle(.secondary)
@@ -30,7 +32,10 @@ struct WorkspaceSettingsView: View {
                 set: { value in store.performAction { try store.setSchedulesPaused(value) } }
             ))
             .disabled(store.behaviorChangesBlocked)
-            Text(localization.text("schedule.runtime_contract")).font(.callout).foregroundStyle(.secondary)
+            Text(localization.text("schedule.requires_app")).font(.callout).foregroundStyle(.secondary)
+            DisclosureGroup(localization.text("schedule.about")) {
+                Text(localization.text("schedule.runtime_contract")).font(.callout).foregroundStyle(.secondary)
+            }
             if store.scheduleFaulted || store.requiresReconciliation {
                 Button(localization.text("action.recover_schedule"), systemImage: "arrow.clockwise") {
                     Task { await store.recoverScheduling() }

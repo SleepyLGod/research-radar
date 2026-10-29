@@ -115,7 +115,16 @@ public enum EngineProtocolCodec {
             guard let path = payload["image_path"] as? String, path.hasPrefix("/"),
                   validDigest(payload["image_sha256"]) else { throw EngineProtocolError.invalidValue }
         }
-        if command == .readPaperLedger {
+        if command == .readTopicKnowledge {
+            guard let topic = payload["topic_id"] as? String, !topic.isEmpty else { throw EngineProtocolError.invalidValue }
+        }
+        if command == .organizeTopic {
+            guard let question = payload["research_question"] as? String,
+                  !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  question.count <= 10_000 else { throw EngineProtocolError.invalidValue }
+            _ = try requireEnum(ReportLanguageV1.self, payload["language"])
+        }
+        if command == .readPaperLedger || command == .organizeTopic {
             guard let topic = payload["topic_id"] as? String, !topic.isEmpty,
                   let reports = payload["reports"] as? [[String: Any]] else { throw EngineProtocolError.invalidValue }
             for report in reports {
@@ -124,12 +133,17 @@ public enum EngineProtocolCodec {
                       validReportDate(report["report_date"]),
                       let path = report["run_dir"] as? String, path.hasPrefix("/") else { throw EngineProtocolError.invalidValue }
             }
+            if command == .organizeTopic && (reports.isEmpty || Set(reports.compactMap {
+                ($0["report_id"] as? String).flatMap(UUID.init(uuidString:))
+            }).count != reports.count) {
+                throw EngineProtocolError.invalidValue
+            }
         }
     }
 
     private static func validateResult(_ data: Data) throws {
         let object = try protocolObject(data)
-        try requireExactKeys(object, resultKeys.union(["cover", "paper_ledger"].filter { object[$0] != nil }))
+        try requireExactKeys(object, resultKeys.union(["cover", "paper_ledger", "knowledge"].filter { object[$0] != nil }))
         try requireSchemaVersion(object)
         let command = try requireEnum(EngineCommand.self, object["command"])
         _ = try requireEnum(EngineResultStatus.self, object["status"])
@@ -175,6 +189,46 @@ public enum EngineProtocolCodec {
                   validDigest(cover["image_sha256"]) else { throw EngineProtocolError.invalidValue }
         case .readPaperLedger:
             try validatePaperLedger(try requireObject(object[expected]))
+        case .organizeTopic, .readTopicKnowledge:
+            try validateKnowledge(try requireObject(object[expected]), requiresCurrent: command == .organizeTopic)
+        }
+    }
+
+    private static func validateKnowledge(_ value: [String: Any], requiresCurrent: Bool) throws {
+        try requireExactKeys(value, value["graph"] == nil ? ["topic_id", "current"] : ["topic_id", "current", "graph"])
+        guard let topic = value["topic_id"] as? String, !topic.isEmpty else { throw EngineProtocolError.invalidValue }
+        if value["current"] is NSNull {
+            guard !requiresCurrent, value["graph"] == nil || value["graph"] is NSNull else { throw EngineProtocolError.invalidValue }
+            return
+        }
+        let current = try requireObject(value["current"])
+        try requireExactKeys(current, ["snapshot_id", "created_at", "input_fingerprint", "report_ids",
+            "provider", "model", "paper_count", "feature_count", "group_count", "relation_count"])
+        guard let id = current["snapshot_id"] as? String, id.count == 32,
+              id.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+              validDigest(current["input_fingerprint"]),
+              let reports = current["report_ids"] as? [String], !reports.isEmpty,
+              Set(reports).count == reports.count, reports.allSatisfy({ UUID(uuidString: $0) != nil })
+        else { throw EngineProtocolError.invalidValue }
+        for key in ["created_at", "provider", "model"] {
+            guard let text = current[key] as? String, !text.isEmpty, text.count <= 500 else { throw EngineProtocolError.invalidValue }
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = current["created_at"] as? String else { throw EngineProtocolError.invalidValue }
+        if formatter.date(from: date) == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            guard formatter.date(from: date) != nil else { throw EngineProtocolError.invalidValue }
+        }
+        for key in ["paper_count", "feature_count", "group_count", "relation_count"] {
+            guard let number = current[key] as? NSNumber, !isJSONBoolean(number),
+                  number.intValue >= (key == "paper_count" ? 1 : 0),
+                  number.doubleValue == Double(number.intValue) else { throw EngineProtocolError.invalidValue }
+        }
+        if let graph = value["graph"], !(graph is NSNull) {
+            let data = try JSONSerialization.data(withJSONObject: graph)
+            let summary = try decode(KnowledgeSummaryV1.self, from: JSONSerialization.data(withJSONObject: current))
+            try KnowledgeGraphValidation.validate(data, summary: summary)
         }
     }
 
@@ -387,12 +441,14 @@ public enum EngineProtocolCodec {
         ],
         .uploadWeChatCover: ["image_path", "image_sha256"],
         .readPaperLedger: ["topic_id", "reports"],
+        .organizeTopic: ["topic_id", "reports", "research_question", "language"],
+        .readTopicKnowledge: ["topic_id"],
     ]
     private static let resultKeys: Set<String> = [
         "schema_version", "request_id", "command", "status", "completed_at",
         "report", "preflight", "topic_draft", "delivery",
     ]
-    private static let resultPayloadKeys = ["report", "preflight", "topic_draft", "delivery", "cover", "paper_ledger"]
+    private static let resultPayloadKeys = ["report", "preflight", "topic_draft", "delivery", "cover", "paper_ledger", "knowledge"]
     private static let resultPayloadKey: [EngineCommand: String] = [
         .preflight: "preflight",
         .bootstrapTopic: "topic_draft",
@@ -400,6 +456,8 @@ public enum EngineProtocolCodec {
         .retryDelivery: "delivery",
         .uploadWeChatCover: "cover",
         .readPaperLedger: "paper_ledger",
+        .organizeTopic: "knowledge",
+        .readTopicKnowledge: "knowledge",
     ]
     private static let preflightKeys: Set<String> = ["checks", "ready"]
     private static let preflightCheckKeys: Set<String> = [
@@ -440,5 +498,6 @@ public enum EngineProtocolCodec {
         "model_transport_failed", "model_response_interrupted", "model_response_retry_exhausted",
         "cancelled",
         "cover_upload_failed",
+        "knowledge_failed",
     ]
 }

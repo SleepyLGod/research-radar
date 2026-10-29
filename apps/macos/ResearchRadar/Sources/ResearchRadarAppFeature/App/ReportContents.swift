@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import ResearchRadarCore
 
 /// A read-only projection of the already-filtered public draft, not raw reader output.
@@ -66,9 +67,14 @@ struct ReportContents: Sendable {
     let papers: [Paper]
     let sources: [Source]
 
-    static func load(report: ReportRecordV1, workspaceRoot: URL) throws -> Self {
+    static func load(report: ReportRecordV1, workspaceRoot: URL, expectedSHA256: String? = nil) throws -> Self {
         let policy = try ReportReaderPolicy(report: report, workspaceRoot: workspaceRoot)
-        return try decode(policy.articleDraftData(), topicID: report.topicID)
+        let data = try policy.articleDraftData()
+        if let expectedSHA256 {
+            let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            guard actual == expectedSHA256 else { throw ReportReaderPolicy.Failure.invalidReport }
+        }
+        return try decode(data, topicID: report.topicID)
     }
 
     static func decode(_ data: Data, topicID: String) throws -> Self {

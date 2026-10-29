@@ -12,6 +12,7 @@ enum EngineTerminalResolver {
         directory: URL, requestID: UUID, command: EngineCommand,
         runDirectory: String? = nil, channel: DeliveryChannel? = nil,
         reportDate: String? = nil, topicID: String? = nil, appSupportRoot: URL? = nil,
+        organization: OrganizeTopicPayloadV1? = nil,
         launched: Bool = true
     ) throws -> EngineTerminalResolution {
         let resultURL = directory.appending(path: "result.json")
@@ -30,6 +31,10 @@ enum EngineTerminalResolver {
                 }
             case .retryDelivery(let payload):
                 guard payload.runDirectory == runDirectory, payload.channel == channel else {
+                    throw EngineJobCoordinatorError.requestMismatch
+                }
+            case .organizeTopic(let payload):
+                guard payload == organization, payload.topicID == topicID else {
                     throw EngineJobCoordinatorError.requestMismatch
                 }
             default: break
@@ -84,6 +89,18 @@ enum EngineTerminalResolver {
             case .uploadWeChatCover:
                 guard let cover = result.cover, case .uploadWeChatCover(let payload) = request.payload,
                       cover.imageSHA256 == payload.imageSHA256 else {
+                    throw EngineJobCoordinatorError.requestMismatch
+                }
+            case .organizeTopic:
+                guard case .organizeTopic(let payload) = request.payload,
+                      let knowledge = result.knowledge, let current = knowledge.current,
+                      knowledge.topicID == payload.topicID,
+                      Set(current.reportIDs) == Set(payload.reports.map(\.reportID)) else {
+                    throw EngineJobCoordinatorError.requestMismatch
+                }
+            case .readTopicKnowledge:
+                guard case .readTopicKnowledge(let payload) = request.payload,
+                      result.knowledge?.topicID == payload.topicID else {
                     throw EngineJobCoordinatorError.requestMismatch
                 }
             }
