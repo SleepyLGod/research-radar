@@ -16,7 +16,7 @@ public enum ResolvedAppLanguage: String, Codable, Sendable {
 }
 
 public enum JobTrigger: String, Codable, Sendable { case schedule, runNow = "run_now", retry }
-public enum JobKind: String, Codable, Sendable { case research, delivery }
+public enum JobKind: String, Codable, Sendable { case research, delivery, organization }
 public enum JobState: String, Codable, Sendable {
     case pending, running, cancelling, succeeded
     case partialSuccess = "partial_success"

@@ -150,6 +150,7 @@ struct TopicEditorView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private func multiline(_ key: String, text: Binding<String>) -> some View {
@@ -168,7 +169,7 @@ struct TopicsView: View {
     @State private var newTopic: TopicRecordV1?
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Picker(localization.text("nav.topics"), selection: Binding(
                     get: { store.selectedTopic?.id ?? "" },
@@ -182,7 +183,8 @@ struct TopicsView: View {
                     newTopic = TopicRecordV1(id: UUID().uuidString.lowercased(), displayName: "", researchFocus: "", queries: [], paperQueries: [], reportLanguage: TopicEditorInput.reportLanguage(for: localization.resolvedLanguage))
                 } label: { Label(localization.text("action.new_topic"), systemImage: "plus") }
                     .disabled(store.behaviorChangesBlocked)
-            }.padding()
+            }.padding(.horizontal, 20).padding(.vertical, 14)
+            Divider()
             if let topic = store.selectedTopic {
                 TopicEditorView(store: store, localization: localization, topic: topic).id(topic.id)
             }

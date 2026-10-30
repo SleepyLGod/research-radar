@@ -1,4 +1,4 @@
-"""Strict Task 1 request protocol for the macOS application bridge."""
+"""Strict request protocol for the macOS application bridge."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from research_radar.app_bridge import BRIDGE_SCHEMA_VERSION
+from research_radar.storage.paper_ledger import LedgerReport
 
 _REQUEST_FIELDS = {
     "schema_version",
@@ -25,6 +26,9 @@ _REQUEST_FIELDS = {
     "payload",
 }
 _PAYLOAD_FIELDS = {
+    "organize_topic": {"topic_id", "reports", "research_question", "language"},
+    "read_topic_knowledge": {"topic_id"},
+    "read_paper_ledger": {"topic_id", "reports"},
     "upload_wechat_cover": {"image_path", "image_sha256"},
     "preflight": {"live_probe"},
     "bootstrap_topic": {"description", "language"},
@@ -61,13 +65,16 @@ class ProtocolError(ValueError):
 
 
 class EngineCommand(StrEnum):
-    """Commands frozen in the App bridge schema v1."""
+    """Commands accepted by the App bridge schema v1."""
 
     PREFLIGHT = "preflight"
     BOOTSTRAP_TOPIC = "bootstrap_topic"
     RUN_DAILY = "run_daily"
     RETRY_DELIVERY = "retry_delivery"
     UPLOAD_WECHAT_COVER = "upload_wechat_cover"
+    READ_PAPER_LEDGER = "read_paper_ledger"
+    ORGANIZE_TOPIC = "organize_topic"
+    READ_TOPIC_KNOWLEDGE = "read_topic_knowledge"
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,12 +123,40 @@ class UploadWeChatCoverPayloadV1:
     image_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class ReadPaperLedgerPayloadV1:
+    """Saved report references for an offline topic paper projection."""
+
+    topic_id: str
+    reports: list[LedgerReport]
+
+
+@dataclass(frozen=True, slots=True)
+class OrganizeTopicPayloadV1:
+    """Explicit organization scope captured from the saved App topic and report index."""
+
+    topic_id: str
+    reports: list[LedgerReport]
+    research_question: str
+    language: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReadTopicKnowledgePayloadV1:
+    """Credential-free read of a topic's last committed knowledge snapshot."""
+
+    topic_id: str
+
+
 EnginePayloadV1 = (
     PreflightPayloadV1
     | BootstrapTopicPayloadV1
     | RunDailyPayloadV1
     | RetryDeliveryPayloadV1
     | UploadWeChatCoverPayloadV1
+    | ReadPaperLedgerPayloadV1
+    | OrganizeTopicPayloadV1
+    | ReadTopicKnowledgePayloadV1
 )
 
 
@@ -224,6 +259,38 @@ def _parse_payload(
         raise ProtocolError(f"Invalid {command.value} payload: {detail}.")
     if command is EngineCommand.PREFLIGHT:
         return PreflightPayloadV1(live_probe=_require_bool(value, "live_probe"))
+    if command is EngineCommand.READ_TOPIC_KNOWLEDGE:
+        return ReadTopicKnowledgePayloadV1(_require_str(value, "topic_id"))
+    if command in {EngineCommand.READ_PAPER_LEDGER, EngineCommand.ORGANIZE_TOPIC}:
+        references = value["reports"]
+        if not isinstance(references, list):
+            raise ProtocolError("reports must be an array.")
+        reports = []
+        for reference in references:
+            if not isinstance(reference, dict) or set(reference) != {
+                "report_id", "report_date", "run_dir",
+            }:
+                raise ProtocolError("Invalid paper ledger report reference.")
+            try:
+                identifier = _require_str(reference, "report_id")
+                UUID(identifier)
+                path = Path(_require_str(reference, "run_dir"))
+                if not path.is_absolute():
+                    raise ValueError("run_dir must be absolute.")
+                reports.append(LedgerReport(
+                    identifier, _require_str(reference, "report_date"), path,
+                ))
+            except ValueError as exc:
+                raise ProtocolError("Invalid paper ledger report reference.") from exc
+        if command is EngineCommand.READ_PAPER_LEDGER:
+            return ReadPaperLedgerPayloadV1(_require_str(value, "topic_id"), reports)
+        if not reports or len({UUID(report.report_id) for report in reports}) != len(reports):
+            raise ProtocolError("Organization requires saved report references.")
+        question = _require_str(value, "research_question")
+        if len(question) > 10_000:
+            raise ProtocolError("Organization research question is too long.")
+        return OrganizeTopicPayloadV1(_require_str(value, "topic_id"), reports,
+                                     question, _require_language(value, "language"))
     if command is EngineCommand.UPLOAD_WECHAT_COVER:
         image = Path(_require_str(value, "image_path"))
         digest = _require_str(value, "image_sha256")

@@ -174,6 +174,8 @@ def _build_provider(
             timeout_seconds=provider_config.timeout_seconds,
             thinking=provider_config.thinking,
             reasoning_effort=provider_config.reasoning_effort,
+            max_tokens=provider_config.max_tokens,
+            stream=provider_config.stream,
             cancellation_event=cancellation_event,
         )
     if provider_config.kind == "anthropic_messages":
@@ -211,7 +213,7 @@ def _default_model(provider_name: str) -> str | None:
         "xiaomi": "mimo-v2.5-pro",
         "openai": "gpt-5.4",
         "anthropic": "claude-sonnet-4-5",
-        "codex": "gpt-5.6-luna",
+        "codex": "gpt-6-luna",
         "claude": "sonnet",
         "von_claude": "sonnet",
         "local": "local",

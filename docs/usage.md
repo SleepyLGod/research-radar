@@ -156,7 +156,7 @@ The default quality path is:
 
 - Deep reading: `deepseek/deepseek-flash` with explicit thinking and `high` reasoning effort
 - Source gist and report localization: `deepseek-flash` through the same configured DeepSeek provider
-- Verification: `codex/gpt-5.6-luna` with `xhigh` reasoning effort
+- Verification: `codex/gpt-6-luna` with `xhigh` reasoning effort
 - Web search: Tavily when the web-search secret is present
 
 Existing YAML remains authoritative: change both the verifier model and the Codex provider's
@@ -230,6 +230,59 @@ anchors, source links, or publication status.
 
 For repeat smoke runs, `--model-cache` keeps expensive reader/verifier/localization calls local to
 the run root.
+
+Unreleased source adds the full endpoint's SHA-256 digest to OpenAI-compatible cache identity,
+alongside existing thinking/effort settings. Switching host, path or query cannot reuse a result
+from another endpoint under the same provider/model name. Old entries are not deleted or migrated,
+but entries created without endpoint identity will miss; a later run may make additional paid
+calls. Codex cache identity and the shared cache-file format remain unchanged. Cache hits without
+server metadata do not establish which server model or finish reason produced an old answer.
+
+OpenAI-compatible responses must contain a nonblank text answer. Output-limit completions
+(`finish_reason=length`), filtering/refusal, unsupported tool calls and unrecognized finish reasons
+fail before caching or reader JSON repair; they do not trigger an additional request. A missing or
+null finish reason remains compatible for valid text, but is unknown, not a confirmed normal stop.
+Provider metadata keeps the requested model separate from a valid endpoint-reported model name.
+Invalid-response diagnostics omit model text and reasoning; normal HTTP errors retain bounded,
+redacted diagnostics. These source changes do not update already installed Apps or beta packages.
+Malformed UTF-8 is rejected instead of being replaced with unreadable characters. Excessive JSON
+nesting is also a standard provider failure. Neither case retries or enters the model cache or
+reader repair path. Incomplete HTTP bodies contribute byte counts and a coarse failure state,
+not text excerpts, even when the fragment has no recognizable JSON envelope.
+
+### OpenAI-compatible Output Budget (Unreleased Source)
+
+An `openai_compatible` provider may set an optional positive integer `max_tokens`, for example:
+
+```yaml
+model_providers:
+  custom_reader:
+    kind: openai_compatible
+    base_url: https://api.example.com/v1/chat/completions
+    api_key_secret: custom_reader.api_key
+    max_tokens: 32768
+```
+
+Omitting this field and setting it to `null` both send no output budget and share a cache identity.
+An explicit budget becomes part of cache identity; changing it may incur a new paid request.
+This field does not configure Codex CLI or add a control to the App. On reasoning models, the
+endpoint may count thinking and visible text against the same budget. A large input context does
+not imply an equally large answer budget; increasing the timeout cannot fix `finish_reason=length`.
+Truncated answers remain rejected, with no automatic budget increase or repair request.
+
+Optional [streaming reception](providers.md#optional-streaming-unreleased-source) is available in
+unreleased shared source, disabled by default. It passes only a complete, normally finished answer
+to the same reader and evidence checks; it does not weaken publication criteria or add live text
+to the App. Existing routes and installed packages are unchanged. Enabling it separates cache
+identity from non-streaming and can cause a new request on the next authorized run. Offline
+transport/pipeline acceptance is not live endpoint or prompt-quality acceptance.
+
+OpenAI-compatible HTTP failure diagnostics include elapsed time, request size and available safe
+request settings, plus an allowlist of bounded, redacted response headers when supplied.
+The diagnostic host excludes endpoint URL usernames and passwords. Request bodies and
+authorization/cookie headers are not logged; response excerpts remain bounded and
+redacted, including any echoed API key. HTTP 504 remains a
+non-retried HTTP error; a gateway timeout is distinct from the configured local request timeout.
 
 ## Single-Paper Run
 

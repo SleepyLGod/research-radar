@@ -15,12 +15,18 @@ from research_radar import __version__
 from research_radar.analysis.research_outcome import parse_research_outcome
 from research_radar.analysis.routing import resolve_task_route
 from research_radar.app_bridge.configuration import LoadedAppConfigurationV1
-from research_radar.app_bridge.events import EventWriter
+from research_radar.app_bridge.events import EventWriter, PaperProgressV1
+from research_radar.app_bridge.knowledge_projection import (
+    project_knowledge as _knowledge_projection,
+)
 from research_radar.app_bridge.pdf_helper import PDFHelperClient, app_figure_extractor
 from research_radar.app_bridge.protocol import (
     BootstrapTopicPayloadV1,
     EngineRequestV1,
+    OrganizeTopicPayloadV1,
     PreflightPayloadV1,
+    ReadPaperLedgerPayloadV1,
+    ReadTopicKnowledgePayloadV1,
     RetryDeliveryPayloadV1,
     RunDailyPayloadV1,
     UploadWeChatCoverPayloadV1,
@@ -29,14 +35,75 @@ from research_radar.application.daily import DailyRunOptions, run_daily_applicat
 from research_radar.application.email import EmailDeliveryOptions, publish_email_application
 from research_radar.application.provider_probe import probe_excerpt, probe_provider
 from research_radar.application.search_probe import probe_web_search
+from research_radar.application.topic_knowledge import load_current_knowledge, organize_topic
 from research_radar.application.wechat import WeChatDraftOptions, publish_wechat_draft
 from research_radar.application.wechat_cover import upload_wechat_cover
 from research_radar.compose.draft_io import load_article_draft
 from research_radar.exceptions import ResearchRadarError
+from research_radar.pipeline.progress import ProgressListener
 from research_radar.publishers.wechat.client import WeChatDraftClient
 from research_radar.security.secrets import SecretBackend, SecretManager
 from research_radar.storage.files import read_json
+from research_radar.storage.paper_ledger import build_paper_ledger
 from research_radar.topic_bootstrap import bootstrap_topic_draft, lint_topic_draft
+
+
+def handle_organize_topic(
+    request: EngineRequestV1, *, config: LoadedAppConfigurationV1 | None,
+    secrets: object, events: EventWriter, pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
+) -> dict[str, object]:
+    """Explicit organization only; reuse the configured reader, never the verifier or discovery."""
+    payload = cast(OrganizeTopicPayloadV1, request.payload)
+    _require_knowledge_topic(config, payload.topic_id)
+    assert config is not None
+    events.write("stage_changed", stage="knowledge", message="Organizing saved public deep reads.")
+    route = resolve_task_route(config.research, cast(SecretManager, secrets), "deep_reading",
+                               cancellation_event=cancellation_event)
+    if route.provider is None or route.model is None:
+        raise ValueError("Organization requires a configured model route.")
+    result = organize_topic(config.workspace_root, payload.topic_id, payload.reports,
+                           research_question=payload.research_question, language=payload.language,
+                           provider=route.provider, model=route.model,
+                           cancelled=(cancellation_event.is_set
+                                      if cancellation_event else lambda: False))
+    return _knowledge_projection(payload.topic_id, result.snapshot)
+
+
+def handle_read_topic_knowledge(
+    request: EngineRequestV1, *, config: LoadedAppConfigurationV1 | None,
+    secrets: object, events: EventWriter, pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
+) -> dict[str, object]:
+    """Read only the last validated local snapshot; never resolve a provider or secret."""
+    payload = cast(ReadTopicKnowledgePayloadV1, request.payload)
+    _require_knowledge_topic(config, payload.topic_id)
+    assert config is not None
+    return _knowledge_projection(payload.topic_id,
+                                 load_current_knowledge(config.workspace_root, payload.topic_id))
+
+
+def _require_knowledge_topic(config: LoadedAppConfigurationV1 | None, topic_id: str) -> None:
+    if config is None or topic_id not in {topic.id for topic in config.research.topics}:
+        raise ValueError("Knowledge topic is not configured.")
+
+
+def handle_read_paper_ledger(
+    request: EngineRequestV1, *, config: LoadedAppConfigurationV1 | None,
+    secrets: object, events: EventWriter, pdf_helper_path: Path | None,
+    cancellation_event: Event | None = None,
+) -> dict[str, object]:
+    """Project saved public report metadata without credentials or research calls."""
+
+    if config is None:
+        raise ValueError("read_paper_ledger requires App configuration.")
+    payload = cast(ReadPaperLedgerPayloadV1, request.payload)
+    if payload.topic_id not in {topic.id for topic in config.research.topics}:
+        raise ValueError("Paper ledger topic is not configured.")
+    return build_paper_ledger(
+        config.workspace_root, payload.topic_id, payload.reports,
+        cancelled=cancellation_event.is_set if cancellation_event else lambda: False,
+    )
 
 
 def handle_preflight(
@@ -366,7 +433,7 @@ def _configured_route_checks(
     return checks
 
 
-def _progress_listener(events: EventWriter):
+def _progress_listener(events: EventWriter) -> ProgressListener:
     stage_map = {
         "discovery": "discovery",
         "relevance": "discovery",
@@ -390,9 +457,32 @@ def _progress_listener(events: EventWriter):
             "progress",
             stage=stage,
             message=str(event.get("message") or "Research in progress."),
+            paper=_paper_progress(event),
         )
 
     return listener
+
+
+def _paper_progress(event: dict[str, object]) -> PaperProgressV1 | None:
+    statuses = {
+        ("ingestion", "started"): "acquiring",
+        ("ingestion", "succeeded"): "acquired",
+        ("ingestion", "failed"): "acquisition_failed",
+        ("paper_text_quality", "passed"): "acquired",
+        ("paper_text_quality", "failed"): "skipped",
+        ("reader", "started"): "reading",
+        ("reader", "succeeded"): "read",
+        ("reader", "failed"): "reading_failed",
+    }
+    status = statuses.get((str(event.get("stage")), str(event.get("status"))))
+    title, source_id = event.get("source_title"), event.get("source_id")
+    if status is None or not isinstance(title, str) or not title.strip():
+        return None
+    if (not isinstance(source_id, str) or len(source_id) != 64
+            or any(char not in "0123456789abcdef" for char in source_id)):
+        return None
+    # A runtime key only: no URL or error body crosses into the progress UI.
+    return PaperProgressV1(source_id, title, status)
 
 
 def _optional_json(path: Path) -> dict[str, object]:

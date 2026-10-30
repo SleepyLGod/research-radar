@@ -71,7 +71,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         try store.setCodexReasoningEffort("high")
         let saved = try AtomicJSONStore(root: root).read(AppConfigurationV1.self, from: "config/app-config.json")
         #expect(saved == store.configuration)
-        #expect(saved.routes.first(where: { $0.task == "verifier" })?.model == "gpt-5.6-luna")
+        #expect(saved.routes.first(where: { $0.task == "verifier" })?.model == "gpt-6-luna")
         #expect(saved.providers.first(where: { $0.id == "codex" })?.reasoningEffort == "high")
         #expect(throws: (any Error).self) { try store.setCodexReasoningEffort("invalid") }
         #expect(store.configuration == saved)

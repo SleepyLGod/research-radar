@@ -1,3 +1,4 @@
+import json
 from http.client import IncompleteRead
 from pathlib import Path
 
@@ -319,7 +320,8 @@ def test_single_paper_pipeline_persists_transport_diagnostics(
     assert transport["partial_byte_count"] == len(partial)
     assert transport["expected_byte_count"] == 100
     assert transport["transport_state"] == "partial_model_response"
-    assert "partial model answer" in transport["response_excerpt"]
+    assert "response_excerpt" not in transport
+    assert "partial model answer" not in json.dumps(run_error)
     assert manifest["metadata"]["failure"]["transport"] == transport
 
 

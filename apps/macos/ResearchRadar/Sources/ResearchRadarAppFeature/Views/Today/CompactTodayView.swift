@@ -63,14 +63,13 @@ struct TodayContentView: View {
         today.latestAttemptReport?.reportDate == ReportDate.string(for: Date())
             && today.latestAttemptReport?.isEffectiveDeepReport == true
     }
-    private var isResearchActive: Bool { today.job.map { $0.kind == .research && [.running, .cancelling, .pending].contains($0.state) } ?? false }
+    private var isResearchActive: Bool { today.researchProgress.isActive }
     private var configurationCode: String? { store.isEngineRunning ? nil : store.researchConfigurationErrorCode }
-    var showsResearchFailure: Bool { today.researchFailureTime != nil }
-    private var emptyTitleKey: String {
-        if today.latestAttemptReport != nil { return "today.latest_attempt" }
-        if configurationCode != nil { return "today.setup_title" }
-        return attentionCode == nil ? "today.start_title" : "today.failed_title"
+    var showsAttemptDetails: Bool {
+        !today.prefersReportFirst || configurationCode != nil || store.isEngineRunning
+            || !store.selectedTopicPaperProgress.isEmpty
     }
+    var showsResearchFailure: Bool { today.researchFailureTime != nil }
     var attentionCode: String? {
         today.failureCode ?? configurationCode
             ?? (today.status == .failed ? "engine_failed" : nil)
@@ -78,12 +77,12 @@ struct TodayContentView: View {
     var statusKey: String {
         if showsResearchFailure { return today.statusKey }
         if configurationCode != nil && today.latestAttemptReport == nil && !isResearchActive { return "today.failed" }
-        return store.isEngineRunning && store.engineStatusPresentation == nil ? "today.checking" : today.statusKey
+        return store.isEngineRunning && store.engineStatusPresentation == nil ? "today.checking" : today.researchProgress.statusKey
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: compact ? 16 : 24) {
                 VStack(alignment: .leading, spacing: 8) {
                     TopicSelectionView(store: store, localization: localization)
                     scheduleLine
@@ -92,75 +91,28 @@ struct TodayContentView: View {
                         Label(localization.text("today.other_task") + ": " + topic.displayName, systemImage: "waveform.path")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
-                }
-                if showsResearchFailure {
-                    researchFailure
-                    if report != nil { Divider() }
-                }
-                if !showsResearchFailure || report != nil {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if showsResearchFailure {
-                            Text(localization.text("today.last_successful_report"))
-                                .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                        } else {
-                            statusLine
-                            if !isResearchActive {
-                                ForEach(Array(today.outcomeReasonKeys.enumerated()), id: \.offset) { _, key in
-                                    Text(localization.text(key)).font(.system(size: 13)).foregroundStyle(.secondary)
-                                }
-                                if let key = today.automaticDeliveryExplanationKey {
-                                    Text(localization.text(key)).font(.system(size: 13)).foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                if today.showsRetainedReport {
-                                    Text(localization.text("today.last_successful_report"))
-                                        .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        Text(isResearchActive ? (store.selectedTopic?.researchFocus ?? "") : (report?.title ?? localization.text(emptyTitleKey)))
-                            .font(.system(size: compact ? 17 : 20, weight: .semibold))
+                    if let focus = today.topic?.researchFocus, !focus.isEmpty {
+                        Text(focus)
+                            .font(.system(size: compact ? 18 : 22, weight: .medium))
                             .fixedSize(horizontal: false, vertical: true)
-                        if let report, !isResearchActive {
-                            Text(report.summary).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(2)
-                            Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-                        } else if !isResearchActive && attentionCode == nil && today.latestAttemptReport == nil {
-                            Text(localization.text("today.start_detail")).foregroundStyle(.secondary)
-                        }
-                        if let attentionCode, !isResearchActive, !showsResearchFailure {
-                            Text(UserFacingErrorCatalog(localization: localization).message(for: attentionCode))
-                                .font(.system(size: 13)).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
                     }
                 }
-                if let report, !isResearchActive {
-                    HStack(spacing: 24) {
-                        statistic(report.sourceCount, "label.sources")
-                        statistic(report.deepReadCount, "label.deep_reads")
-                        statistic(report.publishableClaimCount, "label.publishable_claims")
-                    }
+                Divider()
+                if today.prefersReportFirst, let report {
+                    reportSummary(report)
+                    if showsAttemptDetails { Divider() }
                 }
-                actions
-                if today.job?.kind == .research && !compact && !showsResearchFailure {
+                if showsAttemptDetails { attemptDetails }
+                if !today.prefersReportFirst, let report {
                     Divider()
-                    OperationalTimelineView(stage: today.stage, status: today.status, localization: localization)
-                } else if compact, isResearchActive, let stage = today.stage {
-                    Label(localization.text("stage.\(stage.rawValue)"), systemImage: "circle.inset.filled")
-                        .font(.system(size: 13)).foregroundStyle(.secondary)
-                }
-                if let report, !report.deliveries.isEmpty {
-                    Divider()
-                    if let key = today.deliveryHistoryKey {
-                        Text(localization.text(key)).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                    }
-                    DeliveryStatusView(deliveries: report.deliveries, localization: localization)
+                    reportSummary(report)
                 }
             }
-            .frame(maxWidth: compact ? .infinity : 720, alignment: .leading)
+            .frame(maxWidth: compact ? .infinity : 760, alignment: .leading)
             .padding(compact ? 16 : 20)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .background(Color(nsColor: .textBackgroundColor))
         .confirmationDialog(localization.text("confirm.run_again"), isPresented: $showRunAgain) {
             Button(localization.text("action.run_again")) {
                 Task { await confirmRunAgain() }
@@ -168,12 +120,50 @@ struct TodayContentView: View {
         } message: { Text(localization.text("confirm.run_again_detail")) }
     }
 
+    private var attemptDetails: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(localization.text(today.researchProgress.hasAttempt ? "today.latest_attempt" : "home.research"))
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if let time = today.researchProgress.attemptDate, !compact {
+                    Text(time, format: .dateTime.month().day().hour().minute())
+                        .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                }
+            }
+            if showsResearchFailure {
+                researchFailure
+            } else {
+                statusLine
+                if let key = today.researchProgress.detailKey {
+                    Text(localization.text(key)).font(.system(size: 13)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !isResearchActive {
+                    ForEach(Array(today.outcomeReasonKeys.enumerated()), id: \.offset) { _, key in
+                        Text(localization.text(key)).font(.system(size: 13)).foregroundStyle(.secondary)
+                    }
+                    if let key = today.automaticDeliveryExplanationKey {
+                        Text(localization.text(key)).font(.system(size: 13)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let attentionCode {
+                        Text(UserFacingErrorCatalog(localization: localization).message(for: attentionCode))
+                            .font(.system(size: 13)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            ResearchProgressView(progress: today.researchProgress, compact: compact, localization: localization)
+            actions
+            PaperProgressView(rows: store.selectedTopicPaperProgress, compact: compact, localization: localization)
+        }
+    }
+
     private var researchFailure: some View {
         VStack(alignment: .leading, spacing: 8) {
             statusLine
-            Text(localization.text("today.latest_attempt"))
-                .font(.system(size: compact ? 17 : 20, weight: .semibold))
-            if let time = today.researchFailureTime {
+            if compact, let time = today.researchFailureTime {
                 Text(time, format: .dateTime.year().month().day().hour().minute())
                     .font(.system(size: 12)).foregroundStyle(.secondary)
             }
@@ -181,7 +171,7 @@ struct TodayContentView: View {
                 Label(localization.text(stageKey), systemImage: "exclamationmark.circle")
                     .font(.system(size: 13))
             }
-            if let code = today.failureCode {
+            if let code = today.failureCode, !(today.status == .cancelled && code == "cancelled") {
                 Text(UserFacingErrorCatalog(localization: localization).message(for: code))
                     .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
             }
@@ -228,8 +218,9 @@ struct TodayContentView: View {
 
     private var statusLine: some View {
         Label(localization.text(statusKey), systemImage: isResearchActive ? "waveform.path" : attentionCode != nil ? "exclamationmark.circle" : report != nil ? "doc.text" : "sparkle.magnifyingglass")
-            .font(.subheadline.weight(.medium)).foregroundStyle(isResearchActive ? .teal : .secondary)
+            .font(.system(size: 15, weight: .medium)).foregroundStyle(isResearchActive ? .teal : .primary)
             .accessibilityAddTraits(.updatesFrequently)
+            .help(today.status == .cancelling ? localization.text("progress.stopping") : "")
     }
 
     private var actions: some View {
@@ -240,12 +231,6 @@ struct TodayContentView: View {
     }
 
     @ViewBuilder private var actionButtons: some View {
-        if let report {
-            Button {
-                openReport(report)
-            } label: { Label(localization.text("action.open_report"), systemImage: "doc.richtext") }
-                .buttonStyle(.glassProminent)
-        }
         if store.isEngineRunning {
             Button { Task { await store.cancelActiveJob() } } label: {
                 Label(localization.text(today.otherActiveTopicID == nil ? "action.cancel" : "action.cancel_active"), systemImage: "stop")
@@ -262,11 +247,13 @@ struct TodayContentView: View {
             Button(action: configure) {
                 Label(localization.text("action.configure"), systemImage: "gearshape")
             }.buttonStyle(.glassProminent)
-        } else if !compact || !hasEffectiveAttemptToday {
-            Button { runNow() } label: {
-                Label(localization.text("action.run_now"), systemImage: "play.fill")
-            }.disabled(store.isShuttingDown || store.requiresReconciliation || store.selectedTopic?.isPaused == true)
-                .buttonStyle(.glass)
+        } else {
+            if !hasEffectiveAttemptToday {
+                Button { runNow() } label: {
+                    Label(localization.text("action.run_now"), systemImage: "play.fill")
+                }.disabled(store.isShuttingDown || store.requiresReconciliation || store.selectedTopic?.isPaused == true)
+                    .buttonStyle(.glass)
+            }
             if hasEffectiveAttemptToday, !compact {
                 Menu {
                     Button(localization.text("action.run_again")) { showRunAgain = true }
@@ -278,9 +265,56 @@ struct TodayContentView: View {
         }
     }
 
+    private func reportSummary(_ report: ReportRecordV1) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 10 : 12) {
+            HStack {
+                Text(localization.text(today.reportSectionKey))
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text(report.reportDate).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+            }
+            Text(ReportHeading.title(report: report, topic: today.topic)).font(.system(size: compact ? 13 : 14, weight: .medium))
+                .lineLimit(2).help(report.title)
+            if !report.summary.isEmpty {
+                Text(report.summary).font(.system(size: compact ? 13 : 14)).foregroundStyle(.secondary)
+                    .lineLimit(compact ? 2 : 3)
+            }
+            HStack(spacing: compact ? 20 : 32) {
+                statistic(report.sourceCount, "label.sources")
+                statistic(report.deepReadCount, "label.deep_reads")
+                statistic(report.publishableClaimCount, "label.publishable_claims")
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    readReportButton(report)
+                    if !showsAttemptDetails { actionButtons }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    readReportButton(report)
+                    if !showsAttemptDetails { actionButtons }
+                }
+            }
+            if !report.deliveries.isEmpty {
+                Divider()
+                if let key = today.deliveryHistoryKey {
+                    Text(localization.text(key)).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                }
+                DeliveryStatusView(deliveries: report.deliveries, localization: localization)
+            }
+        }
+    }
+
+    private func readReportButton(_ report: ReportRecordV1) -> some View {
+        Button { openReport(report) } label: {
+            Label(localization.text("action.open_report"), systemImage: "book")
+        }
+        .buttonStyle(.glassProminent).controlSize(.large)
+        .accessibilityIdentifier("today.read_report")
+    }
+
     private func statistic(_ count: Int, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(count, format: .number).font(.system(size: 17, weight: .medium, design: .monospaced))
+            Text(count, format: .number).font(.system(size: compact ? 18 : 20, weight: .medium, design: .monospaced))
             Text(localization.text(label)).font(.system(size: 12)).foregroundStyle(.secondary)
         }.accessibilityElement(children: .combine)
     }
@@ -298,31 +332,6 @@ struct TodayContentView: View {
     func confirmRunAgain() async {
         guard let topic = store.selectedTopic else { return }
         await store.runAgain(topicID: topic.id, reportDate: ReportDate.string(for: Date()), confirmed: true)
-    }
-}
-
-struct OperationalTimelineView: View {
-    let stage: ResearchStage?
-    let status: TodayStatus
-    let localization: LocalizationStore
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(localization.text("label.research_progress")).font(.subheadline.weight(.medium))
-            ForEach(ResearchStage.allCases, id: \.rawValue) { item in
-                let active = stage == item
-                let stopped = [.failed, .cancelled, .interrupted].contains(status)
-                HStack(spacing: 10) {
-                    Image(systemName: active ? (stopped ? "exclamationmark.circle" : "circle.inset.filled") : status == .succeeded ? "checkmark.circle" : "circle")
-                        .frame(width: 18)
-                    Text(localization.text("stage.\(item.rawValue)"))
-                    Spacer()
-                    if active { Text(localization.text(stopped ? "timeline.stopped" : "timeline.current")).font(.system(size: 12)) }
-                }
-                .font(.callout).foregroundStyle(active ? (stopped ? Color.orange : Color.teal) : Color.secondary)
-                .frame(minHeight: 22)
-                .accessibilityElement(children: .combine)
-            }
-        }
     }
 }
 

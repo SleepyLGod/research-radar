@@ -20,6 +20,7 @@ public struct JobRecordV1: Codable, Equatable, Identifiable, Sendable {
     public let trigger: JobTrigger
     public let allowResend: Bool
     public let acknowledgeUnknownOutcome: Bool
+    public let organization: OrganizationJobScopeV1?
     public var state: JobState
     public var stage: EngineStage?
     public var attemptCount: Int
@@ -49,18 +50,24 @@ public struct JobRecordV1: Codable, Equatable, Identifiable, Sendable {
         createdAt: Date,
         startedAt: Date? = nil,
         completedAt: Date? = nil,
-        error: RedactedEngineErrorV1? = nil
+        error: RedactedEngineErrorV1? = nil,
+        organization: OrganizeTopicPayloadV1? = nil
     ) throws {
         guard schemaVersion == 1 else { throw JobRecordError.invalidSchemaVersion }
         guard kind == .delivery || deliveryChannel == nil else {
             throw JobRecordError.deliveryChannelNotAllowed
         }
-        guard kind == .research || deliveryChannel != nil else {
+        guard kind != .delivery || deliveryChannel != nil else {
             throw JobRecordError.deliveryChannelRequired
         }
         guard kind == .research || requestedDeliveryChannels.isEmpty else {
             throw JobRecordError.deliveryChannelNotAllowed
         }
+        guard (kind == .organization) == (organization != nil),
+              organization == nil || organization?.topicID == topicID else {
+            throw EngineProtocolError.invalidValue
+        }
+        try organization?.validate()
         self.schemaVersion = schemaVersion
         self.id = id
         self.kind = kind
@@ -71,6 +78,7 @@ public struct JobRecordV1: Codable, Equatable, Identifiable, Sendable {
         self.trigger = trigger
         self.allowResend = allowResend
         self.acknowledgeUnknownOutcome = acknowledgeUnknownOutcome
+        self.organization = organization.map(OrganizationJobScopeV1.init(payload:))
         self.state = state
         self.stage = stage
         self.attemptCount = attemptCount
@@ -131,6 +139,11 @@ public struct JobQueueSnapshotV1: Codable, Equatable, Sendable, ValidatableDurab
             throw DurableStateValidationError.duplicateIdentifier
         }
         for job in jobs {
+            guard (job.kind == .organization) == (job.organization != nil),
+                  job.organization == nil || job.organization?.topicID == job.topicID else {
+                throw DurableStateValidationError.invalidValue
+            }
+            try job.organization?.payload.validate()
             guard job.schemaVersion == 1,
                   !job.topicID.isEmpty,
                   !job.reportDate.isEmpty,

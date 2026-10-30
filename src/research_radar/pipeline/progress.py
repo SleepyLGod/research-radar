@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from collections.abc import Callable
@@ -37,8 +38,14 @@ class ProgressWriter:
         elif stage in self._active_stages:
             duration = round(now - self._active_stages.pop(stage), 3)
         try:
+            source_url = metadata.get("source_url")
+            source_identity = (
+                {"source_id": hashlib.sha256(source_url.encode()).hexdigest()}
+                if isinstance(source_url, str) and source_url.strip() else {}
+            )
             event = {
                 **_redact_metadata(metadata),
+                **source_identity,
                 "stage": stage,
                 "status": status,
                 "elapsed_seconds": round(now - self._started_at, 3),

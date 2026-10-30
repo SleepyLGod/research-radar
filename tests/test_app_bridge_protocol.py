@@ -51,6 +51,25 @@ def test_load_request_accepts_local_preflight(tmp_path: Path) -> None:
     assert request.config_path is None
 
 
+@pytest.mark.parametrize("change", [
+    {"report_date": "2569-10-28X"}, {"report_date": "2026-02-30"},
+    {"report_id": "not-a-uuid"}, {"run_dir": "relative"}, {"unexpected": True},
+    {"password": "offline-canary"},
+])
+def test_ledger_request_rejects_invalid_nested_references(tmp_path: Path, change: dict) -> None:
+    job = _private_job(tmp_path)
+    config = job.parent.parent / "config.json"
+    config.write_text("{}")
+    reference = {"report_id": str(uuid4()), "report_date": "2026-10-28", "run_dir": str(job)}
+    reference.update(change)
+    with pytest.raises(ProtocolError):
+        load_request(
+            _write_request(job, config_path=str(config), command="read_paper_ledger",
+                           payload={"topic_id": "memory", "reports": [reference]}),
+            job_dir=job,
+        )
+
+
 @pytest.mark.parametrize(
     ("override", "message"),
     [

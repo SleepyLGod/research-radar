@@ -8,14 +8,22 @@ private actor FakeEngineRunner: EngineProcessRunning {
     let result: EngineResultV1?
     let exitCode: Int32
     let afterResult: @Sendable () throws -> Void
+    let progress: [EngineEventV1]
 
-    init(result: EngineResultV1?, exitCode: Int32 = 0, afterResult: @escaping @Sendable () throws -> Void = {}) {
+    init(result: EngineResultV1?, exitCode: Int32 = 0, progress: [EngineEventV1] = [],
+         afterResult: @escaping @Sendable () throws -> Void = {}) {
         self.result = result; self.exitCode = exitCode
+        self.progress = progress
         self.afterResult = afterResult
     }
 
     func run(executable: URL, arguments: [String], eventsURL: URL) async throws -> EngineProcessOutcome {
         lastArguments = arguments
+        if !progress.isEmpty {
+            var data = Data()
+            for event in progress { data.append(try EngineProtocolCodec.encode(event)); data.append(10) }
+            try data.write(to: eventsURL)
+        }
         if let result, let resultIndex = arguments.firstIndex(of: "--result") {
             try EngineProtocolCodec.encode(result).write(to: URL(fileURLWithPath: arguments[resultIndex + 1]))
         }
@@ -30,6 +38,29 @@ private actor FakeEngineRunner: EngineProcessRunning {
 }
 
 @Suite struct EngineJobCoordinatorTests {
+    @Test func allPaperEventsReachTheAppEvenWhenTheGlobalStageDoesNotChange() async throws {
+        let fixture = try ReliabilityFixture()
+        defer { try? trashCoordinatorRoot(fixture.root) }
+        let id = try enqueuedID(try await fixture.queue.enqueueResearch(
+            topicID: "memory", reportDate: "2026-08-30", trigger: .runNow))
+        let recorder = Task3EventRecorder()
+        let events = try [
+            paperEvent(id, sequence: 1, status: "acquiring"),
+            paperEvent(id, sequence: 2, status: "acquisition_failed"),
+            paperEvent(id, sequence: 3, sourceID: String(repeating: "b", count: 64), status: "reading"),
+            paperEvent(id, sequence: 4, sourceID: String(repeating: "b", count: 64), status: "read"),
+        ]
+        let runner = FakeEngineRunner(result: fixture.result(id: id), progress: events)
+        _ = try await fixture.coordinator(runner: runner).executeNext(
+            configuration: testConfiguration(root: fixture.root),
+            onPaperProgress: { await recorder.add($0) })
+        #expect(await recorder.sequences == [1, 2, 3, 4])
+        #expect(await fixture.queue.jobs().first?.state == .succeeded)
+        #expect(await fixture.reports.reports().count == 1)
+        let saved = try String(contentsOf: fixture.root.appending(path: "state/queue.json"), encoding: .utf8)
+        #expect(!saved.contains("source_id"))
+    }
+
     @Test(arguments: [false, true], ResearchOutcomeV1.Status.allCases)
     func outcomeControlsNormalAndRecoveryDelivery(recovery: Bool, status: ResearchOutcomeV1.Status) async throws {
         let fixture = try ReliabilityFixture()

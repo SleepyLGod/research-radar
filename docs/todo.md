@@ -7,6 +7,235 @@ drive the research model.
 
 ## Current State
 
+- **Shared model-call audit (2026-10-30, unreleased):** offline review confirms streaming
+  remains opt-in, omitted/false streaming settings share the same request and cache identity,
+  and endpoint, output budget, thinking/effort and streaming changes separate cached answers.
+  Legacy Codex cache behavior is unchanged. The intentional OpenAI-compatible endpoint-identity
+  migration still causes old entries to miss; documentation now distinguishes that migration
+  from the default-disabled streaming option.
+
+  Three additional boundary cases were reproduced and fixed: malformed non-streaming UTF-8
+  no longer becomes a successful answer with replacement characters; excessive JSON nesting
+  becomes a standard provider failure rather than an uncaught recursion error; incomplete HTTP
+  bodies no longer contribute text excerpts, even without a recognizable JSON envelope.
+  Byte counts and coarse failure states remain available. Invalid encoding/JSON does not retry,
+  cache or enter reader repair; transient disconnects retain the existing one-retry limit.
+  A final diagnostic privacy regression also prevents endpoint URL usernames/passwords from
+  appearing in the failure hostname, for both streaming and non-streaming requests.
+
+  Closeout verified this source slice independently of the pending Reader, evidence, translation,
+  composition and relevance work: 1,178 isolated Python tests passed, with two existing opt-in
+  tests skipped. Separately, the combined working tree passed 1,336 full Python tests, also with
+  two skips. The full runs blocked network and real Keychain access explicitly.
+  An additional offline daily-path regression covers both streaming and non-streaming reader
+  and verifier responses through the existing public draft. The pipeline diagnostic test now
+  asserts that partial model text is absent; unrelated verifier-test changes are excluded.
+  Ruff, privacy and diff checks passed. No real service, credential access or package update was
+  used for closeout. This source work does not update installed Apps or prove live endpoint
+  availability, factual correctness, revised-reader prompt quality or parity between models.
+
+- **Single-paper evidence disclosure (2026-10-30, unreleased):** ordinary reading now
+  starts with the bottom “Verified claims & evidence” section collapsed. A native disclosure
+  keeps every saved claim, quote and source link available. Opening a different paper resets
+  the section; explicit evidence navigation from the ledger, graph or chapter menu reveals
+  it before using the existing layout-aware scroll path. No report, research, evidence gate,
+  delivery rule or persistent setting changed.
+
+  A separate candidate, using the existing local signing certificate and an isolated
+  read-only workspace, opened both saved comparison reports. Actual native clicks verified
+  collapse, expansion and re-collapse; Chinese and English screenshots retain the original
+  report text. Automated native-layout tests cover both languages, and existing evidence
+  navigation tests still pass. Chapter-menu keyboard input and VoiceOver remain manual
+  acceptance items; incomplete automation of the menu is not a passed input test.
+  Pre-commit review also identified a deferred evidence jump overriding a newer chapter
+  selection. A failing offline navigation regression reproduced the stale target; the fix
+  clears it before the new direct jump. Rapid chapter selection during image loading still
+  needs manual input acceptance; the earlier candidate predates this additional fix.
+  Verification at the offline acceptance checkpoint: 396 Swift tests passed. Privacy,
+  bundle/signature and diff checks passed. Original
+  reports, previous Apps and normal configuration remain unchanged. No model/search request,
+  secret value access, upload or delivery was performed during acceptance. This change remains
+  unreleased; publication does not complete the pending manual checks.
+
+- **Topic knowledge source closeout (2026-10-29, unreleased):** explicit organization of saved
+  public deep reads, native multi-label classification, typed semantic relations and exact cited
+  claim navigation are implemented. Source-only ledger entries are not given invented features.
+  Saved browsing is local; explicit organization uses the configured reader model and cost
+  confirmation, without discovery, PDF rereading or delivery. Failed/cancelled organization retains
+  committed knowledge. Two real organizations on the same paper pair give partial quality evidence,
+  not an autonomous-knowledge accuracy guarantee. Automatic/incremental organization, user-edited
+  facets, periodic consolidation and broader-topic quality remain unimplemented or unaccepted.
+  The App currently submits all reports for the selected topic, without a date/report picker;
+  serialized input above 512,000 characters is rejected before a model call, not truncated.
+  Physical keyboard/focus, help dismissal, VoiceOver, multiple displays and larger-graph/resource
+  acceptance remain open. Existing beta downloads are unchanged. The dated checkpoints below retain
+  their original scope; an early "not implemented" or "no live calls" statement is historical, not
+  the final cumulative status. [Current user guide](macos-app.md#unreleased-candidate-organize-saved-papers).
+
+- **Codex default model update (2026-10-28, unreleased):** source App/CLI defaults and newly
+  generated scheduler snapshots use `gpt-6-luna/xhigh`. Updated App startup migrates the former
+  built-in Luna verifier model while preserving the selected effort, custom models and DeepSeek
+  selection. The existing Terra/high migration still applies. Installed Apps, existing scheduler
+  snapshots, reports, caches and past live acceptance records are unchanged. No live validation
+  of the new model or package rebuild is included in this update.
+
+- **Popover startup fix (2026-10-27, unreleased):** the earlier missing-window check
+  had two separate causes. The old layer-zero observer cannot recognize the native layer-25
+  popover. Independently, the production App requested its first presentation while AppKit's
+  status-item window was still zero-height or offscreen; it did not reopen after positioning.
+  The minimal App-only fix waits for that window's move/resize/screen notifications, then releases
+  those observers when the anchor is ready or presentation is cancelled. There is no timer,
+  polling, new engine behavior or change to report content. Regression tests cover zero-height
+  and offscreen anchors plus close/toggle cancellation. Full offline Python and Swift regression
+  passed: 329 Swift tests in 59 suites, with the same two optional frozen-engine tests skipped.
+  A disposable native-only App using the production entry point, paused isolated fixture data
+  and no engine/helper observed an on-screen popover before any status-button action; subsequent
+  AX status-button actions could open it again. This is controlled automation, not physical input
+  or sustained reading acceptance. It exited normally, with no jobs/descendants and unchanged
+  isolated files and retained candidate. The retained candidate was not rebuilt, no installed App
+  or DMG was replaced, and manual reading/VoiceOver/multi-display checks remain deferred.
+  [Cause and verification bounds](superpowers/plans/2026-10-26-native-reading-polish.md#offline-popover-startup-diagnosis-2026-10-27).
+
+  A subsequently authorized independent packaged candidate reused the existing local signing
+  identity and unchanged frozen engine. Release-mode build, static bundle verification and
+  deep/strict signature checks passed; its designated requirement matches the retained candidate.
+  With fresh paused isolated fixture data, the real signed candidate automatically showed its
+  layer-25 popover before input, completed two AX status-button hide/reopen cycles, and exited
+  through its own native Quit menu. Owned-window capture confirmed the isolated home screen.
+  No jobs or descendants remained, and all isolated data plus retained/normal App file hashes
+  were unchanged. This is packaged startup acceptance, not physical reading, extended resource
+  measurement or a Release/DMG update. The user subsequently authorized reviewed signed-off
+  source closeout to the existing Draft PR; manual reading checks remain pending, and merge
+  or Release updates are not authorized.
+
+- **Native reading content/figure repair (2026-10-27, unreleased):** the App now retains the
+  previously omitted public legacy details and figure explanations. Distinct original captions
+  remain available without replacing their translations. The figure heading and chapter menu
+  share the actually loaded thumbnails, so missing, unsafe or undecodable images cannot leave an
+  empty chapter or floating notes. Loading remains limited to the visible paper; hide/switch and
+  cancellation checks cover releasing images and ignoring cancelled stale work. Full Python and
+  Swift regression passed (327 Swift tests in 59 suites; two existing optional frozen-engine
+  tests skipped), along with Ruff, localization, privacy and diff checks. Physical reading-click
+  confirmation remains deferred. Research, generated reports, channel renderers, true configuration
+  and retained App/DMG packages are unchanged.
+  [Scope and verification](superpowers/plans/2026-10-26-native-reading-polish.md#follow-up-public-content-and-available-figure-chapters-2026-10-27).
+
+  A subsequent independent candidate build reused the existing local signing selection and frozen
+  engine. Bundle/signature checks passed and retained App file trees stayed unchanged. Controlled
+  native checks of the current production views covered Chinese/light and English/dark fixture
+  reports: supplementary prose and valid figure explanations are visible; all-unavailable figures
+  leave no body heading or chapter menu action. Fixture files stayed unchanged with zero secret
+  value reads or new jobs. The candidate process separately started and quit with isolated paused
+  configuration, an empty queue and no child processes. Its popover visibility was **not accepted**
+  by the automated startup checks; actual status-item input remains pending. This is not complete
+  packaged-reader acceptance, a new DMG or a published update.
+  The authorized source closeout keeps the fixes/tests and acceptance documents in separate
+  signed-off commits on the existing PR branch. Local App/DMG files, screenshots, fixture data and
+  raw acceptance logs are excluded. The PR remains Draft; merge and release are not authorized.
+
+- **Native reading closeout for Draft review (2026-10-26):** the accumulated overview, public
+  paper browsing, evidence and pane/typography changes were independently reviewed as one set of
+  34 files, with no verified production defect. The user explicitly deferred the remaining physical
+  reading-click confirmation; it is not passed and is not a Ready/release gate claimed by this work.
+  Chinese/light and English/dark new-topic sheets have bounded native open/cancel acceptance,
+  with unchanged fixture topic/job counts and no credential-value reads. Source commits and a
+  Draft PR are the authorized closeout; no beta package or release changes are included.
+  [Acceptance scope and remaining checks](superpowers/plans/2026-10-26-native-reading-polish.md#authorized-closeout).
+
+- **Native pane/typography follow-up (2026-10-26, unreleased):** grouped settings and diagnostics
+  now fill the shared adaptive detail surface instead of adding an outer inset rectangle. Native
+  grouping and navigation materials remain. Topic/report toolbar insets are aligned; paper reading
+  uses system proportional 15-point body text, clearer section spacing and primary-color card
+  questions, with no added font asset or dependency. The English HTML entry now says Full daily
+  report. A bilingual hosted regression reproduced the 20-point form inset and passed after the fix;
+  long native reading at narrow widths also passed. Full Python/Swift regression passed, with the
+  existing opt-in frozen-engine checks still skipped, followed by nine focused UI tests after the
+  last text-style adjustment. Bundle, signing and fresh read-only review passed. Isolated native
+  captures cover English/dark and Chinese/light pages; scroll, return, Escape and compact/full
+  restoration passed without new jobs or credential reads. Extended repeated-menu automation hit
+  a tracking/focus limit and is not claimed complete. Reports and prior Apps remain unchanged;
+  physical input, onboarding/sheets, VoiceOver and multiple displays remain separate manual checks.
+  [Details and bounds](superpowers/plans/2026-10-26-native-reading-polish.md#follow-up-consistent-content-panes-and-reading-typography).
+
+- **Native reading polish candidate (2026-10-26, unreleased):** fixed reading navigation now adds
+  report-scoped paper switching and jumps to existing sections, including repeat selection of the
+  same chapter. Evidence keeps verbatim quotes with leading alignment, distinct locations and
+  tinted safe source links. Friendly topic headings are shared across home, history and report
+  overview; original report titles remain available in report information and delivery confirmations.
+  Preview cards prioritize existing research questions, then core ideas, then summaries; claim counts
+  are secondary and explicitly not independent replication or quality rankings. Delivery is shown
+  only in report overview, with report-level fold state retained while reading. Full Python regression,
+  317 Swift tests in 57 suites, Ruff, privacy, bundle/signature and a fresh read-only review passed.
+  Controlled native input verified repeated jumps, paper switching to the top, return, Escape/reopen,
+  compact/full restoration, retained delivery folding, native picker arrow/Return selection and both
+  channel confirmation cancellations. Fresh system-window captures cover cards, reading and evidence
+  in both languages and appearances; full HTML opens and returns without a persistent delivery block.
+  Original and isolated report artifacts are
+  byte unchanged; no new jobs or credential-value reads occurred. Physical keyboard, VoiceOver,
+  multi-display and external-click acceptance are not implied by these local-input checks.
+  The separately signed candidate preserves both prior Apps and real configuration; no published
+  package has been replaced. [Scope and verification](superpowers/plans/2026-10-26-native-reading-polish.md).
+
+- **Native paper browsing candidate (2026-10-26, unreleased):** opening a report now starts with
+  previews of its existing public deep reads, then a selectable native paper detail with sectioned
+  explanations, claims and original evidence. Additional discovered sources are listed separately,
+  not presented as verified papers. The dated report list and explicit full-HTML report remain.
+  Previews and native detail do not preload WebKit. Safe local raster images are decoded on demand;
+  legacy PDF page screenshots and unsafe/missing images remain excluded. Existing report files,
+  research/evidence behavior, channel confirmations and published packages are unchanged.
+  Python regression, Swift regression (313 tests in 55 suites), focused data/image checks, privacy,
+  bundle/signature and read-only review passed. Isolated native input exercised both papers,
+  scrolling, return, Escape/reopen and full HTML
+  in both languages and appearances, with no new jobs or credential-value reads; all original/copied
+  artifacts were byte unchanged. Physical status-item routing and figure-load hide/remount stress
+  remain distinct from this bounded acceptance. Cross-day paper accumulation, relation graphs,
+  incremental research judgments and per-paper live progress are still future work.
+  [Scope, layers and acceptance](superpowers/plans/2026-10-26-native-paper-reading.md).
+
+- **Home hierarchy candidate (2026-10-26, unreleased):** secondary report titles, a clearer native
+  reading action and less completed-task repetition improve the full and compact homes without
+  changing their dimensions. Active/failure/empty/configuration attention stays visible; channel
+  attention remains with the report. Existing same-day read and confirmed regeneration behavior
+  is preserved without showing a second equivalent Run Now entry. Full Swift regression passed
+  (301 tests in 52 suites); fresh bilingual light/dark and edge-state native captures were checked.
+  Both new reader actions opened the existing report and returned without new jobs or secret reads.
+  This is presentation polish, not completed paper cards, short research briefs or evidence views.
+  [Scope and acceptance](superpowers/plans/2026-10-25-native-visual-alignment.md#home-hierarchy-follow-up-2026-10-26).
+
+- **Reader return/scroll follow-up (2026-10-26, unreleased):** reproduced the expanded Delivery
+  disclosure inflating native split-view minimum height and pushing navigation outside the window.
+  A presentation-only minimum content width fixes that measurement without changing window size,
+  HTML, the research pipeline or sending policy. Regression now exercises actual direct/retained
+  workspaces in both languages, smaller content bounds and bidirectional scrolling; full Swift
+  regression passed with 299 tests in 52 suites. Isolated native clicks verified expand, return,
+  reopen, both confirmation cancellations, Escape and compact/full restoration with no new jobs
+  or credential-value reads. Four system-window captures cover bilingual light/dark readers.
+  Controlled local outside-click routing passed; physical cross-application mouse/trackpad checks
+  remain manual. Old App, real configuration and published beta are unchanged.
+  [Cause, scope and evidence](superpowers/plans/2026-10-25-native-visual-alignment.md#reader-follow-up-2026-10-26).
+
+- **Unreleased native visual-alignment candidate (2026-10-25):** home typography and adaptive
+  reading backgrounds are implemented; the reader now groups existing WeChat/email controls in
+  one Delivery disclosure with independent summary states and one-time attention expansion.
+  Full Swift regression (297 tests), Python regression, Ruff, privacy, bundle/signature checks
+  and a local read-only review passed. Original report artifacts and isolated copies are byte
+  unchanged. Own-view snapshots cover bilingual light/dark layouts, not system glass rendering.
+  System capture and popover focus initially blocked native click/cancel/Escape acceptance; the
+  reader follow-up above records what subsequently passed without substituting state tests. Old App and published beta remain
+  unchanged. [Scope and acceptance](superpowers/plans/2026-10-25-native-visual-alignment.md).
+
+- **Unreleased native overview candidate (2026-10-25):** the first product-prototype slice adapts
+  the homepage and four coarse phases to existing App state. It separates current attempts,
+  retained effective reports and channel attention without changing the research pipeline or
+  renderers. [Scope and layer boundaries](superpowers/plans/2026-10-25-native-research-overview.md).
+  Offline Python and Swift regression, privacy, bundle and signing checks passed. Native fixture
+  captures cover 32 bilingual light/dark home states and 24 outcome states. They verify layout,
+  not live research. Automated button navigation stopped at an unrecognized expand control;
+  fresh manual interaction and visual acceptance remain pending. This is not part of the
+  published beta. Paper cards,
+  per-paper progress, automatic question briefs and a persistent relationship graph remain future
+  work, not hidden functionality behind the new layout.
+
 - **v0.3.0b1 Pre-release published (2026-10-25):** source metadata is aligned at `0.3.0b1` for CLI and
   bundled engine, with App short version `0.3.0`, build `2`, and the same full beta identifier.
   PR #1 was merged using Rebase and merge; tag `v0.3.0b1` points to merged `main` commit `e1eca67`.
@@ -40,7 +269,7 @@ drive the research model.
 - Tavily web search adapter, web-result canonicalization, and web search diagnostics.
 - Source centrality reranking and curated public daily source lists.
 - DeepSeek `deepseek-flash` with explicit thinking and `high` reasoning effort as the default reader route.
-- Codex `gpt-5.6-luna` with `xhigh` reasoning effort as the default verifier route; other
+- Codex `gpt-6-luna` with `xhigh` reasoning effort as the default verifier route; other
   command-backed providers remain optional.
 - Opt-in model call cache and runtime summaries for reader/verifier cost audit.
 - Publishable-only verifier review and conservative anchor-repair skipping to reduce wasted first-run
@@ -118,6 +347,333 @@ drive the research model.
     real source asset or conservative crop; full PDF pages must not be used as figures.
 
 ## Prioritized TODO
+
+### Research Workspace: Next Product Slice (2026-10-27)
+
+- The native overview, paper previews, reading navigation and source-evidence views are already
+  implemented in PR #3. Do not repeatedly reopen accepted presentation work as a prerequisite for
+  adding features. Deferred manual checks remain explicit, not an automatic block on all development.
+- The user permits continuing related features in the current PR; merge, release or a new branch
+  is not a prerequisite. Keep individual feature changes understandable and separately committed
+  when authorized.
+- **Per-paper research progress: implemented locally; offline tests and review passed.** Reuse
+  existing acquisition/reader events, an additive typed protocol field and an App snapshot scoped
+  to the current request and topic. Only attempted papers appear; reading completion is not verifier
+  acceptance. Stop retains observed results, and a new attempt starts with empty progress. No
+  candidate totals or message parsing are used. See the
+  [implementation contract](superpowers/plans/2026-10-27-native-paper-progress.md).
+- Verification: Python regression **963 passed, 2 opt-in frozen checks skipped**; Swift regression
+  **338 tests in 60 suites passed** in the normal macOS graphical environment; Ruff, privacy and
+  diff checks passed. Eight native rendered-view captures cover both UI languages, appearances
+  and compact/full sizes, using fake queue/engine events. These are not a signed-App popover test.
+- Read-only review identified and fixed URL-in-title leakage and identity collisions after audit
+  URL truncation/redaction. Regression checks first reproduced both failures, then passed. Runtime
+  source IDs are now computed before those transformations. No research, evidence or renderer rule
+  was changed; sample Markdown/WeChat HTML stay byte-identical with/without progress forwarding.
+- Source-closeout review reproduced an additional URL-redaction gap when a title URL contains an
+  apostrophe in its path or query. The complete URL token is now removed before wire output;
+  both new regressions first failed and then passed. Final Python checks: **965 passed, 2 opt-in
+  checks skipped**; Swift: **339 tests in 60 suites passed**. Earlier signed candidates predate
+  this source-only fix and were not rebuilt or replaced by the closeout.
+- The per-topic snapshot is in-memory only. Popover/mode/topic changes retain it, but App restart
+  does not reconstruct historical paper progress. Queue, reports and existing event artifacts keep
+  their current persistence. A fresh separately signed candidate and bounded native offline
+  acceptance were completed on 2026-10-28, without changing the old App or real configuration.
+  The isolated QA popover showed independent paper states, retained them after stop/reopen, and
+  cleared them for a new request; the prior offline report bytes stayed unchanged. It used current
+  production views/workflow with a test-only runner and fake credentials (zero value reads), not
+  real research. AX button presses were unavailable; public AppStore actions drove run/stop, and
+  Escape/controller show drove hide/reopen after local status-item click simulation bounced open.
+  Physical pointer, live-service, VoiceOver and multi-screen acceptance are not inferred from it.
+- **Overview copy reduction (2026-10-28, unreleased):** removed the repeated research-focus label,
+  merged a known running stage into one short headline, and moved the standing paper-progress
+  rule into an information popover. Per-paper states, failure reasons/actions, report provenance
+  and the reading/verification distinction remain; the active phase keeps an accessibility value.
+  No research, protocol, report file or delivery behavior changed. Swift **339 tests in 60 suites**
+  and Python **963 passed, 2 opt-in checks skipped**, Ruff, localization validation, privacy and
+  diff checks passed. Eight bilingual light/dark compact/full rendered captures were inspected.
+  A separate 49.6 MiB candidate has since been built with the existing signing identity; the old
+  development App and real configuration were not replaced. An isolated QA executable using
+  current production views/workflow and offline replacements supplied 16 owned-popover running/
+  failure captures, covering both languages, appearances and sizes. The actual information glyph
+  opened the unchanged rule in both languages and sizes. Help dismissal/focus remains unaccepted:
+  synthesized Escape/repeated-click handling was inconsistent, and no physical-input defect was
+  established. Static text is absent from this environment's AX tree, so visual conclusions come
+  from inspected screenshots, not AX-text assertions. Zero real credential reads, no live services
+  or delivery, and unchanged report bytes. The test App exited. This feature remains unreleased;
+  VoiceOver and other deferred manual checks remain open.
+- **Cross-day paper ledger (2026-10-28, unreleased source):** a shared Python projection
+  reads saved public report metadata on demand. Paper identities exclude version; occurrences
+  retain report, date, version, safe source URL and report-local reading locator. Native Papers
+  adds search, all/with-reading/source-only filters, inclusion history and return navigation to
+  the original report, public reading and evidence. A v1 reading does not mark source-only v2 as
+  read; similar titles do not merge. Missing versions remain unknown and unavailable reports
+  are flagged. An in-memory topic/report-reference cache avoids duplicate reads; there is no
+  database, idle scan, model stage, copied prose or relationship inference. Offline checks use
+  two dated reports, including the production frozen engine and restart loader; report/delivery
+  artifacts are not rewritten. Native snapshots are layout evidence, not physical-input proof.
+  Candidate-App control-path acceptance is recorded below; physical keyboard search entry,
+  help dismissal/focus, VoiceOver and other deferred manual checks remain unaccepted.
+  Normal App/configuration and the published Release are unchanged.
+  Python **985 passed, 2 opt-in checks skipped**; Swift reported **350 tests in 61 suites passed**,
+  with the ledger frozen-engine test enabled and the older frozen-daily/cover opt-ins left off.
+  Ruff, localization syntax, privacy, diff and independent frozen-engine bundle/signature checks
+  passed. Eight rendered list/history layouts were inspected in both languages and appearances.
+  Read-only review findings and its refresh follow-up were reproduced, fixed and rechecked.
+- **Independent ledger candidate acceptance (2026-10-28, unreleased):** rebuilt native code and
+  the production frozen engine into a separate 50.08 MiB App using the existing certificate and
+  unchanged designated signing requirement. Real candidate controls, not a replacement test
+  host, exercised two explicitly synthetic dated reports: merged papers, v1 reading vs v2
+  source-only, unknown versions, both filters, both original reports, full HTML, public reading,
+  evidence quote/location, and return to the selected paper's history. Menu-bar collapse/reopen,
+  compact/full retention and restart reconstruction/evidence lookup passed. Draft/HTML/index and
+  isolated configuration bytes were unchanged; the normal App and both earlier candidate App
+  trees were retained byte-for-byte. Within one session, reopening/navigation reused the ledger
+  request; restart rebuilt it. All requests were offline ledger reads, with no research/delivery
+  job, real service call or credential-value access. The candidate exited without helper residue.
+  Keyboard search remains unaccepted: AX value assignment did not update the binding and
+  synthesized text input was inconclusive. Successful filtering is not a keyboard-search claim.
+  Native AXPress/owned-control mouse events are bounded automation, not physical-user,
+  VoiceOver, multi-display or appearance-accessibility acceptance. No product-code repair,
+  replacement of the normal App, Git staging, commit, push or Release update occurred.
+  An initial post-acceptance ledger check passed seven tests but failed the evidence-entry
+  scroll-offset test; an isolated repeat also observed zero offset. The bounded follow-up below
+  diagnoses and fixes that failure rather than dismissing it based on the native control path.
+- **Evidence-entry positioning follow-up (2026-10-28, unreleased source):** traced a native reader
+  lifecycle race: the one-shot scroll request could run before the scroll layout was ready.
+  Waiting longer in the assertion did not replay the missed request. The App now uses the
+  scroll-content geometry update for initial positioning and consumes that request once; no
+  fixed delay, polling, repeated scroll attempts, protocol or research change was added.
+  Native regression cases cover English/Chinese and fresh/preloaded report contents, reaching
+  the evidence section, retaining manual scrolling across resize, and switching papers at the
+  top. Draft and HTML bytes remain unchanged. Python **985 passed, 2 existing opt-in checks
+  skipped**; Swift **350 tests in 61 suites passed**, with the ledger frozen-engine check enabled.
+  Ruff, privacy, diff, candidate bundle and existing-signature checks passed. A separately signed
+  candidate reused the unchanged frozen engine: actual popover controls reached visible evidence
+  without scroll-wheel input, expanded the quote and returned to the original report/history.
+  Protected fixture files and old Apps were unchanged; only an offline ledger read was created,
+  and the candidate exited without helper residue. This is bounded native automation, not human
+  input or accessibility acceptance. Earlier manual limitations remain open. No live services,
+  credential-value reads, delivery, staging, commit, push or Release update.
+- **Approved source closeout (2026-10-28):** after checks and review, commit the shared ledger
+  and protocol separately from native browsing, evidence positioning and acceptance documents,
+  then push to the existing Draft PR. Exclude Apps and acceptance artifacts. This does not accept
+  the pending manual checks or authorize merging, a Release update, live research or delivery.
+  Review regressions additionally cover raw query identity, encoded/non-ASCII reading links and
+  evidence positioning after local images settle. Eight native positioning cases use real scroll
+  events for user-scroll checks. A fresh isolated native/frozen-engine bundle retains the old
+  Apps; earlier manual acceptance limits are unchanged. See the dated ledger plan for details.
+- **Confirmed scope: cross-day topic research workspace, with a graph as well as a list.**
+  For one topic, accumulate papers across reports, preserve versions and first/latest inclusion,
+  and return from each paper to its report, public reading and evidence. This is requested work,
+  not an optional visual enhancement. The ledger source candidate above is implemented separately
+  from the earlier per-paper progress slice; native graph/link records are still future work.
+- **Topic paper map / research-question map:** browse the same accumulated records as a list and
+  an interactive graph. Paper nodes, question/category groupings and explicitly recorded links
+  should support selection, filtering and source/evidence lookup. Incremental updates must retain
+  prior provenance; stopping a new run cannot erase earlier topic knowledge. The graph is not just
+  a network-shaped decoration or a second independent copy of the ledger.
+- **Separate the prerequisites:** first define stable paper-family/version identity and a
+  provenance-preserving cross-report index; then define link/group records and their origin;
+  finally render the native list/graph from those records. Human groupings, explicit citations,
+  model-suggested relations and verified research judgments must remain distinguishable. Graph
+  proximity or an automatic cluster is not proof of support, contradiction or scientific consensus.
+- **Next agreed direction: topic knowledge organization, not a citation-first graph.** AI proposes
+  topic-specific classification facets that the user can adjust. Papers may belong to multiple
+  groups; features, reasoned associations and group/topic summaries should help research judgment.
+  Keep AI synthesis distinct from verified paper claims, with stable paper/version and source
+  provenance. The graph, cards and feature table are views of these records, not separate knowledge.
+- Offer automatic organization off/on plus an explicit reorganize action, using one shared job.
+  Automatic work processes changed inputs and affected summaries; explicit reorganization may
+  reconsider the whole topic without restarting discovery or deep reading. No input changes mean
+  no automatic model call. Failed/cancelled organization retains the last successful snapshot.
+  Start with an explicitly requested organization of existing materials before automatic updates
+  and the native graph. Periodic consolidation may later reuse the same job. This is agreed design,
+  not implemented functionality or approval for live calls. Evaluate Graphify against these needs;
+  no mandatory dependency or additional background service is approved.
+- **Shared knowledge service, offline implementation (2026-10-28):** an explicit Python
+  operation now adapts saved public deep reads, reuses ledger paper identity with separate
+  version keys, and retains exact report/claim provenance. An injected existing provider returns
+  keywords, features, proposed facets, multi-label groups, conservative paper associations,
+  bounded synthesis and open questions. Strict validation rejects unknown/cross-paper references;
+  cancellation, invalid output, changed inputs or failed promotion retain the previous snapshot.
+  This first operation organizes the supplied complete report scope, not an incremental update.
+  That service slice did not wire an App/CLI/bridge entry, automatic trigger, confirmed-facet
+  editing or native graph; the subsequent manual App connection is recorded below.
+  Offline fixtures and a retained two-paper report exercise adaptation/storage only; no real
+  model-quality acceptance, secret access, search, rereading or delivery is implied. See the
+  [service plan](superpowers/plans/2026-10-28-topic-knowledge-service.md).
+- **Manual App organization, offline source candidate (2026-10-28):** the paper ledger now has
+  an explicit organization action/status backed by that same service, the existing serialized
+  engine queue and terminal-artifact recovery. It uses the configured reader route, not the
+  verifier, with a cost confirmation; it does not rediscover/read papers or create delivery jobs.
+  Saved snapshot reads are local and do not construct a secret manager. The App shows typed
+  snapshot metadata/counts while full source-backed records remain in the Python snapshot.
+  Original reports/delivery records stay separate. A separate signed candidate subsequently
+  passed automated native-button acceptance with an offline model boundary: cancel confirmation,
+  success, stop, failure retaining the old snapshot, and quit/reopen. One untranslated cancel
+  label was corrected using the existing translation. Old Apps and saved reports were unchanged;
+  no idle test engine/PDF helper remained. This does not establish live organization quality or
+  a new resource benchmark. The following slice adds native classification; automatic refresh, a separate organizer-model picker,
+  live organization quality and manual keyboard/focus/VoiceOver/multi-display checks remain pending.
+  See the [native manual slice](superpowers/plans/2026-10-28-native-manual-knowledge.md).
+- **Native classification graph, offline candidate (2026-10-28):** the existing saved-snapshot
+  commands now project facets, multi-label group membership, versioned paper cards, features
+  and exact saved claim/quote references. Native node connectors represent stored classification
+  only, not citations, consensus or verified scientific relationships. Users can select a facet,
+  filter by text/multiple keywords, open paper details and their membership/keyword/feature
+  evidence, or return through ledger history. Unclassified and source-only papers remain
+  accessible; source-only records are not given invented features. Topic selection/filter and
+  graph scroll state stay in the existing App presentation model, not a new database.
+  Read-only review identified and corrected long-source-quote rejection and inaccessible keyword
+  citations. Existing reports and snapshots are not rewritten. Real organization quality,
+  automatic/incremental refresh, relation/structure views, facet editing and manual accessibility
+  checks are still separate work. An independently signed candidate passed automated Chinese
+  native graph/detail, keyword/membership evidence, ledger-history return and close/reopen checks
+  using a saved offline snapshot; zero model/research/organization/delivery jobs were created.
+  English/dark graph layout was observed, but English-detail automation was blocked, not passed.
+  Full Python regression and 372 Swift tests passed; larger-topic/long-scroll and remaining manual
+  interaction checks are pending. See the [classification plan](superpowers/plans/2026-10-28-native-classification-graph.md)
+  for the exact offline scope; this is not live model-quality or full Demo-parity acceptance.
+- **Classification workspace layout, offline candidate (2026-10-29):** aligned topic/view controls
+  and node columns, reduced the normal header to two rows, moved snapshot details into on-demand
+  information, and replaced dashed edges with shared-stem connectors for stored membership only.
+  Six synthetic papers cover two facets, overlapping groups, an unclassified paper and long
+  bilingual titles. Eight native hosted layouts cover both languages/appearances at two widths;
+  a separate read-only QA App exercised Chinese/light facet switching, empty-result group clearing,
+  retained search and unclassified-paper evidence/return. Review corrections preserve stop/notices
+  in history and the group clear action when no paper matches. Full Swift regression (377 tests),
+  Python regression (two existing opt-in skips), Ruff, privacy, static bundle/signature and diff
+  checks passed. Existing reports, bottom-layer sources and old Apps were preserved; no research,
+  organization or delivery job ran. Long-list scrolling/restoration, physical keyboard focus/input,
+  information-popover dismissal and accessibility/multi-display checks remain manual pending;
+  do not treat transient/blocked automation as acceptance. No live classification quality or new
+  resource benchmark is claimed. See the [layout plan](superpowers/plans/2026-10-29-classification-workspace-layout.md).
+- **Partitioned classification and empty states, offline candidate (2026-10-29):** supersedes the
+  connector display above with unframed classification sections and individual paper cards.
+  Multi-membership cards retain the same versioned identity and saved evidence; an unclassified
+  section remains available. Composite App-only scroll targets distinguish repeated cards without
+  changing the protocol or stored knowledge. Classification/ledger/report empty states now keep
+  navigation at the top, use a compact message and allow clearing active filters. Regular settings
+  collapse repeated explanations; first-use provider guidance, errors and connection-check cost
+  warnings remain visible. Full Swift regression passed 380 tests, followed by 22 focused final
+  checks; Python regression passed with two existing opt-in skips. Native hosted layouts cover both
+  languages/appearances at 640/720-point widths. The separate read-only candidate exercised native
+  empty-state positioning/clear actions, multi-membership evidence/return, default-collapsed settings
+  and English/dark layout; further scenario details are in the
+  [partition plan](superpowers/plans/2026-10-29-partitioned-classification-workspace.md).
+  Help expansion/closing and keyboard focus remain manually pending after unreliable automation;
+  exact scroll restoration, VoiceOver and multiple displays also remain pending. Fixture labels are
+  synthetic, not accepted AI classification. Real organization quality is the next separate task;
+  no service call, credential-value read, delivery, Release update or new resource benchmark is implied.
+- **Saved semantic relations, local offline slice (2026-10-29):** projects existing undirected
+  relations and exact endpoint references to Swift, rather than deriving edges from classification
+  membership or similarity. The native paper workspace adds a separate Relations view; classification
+  and the ledger remain available. Nodes use actual versioned paper keys, with transient deterministic
+  layout, type filtering, relation details and topic-scoped camera/selection. Existing report evidence
+  navigation pins the saved report fingerprint and uses the ledger's paper index; changed reports
+  cannot silently replace the snapshot source. Python saved-snapshot read and Swift decoding/hosted
+  windows were exercised with isolated offline fixtures, not the independent HTML Demo data.
+  English/Chinese light/dark captures and local AppKit edge clicks are observed; source-button physical
+  input, full popover reopening, accessibility and multiple displays remain manually pending.
+  Full regression and final review results are recorded in the
+  [relation slice plan](superpowers/plans/2026-10-29-native-semantic-relations.md).
+  Final checks passed 1,043 Python tests (two existing opt-in skips), 391 Swift tests, Ruff,
+  privacy and diff checks. Read-only review's reversed-endpoint lane overlap was reproduced,
+  corrected and re-reviewed. This is still uncommitted local source, not an updated installed App.
+  No live model, credential-value read, delivery, shipping App/DMG or Release acceptance is implied.
+  Real organization quality, automatic refresh and larger-graph layout remain separate work.
+- **Saved semantic relations, independent candidate acceptance (2026-10-29):** supersedes the
+  source-only packaging/popover status above. A separate arm64 QA App uses the existing local
+  signing identity and isolated synthetic snapshots, preserving previous Apps and real configuration.
+  Actual native accessibility button actions opened both endpoint reports and explicitly expanded
+  their correct saved quotations. Returning from each paper retained the selected relation, 115%
+  zoom and measured node positions; Escape and status-item reopening retained the same view.
+  Normal exit left no candidate App/helper process. Read-only engine auditing recorded nine ledger/
+  knowledge reads, no forbidden-I/O attempts and no queued/scheduled jobs. Protected report/snapshot
+  and source/previous-App hashes stayed unchanged; signature, symlink, arm64 dependency and native
+  code/resource path checks passed. The candidate intentionally embeds an isolated QA root and is
+  not a shipping package. Only QA setup/timing corrections were needed, not product changes.
+  Physical keyboard/VoiceOver, multiple displays, larger graphs and real organization quality remain
+  pending; this does not claim Quit/relaunch camera persistence or a new full regression/resource
+  benchmark. No real credential, model, search or delivery was accessed; no commit/push or Release
+  update occurred. See the [relation slice plan](superpowers/plans/2026-10-29-native-semantic-relations.md).
+- **First real knowledge-quality check (2026-10-29):** one isolated native organization job used
+  existing MemConflict v1/MemGuide v2 public deep reads and 85 anchored claims. The actual development
+  route was DeepSeek `deepseek-flash`, thinking enabled/high; one model HTTP request succeeded without
+  research or delivery. Native classification, all four relation reasons/both-paper references and
+  both local report/quotation routes were checked against the saved real output. Previous Apps,
+  normal configuration and reports remained unchanged; package checks and clean exit passed.
+  This supersedes the earlier wholly-unverified real-provider status, not the content-quality gate:
+  three of six facets have no groups, two relationship types are overly broad, and some explanation
+  clauses omit their specific supporting references despite those facts existing in the input.
+  The output is useful for assisted reading, not accepted as a reliable autonomous knowledge map.
+  Next: tighten classification/relationship/evidence criteria before a separately approved comparison;
+  do not solve weak interpretation with decorative edges or silently rewrite this snapshot. No prompt
+  or product changes, second organization, commit/push or Release update occurred. Broader-topic,
+  automatic/incremental and manual accessibility gates remain separate. See the
+  [quality checkpoint](superpowers/plans/2026-10-29-native-semantic-relations.md#first-real-organization-quality-check).
+- **Knowledge prompt revision 2, offline regression (2026-10-29):** tightened populated-facet,
+  concrete-relation and clause-to-reference instructions without changing the schema, validator,
+  model routes, evidence gate or App. The first real snapshot and its acceptance files remain
+  unchanged. A public 34-reference excerpt retains the original weak output; a separate hand-edited
+  replay tests the service/storage/projection path, not model quality. Six added cases protect
+  revision provenance, legacy readability, exact evidence, and previous-snapshot retention on bad
+  citations. Focused/full Python passed (64 focused; 1,049 full with two existing opt-in skips),
+  plus Ruff, privacy and whitespace checks. Prompt constraints are not deterministic semantic
+  validation: real classification/relationship improvement still needs a separately approved
+  comparison. No live call, credential read, UI change, App rebuild, delivery or commit/push occurred.
+  See the [prompt revision record](superpowers/plans/2026-10-28-topic-knowledge-service.md#prompt-revision-after-the-first-real-check).
+- **Single real knowledge prompt comparison (2026-10-29):** reused v1; ran only v2 once in a
+  separate signed candidate. Same two public deep reads, 85 references, question/language and
+  input fingerprint; same DeepSeek `deepseek-flash` thinking/high. One organization job/HTTP
+  request succeeded. Empty facets decreased 3→0; the broad shared_evaluation edge disappeared;
+  specific protocol/metric citations improved. This is partial, not uniform semantic acceptance:
+  different_assumption remains weak, an example K=5 became an unqualified setting, and some
+  clause references/interpretation labels are still insufficient. Native classification, three
+  relation reasons/both source sets and correct endpoint report/quote content were observed.
+  Automatic quote positioning is not accepted: final frame review found a target below the visible
+  window despite correct accessibility text; follow-up scroll automation lost the transient popover.
+  Its cause/manual scroll are separate pending checks, not a UI fix in this slice.
+  Protected old results/reports, real configuration, previous Apps and source stayed unchanged;
+  bundle/privacy/diff checks and clean exit passed. No research, second organization, delivery,
+  product change, commit/push or Release update. One pair does not establish stable model-quality
+  improvement or large-topic quality; see the [real comparison record](superpowers/plans/2026-10-28-topic-knowledge-service.md#single-real-v1v2-comparison).
+- **Exact knowledge-reference positioning repair (2026-10-29, offline):** the failed comparison
+  route discarded the claim index and scrolled only to the evidence section header. This was a
+  real App target-selection defect, not resolved by a longer test wait. App navigation now retains
+  and range-checks the exact claim index, using the existing post-image-layout scroll; generic
+  ledger evidence still targets the section. No prompt, protocol, report or research-policy change.
+  Four native reproduction cases first failed and then passed; three new methods cover nine
+  parameter combinations including first/late claims, invalid indices and navigation reset.
+  Full gates: Python 1,049 passed / two existing opt-in skips, Swift 394 passed, Ruff, privacy and
+  whitespace checks. A separately signed read-only candidate opened the saved relation's MemGuide
+  claim 7 and MemConflict claim 36 inside the actual visible viewport without manual scrolling;
+  explicit disclosure showed each original quote, and return preserved the selected relation.
+  New/old organization workspaces, prompt, reports, real configuration and previous Apps retained
+  their hashes. No model, search, credential or delivery access; no commit/push or Release update.
+  This supersedes the specific automatic-positioning pending item above, not content-quality,
+  physical keyboard/VoiceOver or multi-display acceptance. See the
+  [repair checkpoint](superpowers/plans/2026-10-29-native-semantic-relations.md#exact-evidence-navigation-repair).
+- **Cumulative source review (2026-10-29):** the reviewed set contains 91 allowlisted code,
+  test and documentation files, excluding private configuration, certificates, Apps and raw
+  acceptance output. Two independent local reviews found no confirmed actionable defect.
+  CodeRabbit raised one scope/capacity suggestion: add report/date selection and validate
+  multi-week input. The current contract is explicit full-topic organization with a fail-before-call
+  size guard; neither scope selection nor large-topic acceptance is implemented. The suggestion is
+  retained as follow-up, not reported as an implemented fix or as zero review issues. Bilingual
+  guides now make this limitation and the unreleased/partial-quality status explicit. Existing
+  report, prompt, result/configuration and previous-App preservation checks passed. No new research,
+  credentials or delivery were used for closeout; physical input/accessibility gates remain open.
+  Fresh full checks passed: Python 1,049 / two existing skips and Swift 394, plus Ruff, privacy
+  and whitespace checks. The first permission-restricted Swift invocation failed at Trash/AppKit
+  boundaries; a normal-permission rerun passed without product changes. Intermediate model/service
+  source trees also passed their bounded Python checks; optional frozen-workflow gates remain opt-in.
+- The original roadmap-only change was followed by explicit approval for offline implementation,
+  candidate acceptance and then source closeout in the existing Draft PR. Split per-paper progress
+  and copy reduction into signed-off commits; exclude Apps, installers and acceptance artifacts.
+  This approval does not authorize live research, credential-value access, delivery, merging or a
+  Release update. Graph/link records and deferred manual checks remain separate next steps.
 
 ### macOS Local Beta: Current Closeout (2026-10-25)
 

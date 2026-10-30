@@ -112,7 +112,10 @@ widen the engine's PATH. If Node cannot be found, the check reports that require
 Native Codex executables keep their existing launch behavior.
 
 The default reader is DeepSeek `deepseek-flash`, with thinking explicitly enabled and
-`reasoning_effort: high`. The default verifier is Codex `gpt-5.6-luna` with `xhigh` effort.
+`reasoning_effort: high`. The default verifier is Codex `gpt-6-luna` with `xhigh` effort.
+On startup, the updated App migrates its former `gpt-5.6-luna` verifier route while preserving
+the chosen effort. Custom models and a selected DeepSeek verifier are left unchanged. This
+source change does not update an already installed App or the existing beta download.
 The App offers `high` and `xhigh`. These settings do not change your global Codex configuration
 or guarantee that your account can use a particular model.
 
@@ -182,6 +185,48 @@ Use **Run Again** and confirm to start a new attempt. This is not a resume opera
 Research continues when the panel closes. Use the task's cancel action to stop it.
 Use the menu-bar right-click menu to quit. Quitting cancels current work and stops App scheduling;
 it does not leave a hidden scheduler running.
+
+### Unreleased Candidate: Papers Across Reports
+
+The current source candidate adds **Papers** to the full workspace. It is not in the published
+`v0.3.0b1` download. Select a topic, search its saved papers, or filter for **With reading** and
+**Source only**. Open a paper to see its inclusion dates and recorded versions. Each occurrence
+links back to its original report; a public reading also offers its text and evidence.
+
+Dates mean inclusion in a saved report, not publication or the first search result. A reading of
+v1 does not mark a source-only v2 as read. Missing version information remains unknown. Identity
+uses identifiers in saved source URLs; similar titles alone are not merged. Unavailable reports
+are flagged rather than treated as empty history.
+
+The ledger reads existing report metadata on demand without models, searches, credentials, or
+delivery. It can be rebuilt after restart; it does not rewrite reports or keep a second copy of
+their prose. Reading the ledger does not generate classifications or relationships.
+Offline projection/protocol/navigation checks do not replace physical-input acceptance.
+
+### Unreleased Candidate: Organize Saved Papers
+
+In **Papers**, choose **Organize** (or **Reorganize**) and review the confirmation. This uses
+the configured reader model and may incur charges. It organizes the topic's saved public deep
+reads, not new search results or PDFs; it does not start research or delivery. Each operation
+uses all saved reports for the selected topic; there is no report/date-range picker yet.
+Automatic/incremental organization is not implemented. Serialized input above 512,000 characters
+is rejected before the model call rather than silently truncated; the previous snapshot remains.
+Long-running topics may reach this limit, and larger-topic use has not been accepted.
+
+**Classification** groups papers by the saved AI-proposed facets and supports text/keyword
+filters. One paper can appear in several groups. **Relations** shows saved, typed paper-to-paper
+connections; selecting an edge reveals its reason and evidence from both papers. **View evidence
+in report** opens the original reading at the cited claim. Report fingerprints prevent silently
+opening changed source content. Returning keeps the selected relation and current graph view.
+Saved views need no model or credential access. A failed or stopped operation retains the previous
+snapshot; a snapshot already committed before stopping is not rolled back.
+
+These are research aids, not independent verification or scientific consensus. A two-paper real
+comparison improved some categories and citations, but still exposed weak relationship labels,
+lost qualifications and incomplete citation coverage. Review the evidence before relying on a
+connection. User-edited facets, structure diagrams, periodic consolidation and larger-topic quality
+remain future work; physical keyboard, VoiceOver and multiple-display checks remain incomplete.
+These changes are source candidates, not an update to the existing beta download.
 
 ## 4. Optional: WeChat Drafts and Private Email
 

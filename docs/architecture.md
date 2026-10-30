@@ -36,6 +36,12 @@ Only one engine job runs at a time. The engine and PDF helper start on demand; c
 parent-process loss stop the process group. No Python engine or fixed polling loop remains idle.
 The restricted report WebView is created only for reading and released when the panel is hidden.
 
+The unreleased paper-ledger source slice adds an on-demand `read_paper_ledger` command. Shared
+Python owns paper identity, versions and report occurrences; Swift owns topic-scoped filtering,
+selection and navigation back to the original report or public reading/evidence. Saved public
+reports are authoritative. The in-memory ledger is rebuildable, contains no copied prose, and
+does not read credentials or infer paper relationships. No database or idle index scanner is added.
+
 The App uses a PDFKit helper for PDF geometry/rendering; the CLI retains its Poppler fallback.
 Both use the shared figure eligibility policy. An optional figure failure omits the image rather
 than discarding an otherwise usable report.

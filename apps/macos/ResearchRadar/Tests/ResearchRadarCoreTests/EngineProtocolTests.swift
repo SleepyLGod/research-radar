@@ -3,6 +3,60 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct EngineProtocolTests {
+    @Test func paperLedgerCanonicalFixtureRoundTripsAndVersionStatusStaysSeparate() throws {
+        let data = try CanonicalFixture.data(named: "paper-ledger-result.json")
+        let result = try EngineProtocolCodec.decodeResult(data)
+        #expect(result.command == .readPaperLedger)
+        let paper = try #require(result.paperLedger?.papers.first)
+        #expect(paper.firstIncluded == "2026-10-26" && paper.lastIncluded == "2026-10-27")
+        #expect(paper.hasPublicReading)
+        #expect(paper.occurrences[0].version == "v2" && paper.occurrences[0].paperIndex == nil)
+        #expect(try CanonicalFixture.object(from: EngineProtocolCodec.encode(result)) == CanonicalFixture.object(from: data))
+    }
+
+    @Test func paperLedgerRejectsUnsafeLinksUnknownFieldsAndInvalidIndices() throws {
+        let fixture = try CanonicalFixture.objectDictionary(named: "paper-ledger-result.json")
+        for (key, value): (String, Any) in [("paper_index", true), ("paper_index", -1),
+            ("source_url", "file:///private/report"), ("source_url", "https://user:pass@example.org"),
+            ("report_id", UUID().uuidString), ("report_date", "2026-02-30"), ("extra", true)] {
+            var object = fixture
+            var ledger = try #require(object["paper_ledger"] as? [String: Any])
+            var papers = try #require(ledger["papers"] as? [[String: Any]])
+            var occurrences = try #require(papers[0]["occurrences"] as? [[String: Any]])
+            occurrences[0][key] = value; papers[0]["occurrences"] = occurrences
+            ledger["papers"] = papers; object["paper_ledger"] = ledger
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeResult(CanonicalFixture.data(from: object)) }
+        }
+    }
+
+    @Test func paperProgressFixtureRoundTripsWithoutChangingLegacyEvents() throws {
+        let data = try CanonicalFixture.data(named: "paper-progress-event.json")
+        let event = try EngineProtocolCodec.decodeEvent(data)
+        #expect(try CanonicalFixture.object(from: EngineProtocolCodec.encode(event)) == CanonicalFixture.object(from: data))
+        let legacy = try EngineProtocolCodec.decodeEvents(CanonicalFixture.data(named: "engine-events.jsonl"))
+        let old = try CanonicalFixture.object(from: EngineProtocolCodec.encode(legacy[0]))
+        #expect((old as? [String: Any])?["paper"] == nil)
+    }
+
+    @Test func malformedPaperProgressIsRejectedWithoutRelaxingEventKeys() throws {
+        let valid = try CanonicalFixture.objectDictionary(named: "paper-progress-event.json")
+        let malformed: [Any] = [
+            [:], ["source_id": "local path", "title": "Paper", "status": "reading"],
+            ["source_id": String(repeating: "a", count: 64), "title": "Paper", "status": "verified"],
+            ["source_id": String(repeating: "a", count: 64), "title": "", "status": "read"],
+            ["source_id": String(repeating: "a", count: 64), "title": String(repeating: "x", count: 501), "status": "read"],
+            ["source_id": String(repeating: "a", count: 64), "title": "Paper", "status": "reading", "extra": true],
+        ]
+        for paper in malformed {
+            var object = valid; object["paper"] = paper
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeEvent(CanonicalFixture.data(from: object)) }
+        }
+        for (key, value) in [("stage", "email"), ("type", "completed"), ("status", "succeeded")] {
+            var object = valid; object[key] = value
+            #expect(throws: (any Error).self) { try EngineProtocolCodec.decodeEvent(CanonicalFixture.data(from: object)) }
+        }
+    }
+
     @Test func codexConfigurationFailurePreservesItsActionableCode() throws {
         let error = try EngineProtocolCodec.decodeError(
             CanonicalFixture.data(named: "codex-configuration-error.json")

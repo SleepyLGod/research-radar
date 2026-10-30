@@ -1,18 +1,26 @@
 import Foundation
 
 public enum AppConfigurationDefaults {
-    /// Migrate only an unmodified built-in Codex verifier, never a custom route.
+    /// Updates former built-in Codex verifiers without changing custom routes.
     public static func updatingLegacyCodexDefaults(_ configuration: AppConfigurationV1) -> AppConfigurationV1 {
         guard let route = configuration.routes.firstIndex(where: {
-            $0.task == "verifier" && $0.providerID == "codex" && $0.model == "gpt-5.6-terra"
+            $0.task == "verifier" && $0.providerID == "codex"
         }), let provider = configuration.providers.firstIndex(where: {
-            $0.id == "codex" && $0.kind == "codex_cli" && $0.reasoningEffort == "high"
-        }), !configuration.routes.contains(where: { $0.providerID == "codex" && $0.task != "verifier" }) else {
+            $0.id == "codex" && $0.kind == "codex_cli"
+        }) else {
             return configuration
         }
         var updated = configuration
-        updated.routes[route].model = "gpt-5.6-luna"
-        updated.providers[provider].reasoningEffort = "xhigh"
+        switch configuration.routes[route].model {
+        case "gpt-5.6-luna":
+            updated.routes[route].model = "gpt-6-luna"
+        case "gpt-5.6-terra" where configuration.providers[provider].reasoningEffort == "high"
+            && !configuration.routes.contains(where: { $0.providerID == "codex" && $0.task != "verifier" }):
+            updated.routes[route].model = "gpt-6-luna"
+            updated.providers[provider].reasoningEffort = "xhigh"
+        default:
+            break
+        }
         return updated
     }
 
@@ -44,7 +52,7 @@ public enum AppConfigurationDefaults {
         ]
         let routes = deepSeekTasks.map {
             RouteRecordV1(task: $0, providerID: "deepseek", model: "deepseek-flash")
-        } + [RouteRecordV1(task: "verifier", providerID: "codex", model: "gpt-5.6-luna")]
+        } + [RouteRecordV1(task: "verifier", providerID: "codex", model: "gpt-6-luna")]
         return AppConfigurationV1(
             workspaceRoot: workspaceRoot.path,
             providers: [deepSeek, codex], routes: routes,

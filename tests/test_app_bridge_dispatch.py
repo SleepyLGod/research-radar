@@ -244,6 +244,9 @@ def test_runner_dispatches_only_selected_handler(tmp_path: Path) -> None:
         run_daily=unexpected,
         retry_delivery=unexpected,
         upload_wechat_cover=unexpected,
+        read_paper_ledger=unexpected,
+        organize_topic=unexpected,
+        read_topic_knowledge=unexpected,
         clock=lambda: datetime(2026, 8, 30, 10, tzinfo=UTC),
         config_loader=lambda path, require_topics: object(),
         secret_manager_factory=lambda: object(),
@@ -267,6 +270,45 @@ def test_runner_dispatches_only_selected_handler(tmp_path: Path) -> None:
     assert payload["preflight"] is None
     assert payload["report"] is None
     assert payload["delivery"] is None
+
+
+def test_paper_ledger_dispatch_is_offline_and_never_constructs_secrets(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from test_paper_ledger import saved_report
+
+    from research_radar.app_bridge.handlers import handle_read_paper_ledger
+
+    request, events, result, error, root = _job(
+        tmp_path, command="read_paper_ledger", payload={"topic_id": "memory", "reports": []},
+    )
+    workspace = root / "workspace"
+    first = saved_report(workspace, str(uuid4()), "2026-10-26", deep=True)
+    second = saved_report(workspace, str(uuid4()), "2026-10-27", version="v2")
+    value = json.loads(request.read_text())
+    value["payload"]["reports"] = [
+        {"report_id": r.report_id, "report_date": r.report_date, "run_dir": str(r.run_dir)}
+        for r in (first, second)
+    ]
+    request.write_text(json.dumps(value))
+    before = {p: p.read_bytes() for p in workspace.rglob("*") if p.is_file()}
+
+    def forbidden() -> object:
+        raise AssertionError("Offline ledger must not access credentials")
+
+    config = SimpleNamespace(workspace_root=workspace,
+                             research=SimpleNamespace(topics=[SimpleNamespace(id="memory")]))
+    dependencies = replace(BridgeDependencies.testing(), read_paper_ledger=handle_read_paper_ledger,
+                           config_loader=lambda path, require_topics: config,
+                           secret_manager_factory=forbidden)
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 0
+    ledger = json.loads(result.read_text())["paper_ledger"]
+    assert len(ledger["papers"]) == 1
+    assert [entry["paper_index"] for entry in ledger["papers"][0]["occurrences"]] == [None, 0]
+    assert all(path.read_bytes() == content for path, content in before.items())
+    assert not error.exists()
 
 
 def test_runner_rejects_historical_daily_before_handler(tmp_path: Path) -> None:

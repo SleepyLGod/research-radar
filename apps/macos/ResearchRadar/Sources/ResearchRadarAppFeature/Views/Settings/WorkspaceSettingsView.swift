@@ -17,7 +17,9 @@ struct WorkspaceSettingsView: View {
                 ))
                 .disabled(store.notifications.isChangingPreference || store.isShuttingDown)
                 .accessibilityIdentifier("notifications.enable")
-                Text(localization.text("notification.detail")).font(.callout).foregroundStyle(.secondary)
+                DisclosureGroup(localization.text("notification.about")) {
+                    Text(localization.text("notification.detail")).font(.callout).foregroundStyle(.secondary)
+                }
                 if let issue = store.notifications.issue {
                     Text(localization.text("notification.issue.\(issue.rawValue)"))
                         .font(.callout).foregroundStyle(.secondary)
@@ -30,7 +32,10 @@ struct WorkspaceSettingsView: View {
                 set: { value in store.performAction { try store.setSchedulesPaused(value) } }
             ))
             .disabled(store.behaviorChangesBlocked)
-            Text(localization.text("schedule.runtime_contract")).font(.callout).foregroundStyle(.secondary)
+            Text(localization.text("schedule.requires_app")).font(.callout).foregroundStyle(.secondary)
+            DisclosureGroup(localization.text("schedule.about")) {
+                Text(localization.text("schedule.runtime_contract")).font(.callout).foregroundStyle(.secondary)
+            }
             if store.scheduleFaulted || store.requiresReconciliation {
                 Button(localization.text("action.recover_schedule"), systemImage: "arrow.clockwise") {
                     Task { await store.recoverScheduling() }
@@ -88,7 +93,7 @@ struct WorkspaceSettingsView: View {
                 }
             }
             .onAppear { store.refreshStorageUsage() }
-        }.formStyle(.grouped).padding(20)
+        }.formStyle(.grouped).scrollContentBackground(.hidden)
         .confirmationDialog(localization.text("confirm.clear_cache"), isPresented: $showClearCacheConfirmation) {
             Button(localization.text("action.clear_cache"), role: .destructive) { store.clearModelCache() }
             Button(localization.text("action.cancel"), role: .cancel) {}

@@ -91,6 +91,57 @@ OpenAI-compatible `reasoning_effort` values `none`, `minimal`, `low`, `medium`, 
 `max`; each endpoint may support only a subset. Leave both fields unset unless the provider documents
 them. Configured values are included in provider diagnostics and model-cache identity.
 
+### Optional Streaming (Unreleased Source)
+
+The shared OpenAI-compatible provider can opt into Chat Completions SSE responses:
+
+```yaml
+model_providers:
+  long-reader:
+    kind: openai_compatible
+    base_url: https://<provider-host>/v1/chat/completions
+    api_key_secret: long-reader.api_key
+    stream: true
+```
+
+`stream` must be a boolean and is only valid for `openai_compatible`. It defaults to `false`;
+omitting it and setting it to `false` send the same non-streaming request and share a cache identity.
+The separate endpoint-isolation change applies to both: old cache entries without the endpoint
+digest will miss and may require a new paid request on a later authorized run. No built-in
+provider or task route has been switched. Enable it only for an endpoint that supports this SSE
+format; the published installation packages have not been updated by this source change.
+
+Streaming changes reception, not research: the provider assembles one final answer and passes it
+through the existing completion validator and reader. A terminal choice with normal `stop` and a
+`[DONE]` event are required for success. Split UTF-8, LF/CRLF/CR framing, comments and multiline data
+events are supported. Reasoning deltas are ignored, not appended to the answer or persisted.
+An event or final answer exceeding 1,048,576 characters is rejected as a safety limit.
+
+Incomplete framing, invalid events, output exhaustion, refusals and tool calls are failures, not
+cacheable answers. There is no automatic non-streaming fallback, additional JSON repair or new
+retry loop. Existing transient disconnect handling still allows at most one retry with the original
+remaining time; HTTP errors such as 504, stream-contract errors and timeouts are not retried.
+The reader's pre-existing JSON-repair policy for complete answers remains unchanged.
+Request headers and streamed reads share the same deadline. Cancellation is checked before/after
+reads and during retry backoff; blocked socket reads still rely on their timeout and the existing
+App/scheduler process-group cancellation. No background thread or polling service is added.
+
+Successful streaming responses use a distinct `stream=true` cache identity, so they cannot be
+confused with an old non-streaming cache hit. Enabling the option can therefore require a new model
+request on a later authorized run. Old cache files are retained. Only complete final answers enter
+the existing cache; stream fragments, reasoning and stream-response body excerpts are not logged.
+HTTP status, allowlisted redacted headers, elapsed time and attempt counts remain available.
+Non-streaming responses also require valid UTF-8 and decodable JSON. Invalid encoding and excessive
+JSON nesting produce standard provider failures, without retry, caching or reader repair. Incomplete
+HTTP bodies retain only byte counts and a coarse failure classification, never a body excerpt.
+Failure diagnostics identify the hostname, without including URL usernames or passwords.
+
+There is no new App control, wire command or token-by-token UI. Offline acceptance covers the
+shared provider through the reader/verifier to a public draft. Real endpoint compatibility and
+the revised reader prompt's quality still need separately authorized live acceptance.
+A complete response is not proof of factual accuracy or a good research explanation. This layer
+does not change reader/verifier prompts or make different models equivalent in research quality.
+
 Probe before routing research work:
 
 ```bash
@@ -154,7 +205,7 @@ models:
   task_routes:
     verifier:
       provider: codex
-      model: gpt-5.6-luna
+      model: gpt-6-luna
 ```
 
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a

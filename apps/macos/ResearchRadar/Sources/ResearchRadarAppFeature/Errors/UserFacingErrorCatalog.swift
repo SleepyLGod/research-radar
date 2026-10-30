@@ -13,6 +13,7 @@ public struct UserFacingErrorCatalog {
             "codex_not_configured", "codex_path_invalid", "credentials_missing", "credentials_unchecked",
             "keychain_lookup_failed", "invalid_configuration", "research_failed", "delivery_failed",
             "engine_failed", "configuration_write_failed",
+            "knowledge_failed", "knowledge_no_material", "knowledge_confirmation_changed",
             "model_transport_failed", "model_response_interrupted", "model_response_retry_exhausted",
             "schedule_refresh_failed", "schedule_recovery_failed", "state_reconciliation_failed",
             "email_confirmation_changed", "email_report_missing", "email_password_missing", "delivery_retry_blocked",

@@ -97,7 +97,8 @@ private final class AppContainer {
             if let active {
                 state = active.job.state == .cancelling ? "today.cancelling"
                     : active.job.stage.map { "stage.\($0.rawValue)" }
-                    ?? (active.job.kind == .delivery ? "today.delivering" : "today.running")
+                    ?? (active.job.kind == .organization ? "knowledge.running"
+                        : active.job.kind == .delivery ? "today.delivering" : "today.running")
             } else {
                 state = store.isUploadingWeChatCover ? "stage.wechat_cover"
                     : store.isEngineRunning ? "today.checking" : today.statusKey

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "command": "read_topic_knowledge",
+  "status": "succeeded",
+  "completed_at": "2026-10-28T09:00:00Z",
+  "report": null, "preflight": null, "topic_draft": null, "delivery": null,
+  "knowledge": {
+    "topic_id": "memory",
+    "current": {
+      "snapshot_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "created_at": "2026-10-28T09:00:00Z",
+      "input_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "report_ids": ["22222222-2222-4222-8222-222222222222"],
+      "provider": "offline", "model": "offline-model",
+      "paper_count": 2, "feature_count": 3, "group_count": 2, "relation_count": 0
+    },
+    "graph": {
+      "snapshot_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "research_question": "How are memories selected?",
+      "facets": [{"id": "mechanism", "label": "Mechanism", "description": "How the saved materials organize memory."}],
+      "groups": [
+        {"id": "f000bf65d2d41dd3d7df757afb7733c10c1de6a96adcb6c94cdf3bdfd2c4b467", "facet_id": "mechanism", "label": "Selection", "members": [
+          {"paper_key": "3333333333333333333333333333333333333333333333333333333333333333", "reason": "Uses task utility to select memory.", "ref_ids": ["7777777777777777777777777777777777777777777777777777777777777777"]},
+          {"paper_key": "4444444444444444444444444444444444444444444444444444444444444444", "reason": "Studies when a retrieved memory is valid.", "ref_ids": ["8888888888888888888888888888888888888888888888888888888888888888"]}
+        ]},
+        {"id": "870ddf4c58e9f9a8ac32571967defd31894b356f167bbdcab073bc36ef2bafba", "facet_id": "mechanism", "label": "Evaluation", "members": [
+          {"paper_key": "4444444444444444444444444444444444444444444444444444444444444444", "reason": "Separates retrieval from answer evaluation.", "ref_ids": ["8888888888888888888888888888888888888888888888888888888888888888"]}
+        ]}
+      ],
+      "papers": [
+        {"paper_key": "3333333333333333333333333333333333333333333333333333333333333333", "paper_id": "5555555555555555555555555555555555555555555555555555555555555555", "version": "v2", "title": "离线论文 A: Task utility", "keywords": [{"label": "retrieval", "ref_ids": ["7777777777777777777777777777777777777777777777777777777777777777"]}], "features": [
+          {"name": "Mechanism", "value": "Task-aligned memory selection.", "basis": "source_statement", "ref_ids": ["7777777777777777777777777777777777777777777777777777777777777777"], "missing_reason": null},
+          {"name": "Evaluation", "value": null, "basis": "unknown", "ref_ids": [], "missing_reason": "Not covered by the supplied claim."}
+        ]},
+        {"paper_key": "4444444444444444444444444444444444444444444444444444444444444444", "paper_id": "6666666666666666666666666666666666666666666666666666666666666666", "version": "v1", "title": "Offline paper B: Memory validity", "keywords": [{"label": "retrieval", "ref_ids": ["8888888888888888888888888888888888888888888888888888888888888888"]}, {"label": "conflict", "ref_ids": ["8888888888888888888888888888888888888888888888888888888888888888"]}], "features": [
+          {"name": "Problem", "value": "Validity is distinct from utility.", "basis": "synthesis", "ref_ids": ["8888888888888888888888888888888888888888888888888888888888888888"], "missing_reason": null}
+        ]}
+      ],
+      "references": [
+        {"ref_id": "7777777777777777777777777777777777777777777777777777777777777777", "paper_key": "3333333333333333333333333333333333333333333333333333333333333333", "report_id": "22222222-2222-4222-8222-222222222222", "report_date": "2026-10-24", "report_sha256": "9999999999999999999999999999999999999999999999999999999999999999", "json_pointer": "/sections/0/metadata/deep_reads/0/claims/0", "text": "The method selects useful memories.", "evidence": [{"source_url": "https://arxiv.org/abs/2505.20231v2", "quote": "Original source quote A.", "location": "Abstract"}]},
+        {"ref_id": "8888888888888888888888888888888888888888888888888888888888888888", "paper_key": "4444444444444444444444444444444444444444444444444444444444444444", "report_id": "22222222-2222-4222-8222-222222222222", "report_date": "2026-10-24", "report_sha256": "9999999999999999999999999999999999999999999999999999999999999999", "json_pointer": "/sections/0/metadata/deep_reads/1/claims/0", "text": "The protocol evaluates conflicts.", "evidence": [{"source_url": "https://arxiv.org/abs/2605.20926v1", "quote": "Original source quote B.", "location": "Section 3"}]}
+      ]
+    }
+  }
+}
