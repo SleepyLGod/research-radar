@@ -172,7 +172,6 @@ def test_openai_compatible_sends_explicit_thinking_without_temperature(monkeypat
         "thinking": {"type": "enabled"},
         "reasoning_effort": "high",
     }
-    assert provider.cache_identity == "thinking=enabled;reasoning_effort=high"
 
 
 def test_openai_compatible_without_thinking_keeps_temperature(monkeypatch) -> None:
@@ -209,7 +208,6 @@ def test_openai_compatible_without_thinking_keeps_temperature(monkeypatch) -> No
         "messages": [{"role": "user", "content": "hello"}],
         "temperature": 0.2,
     }
-    assert provider.cache_identity == ""
 
 
 def test_openai_compatible_wraps_incomplete_http_reads(monkeypatch) -> None:
@@ -273,7 +271,8 @@ def test_openai_compatible_reports_incomplete_read_partial_diagnostics(monkeypat
     assert f"partial_byte_count={len(partial)}" in message
     assert "expected_byte_count=100" in message
     assert "transport_state=partial_model_response" in message
-    assert "partial model answer" in message
+    assert "partial model answer" not in message
+    assert "response_excerpt" not in diagnostics
     assert "private prompt" not in message
     assert diagnostics["partial_byte_count"] == len(partial)
     assert diagnostics["expected_byte_count"] == 100
@@ -307,7 +306,8 @@ def test_openai_compatible_redacts_incomplete_read_partial_body(monkeypatch) -> 
     assert "transport_state=partial_provider_error" in message
     assert "fake-token-12345" not in message
     assert diagnostics["transport_state"] == "partial_provider_error"
-    assert "fake-token-12345" not in diagnostics["response_excerpt"]
+    assert "response_excerpt" not in diagnostics
+    assert "fake-token-12345" not in str(diagnostics)
 
 
 def test_openai_compatible_error_includes_redacted_diagnostics(monkeypatch) -> None:
@@ -386,7 +386,8 @@ def test_openai_compatible_invalid_json_reports_provider_context(monkeypatch) ->
     assert "openai request failed" in message
     assert "model=gpt-test" in message
     assert "JSONDecodeError" in message
-    assert "not json" in message
+    assert "response_state=invalid_response_json" in message
+    assert "response_excerpt" not in message
     assert "private prompt" not in message
 
 

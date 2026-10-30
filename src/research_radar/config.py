@@ -64,6 +64,8 @@ class ModelProviderConfig:
     timeout_seconds: int = 120
     thinking: str | None = None
     reasoning_effort: str | None = None
+    max_tokens: int | None = None
+    stream: bool = False
 
 
 @dataclass(frozen=True)
@@ -394,6 +396,19 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             f"model_providers.{name}.reasoning_effort",
             kind=kind,
         )
+        max_tokens = item.get("max_tokens")
+        if max_tokens is not None:
+            if kind != "openai_compatible":
+                raise ConfigError(
+                    f"model_providers.{name}.max_tokens is only valid for openai_compatible."
+                )
+            if type(max_tokens) is not int or max_tokens < 1:
+                raise ConfigError(f"model_providers.{name}.max_tokens must be a positive integer.")
+        stream = item.get("stream", False)
+        if type(stream) is not bool:
+            raise ConfigError(f"model_providers.{name}.stream must be a boolean.")
+        if "stream" in item and kind != "openai_compatible":
+            raise ConfigError(f"model_providers.{name}.stream is only valid for openai_compatible.")
         configs[name.strip()] = ModelProviderConfig(
             kind=kind,
             base_url=_optional_string(item.get("base_url"), f"model_providers.{name}.base_url"),
@@ -405,6 +420,8 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             timeout_seconds=timeout_seconds,
             thinking=thinking,
             reasoning_effort=reasoning_effort,
+            max_tokens=max_tokens,
+            stream=stream,
         )
     return configs
 

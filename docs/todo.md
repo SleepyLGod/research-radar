@@ -7,6 +7,33 @@ drive the research model.
 
 ## Current State
 
+- **Shared model-call audit (2026-10-30, unreleased):** offline review confirms streaming
+  remains opt-in, omitted/false streaming settings share the same request and cache identity,
+  and endpoint, output budget, thinking/effort and streaming changes separate cached answers.
+  Legacy Codex cache behavior is unchanged. The intentional OpenAI-compatible endpoint-identity
+  migration still causes old entries to miss; documentation now distinguishes that migration
+  from the default-disabled streaming option.
+
+  Three additional boundary cases were reproduced and fixed: malformed non-streaming UTF-8
+  no longer becomes a successful answer with replacement characters; excessive JSON nesting
+  becomes a standard provider failure rather than an uncaught recursion error; incomplete HTTP
+  bodies no longer contribute text excerpts, even without a recognizable JSON envelope.
+  Byte counts and coarse failure states remain available. Invalid encoding/JSON does not retry,
+  cache or enter reader repair; transient disconnects retain the existing one-retry limit.
+  A final diagnostic privacy regression also prevents endpoint URL usernames/passwords from
+  appearing in the failure hostname, for both streaming and non-streaming requests.
+
+  Closeout verified this source slice independently of the pending Reader, evidence, translation,
+  composition and relevance work: 1,178 isolated Python tests passed, with two existing opt-in
+  tests skipped. Separately, the combined working tree passed 1,336 full Python tests, also with
+  two skips. The full runs blocked network and real Keychain access explicitly.
+  An additional offline daily-path regression covers both streaming and non-streaming reader
+  and verifier responses through the existing public draft. The pipeline diagnostic test now
+  asserts that partial model text is absent; unrelated verifier-test changes are excluded.
+  Ruff, privacy and diff checks passed. No real service, credential access or package update was
+  used for closeout. This source work does not update installed Apps or prove live endpoint
+  availability, factual correctness, revised-reader prompt quality or parity between models.
+
 - **Single-paper evidence disclosure (2026-10-30, unreleased):** ordinary reading now
   starts with the bottom “Verified claims & evidence” section collapsed. A native disclosure
   keeps every saved claim, quote and source link available. Opening a different paper resets

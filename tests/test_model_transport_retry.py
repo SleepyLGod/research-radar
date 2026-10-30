@@ -155,3 +155,65 @@ def test_already_cancelled_does_not_read_credentials_or_send(monkeypatch, clock)
     monkeypatch.setattr(SecretManager, "get_named_secret", lambda *_: pytest.fail("read secret"))
     with pytest.raises(OperationCancelled):
         instance.complete([], model="test")
+
+
+def test_http504_records_bounded_diagnostics_without_retry_or_secrets(monkeypatch, clock):
+    calls = []
+
+    def request(req, *, timeout):
+        calls.append(req)
+        clock[0] += 300
+        raise HTTPError(
+            req.full_url, 504, "Gateway Timeout", {
+                "X-Request-ID": "offline-request-id",
+                "Server": "offline-gateway",
+                "Retry-After": "30",
+                "Set-Cookie": "never-record-this",
+                "Authorization": "Bearer test-only-key",
+            }, io.BytesIO(b''),
+        )
+
+    monkeypatch.setattr(transport, "urlopen", request)
+    with pytest.raises(ProviderTransportError) as failure:
+        provider(max_tokens=32768, stream=True).complete(
+            [Message("user", "private paper text")], model="offline",
+        )
+
+    detail = failure.value.diagnostics
+    assert len(calls) == 1
+    assert detail["status"] == 504
+    assert detail["elapsed_seconds"] == 300
+    assert detail["http_reason"] == "Gateway Timeout"
+    assert detail["request_byte_count"] == len(calls[0].data)
+    assert detail["max_tokens"] == 32768
+    assert detail["stream"] is True
+    assert json.loads(calls[0].data)["max_tokens"] == 32768
+    assert json.loads(calls[0].data)["stream"] is True
+    assert detail["response_headers"] == {
+        "x-request-id": "offline-request-id", "server": "offline-gateway", "retry-after": "30",
+    }
+    assert "offline-request-id" in str(failure.value)
+    assert "private paper text" not in str(failure.value)
+    assert "test-only-key" not in str(failure.value)
+    assert "never-record-this" not in str(detail)
+    assert detail["retryable"] is False
+
+
+def test_http_diagnostics_redact_echoed_key_and_bound_error_body(monkeypatch, clock):
+    body = io.BytesIO(("test-only-key " + "x" * 10_000).encode())
+
+    def request(req, **kwargs):
+        raise HTTPError(req.full_url, 504, "test-only-key", {
+            "X-Request-ID": "test-only-key", "Server": "x" * 1000,
+        }, body)
+
+    monkeypatch.setattr(transport, "urlopen", request)
+    with pytest.raises(ProviderTransportError) as failure:
+        provider().complete([], model="offline")
+
+    detail = failure.value.diagnostics
+    assert body.tell() <= 4096
+    assert "test-only-key" not in str(detail)
+    assert "test-only-key" not in str(failure.value)
+    assert len(detail["response_headers"]["server"]) <= 163
+    assert len(detail["response_excerpt"]) <= 503

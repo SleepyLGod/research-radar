@@ -174,6 +174,8 @@ def _build_provider(
             timeout_seconds=provider_config.timeout_seconds,
             thinking=provider_config.thinking,
             reasoning_effort=provider_config.reasoning_effort,
+            max_tokens=provider_config.max_tokens,
+            stream=provider_config.stream,
             cancellation_event=cancellation_event,
         )
     if provider_config.kind == "anthropic_messages":
