@@ -389,6 +389,7 @@
 "paper.deep_read" = "精读论文";
 "paper.open" = "阅读论文";
 "paper.claims" = "已核验结论";
+"paper.claims_evidence" = "已核验结论与证据";
 "paper.evidence" = "查看原文证据";
 "paper.original" = "查看原文";
 "paper.sources" = "其他发现的来源";

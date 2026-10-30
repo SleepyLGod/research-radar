@@ -389,6 +389,7 @@
 "paper.deep_read" = "Deep read";
 "paper.open" = "Read paper";
 "paper.claims" = "Verified claims";
+"paper.claims_evidence" = "Verified claims & evidence";
 "paper.evidence" = "Original evidence";
 "paper.original" = "View source";
 "paper.sources" = "Additional sources";

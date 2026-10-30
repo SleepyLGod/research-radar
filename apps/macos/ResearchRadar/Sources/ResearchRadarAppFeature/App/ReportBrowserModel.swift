@@ -7,6 +7,7 @@ import ResearchRadarCore
     var page: Page = .overview
     private(set) var contents: ReportContents?
     private(set) var loadFailed = false
+    var evidenceExpanded = false
     private(set) var initialEvidenceTarget: Int?
     private(set) var initialEvidenceClaimIndex: Int?
     var initialEvidenceAnchor: PaperReadingSection.ID {
@@ -38,6 +39,7 @@ import ResearchRadarCore
     func openPaper(_ id: Int) {
         guard contents?.papers.contains(where: { $0.id == id }) == true else { return }
         page = .paper(id)
+        evidenceExpanded = false
         finishInitialEvidenceNavigation()
     }
 
@@ -50,8 +52,25 @@ import ResearchRadarCore
             guard entry.evidence, paper.claims.indices.contains(claimIndex) else { return }
         }
         openPaper(index)
-        initialEvidenceTarget = entry.evidence ? index : nil
-        initialEvidenceClaimIndex = entry.evidenceClaimIndex
+        if entry.evidence { revealEvidence(claimIndex: entry.evidenceClaimIndex) }
+    }
+
+    func revealEvidence(claimIndex: Int? = nil) {
+        guard let paper = selectedPaper, !paper.claims.isEmpty else { return }
+        if let claimIndex, !paper.claims.indices.contains(claimIndex) { return }
+        evidenceExpanded = true
+        initialEvidenceTarget = paper.id
+        initialEvidenceClaimIndex = claimIndex
+    }
+
+    /// Return nil when expansion must settle before scrolling.
+    func prepareSectionJump(to section: PaperReadingSection.ID) -> PaperReadingSection.ID? {
+        if section == .evidence && !evidenceExpanded {
+            revealEvidence()
+            return nil
+        }
+        finishInitialEvidenceNavigation()
+        return section
     }
 
     func finishInitialEvidenceNavigation() {

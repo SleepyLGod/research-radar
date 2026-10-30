@@ -18,7 +18,7 @@ struct PaperReadingSection: Identifiable {
         switch id {
         case .paragraph(let key): "paper.\(key)"
         case .figures: "paper.figures"
-        case .evidence, .claim: "paper.claims"
+        case .evidence, .claim: "paper.claims_evidence"
         }
     }
 }

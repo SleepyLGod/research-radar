@@ -6,6 +6,7 @@ struct PaperDetailView: View {
     let paper: ReportContents.Paper
     let figures: [PaperFiguresModel.Figure]
     let localization: LocalizationStore
+    @Binding var evidenceExpanded: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -32,13 +33,18 @@ struct PaperDetailView: View {
         }
         if !paper.claims.isEmpty {
             Divider()
-            VStack(alignment: .leading, spacing: 20) {
-                Text(localization.text("paper.claims")).font(.system(size: 16, weight: .semibold))
-                ForEach(paper.claims.indices, id: \.self) { index in
-                    PaperEvidenceView(claim: paper.claims[index], localization: localization)
-                        .id(PaperReadingSection.ID.claim(index))
-                }
-            }.id(PaperReadingSection.ID.evidence)
+            DisclosureGroup(localization.text("paper.claims_evidence"), isExpanded: $evidenceExpanded) {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(paper.claims.indices, id: \.self) { index in
+                        PaperEvidenceView(claim: paper.claims[index], localization: localization)
+                            .id(PaperReadingSection.ID.claim(index))
+                    }
+                }.padding(.top, 12)
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("paper.claims_evidence")
+            .id(PaperReadingSection.ID.evidence)
         }
     }
 }

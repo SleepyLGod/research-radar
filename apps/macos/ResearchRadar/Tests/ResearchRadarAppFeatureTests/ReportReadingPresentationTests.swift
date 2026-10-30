@@ -49,6 +49,54 @@ struct ReportReadingPresentationTests {
 }
 
 @MainActor struct ReportReadingNavigationTests {
+    @Test func newChapterSelectionReplacesPendingEvidenceJump() async throws {
+        let fixture = try ReaderFixture()
+        defer { task3Trash(fixture.workspaceRoot) }
+        try paperDraft().write(to: URL(fileURLWithPath: fixture.report.articleDraftPath))
+        let browser = ReportBrowserModel()
+        await browser.load(report: fixture.report, workspaceRoot: fixture.workspaceRoot)
+        browser.openPaper(0)
+        #expect(browser.prepareSectionJump(to: .evidence) == nil)
+        #expect(browser.evidenceExpanded && browser.initialEvidenceTarget == 0)
+        // A newer chapter choice wins even while the first jump awaits image layout.
+        let chapter = PaperReadingSection.ID.paragraph("problem_walkthrough")
+        #expect(browser.prepareSectionJump(to: chapter) == chapter)
+        #expect(browser.initialEvidenceTarget == nil && browser.initialEvidenceClaimIndex == nil)
+        #expect(browser.evidenceExpanded)
+        #expect(browser.prepareSectionJump(to: .evidence) == .evidence)
+        #expect(browser.prepareSectionJump(to: .evidence) == .evidence)
+        #expect(browser.initialEvidenceTarget == nil)
+    }
+
+    @Test func ordinaryReadingStartsFoldedAndEvidenceNavigationRevealsIt() async throws {
+        let fixture = try ReaderFixture()
+        defer { task3Trash(fixture.workspaceRoot) }
+        let data = paperDraft()
+        try data.write(to: URL(fileURLWithPath: fixture.report.articleDraftPath))
+        let browser = ReportBrowserModel()
+        await browser.load(report: fixture.report, workspaceRoot: fixture.workspaceRoot)
+        browser.openPaper(0)
+        #expect(!browser.evidenceExpanded)
+        browser.revealEvidence()
+        #expect(browser.evidenceExpanded && browser.initialEvidenceAnchor == .evidence)
+        #expect(browser.initialEvidenceTarget == 0)
+        browser.finishInitialEvidenceNavigation()
+        #expect(browser.evidenceExpanded)
+        browser.evidenceExpanded = false
+        browser.revealEvidence()
+        #expect(browser.evidenceExpanded && browser.initialEvidenceTarget == 0)
+        browser.finishInitialEvidenceNavigation()
+        browser.openPaper(1)
+        #expect(!browser.evidenceExpanded && browser.initialEvidenceTarget == nil)
+        browser.openPaper(0)
+        browser.revealEvidence(claimIndex: 1)
+        #expect(!browser.evidenceExpanded && browser.initialEvidenceTarget == nil)
+        browser.openLedgerEntry(.init(reportID: fixture.report.id, paperIndex: 0,
+            sourceURL: "https://example.org/paper", evidence: true, evidenceClaimIndex: 0))
+        #expect(browser.evidenceExpanded && browser.initialEvidenceAnchor == .claim(0))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: fixture.report.articleDraftPath)) == data)
+    }
+
     @Test func deliveryIsReportLevelAndNeverInterruptsPaperSelection() async throws {
         let fixture = try ReaderFixture()
         defer { task3Trash(fixture.workspaceRoot) }

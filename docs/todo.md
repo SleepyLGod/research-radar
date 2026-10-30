@@ -7,6 +7,29 @@ drive the research model.
 
 ## Current State
 
+- **Single-paper evidence disclosure (2026-10-30, unreleased):** ordinary reading now
+  starts with the bottom “Verified claims & evidence” section collapsed. A native disclosure
+  keeps every saved claim, quote and source link available. Opening a different paper resets
+  the section; explicit evidence navigation from the ledger, graph or chapter menu reveals
+  it before using the existing layout-aware scroll path. No report, research, evidence gate,
+  delivery rule or persistent setting changed.
+
+  A separate candidate, using the existing local signing certificate and an isolated
+  read-only workspace, opened both saved comparison reports. Actual native clicks verified
+  collapse, expansion and re-collapse; Chinese and English screenshots retain the original
+  report text. Automated native-layout tests cover both languages, and existing evidence
+  navigation tests still pass. Chapter-menu keyboard input and VoiceOver remain manual
+  acceptance items; incomplete automation of the menu is not a passed input test.
+  Pre-commit review also identified a deferred evidence jump overriding a newer chapter
+  selection. A failing offline navigation regression reproduced the stale target; the fix
+  clears it before the new direct jump. Rapid chapter selection during image loading still
+  needs manual input acceptance; the earlier candidate predates this additional fix.
+  Verification at the offline acceptance checkpoint: 396 Swift tests passed. Privacy,
+  bundle/signature and diff checks passed. Original
+  reports, previous Apps and normal configuration remain unchanged. No model/search request,
+  secret value access, upload or delivery was performed during acceptance. This change remains
+  unreleased; publication does not complete the pending manual checks.
+
 - **Topic knowledge source closeout (2026-10-29, unreleased):** explicit organization of saved
   public deep reads, native multi-label classification, typed semantic relations and exact cited
   claim navigation are implemented. Source-only ledger entries are not given invented features.

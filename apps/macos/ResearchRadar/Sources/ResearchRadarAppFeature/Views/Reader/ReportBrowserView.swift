@@ -51,7 +51,11 @@ struct ReportBrowserView: View {
                 if let paper = browser.selectedPaper, let contents = browser.contents {
                     PaperReadingControls(papers: contents.papers, selected: paper,
                         sections: paper.readingSections(hasAvailableFigures: !selectedFigures.isEmpty), localization: localization,
-                        select: browser.openPaper, jump: { proxy.scrollTo($0, anchor: .top) })
+                        select: browser.openPaper, jump: { section in
+                            if let target = browser.prepareSectionJump(to: section) {
+                                proxy.scrollTo(target, anchor: .top)
+                            }
+                        })
                     Divider()
                 }
                 if browser.page == .fullReport {
@@ -62,7 +66,8 @@ struct ReportBrowserView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             if let paper = browser.selectedPaper {
-                                PaperDetailView(paper: paper, figures: selectedFigures, localization: localization)
+                                PaperDetailView(paper: paper, figures: selectedFigures, localization: localization,
+                                    evidenceExpanded: $browser.evidenceExpanded)
                             } else {
                                 overview
                             }
