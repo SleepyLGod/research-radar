@@ -29,15 +29,21 @@ from research_radar.analysis.paper_sections import (
 )
 from research_radar.analysis.providers import LLMProvider
 from research_radar.analysis.public_style import audit_public_writing_text
-from research_radar.analysis.review import model_review_publishable_claims, rule_based_review
+from research_radar.analysis.reader_input import ReaderInputError
+from research_radar.analysis.review import (
+    model_review_publishable_claims,
+    review_publication_facts,
+    reviewed_analysis_claims,
+    rule_based_review,
+)
 from research_radar.compose.paper import render_paper_brief
 from research_radar.config import AppConfig, TopicConfig
 from research_radar.evidence.ledger import write_claims, write_evidence
 from research_radar.exceptions import AnalysisError, ResearchRadarError
 from research_radar.ingestion.router import ingest_source
-from research_radar.models import RunManifest, SourceCandidate, SourceType
+from research_radar.models import RunManifest, SourceCandidate, SourceType, dataclass_to_dict
 from research_radar.pipeline.progress import ProgressWriter
-from research_radar.pipeline.reporting import render_review_report
+from research_radar.pipeline.reporting import render_review_report, write_failed_run
 from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.storage.files import ensure_dir, write_json, write_jsonl, write_text
 from research_radar.storage.runs import make_run_id
@@ -78,7 +84,7 @@ def run_paper(
         artifact = ingest_source(source, run_dir / "artifacts")
     except ResearchRadarError as exc:
         progress.record("ingestion", "failed", error_type=type(exc).__name__, error=str(exc))
-        _write_failed_run(run_dir, manifest, "ingestion", None, None, exc)
+        write_failed_run(run_dir, manifest, "ingestion", None, None, exc)
         raise
     progress.record(
         "ingestion",
@@ -89,6 +95,9 @@ def run_paper(
     )
     paper_sections = build_paper_sections(artifact)
     reading_packet = build_reading_packet(artifact, sections=paper_sections)
+    write_jsonl(run_dir / "paper_reading_inputs.jsonl", [
+        {"source_url": source.url, **dataclass_to_dict(reading_packet)},
+    ])
     progress.record(
         "reader",
         "started",
@@ -111,6 +120,7 @@ def run_paper(
             packet=reading_packet,
             anchor_repair_provider=anchor_repair_provider,
             anchor_repair_model=anchor_repair_model,
+            facts_only=report_language == "zh",
         )
     except ResearchRadarError as exc:
         progress.record(
@@ -123,7 +133,13 @@ def run_paper(
             error_type=type(exc).__name__,
             error=str(exc),
         )
-        _write_failed_run(run_dir, manifest, "reader", reader.name, model, exc)
+        if isinstance(exc, ReaderInputError):
+            write_jsonl(run_dir / "reader_attempts.jsonl", exc.reader_attempts)
+            write_jsonl(run_dir / "paper_reading_inputs.jsonl", [{
+                "source_url": source.url, **dataclass_to_dict(reading_packet),
+                "input_budget": exc.audit,
+            }])
+        write_failed_run(run_dir, manifest, "reader", reader.name, model, exc)
         raise
     reader_cache_delta = merge_cache_deltas(
         provider_cache_delta(reader_cache_before, reader),
@@ -143,72 +159,39 @@ def run_paper(
         anchor_repair_skipped_count=_anchor_repair_skipped_count(deep_result.anchor_repairs),
         **reader_cache_delta,
     )
+    artifact = deep_result.artifact or artifact
     reading = deep_result.reading
     claims = deep_result.claims
     findings = deep_result.findings
-    model_feedback = None
-    verification_actions = []
     review_provider = verifier or reader
     review_model = verifier_model or model
-    if claims and review_provider is not None:
-        progress.record(
-            "verifier",
-            "started",
-            provider=review_provider.name,
-            model=review_model,
-            claim_count=len(claims),
-            verifier_input_count=sum(1 for claim in claims if claim.is_publishable()),
-            verifier_skipped_claim_count=sum(1 for claim in claims if not claim.is_publishable()),
-        )
-        verifier_cache_before = provider_cache_stats(review_provider)
+    verified_facts = report_language == "zh" and bool(reading.claim_units)
+    if verified_facts:
+        write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(reading)])
+        progress.record("verifier", "started", scope="facts", provider=review_provider.name,
+                        model=review_model)
+        write_claims(run_dir / "reader_claims.jsonl", claims)
         try:
-            review_result = model_review_publishable_claims(
-                claims,
-                review_provider,
-                model=review_model,
-                topic_id=topic.id,
-                queries=topic.queries,
-            )
-            claims = review_result.claims
-            model_findings = review_result.findings
-            model_feedback = review_result.raw_feedback
-            verification_actions = review_result.actions
+            fact_review = review_publication_facts(claims, review_provider, model=review_model,
+                readings=[reading], artifacts=[artifact], topic_id=topic.id, queries=topic.queries)
         except ResearchRadarError as exc:
-            progress.record(
-                "verifier",
-                "failed",
-                provider=review_provider.name,
-                model=review_model,
-                error_type=type(exc).__name__,
-                error=str(exc),
-            )
-            _write_failed_run(
-                run_dir,
-                manifest,
-                "verifier",
-                review_provider.name,
-                review_model,
-                exc,
-            )
+            progress.record("verifier", "failed", scope="facts", error=str(exc))
+            write_failed_run(run_dir, manifest, "verifier",
+                              review_provider.name, review_model, exc)
             raise
-        findings.extend(model_findings)
-        claims, post_model_findings = rule_based_review(claims)
-        findings.extend(post_model_findings)
-        progress.record(
-            "verifier",
-            "succeeded",
-            provider=review_provider.name,
-            model=review_model,
-            publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
-            action_count=len(verification_actions),
-            verifier_input_count=review_result.reviewed_count,
-            verifier_skipped_claim_count=review_result.skipped_count,
-            **provider_cache_delta(verifier_cache_before, review_provider),
-        )
+        claims = fact_review.claims
+        reading = fact_review.readings[0]
+        findings.extend(fact_review.findings)
+        write_claims(run_dir / "fact_claims.jsonl", claims)
+        write_text(run_dir / "fact_review.json", fact_review.raw_feedback or "{}")
+        progress.record("verifier", "succeeded", scope="facts",
+                        reviewed_count=fact_review.reviewed_count)
     display_reading = reading
     display_claims = claims
     localization_attempts = []
     if report_language == "zh":
+        write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(reading)])
+        write_claims(run_dir / "claims.jsonl", claims)
         progress.record(
             "localization",
             "started",
@@ -225,10 +208,14 @@ def run_paper(
             provider=localizer,
             model=localization_model,
             language=report_language,
+            verified_facts=verified_facts,
         )
         display_reading = localization.readings[0] if localization.readings else reading
         display_claims = localization.claims
         localization_attempts = localization.attempts
+        write_jsonl(run_dir / "publication_candidates.jsonl",
+                    [reading_to_dict(item) for item in localization.readings])
+        write_claims(run_dir / "publication_claims.jsonl", display_claims)
         findings.extend(localization.findings)
         status = localization.status
         if localization_failed(localization):
@@ -252,6 +239,71 @@ def run_paper(
             **provider_cache_delta(localization_cache_before, localizer),
         )
 
+    model_feedback = None
+    verification_actions = []
+    if claims and review_provider is not None:
+        progress.record(
+            "verifier",
+            "started",
+            provider=review_provider.name,
+            model=review_model,
+            claim_count=len(claims),
+            verifier_input_count=sum(1 for claim in claims if claim.is_publishable()),
+            verifier_skipped_claim_count=sum(1 for claim in claims if not claim.is_publishable()),
+        )
+        verifier_cache_before = provider_cache_stats(review_provider)
+        try:
+            review_result = model_review_publishable_claims(
+                display_claims,
+                review_provider,
+                model=review_model,
+                topic_id=topic.id,
+                queries=topic.queries,
+                readings=[display_reading],
+                artifacts=[artifact],
+                analysis_claims=claims,
+                require_fact_receipts=report_language == "zh",
+            )
+            display_claims = review_result.claims
+            display_reading = review_result.readings[0]
+            claims = reviewed_analysis_claims(claims, display_claims)
+            if report_language != "zh":
+                reading = display_reading
+            model_findings = review_result.findings
+            model_feedback = review_result.raw_feedback
+            verification_actions = review_result.actions
+        except ResearchRadarError as exc:
+            progress.record(
+                "verifier",
+                "failed",
+                provider=review_provider.name,
+                model=review_model,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            write_failed_run(
+                run_dir,
+                manifest,
+                "verifier",
+                review_provider.name,
+                review_model,
+                exc,
+            )
+            raise
+        findings.extend(model_findings)
+        claims, post_model_findings = rule_based_review(claims)
+        findings.extend(post_model_findings)
+        progress.record(
+            "verifier",
+            "succeeded",
+            provider=review_provider.name,
+            model=review_model,
+            publishable_claim_count=sum(1 for claim in claims if claim.is_publishable()),
+            action_count=len(verification_actions),
+            verifier_input_count=review_result.reviewed_count,
+            verifier_skipped_claim_count=review_result.skipped_count,
+            **provider_cache_delta(verifier_cache_before, review_provider),
+        )
     manifest = RunManifest(
         run_id=manifest.run_id,
         topic_id=topic_id,
@@ -273,6 +325,7 @@ def run_paper(
             "paper_reading_packet": {
                 "chunk_count": len(reading_packet.chunks),
                 "warnings": reading_packet.warnings,
+                "coverage": reading_packet.coverage,
             },
             "anchor_repair": {
                 "resolution_count": len(deep_result.anchor_resolutions),
@@ -387,35 +440,6 @@ def _create_paper_run_dir(
     manifest = RunManifest(run_id=run_id, topic_id=topic.id, mode="paper")
     write_json(run_dir / "manifest.json", manifest)
     return run_dir, manifest
-
-
-def _write_failed_run(
-    run_dir: Path,
-    manifest: RunManifest,
-    stage: str,
-    provider: str | None,
-    model: str | None,
-    exc: ResearchRadarError,
-) -> None:
-    failure = {
-        "stage": stage,
-        "provider": provider,
-        "model": model,
-        "error_type": type(exc).__name__,
-        "message": str(exc),
-    }
-    diagnostics = getattr(exc, "diagnostics", None)
-    if isinstance(diagnostics, dict):
-        failure["transport"] = diagnostics
-    failed_manifest = RunManifest(
-        run_id=manifest.run_id,
-        topic_id=manifest.topic_id,
-        mode=manifest.mode,
-        created_at=manifest.created_at,
-        metadata={**manifest.metadata, "failure": failure},
-    )
-    write_json(run_dir / "manifest.json", failed_manifest)
-    write_json(run_dir / "run_error.json", failure)
 
 
 def _write_failed_localization_run(

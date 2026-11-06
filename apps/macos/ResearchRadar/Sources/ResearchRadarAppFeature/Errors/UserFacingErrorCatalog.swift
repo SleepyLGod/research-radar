@@ -21,6 +21,7 @@ public struct UserFacingErrorCatalog {
             "wechat_confirmation_changed", "wechat_report_missing", "wechat_credentials_missing",
             "wechat.no_public_report", "wechat.configure_first", "wechat.busy",
             "wechat_cover_invalid", "wechat_cover_unconfirmed", "wechat_cover_save_failed",
+            "reader_context_unknown", "reader_context_exceeded", "reader_output_reserve_insufficient", "reader_context_invalid",
         ])
 
     @MainActor public func message(for code: String) -> String {

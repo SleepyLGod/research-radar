@@ -17,6 +17,7 @@ from research_radar.analysis.paper_reading import (
 )
 from research_radar.analysis.paper_sections import PaperReadingPacket
 from research_radar.analysis.providers import LLMProvider
+from research_radar.evidence.pdf_tables import attach_table_evidence
 from research_radar.models import Artifact, Claim, ReviewFinding
 
 
@@ -30,6 +31,7 @@ class DeepReadingResult:
     anchor_resolutions: list[AnchorResolution]
     anchor_repairs: list[AnchorRepairAttempt]
     reader_attempts: list[ReaderAttempt]
+    artifact: Artifact | None = None
 
 
 def run_artifact_deep_reading(
@@ -42,9 +44,11 @@ def run_artifact_deep_reading(
     packet: PaperReadingPacket | None = None,
     anchor_repair_provider: LLMProvider | None = None,
     anchor_repair_model: str | None = None,
+    facts_only: bool = False,
 ) -> DeepReadingResult:
     """Run model reading, claim validation, and quote-only anchor repair."""
 
+    artifact = attach_table_evidence(artifact)
     reading_result = model_paper_reading_with_attempts(
         artifact,
         reader,
@@ -52,8 +56,11 @@ def run_artifact_deep_reading(
         area_context=area_context,
         language=language,
         packet=packet,
+        facts_only=facts_only,
     )
-    claims, findings = validate_paper_reading(reading_result.reading, artifact)
+    claims, findings = validate_paper_reading(
+        reading_result.reading, artifact, include_context_claims=facts_only,
+    )
     claims, anchor_resolutions, anchor_repairs, anchor_findings = apply_anchor_repair(
         claims,
         artifact,
@@ -79,4 +86,5 @@ def run_artifact_deep_reading(
         anchor_resolutions=anchor_resolutions,
         anchor_repairs=anchor_repairs,
         reader_attempts=reading_result.attempts,
+        artifact=artifact,
     )

@@ -1,0 +1,887 @@
+{
+  "description": "Bounded public excerpts from the stopped MemConflict schema-path acceptance. Saved decisions are historical, not approvals for new prose.",
+  "source_url": "http://arxiv.org/abs/2605.20926v1",
+  "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+  "claims": [
+    {
+      "claim_id": "c1",
+      "text": "Problem: MemConflict 将 temporal validity 定义为记忆在查询时是否匹配真实用户状态。",
+      "original_text": "Problem: MemConflict defines temporal validity by whether a memory matches the true user state at query time.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "A memory item is temporally valid if it matches the true user state at query time",
+          "location": "p. 8, §3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c2",
+      "text": "Problem: Static conflicts 指矛盾的提及挑战 factual correctness，但不代表真实状态更新。",
+      "original_text": "Problem: Static conflicts model contradictory mentions that do not represent true state updates.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Static conflicts arise when contradictory mentions challenge factual correctness without representing true state updates.",
+          "location": "p. 8, §3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c3",
+      "text": "Problem: Conditional conflicts 指多个值看似合理，但只有匹配查询上下文的 value-condition association 适用。",
+      "original_text": "Problem: Conditional conflicts test whether the system selects the value-condition association that matches the query.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Conditional conflicts arise when multiple values appear plausible, but only the value-condition association matching the query context is applicable.",
+          "location": "p. 8, §3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c4",
+      "text": "Problem: 基准构造保证每个查询有唯一的 gold candidate。",
+      "original_text": "Problem: Benchmark construction assumes a unique gold candidate for each query.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "The benchmark construction guarantees a unique maximizer for each query.",
+          "location": "p. 9, §3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c5",
+      "text": "Solution: 用户 profile 由从 Persona Hub 采样得到的 persona seeds 初始化。",
+      "original_text": "Solution: User profiles are initialized from persona seeds sampled from Persona Hub.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "MemConflict initializes each user from a persona seed 𝑧𝑢 sampled from Persona Hub2.",
+          "location": "p. 9, §3.2"
+        }
+      ]
+    },
+    {
+      "claim_id": "c6",
+      "text": "Solution: 模拟时间线覆盖 2022 年 1 月至 2025 年 12 月，并按月组织 session slots。",
+      "original_text": "Solution: The simulated timeline spans January 2022 through December 2025 with monthly session slots.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "The timeline spans January 2022 to December 2025, with observed sessions organized at monthly granularity.",
+          "location": "p. 10, §3.3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c7",
+      "text": "Experiment: 基准包含 12 个 instances，每个对应一个 virtual user。",
+      "original_text": "Experiment: The benchmark contains 12 instances, each corresponding to one virtual user.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "We constructed 12 benchmark instances.",
+          "location": "p. 15, §3.7"
+        }
+      ]
+    },
+    {
+      "claim_id": "c8",
+      "text": "Experiment: 每个 benchmark instance 平均包含 52.33 sessions。",
+      "original_text": "Experiment: Each benchmark instance contains an average of 52.33 sessions.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "On average, each instance contains 52.33 sessions",
+          "location": "p. 15, §3.7"
+        }
+      ]
+    },
+    {
+      "claim_id": "c9",
+      "text": "Experiment: 每个 benchmark instance 平均上下文长度为 203,910.83 tokens。",
+      "original_text": "Experiment: Each benchmark instance contains an average context length of 203,910.83 tokens.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "203,910.83 tokens",
+          "location": "p. 15, §3.7"
+        }
+      ]
+    },
+    {
+      "claim_id": "c10",
+      "text": "Experiment: 每个 benchmark instance 平均包含 124.33 evaluation queries。",
+      "original_text": "Experiment: Each benchmark instance contains an average of 124.33 evaluation queries.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "with 124.33 evaluation queries.",
+          "location": "p. 15, §3.7"
+        }
+      ]
+    },
+    {
+      "claim_id": "c11",
+      "text": "Experiment: 被评估系统为 A-Mem、LangMem、Letta、MemOS、Mem0 和 Memobase。",
+      "original_text": "Experiment: The evaluated systems are A-Mem, LangMem, Letta, MemOS, Mem0, and Memobase.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "We evaluate six representative long-term memory systems: A-Mem [37], LangMem3, Letta4, MemOS [12], Mem0 [4], and Memobase5.",
+          "location": "p. 16, §4.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c13",
+      "text": "Experiment: 论文报告 benchmark-construction calls 和需要 LLM 的 memory-system backends 使用 gpt-5.0-mini。",
+      "original_text": "Experiment: The paper reports using gpt-5.0-mini for benchmark-construction calls and memory-system backends that require an LLM.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "All LLM calls used in benchmark construction, including profile generation, dialogue generation, query generation, and memory-system backends that require an LLM, usegpt-5.0-mini.",
+          "location": "p. 18, §4.2"
+        }
+      ]
+    },
+    {
+      "claim_id": "c14",
+      "text": "Experiment: Answer Accuracy 评估最终答案的正确性。",
+      "original_text": "Experiment: Answer Accuracy evaluates correctness of the final answer.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Black-box evaluation measures whether the system returns the correct final answer",
+          "location": "p. 14, §3.6"
+        }
+      ]
+    },
+    {
+      "claim_id": "c16",
+      "text": "Experiment: SRS 根据 gold memory 的排名给出对数折扣分数，未检索到时记 0。",
+      "original_text": "Experiment: SRS gives a logarithmically discounted score based on the gold memory's rank and zero when it is not retrieved.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "SRS assigns a logarithmically discounted score according to its rank, and assigns 0 when it is not retrieved:",
+          "location": "p. 14, §3.6"
+        }
+      ]
+    },
+    {
+      "claim_id": "c17",
+      "text": "Experiment: UOCS 衡量系统是否识别真实 update，并保留旧状态到新状态的 temporal order。",
+      "original_text": "Experiment: UOCS measures recognition of a true update and preservation of the old-to-new temporal order.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Update Order Consistency Score (UOCS) measures whether the system recognizes that a true update has occurred and preserves the temporal order between earlier and later states",
+          "location": "p. 15, §3.6"
+        }
+      ]
+    },
+    {
+      "claim_id": "c18",
+      "text": "Experiment: CRS 衡量系统是否识别 contradictory information 的存在。",
+      "original_text": "Experiment: CRS measures recognition that contradictory information is present.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Conflict Recognition Score (CRS) measures whether the system identifies the presence of contradictory information:",
+          "location": "p. 15, §3.6"
+        }
+      ]
+    },
+    {
+      "claim_id": "c19",
+      "text": "Experiment: Answer 和 memory-item 判断使用 LLM-assisted matching，随后进行 human verification。",
+      "original_text": "Experiment: Answer and memory-item judgments use LLM-assisted matching followed by human verification.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "All answer and memory-item judgments are produced through LLM-assisted matching followed by human verification.",
+          "location": "p. 15, §3.6"
+        }
+      ]
+    },
+    {
+      "claim_id": "c20",
+      "text": "Experiment: 没有 evaluated system 在所有报告的 metrics 和 conflict types 上占优。",
+      "original_text": "Experiment: No evaluated system dominates all reported metrics and conflict types.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "No system dominates all metrics and conflict types.",
+          "location": "p. 18, §4.3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c21",
+      "text": "Experiment: 作者报告 MemOS 有最高 average AA、static AA、conditional AA 和 UOCS，而 LangMem 有最高 dynamic AA。",
+      "original_text": "Experiment: The authors report that MemOS has the highest average AA, static AA, conditional AA, and UOCS, while LangMem has the highest dynamic AA.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "MemOS achieves the highest average AA, with the best static and conditional AA and the highest UOCS, although LangMem obtains the highest dynamic AA.",
+          "location": "p. 18, §4.3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c22",
+      "text": "Experiment: 作者报告，被评估系统中的最高 CRS 为 0.2501。",
+      "original_text": "Experiment: The authors report that the highest CRS among the evaluated systems is 0.2501.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "CRS remains low for all systems, with the best score only reaching 0.2501",
+          "location": "p. 19, §4.3.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c23",
+      "text": "Experiment: 作者报告 MemOS 有最高 average SEH@3 和 SRS。",
+      "original_text": "Experiment: The authors report that MemOS has the highest average SEH@3 and SRS.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "MemOS achieves the highest average SEH@3 and SRS",
+          "location": "p. 19, §4.3.2"
+        }
+      ]
+    },
+    {
+      "claim_id": "c24",
+      "text": "Experiment: 在报告的长历史比较中，所有被评估系统的 performance 都下降。",
+      "original_text": "Experiment: In the reported longer-history comparison, performance decreases for all evaluated systems.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Longer histories reduce performance for all evaluated systems, but the magnitude of degradation varies.",
+          "location": "p. 21, §4.4.2"
+        }
+      ]
+    },
+    {
+      "claim_id": "c25",
+      "text": "Experiment: 在报告的对比中，移除 distractors 使所有六个系统的 performance 提升。",
+      "original_text": "Experiment: Removing distractors improves performance for all six systems in the reported comparison.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Removing distractors improves performance for all systems, although the gains vary.",
+          "location": "p. 23, §4.4.3"
+        }
+      ]
+    },
+    {
+      "claim_id": "c26",
+      "text": "Experiment: 与 direct queries 相比，implicit queries 通常降低 black-box 和 white-box performance，但随系统和 conflict type 变化。",
+      "original_text": "Experiment: Implicit queries generally reduce black-box and white-box performance relative to direct queries, with variation by system and conflict type.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Compared with the direct-query setting, implicit queries generally reduce both black-box and white-box performance, although the effect varies across systems and conflict types.",
+          "location": "p. 24, §4.4.4"
+        }
+      ]
+    },
+    {
+      "claim_id": "c27",
+      "text": "Experiment: 在报告的对比中，随着 conflict distance 增大，performance 下降。",
+      "original_text": "Experiment: Performance decreases as conflict distance increases in the reported comparison.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Performance decreases as conflict distance increases across all systems.",
+          "location": "p. 25, §4.4.5"
+        }
+      ]
+    },
+    {
+      "claim_id": "c28",
+      "text": "Experiment: 作者报告，在六个系统中，MemOS 有最低 total runtime、addition time 和 response time。",
+      "original_text": "Experiment: The authors report that MemOS has the lowest total runtime, addition time, and response time among the six systems.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "MemOS achieves the lowest total runtime, with the lowest addition time and response time.",
+          "location": "p. 26, §4.5.1"
+        }
+      ]
+    },
+    {
+      "claim_id": "c29",
+      "text": "Experiment: 失败分解将多数系统和 conflict types 的错误主导份额归因于 retrieval failures。",
+      "original_text": "Experiment: The failure breakdown attributes the dominant share of errors to retrieval failures for most systems and conflict types.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "Across most systems and conflict types, retrieval failures account for the dominant share of errors",
+          "location": "p. 28, §4.5.2"
+        }
+      ]
+    },
+    {
+      "claim_id": "c30",
+      "text": "Limitations: 该基准通过受控模拟构建，而不是从自然发生的长期人类交互中收集。",
+      "original_text": "Limitations: The benchmark is constructed through controlled simulation rather than naturally occurring long-term human interactions.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "it is still constructed through controlled simulation rather than collected from naturally occurring long-term human interactions.",
+          "location": "p. 29, §5"
+        }
+      ]
+    },
+    {
+      "claim_id": "c31",
+      "text": "Limitations: 当前基准聚焦于 temporal updates、factual contradictions 和 condition-dependent preferences。",
+      "original_text": "Limitations: The current benchmark focuses on temporal updates, factual contradictions, and condition-dependent preferences.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "the current benchmark focuses on a specific set of memory difficulties, namely temporal updates, factual contradictions, and condition-dependent preferences",
+          "location": "p. 29, §5"
+        }
+      ]
+    },
+    {
+      "claim_id": "c32",
+      "text": "Limitations: 实验评估的是一组有代表性但有限的 memory systems。",
+      "original_text": "Limitations: The experiments evaluate a limited set of memory systems.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "our experiments evaluate a representative but limited set of memory systems",
+          "location": "p. 29, §5"
+        }
+      ]
+    },
+    {
+      "claim_id": "c33",
+      "text": "Limitations: white-box protocol 假设支持 gold answer 的 memory items 可以被显式检索和排序。",
+      "original_text": "Limitations: The white-box protocol assumes that gold-supporting memory items can be explicitly retrieved and ranked.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "the current white-box protocol assumes that memory items supporting the gold answer can be explicitly retrieved and ranked",
+          "location": "p. 29, §5"
+        }
+      ]
+    },
+    {
+      "claim_id": "c34",
+      "text": "Limitations: 作者将 multilingual、multimodal 以及 multi-user 或 multi-agent 设置列为未来扩展。",
+      "original_text": "Limitations: The authors identify multilingual, multimodal, and multi-user or multi-agent settings as future extensions.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "A natural extension is to broaden MemConflict to more realistic and diverse interaction settings, including multilingual conversations, multimodal memory, and memory involving multiple interacting users or agents.",
+          "location": "p. 29, §5"
+        }
+      ]
+    },
+    {
+      "claim_id": "c37",
+      "text": "Essence: MemConflict 沿 temporal validity、factual correctness 和 contextual applicability 三个互补维度定义 memory validity。",
+      "original_text": "Essence: MemConflict evaluates memory validity along temporal, factual, and contextual dimensions.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "MemConflict defines memory validity along three complementary dimensions: temporal validity, factual correctness, and contextual applicability.",
+          "location": "p. 8, §3.1"
+        }
+      ]
+    }
+  ],
+  "paragraphs": [
+    {
+      "paragraph_id": "p1.opening_context.1",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "MemConflict 沿 temporal validity、factual correctness 和 contextual applicability 三个互补维度定义 memory validity (c37)。",
+      "supporting_claim_ids": [
+        "c37"
+      ],
+      "claim_indexes": [
+        33
+      ]
+    },
+    {
+      "paragraph_id": "p1.problem_walkthrough.1",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "其中，temporal validity 的判断标准是记忆在查询时是否匹配真实用户状态 (c1)。Static conflicts 指矛盾的提及挑战 factual correctness、但不代表真实状态更新的情形 (c2)；Conditional conflicts 指多个值看似合理、但只有匹配查询上下文的 value-condition association 才适用的情形 (c3)。基准构造保证每个查询有唯一 gold candidate (c4)。",
+      "supporting_claim_ids": [
+        "c1",
+        "c2",
+        "c3",
+        "c4"
+      ],
+      "claim_indexes": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "paragraph_id": "p1.solution_walkthrough.1",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "构造上，MemConflict 用从 Persona Hub 采样得到的 persona seeds 初始化每个用户 (c5)。模拟时间线覆盖 2022 年 1 月至 2025 年 12 月，观察到的 sessions 按月度粒度组织 (c6)。",
+      "supporting_claim_ids": [
+        "c5",
+        "c6"
+      ],
+      "claim_indexes": [
+        5,
+        6
+      ]
+    },
+    {
+      "paragraph_id": "p1.solution_walkthrough.2",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "数据流中，论文报告 benchmark-construction calls 和需要 LLM 的 memory-system backends 使用 gpt-5.0-mini (c13)。",
+      "supporting_claim_ids": [
+        "c13"
+      ],
+      "claim_indexes": [
+        12
+      ]
+    },
+    {
+      "paragraph_id": "p1.solution_walkthrough.3",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "基准规模方面，作者构造了 12 个 benchmark instances，每个 instance 对应一个 virtual user (c7)；平均每个 instance 包含 52.33 sessions (c8)、203,910.83 tokens 的上下文长度 (c9) 和 124.33 evaluation queries (c10)。",
+      "supporting_claim_ids": [
+        "c7",
+        "c8",
+        "c9",
+        "c10"
+      ],
+      "claim_indexes": [
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "paragraph_id": "p1.experiment_interpretation.1",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "评估指标覆盖不同结果阶段：Answer Accuracy 判断最终答案是否正确 (c14)；SRS 按 gold memory 的排名给出对数折扣分数，未检索到时记 0 (c16)；UOCS 检查系统是否识别真实 update 并保留旧到新的 temporal order (c17)；CRS 检查系统是否识别 contradictory information 的存在 (c18)。答案与 memory-item 的判断由 LLM-assisted matching 产生，再经 human verification (c19)。",
+      "supporting_claim_ids": [
+        "c14",
+        "c16",
+        "c17",
+        "c18",
+        "c19"
+      ],
+      "claim_indexes": [
+        13,
+        14,
+        15,
+        16,
+        17
+      ]
+    },
+    {
+      "paragraph_id": "p1.experiment_interpretation.2",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "实验比较 A-Mem、LangMem、Letta、MemOS、Mem0 和 Memobase 六个长期记忆系统 (c11)。在作者报告的跨 metrics 和 conflict types 比较中，没有 system 在所有指标和冲突类型上占优 (c20)；MemOS 取得最高 average AA，并在 static AA、conditional AA 和 UOCS 上最高，LangMem 取得最高 dynamic AA (c21)，而 CRS 的最高报告值为 0.2501 (c22)。在 SEH@3 和 SRS 上，作者报告 MemOS 有最高 average SEH@3 和 SRS (c23)。",
+      "supporting_claim_ids": [
+        "c11",
+        "c20",
+        "c21",
+        "c22",
+        "c23"
+      ],
+      "claim_indexes": [
+        11,
+        18,
+        19,
+        20,
+        21
+      ]
+    },
+    {
+      "paragraph_id": "p1.experiment_interpretation.3",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "在 query formulation 的条件比较中，与 direct-query 设置相比，implicit queries 通常降低 black-box 和 white-box performance，但影响随系统和 conflict type 变化 (c26)。",
+      "supporting_claim_ids": [
+        "c26"
+      ],
+      "claim_indexes": [
+        24
+      ]
+    },
+    {
+      "paragraph_id": "p1.experiment_interpretation.4",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "运行时比较中，作者报告 MemOS 在六个系统里拥有最低 total runtime，同时 addition time 和 response time 也最低 (c28)。",
+      "supporting_claim_ids": [
+        "c28"
+      ],
+      "claim_indexes": [
+        26
+      ]
+    },
+    {
+      "paragraph_id": "p1.experiment_interpretation.5",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "错误分解方面，在多数系统和 conflict types 中，retrieval failures 占错误的主导份额 (c29)。",
+      "supporting_claim_ids": [
+        "c29"
+      ],
+      "claim_indexes": [
+        27
+      ]
+    },
+    {
+      "paragraph_id": "p1.limitations_discussion.1",
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "text": "作者列出的限制包括：该基准通过受控模拟构建，而不是从自然发生的长期人类交互中收集 (c30)；当前基准聚焦于 temporal updates、factual contradictions 和 condition-dependent preferences (c31)；实验评估的是一组有代表性但有限的 memory systems (c32)。white-box protocol 还假设支持 gold answer 的 memory items 能被显式检索和排序 (c33)，未来扩展则指向 multilingual、multimodal 以及 multi-user 或 multi-agent 设置 (c34)。",
+      "supporting_claim_ids": [
+        "c30",
+        "c31",
+        "c32",
+        "c33",
+        "c34"
+      ],
+      "claim_indexes": [
+        28,
+        29,
+        30,
+        31,
+        32
+      ]
+    }
+  ],
+  "saved_feedback": {
+    "decisions": [
+      {
+        "claim_index": 1,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.1 states a memory item is temporally valid if it matches the true user state at query time."
+      },
+      {
+        "claim_index": 2,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.1 states static conflicts challenge factual correctness without representing true state updates."
+      },
+      {
+        "claim_index": 3,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.1 states conditional conflicts occur when multiple values are plausible but only the matching value-condition association is applicable."
+      },
+      {
+        "claim_index": 4,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.1 guarantees a unique maximizer for each query; the gold candidate is defined as that maximizer."
+      },
+      {
+        "claim_index": 5,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.2 initializes each user from a Persona Hub persona seed and generates the structured profile conditioned on it."
+      },
+      {
+        "claim_index": 6,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.3.1 states the timeline spans January 2022 to December 2025 with observed sessions at monthly granularity."
+      },
+      {
+        "claim_index": 7,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.7 states 12 benchmark instances were constructed, each corresponding to one virtual user."
+      },
+      {
+        "claim_index": 8,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.7 and Table 2 report an average of 52.33 sessions per instance."
+      },
+      {
+        "claim_index": 9,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.7 and Table 2 report an average context length of 203,910.83 tokens per instance."
+      },
+      {
+        "claim_index": 10,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.7 and Table 2 report an average of 124.33 evaluation questions per instance."
+      },
+      {
+        "claim_index": 11,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.1 lists the evaluated systems as A-Mem, LangMem, Letta, MemOS, Mem0, and Memobase."
+      },
+      {
+        "claim_index": 12,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.2 states all benchmark-construction LLM calls and LLM-backed memory-system backends use gpt-5.0-mini."
+      },
+      {
+        "claim_index": 13,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.6 defines Answer Accuracy for black-box correctness of the final answer."
+      },
+      {
+        "claim_index": 14,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.6 defines SRS as a logarithmic rank discount, with zero when the gold memory is not retrieved."
+      },
+      {
+        "claim_index": 15,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.6 states UOCS measures true-update recognition and preservation of temporal order between earlier and later states."
+      },
+      {
+        "claim_index": 16,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.6 states CRS measures whether the system identifies the presence of contradictory information."
+      },
+      {
+        "claim_index": 17,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.6 states answer and memory-item judgments use LLM-assisted matching followed by human verification."
+      },
+      {
+        "claim_index": 18,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.3.1 states no system dominates all metrics and conflict types."
+      },
+      {
+        "claim_index": 19,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.3.1 and Table 3 report MemOS has the highest average, static, and conditional AA and UOCS, while LangMem has the highest dynamic AA."
+      },
+      {
+        "claim_index": 20,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.3.1 and Table 3 report the highest CRS is 0.2501."
+      },
+      {
+        "claim_index": 21,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.3.2 and Table 4 report MemOS has the highest average SEH@3 and SRS."
+      },
+      {
+        "claim_index": 22,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.4.2 states longer histories reduce performance for all evaluated systems."
+      },
+      {
+        "claim_index": 23,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.4.3 states removing distractors improves performance for all systems, with varying gains."
+      },
+      {
+        "claim_index": 24,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.4.4 states implicit queries generally reduce black-box and white-box performance, with variation by system and conflict type."
+      },
+      {
+        "claim_index": 25,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.4.5 states performance decreases as conflict distance increases across all systems."
+      },
+      {
+        "claim_index": 26,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.5.1 and Table 6 report MemOS has the lowest total runtime, addition time, and response time."
+      },
+      {
+        "claim_index": 27,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §4.5.2 states retrieval failures account for the dominant share of errors for most systems and conflict types."
+      },
+      {
+        "claim_index": 28,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §5 states the benchmark is constructed through controlled simulation rather than naturally occurring long-term human interactions."
+      },
+      {
+        "claim_index": 29,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §5 states the benchmark focuses on temporal updates, factual contradictions, and condition-dependent preferences."
+      },
+      {
+        "claim_index": 30,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §5 states the experiments evaluate a representative but limited set of memory systems."
+      },
+      {
+        "claim_index": 31,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §5 states the white-box protocol assumes gold-supporting memory items can be explicitly retrieved and ranked."
+      },
+      {
+        "claim_index": 32,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §5 lists multilingual, multimodal, and multi-user or multi-agent settings as future extensions."
+      },
+      {
+        "claim_index": 33,
+        "status": "supported",
+        "risk": "low",
+        "reason": "Source §3.1 states MemConflict defines memory validity along three complementary dimensions: temporal validity, factual correctness, and contextual applicability."
+      }
+    ],
+    "follow_up_actions": [
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 33,
+        "reason": "p1.opening_context.1 cites c37, which is not a valid claim ID; the matching claim is 33. Also verify Chinese '定义' against original analysis 'evaluates'.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "source_recheck_query",
+        "claim_index": 3,
+        "reason": "p1.problem_walkthrough.1 changes original analysis from 'test whether the system selects' to a definition of conditional conflicts; source supports both but translation fidelity needs review.",
+        "query": "conditional conflicts multiple values plausible value-condition association query context",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "source_recheck_query",
+        "claim_index": 4,
+        "reason": "p1.problem_walkthrough.1 changes original analysis 'assumes' to 'guarantees' unique gold candidate; source says unique maximizer, so verify strength and translation.",
+        "query": "benchmark construction guarantees unique maximizer each query",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 12,
+        "reason": "p1.solution_walkthrough.2 cites c13, but the gpt-5.0-mini statement is claim 12; correct citation.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 13,
+        "reason": "p1.experiment_interpretation.1 inline IDs are shifted by one: c14 for AA (claim 13), c16 for SRS (claim 14), etc.; correct citations.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 18,
+        "reason": "p1.experiment_interpretation.2 cites c20-c23 for claims that are actually 18-21 (off by two); correct citations.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 24,
+        "reason": "p1.experiment_interpretation.3 cites c26 but the implicit-query claim is 24; correct citation.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 26,
+        "reason": "p1.experiment_interpretation.4 cites c28 but the runtime claim is 26; correct citation.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 27,
+        "reason": "p1.experiment_interpretation.5 cites c29 but the failure-breakdown claim is 27; correct citation.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      },
+      {
+        "action_type": "missing_anchor",
+        "claim_index": 28,
+        "reason": "p1.limitations_discussion.1 cites c30-c34 for claims that are actually 28-32 (off by two); c34 is invalid; correct citations.",
+        "source_url": "http://arxiv.org/abs/2605.20926v1"
+      }
+    ],
+    "explanation_decisions": [
+      {
+        "paragraph_id": "p1.opening_context.1",
+        "status": "needs_review",
+        "reason": "Text matches §3.1, but c37 is not a valid claim ID (matching claim is 33) and '定义' differs from original analysis 'evaluates'; citation and translation need audit."
+      },
+      {
+        "paragraph_id": "p1.problem_walkthrough.1",
+        "status": "needs_review",
+        "reason": "c1/c2 are source-grounded, but c3 changes the original analysis from 'test whether the system selects' to a definition, and c4 changes 'assumes' to 'guarantees'; translation fidelity needs review."
+      },
+      {
+        "paragraph_id": "p1.solution_walkthrough.1",
+        "status": "supported",
+        "reason": "c5/c6 prose matches §3.2/§3.3.1 and citations align with claims 5-6."
+      },
+      {
+        "paragraph_id": "p1.solution_walkthrough.2",
+        "status": "needs_review",
+        "reason": "Prose matches §4.2's gpt-5.0-mini statement, but it cites c13 while the matching claim is 12 (c13 is Answer Accuracy); citation mismatch."
+      },
+      {
+        "paragraph_id": "p1.solution_walkthrough.3",
+        "status": "supported",
+        "reason": "c7-c10 prose matches §3.7 and Table 2; citations align with claims 7-10."
+      },
+      {
+        "paragraph_id": "p1.experiment_interpretation.1",
+        "status": "needs_review",
+        "reason": "Metric definitions and human-verification sentence are source-grounded, but inline IDs are shifted: c14 for AA (claim 13), c16 for SRS (claim 14), etc.; citations need correction."
+      },
+      {
+        "paragraph_id": "p1.experiment_interpretation.2",
+        "status": "needs_review",
+        "reason": "Reported system comparisons match §4.3.1/§4.3.2, but inline IDs c20-c23 correspond to claims 18-21 (off by two); citations need correction."
+      },
+      {
+        "paragraph_id": "p1.experiment_interpretation.3",
+        "status": "needs_review",
+        "reason": "Implicit-query statement matches §4.4.4, but it cites c26 while the matching claim is 24; citation mismatch."
+      },
+      {
+        "paragraph_id": "p1.experiment_interpretation.4",
+        "status": "needs_review",
+        "reason": "Runtime statement matches §4.5.1/Table 6, but it cites c28 while the matching claim is 26; citation mismatch."
+      },
+      {
+        "paragraph_id": "p1.experiment_interpretation.5",
+        "status": "needs_review",
+        "reason": "Failure-decomposition statement matches §4.5.2, but it cites c29 while the matching claim is 27; citation mismatch."
+      },
+      {
+        "paragraph_id": "p1.limitations_discussion.1",
+        "status": "needs_review",
+        "reason": "Limitation and future-work statements match §5, but inline IDs c30-c34 correspond to claims 28-32 (off by two), and c34 is invalid; citations need correction."
+      }
+    ]
+  }
+}

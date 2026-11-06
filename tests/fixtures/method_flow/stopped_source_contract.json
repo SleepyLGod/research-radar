@@ -1,0 +1,12 @@
+{
+  "provenance": "Bounded, unchanged examples from the stopped MemConflict Reader batch. Not repaired outputs or semantic approvals.",
+  "evidence": [
+    {"end":"[s5576f6e20d3714d7:90]","start":"[s5576f6e20d3714d7:77]"},
+    {"end":"[s5576f6e20d3714d7:398]","start":"[s5576f6e20d3714d7:314]"},
+    {"end":"[s5576f6e20d3714d7:627]","start":"[s5576f6e20d3714d7:591]"}
+  ],
+  "operations": [
+    {"condition_claim_ids":[],"input_claim_ids":[],"operation_claim_id":"c5","output_claim_ids":["c5"],"scope":"Generate structured virtual-user profiles from persona seeds."},
+    {"condition_claim_ids":["c6"],"input_claim_ids":["c5"],"operation_claim_id":"c6","output_claim_ids":["c6"],"scope":"Simulate ordered monthly session timelines for initialized users."}
+  ]
+}

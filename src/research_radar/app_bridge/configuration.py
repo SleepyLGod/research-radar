@@ -34,8 +34,10 @@ _PROVIDER_FIELDS = {
     "timeout_seconds",
     "thinking",
     "reasoning_effort",
+    "reader_contexts",
 }
 _PROVIDER_OPTIONAL_FIELDS = {
+    "reader_contexts",
     "base_url",
     "api_key_secret",
     "command_path",
@@ -205,6 +207,9 @@ def _providers(value: Any) -> dict[str, dict[str, object]]:
             ),
             "thinking": provider.get("thinking"),
             "reasoning_effort": provider.get("reasoning_effort"),
+            "reader_contexts": (
+                provider["reader_contexts"] if provider.get("reader_contexts") is not None else {}
+            ),
         }
     return result
 

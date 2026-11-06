@@ -1,0 +1,32 @@
+{
+  "provenance": "Public original source excerpts and exact saved Reader assertions from the stopped 2026-11-02 batch; no model approval is added.",
+  "source_url": "http://arxiv.org/abs/2605.20926v1",
+  "retrieval": {
+    "text": "Experiment: The default white-box retrieval depth is K=3, with K=2 and K=5 also examined in a sensitivity analysis.",
+    "quotes": [
+      "4.2 Experimental Setup\nWe evaluate all systems under the same MemConflict query set, answer normalization procedure,\nand white-box memory retrieval and ranking protocol. The experiments vary the following factors:\n• Conflict Types. All systems are evaluated on dynamic, static, and conditional conflicts,\ncorresponding to temporal validity, factual correctness, and contextual applicability, respec-\ntively.\n• Evaluation Perspectives. Black-box evaluation measures final-answer correctness, while\nwhite-box evaluation examines whether retrieved memory items contain the gold memory\nitem and how highly it is ranked.\n• Retrieval Depth. The main white-box evaluation uses 𝐾= 3. We further examine retrieval\nsensitivity with𝐾∈ {2,5}.\n• Dialogue Length. Dialogue length controls the amount of surrounding conversational\ncontext between target information and the query. We compare medium and long dialogue\nsettings.\n• Distractor Injection. We compare settings with and without semantically similar but non-\ntarget information from related entities.\n• Query Formulation. We evaluate both direct queries and implicit queries that require less\nexplicit grounding of the target memory.",
+      "• Conflict Distance. Conflict distance measures how far apart competing memory candidates\nare distributed across sessions. We evaluate distance variants by changing the number of\nintervening sessions between competing memory candidates.\n• Metrics. We report Answer Accuracy (AA) for all conflict types. Update Order Consistency\nScore (UOCS) is reported for dynamic conflicts, and Conflict Recognition Score (CRS) for\nstatic conflicts. Support Evidence Hit@K (SEH@K) and Support Rank Score (SRS) are used\nfor white-box analysis across all conflict types, following the definitions in Section 3.6.\nFigure 3 summarizes the evaluation dimensions and reported outputs used in MemConflict.\nUnless otherwise specified, the main results use the default configuration with direct queries,\nmedium dialogue length, distractor injection, medium conflict distance, and 𝐾= 3for white-box\nanalysis. Each sensitivity analysis varies one factor while keeping the others fixed. For black-box\nJ. ACM, Vol. 37, No. 4, Article 111. Publication date: August 2018."
+    ]
+  },
+  "table": {
+    "text": "Table 4. White-box Memory Retrieval and Ranking of Memory Systems on MemConflict by Conflict Type.\nMemory\nSystem\nDynamic Static Conditional Average\nSEH@3 SRS SEH@3 SRS SEH@3 SRS SEH@3 SRS\nA-Mem 0.5205 0.4341 0.3611 0.2854 0.8111 0.7288 0.5642 0.4828\nLangMem0.7842 0.70890.3194 0.2697 0.2012 0.1944 0.4349 0.3910\nLetta 0.5394 0.4620 0.4167 0.30990.90460.7653 0.6202 0.5124\nMemOS 0.5548 0.45520.5694 0.48860.88890.8198 0.6710 0.5879\nMem0 0.2003 0.1587 0.2917 0.2401 0.8222 0.7780 0.4381 0.3923\nMemobase 0.5925 0.5204 0.5278 0.4557 0.3021 0.2877 0.4741 0.4213\n",
+    "claims": [
+      {
+        "claim_id": "c32",
+        "text": "Experiment: Under the default configuration, MemOS has the highest macro-average SEH@3 among the six systems, at 0.6710.",
+        "quotes": [
+          "Dynamic Static Conditional Average\nSEH@3 SRS SEH@3 SRS SEH@3 SRS SEH@3 SRS",
+          "A-Mem 0.5205 0.4341 0.3611 0.2854 0.8111 0.7288 0.5642 0.4828\nLangMem0.7842 0.70890.3194 0.2697 0.2012 0.1944 0.4349 0.3910\nLetta 0.5394 0.4620 0.4167 0.30990.90460.7653 0.6202 0.5124\nMemOS 0.5548 0.45520.5694 0.48860.88890.8198 0.6710 0.5879\nMem0 0.2003 0.1587 0.2917 0.2401 0.8222 0.7780 0.4381 0.3923\nMemobase 0.5925 0.5204 0.5278 0.4557 0.3021 0.2877 0.4741 0.4213"
+        ]
+      },
+      {
+        "claim_id": "c33",
+        "text": "Experiment: Under the default configuration, MemOS has the highest macro-average SRS among the six systems, at 0.5879.",
+        "quotes": [
+          "Dynamic Static Conditional Average\nSEH@3 SRS SEH@3 SRS SEH@3 SRS SEH@3 SRS",
+          "A-Mem 0.5205 0.4341 0.3611 0.2854 0.8111 0.7288 0.5642 0.4828\nLangMem0.7842 0.70890.3194 0.2697 0.2012 0.1944 0.4349 0.3910\nLetta 0.5394 0.4620 0.4167 0.30990.90460.7653 0.6202 0.5124\nMemOS 0.5548 0.45520.5694 0.48860.88890.8198 0.6710 0.5879\nMem0 0.2003 0.1587 0.2917 0.2401 0.8222 0.7780 0.4381 0.3923\nMemobase 0.5925 0.5204 0.5278 0.4557 0.3021 0.2877 0.4741 0.4213"
+        ]
+      }
+    ]
+  }
+}

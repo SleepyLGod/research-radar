@@ -1,0 +1,56 @@
+{
+  "provenance": "Unchanged method role decisions from the stopped real MemConflict fact review. No operation IDs were added or inferred from reason text.",
+  "response_sha256": "c23bff1ca824556975dd4a46afb42c6a1c08aaaf67b8250821ade656c313234b",
+  "method_flow_decisions": [
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c3: persona seeds are inputs and LLM-generated structured profiles are outputs, matching c3 and Algorithm 1 line 2."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c4: initialized profiles feed timeline simulation; output is a temporally ordered session timeline under the monthly Jan 2022-Dec 2025 condition, matching c3/c4 and Algorithm 1 line 3."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c5: update sessions select dynamic attributes and accept only validated changes; prior dynamic state and attributes are inputs, accepted updates are output, matching c5 and Eqs. 4-5."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c6: an invariant profile fact is input; a true mention and later false contradictory mention are produced under the invariant/false-contradiction condition, matching c6."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c7: conditional preference pairs are inputs; distinct condition-value bindings are inserted as condition-bound mentions, matching c7."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c8: related-entity semantically similar facts are inputs; non-target distractor mentions are inserted within the conflict span, matching c8."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c9: synopsis plus assigned updates, static mentions, conditional bindings, and distractors are inputs; multi-turn dialogue is output; non-empty items must appear explicitly and c10 human checks apply."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c11: the evaluable conflict history prefix is input; a conflict-targeted query and gold label are output after required information is available, matching c11/c39."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c12: system response and gold answer are inputs; normalized comparison yields Answer Accuracy, matching c12/c22."
+    },
+    {
+      "source_url": "http://arxiv.org/abs/2605.20926v1",
+      "status": "supported",
+      "reason": "Operation c13: retrieved top-K items and the gold supporting item are inputs; SEH@K and SRS are outputs, with top-3 as the default per c13/c14/c17."
+    }
+  ]
+}

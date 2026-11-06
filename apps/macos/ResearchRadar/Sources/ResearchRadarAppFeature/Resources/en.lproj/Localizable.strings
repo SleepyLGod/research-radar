@@ -510,3 +510,12 @@
 "error.knowledge_failed" = "The topic could not be organized. Existing reports and the previous snapshot have not been removed. Check Diagnostics before retrying.";
 "error.knowledge_no_material" = "Generate a report with a public deep read before organizing this topic.";
 "error.knowledge_confirmation_changed" = "The topic or report scope changed. Review it and confirm organization again.";
+"setting.reader_budget" = "Full-paper reading limits";
+"setting.context_window" = "Context capacity (tokens)";
+"setting.output_reserve" = "Output and thinking reserve (tokens)";
+"setting.overhead_reserve" = "Request overhead reserve (tokens)";
+"setting.reader_budget_help" = "Use the documented limits for this exact model and endpoint. Unknown or insufficient capacity stops the request; papers are never silently shortened. These planning values are not exact token measurements.";
+"error.reader_context_unknown" = "This model's full-paper capacity has not been declared. Open Settings → Full-paper reading limits before trying again.";
+"error.reader_context_exceeded" = "The complete paper or review exceeds this model's declared capacity. Use a model with sufficient documented capacity; the input was not shortened.";
+"error.reader_output_reserve_insufficient" = "The output reserve is smaller than the configured output limit. Check Full-paper reading limits in Settings.";
+"error.reader_context_invalid" = "Enter positive whole-number limits. Output and overhead reserves together must be smaller than the context capacity.";

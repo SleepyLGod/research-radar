@@ -72,6 +72,7 @@ import Testing
         let root = try task3Root(); defer { task3Trash(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"),
             codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         config.topics = [.init(id: "one", displayName: "One", researchFocus: "Memory",
             queries: ["memory"], paperQueries: ["memory"], reportLanguage: .english)]
         let prior = task3Report(topic: "one", run: root.appending(path: "workspace/runs/prior"), date: 1)

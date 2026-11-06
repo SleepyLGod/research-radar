@@ -510,3 +510,12 @@
 "error.knowledge_failed" = "本次整理未完成，已有报告和旧快照没有被删除。请先查看诊断再重试。";
 "error.knowledge_no_material" = "请先生成至少有一篇可公开精读的报告，再整理这个主题。";
 "error.knowledge_confirmation_changed" = "主题或报告范围已变化，请核对后重新确认整理。";
+"setting.reader_budget" = "全文阅读容量";
+"setting.context_window" = "上下文容量（tokens）";
+"setting.output_reserve" = "输出及 thinking 预留（tokens）";
+"setting.overhead_reserve" = "请求开销预留（tokens）";
+"setting.reader_budget_help" = "使用当前模型及接口文档明确的容量。容量未知或不足时停止请求，不会偷偷截短论文。这些值用于保守预算，并非精确 token 计数。";
+"error.reader_context_unknown" = "尚未声明当前模型的全文阅读容量，请先在设置的“全文阅读容量”中配置。";
+"error.reader_context_exceeded" = "完整论文或核验输入超过当前模型的已声明容量。请使用容量足够的模型；输入没有被截短。";
+"error.reader_output_reserve_insufficient" = "输出预留小于已配置的输出上限，请检查设置中的全文阅读容量。";
+"error.reader_context_invalid" = "请输入正整数；输出和请求开销预留之和必须小于上下文容量。";

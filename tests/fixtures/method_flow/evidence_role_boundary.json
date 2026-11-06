@@ -1,0 +1,102 @@
+{
+  "provenance": "Unchanged bounded cases from the stopped source-block/named-material Reader run. No semantic approvals or repaired answers.",
+  "raw_answer_sha256": "00df7de22fd6a40a680747ad5557a328e529c6f610abe82f9829fca26664684a",
+  "source_url": "http://arxiv.org/abs/2605.20926v1",
+  "claims": [
+    {
+      "claim_id": "c3",
+      "text": "Solution: The simulated timeline spans January 2022 through December 2025, with session slots at monthly granularity.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "111:10 Tao et al.\ncompetition among memory candidates. The following subsections describe the timeline simulation\nprocedure and the construction of conflict instances and distractors.\n3.3.1Timeline Simulation.For each initialized user profile 𝑈𝑢 =(𝐼 𝑢, 𝐷𝑢, 𝐶𝑢, 𝑇𝑢, 𝑅𝑢), MemCon-\nflict simulates a temporally ordered sequence of sessions that serves as the interaction timeline for\nuser 𝑢. This stage is designed to approximate realistic long-horizon user interaction, in which user-\nrelated information is gradually introduced, updated, and revisited across sessions. The resulting\nmulti-session history provides a coherent basis for subsequent conflict instantiation.\nThe timeline spans January 2022 to December 2025, with observed sessions organized at monthly\ngranularity. We begin the simulation in 2022 to align the benchmark horizon with the recent rise\nof LLM-based interactive applications, while the four-year span provides sufficient room for state\nevolution and conflict accumulation. For user 𝑢, the observed interaction timeline is represented as:\nT𝑢 =(𝑠 1, 𝑠2, . . . , 𝑠𝑇 ),(3)\nwhere each session 𝑠𝑡 corresponds to the 𝑡-th temporal slot and is associated with a session type",
+          "location": "page 10; source block b5576f6e20d3714d7:61",
+          "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "𝜏𝑡 ∈ {chat,update} . Chat sessions provide non-update interaction opportunities, whereas update\nsessions are reserved for genuine changes in the user’s dynamic state. These session slots serve as\ntemporal positions into which initial mentions, state updates, conflict values, and distractors are\nplaced in subsequent construction steps. Under this construction, the query-time history prefix 𝐻𝑡\ndefined in Section 3.1 corresponds to the first𝑡observed sessions inT 𝑢.\nThe initial dynamic attributes 𝐷𝑢 defined in Section 3.2 provide the user’s starting ground-truth\nstate. To avoid overly mechanical information exposure, mentions of these initial attributes are\ndistributed across early sessions rather than revealed in a single initial session. The dynamic state\ntrajectory induced by update sessions is constructed next.\n3.3.2Dynamic Conflict Construction via State Transitions.Starting from the session slots\nconstructed in Section 3.3.1, MemConflict simulates how the user’s dynamic state evolves over time.\nThe goal is to create realistic state changes rather than arbitrary attribute edits. In each update",
+          "location": "page 10; source block b5576f6e20d3714d7:62",
+          "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "claim_id": "c14",
+      "text": "Experiment: Support Rank Score gives a logarithmically discounted score to the rank of the gold supporting memory and zero when it is absent from the top-K.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "𝑁\n𝑁∑︁\n𝑖=1\n1(𝑚∗\n𝑖 ∈𝑅 𝐾\n𝑖 ).(12)\nIf the supporting memory item is retrieved, we further evaluate how highly it is ranked in 𝑅𝐾\n𝑖 .\nSupport Rank Score (SRS) assigns a logarithmically discounted score according to its rank, and\nassigns 0 when it is not retrieved:",
+          "location": "page 14; source block b5576f6e20d3714d7:89",
+          "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "SRS= 1",
+          "location": "page 14; source block b5576f6e20d3714d7:90",
+          "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "𝑁\n𝑁∑︁\n𝑖=1\n( 1\nlog2 (rank(𝑚 ∗\n𝑖 )+1) ,if𝑚 ∗\n𝑖 ∈𝑅 𝐾\n𝑖 ,\n0,otherwise.\n(13)\nJ. ACM, Vol. 37, No. 4, Article 111. Publication date: August 2018.",
+          "location": "page 14; source block b5576f6e20d3714d7:91",
+          "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "claim_id": "c29",
+      "text": "Experiment: The paper states that all LLM calls in benchmark construction and LLM-requiring memory-system backends use gpt-5.0-mini.",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2605.20926v1",
+          "quote": "System Diagnostics\nEfficiency\nReliability\nFig. 3. Overview of evaluation dimensions and reported outputs in MemConflict.\nevaluation, system outputs are normalized before comparison with the gold answer. For white-\nbox evaluation, the top-𝐾 retrieved memory items returned by each system are used to compute\nretrieval and rank-based metrics. All LLM calls used in benchmark construction, including profile\ngeneration, dialogue generation, query generation, and memory-system backends that require an\nLLM, usegpt-5.0-mini.",
+          "location": "page 18; source block b5576f6e20d3714d7:119",
+          "source_title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+          "confidence": 0.7
+        }
+      ]
+    }
+  ],
+  "condition_as_operation": {
+    "conditions": [
+      {
+        "name": "Monthly session slots from January 2022 through December 2025",
+        "supporting_claim_ids": [
+          "c3"
+        ]
+      }
+    ],
+    "inputs": [
+      {
+        "name": "Initialized user profile",
+        "supporting_claim_ids": [
+          "c3"
+        ]
+      }
+    ],
+    "operation_claim_id": "c3",
+    "outputs": [
+      {
+        "name": "Ordered session timeline",
+        "supporting_claim_ids": [
+          "c3"
+        ]
+      }
+    ],
+    "scope": "Simulate a long-horizon session timeline."
+  },
+  "self_link": {
+    "from_claim_id": "c10",
+    "supporting_claim_ids": [
+      "c10"
+    ],
+    "to_claim_id": "c10"
+  }
+}

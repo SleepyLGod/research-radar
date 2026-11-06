@@ -133,6 +133,7 @@ struct ProviderSettingsView: View {
                     Text(localization.text("setting.codex_connection_detail")).font(.callout).foregroundStyle(.secondary)
                 }
             }
+            ReaderBudgetSettingsView(store: store, localization: localization)
             if !onboarding { ConnectionChecksView(store: store, localization: localization) }
         }
         .onAppear {

@@ -15,6 +15,7 @@ class AnthropicMessagesProvider:
     """Provider for Anthropic's Messages API."""
 
     endpoint = "https://api.anthropic.com/v1/messages"
+    max_tokens = 4096
 
     def __init__(
         self,
@@ -34,7 +35,7 @@ class AnthropicMessagesProvider:
 
         payload = {
             "model": model,
-            "max_tokens": 4096,
+            "max_tokens": self.max_tokens,
             "temperature": 0.2,
             "messages": _anthropic_messages(messages),
         }

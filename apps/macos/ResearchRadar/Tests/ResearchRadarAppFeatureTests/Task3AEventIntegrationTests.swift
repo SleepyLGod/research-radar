@@ -7,6 +7,7 @@ import ResearchRadarCore
     @Test func liveStagesReachStoreAndDiskButCompletedEventIsNotSuccess() async throws {
         let root = try task3Root(); defer { task3Trash(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         config.topics = [TopicRecordV1(id: "one", displayName: "One", researchFocus: "One", queries: ["one"], paperQueries: ["one"], reportLanguage: .english)]
         let runner = Task3LiveRunner()
         let store = AppStore(configuration: config, runtime: .init(selectedTopicID: "one", updatedAt: Date()),

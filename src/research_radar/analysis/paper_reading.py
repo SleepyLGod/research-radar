@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 
+from research_radar.analysis.experimental_results import (
+    ExperimentalResult,
+    parse_experimental_results,
+)
+from research_radar.analysis.method_flow import (
+    MethodAssertion,
+    MethodFlow,
+    method_claim_ids,
+    parse_method_assertion,
+    parse_method_flow,
+    validate_method_assertions,
+)
+from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.paper_sections import (
     PaperReadingPacket,
     build_reading_packet,
@@ -14,7 +28,15 @@ from research_radar.analysis.paper_sections import (
 from research_radar.analysis.prompts import RESEARCH_RADAR_RUNTIME_CONTRACT
 from research_radar.analysis.providers import LLMProvider, Message
 from research_radar.analysis.public_style import READER_PUBLIC_WRITING_STYLE_CONTRACT
+from research_radar.analysis.reader_input import ReaderInputError, check_reader_input
+from research_radar.analysis.reader_schema import paper_reading_response_schema
+from research_radar.analysis.source_references import (
+    SourceReferenceError,
+    build_source_index,
+    resolve_reader_evidence,
+)
 from research_radar.evidence.policy import enforce_evidence_policy
+from research_radar.evidence.quotes import find_quote
 from research_radar.exceptions import AnalysisError
 from research_radar.models import (
     Artifact,
@@ -90,6 +112,17 @@ class ClaimUnit:
     evidence: list[EvidenceAnchor]
     claim_id: str = ""
     publishable_default: bool = True
+    method: MethodAssertion | None = None
+
+
+@dataclass(frozen=True)
+class ParagraphReview:
+    """Verifier decision bound to the exact paragraph and its source-bound claims."""
+
+    status: str
+    reason: str
+    source_url: str
+    binding_sha256: str
 
 
 @dataclass(frozen=True)
@@ -98,6 +131,39 @@ class ReaderExplanationParagraph:
 
     text: str
     supporting_claim_ids: list[str] = field(default_factory=list)
+    review: ParagraphReview | None = None
+
+
+@dataclass(frozen=True)
+class EvaluationContextItem:
+    """Reader-proposed evaluation condition with literal source anchors, not approval."""
+
+    text: str
+    evidence: list[EvidenceAnchor]
+
+
+@dataclass(frozen=True)
+class EvaluationContext:
+    """Conditions needed to interpret an experiment; empty means not extracted."""
+
+    data_construction: list[EvaluationContextItem] = field(default_factory=list)
+    available_inputs: list[EvaluationContextItem] = field(default_factory=list)
+    outcome_measurement: list[EvaluationContextItem] = field(default_factory=list)
+    claim_references: dict[str, list[str]] | None = None
+
+
+EVALUATION_DIMENSIONS = ("data_construction", "available_inputs", "outcome_measurement")
+
+
+def evaluation_context_payload(context: EvaluationContext) -> dict:
+    """Serialize new role references or historical proposals without converting between them."""
+    if context.claim_references is not None:
+        if (set(context.claim_references) != set(EVALUATION_DIMENSIONS)
+                or any(getattr(context, key) for key in EVALUATION_DIMENSIONS)):
+            raise ReaderContextError("Cannot mix evaluation references and legacy proposals.")
+        return {key: list(context.claim_references[key]) for key in EVALUATION_DIMENSIONS}
+    return {key: [dataclass_to_dict(item) for item in getattr(context, key)]
+            for key in EVALUATION_DIMENSIONS}
 
 
 @dataclass(frozen=True)
@@ -132,6 +198,10 @@ class PaperReading:
     unsupported_or_rejected_claims: list[str] = field(default_factory=list)
     claim_units: list[ClaimUnit] = field(default_factory=list)
     reader_explanation: ReaderExplanation = field(default_factory=ReaderExplanation)
+    evaluation_context: EvaluationContext = field(default_factory=EvaluationContext)
+    source_url: str = ""
+    experimental_results: list[ExperimentalResult] = field(default_factory=list)
+    method_flow: MethodFlow = field(default_factory=MethodFlow)
 
 
 @dataclass(frozen=True)
@@ -144,6 +214,7 @@ class ReaderAttempt:
     status: str
     error_message: str | None = None
     response_excerpt: str = ""
+    input_budget: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -154,26 +225,158 @@ class PaperReadingResult:
     attempts: list[ReaderAttempt]
 
 
+class ReaderExplanationError(AnalysisError):
+    """Fresh explanation bindings are unusable; do not spend another repair request."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(f"Reader explanation bindings invalid: {message}")
+        self.reader_attempts: list[dict[str, object]] = []
+
+
+class ReaderContextError(AnalysisError):
+    """Invalid evaluation references cannot be repaired by another syntax-only request."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(f"Reader evaluation context invalid: {message}")
+        self.reader_attempts: list[dict[str, object]] = []
+
+
+def _reading_response_example(
+    *, facts_only: bool = False, source_id: str = "b0000000000000000:1",
+) -> str:
+    evidence = [{"source_id": source_id}]
+    explanation = {item.name: [] for item in fields(ReaderExplanation)}
+    explanation["solution_walkthrough"] = [{
+        "text": "<explanation grounded only in c1>", "supporting_claim_ids": ["c1"],
+    }]
+    reading = {
+        "title": "<paper title>",
+        "area_context": {
+            "background": "<source-grounded context>", "active_questions": ["<question>"],
+            "common_baselines": ["<named baseline>"], "evidence": evidence,
+        },
+        "problem_solution": {
+            "problem": "<research problem>", "why_it_matters": "<motivation>",
+            "hidden_assumptions": ["<source-grounded assumption>"],
+            "solution": "<main approach>", "mechanism": "<how the approach works>",
+            "evidence": evidence,
+        },
+        "related_work": {
+            "prior_work": ["<named prior work>"], "novelty": "<attributed contribution>",
+            "repackaging_risk": "<evidence-grounded assessment>", "evidence": evidence,
+        },
+        "experiments": {"summary": "<setup, results and conditions>", "evidence": evidence},
+        "experimental_results": [{
+            "result_id": "r1", "question": "<tested research question>",
+            "conditions": ["<task, setup and outcome stage>"], "metric": "<metric name>",
+            "observations": [{"subject": "<method under the stated condition>",
+                              "value": "<exact reported value or observation>"}],
+            "comparison_scope": ["<compared method and setting>"],
+            "uncertainty": [], "supporting_claim_ids": ["c2"], "evidence": evidence,
+            "source_kind": "text", "source_label": "<table/figure/section label>",
+            "physical_page": None, "binding_status": "text_bound",
+        }],
+        "evaluation_context": {key: [] for key in (
+            "data_construction", "available_inputs", "outcome_measurement",
+        )},
+        "method_flow": {"operations": [{"scope": "<task performed by this operation>",
+            "operation_claim_id": "c1", "inputs": [],
+            "outputs": [{"name": "<artifact produced by the operation described in c1>",
+                         "supporting_claim_ids": ["c1"]}],
+            "conditions": []}], "links": [], "gaps": []},
+        "limitations": {
+            "explicit_limitations": ["<paper-stated limitation>"],
+            "inferred_weaknesses": [], "future_work": [], "evidence": evidence,
+        },
+        "critical_assessment": {
+            "overclaiming_risk": "<bounded assessment>", "weak_evaluations": [],
+            "missing_ablations": [], "bottom_line": "<evidence-grounded conclusion>",
+            "evidence": evidence,
+        },
+        "plain_language_example": "<grounded simple example>",
+        "essence": "<one narrow assertion>",
+        "claim_units": [{
+            "claim_id": "c1", "section": "solution", "claim_kind": "fact",
+            "text": "<one atomic method assertion>", "evidence": evidence,
+            "publishable_default": True,
+            "method": {"kind": "operation", "from_claim_id": None, "to_claim_id": None},
+        }, {
+            "claim_id": "c2", "section": "experiment", "claim_kind": "fact",
+            "text": "<one scoped experimental observation>", "evidence": evidence,
+            "publishable_default": True,
+            "method": None,
+        }, {
+            "claim_id": "c3", "section": "experiment", "claim_kind": "fact",
+            "text": "<one evaluation metric or aggregation definition>", "evidence": evidence,
+            "publishable_default": True, "method": None,
+        }],
+        "reader_explanation": {} if facts_only else explanation,
+    }
+    reading["evaluation_context"]["outcome_measurement"] = ["c3"]
+    return json.dumps({
+        "deep_readings": [reading],
+        "unsupported_or_rejected_claims": ["<considered but ungrounded claim>"],
+    }, ensure_ascii=False, separators=(",", ":"))
+
+
+def _reader_table_projection(value: object) -> object:
+    """Keep literal table structure in the prompt; geometry stays in local evidence."""
+    if isinstance(value, list):
+        return [_reader_table_projection(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _reader_table_projection(item) for key, item in value.items()
+                if key not in {"box", "row_header_boxes", "column_header_boxes"}}
+    return value
+
+
 def paper_reading_prompt(
     artifact: Artifact,
     area_context: str | None = None,
     *,
     language: str = "en",
     packet: PaperReadingPacket | None = None,
+    facts_only: bool = False,
 ) -> str:
     """Build the structured paper-reading prompt."""
 
     context = area_context or "Infer only from supplied sources; mark missing context as unknown."
     reading_packet = packet or build_reading_packet(artifact)
+    source_index = build_source_index(artifact)
+    table_context = (
+        "\nPOSITIONED TABLE SOURCES (literal cells, not approved findings):\n"
+        + json.dumps(_reader_table_projection(artifact.metadata["table_evidence"]),
+                     ensure_ascii=False)
+        + "\nKeep row/model groups, column paths and units distinct. Do not split glued numbers "
+          "or infer cells from unresolved grids. Continue selecting original source_id blocks.\n"
+        if artifact.metadata.get("table_evidence") else ""
+    )
+    explanation_contract = (
+        "- Return reader_explanation as an empty object {}. This stage extracts factual "
+        "candidates and evaluation conditions, NOT a second article. A separate writer "
+        "will compose source-bound paragraphs, then a Verifier will review the exact "
+        "final text against the full source. None of these candidates is yet verified.\n"
+        if facts_only else f"""
+- reader_explanation is the reader-facing explanation layer. Each field is a JSON list
+  of paragraph objects with text and supporting_claim_ids. Use an empty list when no
+  distinct, grounded explanation is needed. Usually one paragraph per field is enough;
+  solution_walkthrough may use more paragraphs to explain the mechanism clearly.
+  Keep each paragraph on one topic and cite every claim_unit needed for its factual content.
+- reader_explanation must not introduce any new facts beyond the anchored claims. Explain the
+  mechanism, experimental conditions and limitations without unsupported generalizations.
+- solution_walkthrough must be the most detailed explanation field. Cover components,
+  data flow, why each step exists, how components interact and how they connect to
+  reported experiments when grounded. Explain the broader area problem first.
+- Follow this public writing style contract for reader_explanation only:
+{READER_PUBLIC_WRITING_STYLE_CONTRACT}"""
+    )
     language_rule = (
         "REPORT LANGUAGE: Simplified Chinese. Every analytical JSON string value must be "
         "Simplified Chinese, including background, problem, motivation, solution, mechanism, "
         "experiments, related work, limitations, critique, plain_language_example, and essence. "
-        "Only evidence quote fields may remain in the original source language, because they "
-        "must be exact substrings from the full paper reading packet."
+        "Evidence selects supplied source_id values; the program retrieves the original text."
         if language == "zh"
-        else "REPORT LANGUAGE: English. Write all analytical prose in English. Keep evidence "
-        "quote fields as exact substrings from the full paper reading packet."
+        else "REPORT LANGUAGE: English. Write analytical prose in English. Evidence selects "
+        "supplied source_id values; the program retrieves the original text."
     )
     return f"""{RESEARCH_RADAR_RUNTIME_CONTRACT}
 
@@ -187,52 +390,67 @@ Area context:
 Paper:
 TITLE: {artifact.source.title}
 URL: {artifact.source.url}
-{render_reading_packet(reading_packet)}
+{render_reading_packet(reading_packet, rendered_source=source_index.render())}{table_context}
 
-Return structured JSON with these fields:
-- deep_readings:
-  - area_context: background, active_questions, common_baselines, evidence
-  - problem_solution: problem, why_it_matters, hidden_assumptions, solution, mechanism, evidence
-  - related_work: prior_work, novelty, repackaging_risk, evidence
-  - experiments: summary, evidence
-  - limitations: explicit_limitations, inferred_weaknesses, future_work, evidence
-  - critical_assessment: overclaiming_risk, weak_evaluations, missing_ablations,
-    bottom_line, evidence
-  - plain_language_example: simple example grounded in the source
-  - essence: one sentence describing what the source is really doing
-  - claim_units: required list of atomic claims for verification and publication
-  - reader_explanation: opening_context, core_thesis, problem_walkthrough,
-    solution_walkthrough, experiment_interpretation, related_work_context,
-    limitations_discussion, plain_language_story, reader_takeaway
-- perspective_questions: follow-up questions from researcher, builder, evaluator, and skeptic views
-- evidence_index: anchors used for factual, novelty, limitation, and critique claims
-- unsupported_or_rejected_claims: claims you considered but rejected
+Return one complete JSON object for this single paper, with two root keys:
+- deep_readings: an array containing exactly one reading object.
+- unsupported_or_rejected_claims: a sibling string array at the root, not inside
+  reader_explanation and not an additional item in deep_readings.
+Close reader_explanation, then the reading object, then the deep_readings array
+before writing the root unsupported_or_rejected_claims field. Do not omit closing braces.
+The complete example below defines the nesting and field types. Its placeholders
+are not paper facts or evidence; replace them from the supplied packet, never copy them.
+Use empty arrays where no grounded entries exist rather than inventing content.
 
 Rules:
+- Evidence is a selection, not generated text: every evidence item is
+  {{"source_id":"an exact offered source_id value"}}.
+  Copy the value after source_id=; the schema lists the available values. Blocks are already
+  same-page and bounded. Select separate blocks when support spans multiple passages.
+  Do not calculate line ranges or character counts, and do not add brackets to a source_id.
+  The program copies the exact substring from the full paper reading packet, including
+  formula layout. Never return quote/location fields, reconstructed formulas or paraphrases
+  as evidence. A valid selection does not itself establish that it supports an assertion.
 - Separate facts from interpretation and speculation.
+- This packet contains the complete available extracted text, including references and appendices.
+  Text extraction is not visual inspection: missing from extracted text is not absent from the PDF.
+  Report coverage gaps as input limitations, not as proof the authors omitted an experiment
+  or discussion. Keep evaluation units, aggregation, outcome stage and conditions explicit.
+- Table comparisons need the metric and model/group headers plus baseline and target rows.
+  Cite both sides of a comparison; a number appearing somewhere in a table is not support
+  for a particular method/metric pairing. Do not reconstruct unreadable cells.
+- Cross-check results against supplied tables, figures and prose. When they conflict,
+  preserve both cited observations as an unresolved discrepancy; do not choose a preferred number.
+  Attribution to the authors does not resolve a contradiction or justify an unconditional result.
+- claim_units is a required list of atomic claims for verification and publication.
+- experimental_results is a list of source-bound experiment records, not another summary.
+  Use [] for nonexperimental work or when no result can be extracted. Each record contains
+  result_id, question, conditions (list), metric, observations (a list of objects, each with
+  subject and value string fields; never a list of strings),
+  comparison_scope (list), uncertainty (list), supporting_claim_ids (list), evidence (exact
+  source-block objects), source_kind (text/table/figure), source_label, physical_page (1-based
+  PDF page or null), binding_status (text_bound/unresolved/source_conflict). No invented cells
+  or values. State preprocessing/selection and pre/post-clarification or correction conditions.
+  Do not infer a ranking from a single cell or flattened chart labels. A visual value not
+  independently bound to a method/legend remains unresolved. Cite conflicting source statements
+  separately and mark source_conflict; do not silently choose one. These records propose context;
+  only separately verified claims and exact final paragraphs can become public.
+- evaluation_context separates data construction (selection and exclusions), available
+  inputs (what the system and evaluator receive), and outcome measurement (unit,
+  aggregation and stage, including clarification/correction). Each dimension is a list of
+  existing factual claim_id strings from claim_units. Extract each condition once in
+  claim_units with its own evidence, then index it here; do not create a second summary,
+  text/evidence object or new context claim. A fact may serve more than one dimension.
+  Leave a dimension empty when unstated. References organize verification and prose coverage,
+  not approval; every referenced fact and the final explanation still require verification.
+- Return string arrays for active_questions, common_baselines, hidden_assumptions,
+  prior_work, explicit_limitations, inferred_weaknesses, future_work, weak_evaluations,
+  missing_ablations, and unsupported_or_rejected_claims; do not replace them with prose strings.
 - Give every claim_unit a unique short claim_id such as c1, c2, or c3.
-- reader_explanation is the reader-facing explanation layer. Each field must be a JSON
-  list of 1-3 paragraph objects with text and supporting_claim_ids. Keep each paragraph
-  on one topic and cite every claim_unit needed for its factual content.
-- reader_explanation must not introduce any new facts, URLs, rankings, critique, or
-  speculation beyond the anchored section fields and claim_units. If a point cannot
-  be grounded in the supplied packet, omit it or mark it unknown in unsupported_or_rejected_claims.
-- Use reader_explanation to make the paper understandable: explain why the problem
-  matters, how the mechanism works step by step, how to read the experiments, how
-  related work frames the contribution, what the limitations mean in practice, and
-  give one plain-language story that follows only verified technical claims.
-- opening_context should work as a short background primer for ordinary technical
-  readers: explain the broader area problem first, then why this specific paper is
-  worth reading.
-- solution_walkthrough must be the most detailed explanation field. Cover the main
-  components, data flow, why each step exists, how components interact, and how the
-  mechanism connects to reported experiments. Only include components supported by
-  anchored evidence.
-- For systems papers, solution_walkthrough should also cover the request lifecycle,
-  scheduling or routing policy, memory/KV-cache behavior, implementation substrate,
-  workload setup, and metric linkage when those details appear in the packet.
-- Follow this public writing style contract for reader_explanation only:
-{READER_PUBLIC_WRITING_STYLE_CONTRACT}
+  section must be problem, solution, experiment, related_work, limitations,
+  critical_assessment, or essence. claim_kind must be fact, interpretation,
+  novelty, limitation, critique, or essence.
+{explanation_contract}
 - Keep each claim_unit to exactly one verifiable assertion; split broad claims.
 - claim_units must not combine method, result, novelty, and critique in one sentence.
 - Setup facts must be separate claim_units: benchmark identity, metric definition,
@@ -244,8 +462,36 @@ Rules:
   evidence quotes.
 - Do not combine method design with reported performance, result with cost, ranking
   with causal explanation, or factual setup with critique.
-- claim_units must cover the publishable factual, method, experiment, limitation, critique,
-  and essence statements you want downstream article generation to use.
+- method_flow contains operations, links and gaps, referring to the same factual claim_units.
+  Each operation has scope (the task it performs), operation_claim_id, inputs, outputs and
+  conditions. Each role value is {{"name":"a material or constraint from the paper",
+  "supporting_claim_ids":["existing factual ID"]}}. An action is not an output object:
+  if c1 states that the builder generates profiles from persona seeds, the action can reference
+  c1, the input can name "persona seeds" supported by c1, and the output can name "profiles"
+  supported by c1. This does not require duplicate facts or authorize a new material/constraint.
+  Distinguish dataset construction from system evaluation when the paper has both; use the
+  paper's actual task boundaries rather than forcing every paper into those two categories.
+  operation_claim_id must itself assert what is done, not only a true setting or statistic;
+  scope names that assertion and cannot add an action missing from it. Each named role must
+  follow from its supporting assertions, not merely neighboring source text. Return empty
+  role lists for unstated inputs/outputs, without invention.
+  Keep statistics and results in their existing experiment fields and claims.
+  Operations are an unordered inventory. Each link connects distinct operation IDs and has
+  from_claim_id, to_claim_id and nonempty
+  relation_claim_id for ONE dedicated precedence claim_unit. That fact declares method=
+  {{"kind":"precedes","from_claim_id":"operation-id","to_claim_id":"operation-id"}}
+  and its own original source evidence. The endpoints must match the link exactly.
+  Operation facts declare method={{"kind":"operation","from_claim_id":null,"to_claim_id":null}};
+  settings alone use kind="condition" with null endpoints; other claims use method=null.
+  The operation fact must describe the action in its text. A role tag is not evidence.
+  Do not reuse a fact about a different pair simply because its quoted block also contains
+  the whole algorithm. Use the relation fact in the same claim_units ledger, not a second
+  paraphrased claim hidden in method_flow. Never infer
+  a connection from adjacency, section order or domain convention. Use gaps for unextracted or
+  unresolved parts; no fixed step count or linear flow is required. Do not duplicate prose in
+  this index or leave the only account of the process in problem_solution.mechanism.
+- claim_units must cover the factual, method, experiment, limitation, critique, and essence
+  statements you want downstream article generation to use.
 - claim_units may include facts, interpretation, novelty, limitation, critique, or essence,
   but every publishable_default=true unit must have exact evidence anchors.
 - If a section-level conclusion is broad, put only the precise supported subclaims in
@@ -261,36 +507,29 @@ Rules:
 - Limitations must separate paper-explicit limitations, evidence-backed inferred
   weaknesses, and critique that needs external verification.
 - Limitations and critique must prefer evidence from limitations_conclusion chunks or
-  explicit evaluation evidence. If the packet has a coverage warning, mention the gap
-  in unsupported_or_rejected_claims instead of inventing the missing section.
+  explicit evaluation evidence. Section-index warnings concern heading detection, not
+  missing source text; inspect the complete text rather than inventing a missing section.
 - Author-reported superlatives such as best, state-of-the-art, or outperforms must be
   phrased as author-reported claims unless independently verified by supplied evidence.
 - Broad essence statements must not bundle multiple contributions. Split them into
   separate atomic claim_units and keep only a narrow essence claim publishable by default.
-- Make problem, motivation, solution, mechanism, experiments, related work, limitations, and
-  critique detailed enough for researcher notes: usually 2-4 concrete sentences per field.
+- Keep analytical section fields as concise research notes, not a second reader-facing
+  article. Avoid repeating the same prose across analytical fields. claim_units are the
+  factual verification layer; reader_explanation may explain those claims without adding
+  facts. Preserve experiment setup, metrics, comparison
+  conditions, results, caveats, and limitations in atomic claims; do not omit them or
+  merge independent assertions just to shorten the response.
 - Every factual or critical claim needs evidence in the same section.
 - Every section evidence field must be a non-empty list of objects.
-- Every evidence object must include quote and location.
-- The quote field must be an exact substring copied from the full paper reading packet.
-- Use short exact quotes; do not clean up hyphenation, symbols, line-break artifacts, or wording.
-- Do not use paraphrased evidence anchors.
+- Every evidence object contains only source_id. Select the block
+  establishing the assertion, including experimental qualifiers, not an unrelated nearby line.
 - Do not turn author framing into your own conclusion unless evidence supports it.
 - Be neutral, sharp, and concrete. Do not flatter the paper.
 - Do not draft the final article here; this stage feeds an outline-first synthesis step.
-- Return JSON only. Do not wrap it in Markdown.
+- Return JSON only, without indentation. Do not wrap it in Markdown.
 
-Evidence object shape:
-{{"quote": "source-backed anchor", "location": "README section, page, or extracted text"}}
-Claim unit shape:
-{{"claim_id": "c1",
-  "section": "problem|solution|experiment|related_work|limitations|critical_assessment|essence",
-  "claim_kind": "fact|interpretation|novelty|limitation|critique|essence",
-  "text": "one atomic assertion",
-  "evidence": [{{"quote": "exact substring", "location": "section or page"}}],
-  "publishable_default": true}}
-Reader explanation paragraph shape:
-{{"text": "one natural paragraph", "supporting_claim_ids": ["c1", "c2"]}}
+Complete JSON response example (replace all placeholders):
+{_reading_response_example(facts_only=facts_only, source_id=source_index.source_ids[0])}
 """
 
 
@@ -323,15 +562,21 @@ def model_paper_reading_with_attempts(
     area_context: str | None = None,
     language: str = "en",
     packet: PaperReadingPacket | None = None,
+    facts_only: bool = False,
 ) -> PaperReadingResult:
-    """Run model-based deep reading with one schema retry and attempt audit."""
+    """Keep the existing schema retry, but stop unbound explanations without another call."""
 
     reading_packet = packet or build_reading_packet(artifact)
+    if reading_packet.source_text != artifact.text or not artifact.text.strip():
+        raise ReaderInputError(
+            "reader_input_incomplete", "Reader requires the complete extracted text.", {},
+        )
     user_prompt = paper_reading_prompt(
         artifact,
         area_context,
         language=language,
         packet=reading_packet,
+        facts_only=facts_only,
     )
     messages = [
         Message(
@@ -348,12 +593,46 @@ def model_paper_reading_with_attempts(
     last_error = ""
     current_messages = messages
     provider_name = getattr(provider, "name", provider.__class__.__name__)
+    response_schema = (paper_reading_response_schema(facts_only=facts_only,
+                       source_ids=build_source_index(artifact).source_ids)
+                       if getattr(provider, "supports_response_schema", False) else None)
     for attempt_index in (1, 2):
-        response = provider.complete(current_messages, model=model)
-        excerpt = _response_excerpt(response.content)
         try:
-            reading = parse_paper_reading(response.content, artifact)
+            input_budget = check_reader_input(current_messages, provider, model=model,
+                                             response_schema=response_schema)
+        except ReaderInputError as exc:
+            exc.audit["attempt_index"] = attempt_index
+            exc.reader_attempts = [dataclass_to_dict(attempt) for attempt in attempts]
+            raise
+        excerpt = ""
+        validation_error: AnalysisError | None = None
+
+        def parse(content: str) -> PaperReading:
+            nonlocal excerpt, validation_error
+            excerpt = _response_excerpt(content)
+            try:
+                return parse_paper_reading(
+                    content, artifact, require_explanation_bindings=True,
+                    require_source_references=True,
+                    require_method_assertions=response_schema is not None,
+                )
+            except AnalysisError as error:
+                validation_error = error
+                raise
+
+        try:
+            validation = ({"validate_response": parse}
+                          if isinstance(provider, CachedLLMProvider) else {})
+            if response_schema is None:
+                response = provider.complete(current_messages, model=model, **validation)
+            else:
+                response = provider.complete_with_schema(
+                    current_messages, model=model, response_schema=response_schema, **validation,
+                )
+            reading = parse(response.content)
         except AnalysisError as exc:
+            if exc is not validation_error:
+                raise  # Provider failures are not Reader-format repair candidates.
             last_error = str(exc)
             attempts.append(
                 ReaderAttempt(
@@ -363,8 +642,14 @@ def model_paper_reading_with_attempts(
                     status="failed",
                     error_message=last_error,
                     response_excerpt=excerpt,
+                    input_budget=input_budget,
                 )
             )
+            if isinstance(exc, (ReaderExplanationError, ReaderContextError, SourceReferenceError)):
+                exc.reader_attempts = [dataclass_to_dict(attempt) for attempt in attempts]
+                raise
+            if response_schema is not None:
+                raise AnalysisError(f"Constrained paper reading failed validation: {exc}") from exc
             if attempt_index == 2:
                 break
             current_messages = [
@@ -386,6 +671,7 @@ def model_paper_reading_with_attempts(
                 model=model,
                 status="succeeded",
                 response_excerpt=excerpt,
+                input_budget=input_budget,
             )
         )
         return PaperReadingResult(reading=reading, attempts=attempts)
@@ -393,27 +679,45 @@ def model_paper_reading_with_attempts(
     raise AnalysisError(f"Paper reading failed after 2 attempts: {last_error}")
 
 
-def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
-    """Parse model JSON into a validated paper-reading structure."""
+def parse_paper_reading(
+    raw_json: str, artifact: Artifact, *, require_explanation_bindings: bool = False,
+    require_source_references: bool = False,
+    require_method_assertions: bool = False,
+) -> PaperReading:
+    """Parse a reading; fresh model calls require explicit bindings, old records remain readable."""
 
-    payload = _load_json_object(raw_json)
+    payload = resolve_reader_evidence(_load_json_object(raw_json), artifact,
+                                     require_references=require_source_references)
     reading_data = payload.get("deep_readings", payload)
     if isinstance(reading_data, list):
         if not reading_data:
             raise AnalysisError("Paper reading JSON contained no deep readings.")
+        if len(reading_data) != 1:
+            raise AnalysisError("Paper reading JSON must contain exactly one deep reading.")
         reading_data = reading_data[0]
     if not isinstance(reading_data, dict):
         raise AnalysisError("Paper reading JSON must contain an object deep_readings value.")
+    if require_source_references:
+        flow = reading_data.get("method_flow")
+        if not isinstance(flow, dict) or set(flow) != {"operations", "links", "gaps"}:
+            raise AnalysisError("Fresh Reader method_flow requires scoped operation records.")
 
     fallback_evidence = _parse_evidence(
         payload.get("evidence_index", []),
         artifact,
         required=False,
     )
-    claim_units = _parse_claim_units(
-        reading_data.get("claim_units") or payload.get("claim_units", []),
-        artifact,
-    )
+    claim_unit_data = reading_data.get("claim_units") or payload.get("claim_units", [])
+    claim_units = _parse_claim_units(claim_unit_data, artifact)
+    explicit_ids = {
+        item["claim_id"].strip()
+        for item in (claim_unit_data if isinstance(claim_unit_data, list) else [])
+        if isinstance(item, dict) and isinstance(item.get("claim_id"), str)
+    }
+    if require_explanation_bindings:
+        _require_explanation_bindings(
+            reading_data.get("reader_explanation", {}), claim_unit_data, claim_units,
+        )
     reading = PaperReading(
         title=str(reading_data.get("title") or artifact.source.title),
         area_context=_parse_area_context(reading_data.get("area_context", {}), artifact),
@@ -447,21 +751,110 @@ def parse_paper_reading(raw_json: str, artifact: Artifact) -> PaperReading:
             artifact,
             fallback_evidence,
         ),
-        unsupported_or_rejected_claims=[
-            str(item)
-            for item in reading_data.get("unsupported_or_rejected_claims", [])
-            if str(item).strip()
-        ],
+        unsupported_or_rejected_claims=list(dict.fromkeys([
+            *_string_list(reading_data.get("unsupported_or_rejected_claims")),
+            *_string_list(payload.get("unsupported_or_rejected_claims")),
+        ])),
         claim_units=claim_units,
         reader_explanation=_parse_reader_explanation(
             reading_data.get("reader_explanation", {}),
         ),
+        evaluation_context=_parse_evaluation_context(
+            reading_data.get("evaluation_context"), artifact,
+            claim_units={unit.claim_id: unit for unit in claim_units
+                         if unit.claim_id in explicit_ids},
+            require_references=require_source_references,
+        ),
+        source_url=artifact.source.url,
+        experimental_results=parse_experimental_results(
+            reading_data.get("experimental_results"), artifact,
+            claim_ids={unit.claim_id for unit in claim_units},
+        ),
+        method_flow=parse_method_flow(reading_data.get("method_flow"),
+            claim_ids={unit.claim_id for unit in claim_units if unit.claim_kind == "fact"}),
     )
     _require_anchor(reading.problem_solution.evidence, "problem_solution")
+    validate_method_assertions(reading.method_flow,
+        {unit.claim_id: unit.method for unit in claim_units},
+        require_typed=require_method_assertions)
     _require_anchor(reading.related_work.evidence, "related_work")
     _require_anchor(reading.limitations.evidence, "limitations")
     _require_anchor(reading.critical_assessment.evidence, "critical_assessment")
     return reading
+
+
+def _require_explanation_bindings(
+    value: object, claim_unit_data: object, claim_units: list[ClaimUnit],
+) -> None:
+    if not isinstance(value, dict):
+        raise ReaderExplanationError("expected section arrays of paragraph objects.")
+    # Legacy positional IDs support old-file reading, not binding new model prose.
+    known_ids = {
+        item["claim_id"].strip()
+        for item in (claim_unit_data if isinstance(claim_unit_data, list) else [])
+        if isinstance(item, dict) and isinstance(item.get("claim_id"), str)
+        and item["claim_id"].strip()
+    }
+    known_ids &= {claim.claim_id for claim in claim_units}
+    for section in fields(ReaderExplanation):
+        paragraphs = value.get(section.name, [])
+        if not isinstance(paragraphs, list):
+            raise ReaderExplanationError(f"{section.name} must be a paragraph array.")
+        for paragraph in paragraphs:
+            if (not isinstance(paragraph, dict)
+                    or not isinstance(paragraph.get("text"), str)
+                    or not paragraph["text"].strip()):
+                raise ReaderExplanationError(f"{section.name} requires nonempty paragraph objects.")
+            ids = paragraph.get("supporting_claim_ids")
+            if (not isinstance(ids, list) or not ids
+                    or any(not isinstance(item, str) or not item.strip() for item in ids)):
+                raise ReaderExplanationError(f"{section.name} requires explicit support IDs.")
+            normalized = [item.strip() for item in ids]
+            if len(set(normalized)) != len(normalized) or not set(normalized) <= known_ids:
+                raise ReaderExplanationError(
+                    f"{section.name} has duplicate or unknown support IDs."
+                )
+
+
+def _parse_evaluation_context(
+    value: object, artifact: Artifact, *, claim_units: dict[str, ClaimUnit],
+    require_references: bool = False,
+) -> EvaluationContext:
+    if value is None:
+        if require_references:
+            raise ReaderContextError("Fresh output requires the three evaluation dimensions.")
+        return EvaluationContext()
+    allowed = set(EVALUATION_DIMENSIONS)
+    if (not isinstance(value, dict) or set(value) - allowed
+            or (require_references and set(value) != allowed)):
+        raise ReaderContextError("Use only the three evaluation dimensions.")
+    dimensions = {key: value.get(key, []) for key in EVALUATION_DIMENSIONS}
+    if any(not isinstance(items, list) for items in dimensions.values()):
+        raise ReaderContextError("Each evaluation dimension must be a list.")
+    if require_references or any(isinstance(item, str) for items in dimensions.values()
+                                 for item in items):
+        for ids in dimensions.values():
+            if (any(not isinstance(identity, str) or identity not in claim_units
+                    for identity in ids)
+                    or len(ids) != len(set(ids))):
+                raise ReaderContextError(
+                    "References require distinct, explicit existing claim IDs.")
+            if any(claim_units[identity].claim_kind != "fact" or not claim_units[identity].evidence
+                   for identity in ids):
+                raise ReaderContextError("Evaluation references require anchored factual claims.")
+        return EvaluationContext(claim_references={key: list(ids)
+                                                   for key, ids in dimensions.items()})
+    parsed = {}
+    for key, entries in dimensions.items():
+        parsed[key] = []
+        for entry in entries:
+            if (not isinstance(entry, dict) or set(entry) != {"text", "evidence"}
+                    or not isinstance(entry["text"], str) or not entry["text"].strip()):
+                raise ReaderContextError("Evaluation context requires text and source evidence.")
+            anchors = _parse_evidence(entry["evidence"], artifact, required=True)
+            _require_anchor(anchors, "evaluation_context")
+            parsed[key].append(EvaluationContextItem(entry["text"], anchors))
+    return EvaluationContext(**parsed)
 
 
 def _retry_paper_reading_prompt(
@@ -483,8 +876,8 @@ Previous response excerpt:
 Return a complete replacement JSON object, not a patch, diff, explanation, or Markdown.
 Do not omit required fields. Do not invent new claims to fill missing schema fields.
 Keep all ResearchRadar evidence rules unchanged:
-- every evidence quote must be an exact substring from the full paper reading packet;
-- do not clean up hyphenation, symbols, line-break artifacts, or wording;
+- evidence contains exact offered source_id values, never ranges or model-written quotes;
+- the program retrieves an exact substring, without changing formulas or source whitespace;
 - keep claim_units atomic;
 - do not relax quote matching, claim lint, or anchor completeness.
 
@@ -622,7 +1015,8 @@ def render_deep_reading_report(
 def reading_to_dict(reading: PaperReading) -> dict[str, object]:
     """Convert a paper reading to a JSON-friendly dictionary."""
 
-    return dataclass_to_dict(reading)
+    return {**dataclass_to_dict(reading),
+            "evaluation_context": evaluation_context_payload(reading.evaluation_context)}
 
 
 def _publishable_prefixes(claims: list[Claim] | None) -> set[str] | None:
@@ -751,12 +1145,15 @@ def _first_or_none(values: list[str], fallback: str) -> str:
     return values[0] if values else fallback
 
 
-def reading_to_claims(reading: PaperReading) -> list[Claim]:
+def reading_to_claims(
+    reading: PaperReading, *, include_context_claims: bool = False,
+) -> list[Claim]:
     """Convert a structured paper reading into evidence-bound claims."""
 
     if reading.claim_units:
         return [
             *_claim_units_to_claims(reading.claim_units),
+            *(_context_claims(reading) if include_context_claims else []),
             *[
                 Claim(
                     text=text,
@@ -832,6 +1229,42 @@ def reading_to_claims(reading: PaperReading) -> list[Claim]:
     ]
 
 
+def _context_claims(reading: PaperReading) -> list[Claim]:
+    """Project anchored method/conditions into candidates, never into approved facts."""
+    proposed = ([] if method_claim_ids(reading.method_flow) else [
+        ("problem_solution.mechanism", "solution", reading.problem_solution.mechanism,
+         reading.problem_solution.evidence)])
+    if reading.evaluation_context.claim_references is None:
+        proposed.extend((f"evaluation_context.{dimension}", "experiment", item.text, item.evidence)
+                        for dimension in EVALUATION_DIMENSIONS
+                        for item in getattr(reading.evaluation_context, dimension))
+    def signature(text: str, evidence: list[EvidenceAnchor]) -> str:
+        return json.dumps({"text": text.strip(), "evidence": [
+            {"source_url": a.source_url, "quote": a.quote, "location": a.location}
+            for a in evidence]}, ensure_ascii=False, sort_keys=True)
+    seen = {signature(unit.text, unit.evidence) for unit in reading.claim_units}
+    existing_ids = {unit.claim_id for unit in reading.claim_units}
+    claims = []
+    for origin, section, text, evidence in proposed:
+        identity = signature(text, evidence)
+        if not text.strip() or not evidence or identity in seen:
+            continue
+        digest = hashlib.sha256((reading.source_url + "\0" + origin + "\0" + identity).encode())
+        claim_id = "context-" + digest.hexdigest()[:16]
+        if claim_id in existing_ids:
+            raise AnalysisError("Context claim identity conflicts with an existing claim.")
+        existing_ids.add(claim_id)
+        seen.add(identity)
+        unit = ClaimUnit(section=section, claim_kind="fact", text=text.strip(), evidence=evidence,
+                         claim_id=claim_id, publishable_default=bool(reading.source_url) and all(
+                             a.source_url == reading.source_url for a in evidence))
+        claim = _claim_units_to_claims([unit])[0]
+        claims.append(replace(claim, metadata={"paper_reading": {
+            **claim.metadata["paper_reading"], "source": "reading_context", "context_field": origin,
+        }}))
+    return claims
+
+
 def _claim_units_to_claims(units: list[ClaimUnit]) -> list[Claim]:
     claims = []
     for unit in units:
@@ -850,6 +1283,7 @@ def _claim_units_to_claims(units: list[ClaimUnit]) -> list[Claim]:
                         "claim_kind": unit.claim_kind,
                         "publishable_default": unit.publishable_default,
                         "status_reason": status_reason,
+                        **({"method": dataclass_to_dict(unit.method)} if unit.method else {}),
                     },
                 },
             )
@@ -886,21 +1320,8 @@ def _claim_lint_reason(unit: ClaimUnit) -> str | None:
     ]
     if sum(1 for matched in setup_facets if matched) > 1:
         return "claim too broad; split setup facets"
-    has_method = _has_any(
-        text,
-        (
-            "integrates",
-            "combines",
-            "proposes",
-            "introduces",
-            "tree-based",
-            "hierarchical storage",
-            "framework",
-        ),
-    )
+    # Method verbs and scoring vocabulary alone do not establish an empirical result.
     has_result = _has_result_marker(text)
-    if has_method and has_result:
-        return "claim too broad; split method and result"
     has_cost = _has_any(
         text,
         (
@@ -939,7 +1360,6 @@ def _has_result_marker(text: str) -> bool:
         (
             "performance",
             "result",
-            "score",
             "outperform",
             "outperforms",
             "best",
@@ -953,6 +1373,12 @@ def _has_result_marker(text: str) -> bool:
 
 def _requires_author_report_attribution(text: str) -> bool:
     normalized = text.casefold()
+    normalized = re.sub(
+        r"\bbest(?:\s+of\s+|-of-)(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten)"
+        r"\s+(?:rounds?|runs?|trials?)\b",
+        "trial selection",
+        normalized,
+    )
     superlatives = (
         "best",
         "state-of-the-art",
@@ -1035,10 +1461,14 @@ def _claim_unit_prefix(section: str) -> str:
 def validate_paper_reading(
     reading: PaperReading,
     artifact: Artifact | None = None,
+    *,
+    include_context_claims: bool = False,
 ) -> tuple[list[Claim], list[ReviewFinding]]:
     """Validate that paper-reading claims are evidence-backed before publication."""
 
-    claims, findings = enforce_evidence_policy(reading_to_claims(reading))
+    claims, findings = enforce_evidence_policy(reading_to_claims(
+        reading, include_context_claims=include_context_claims,
+    ))
     findings.extend(_claim_lint_findings(claims))
     if artifact is None:
         return claims, findings
@@ -1048,7 +1478,9 @@ def validate_paper_reading(
             checked_claims.append(claim)
             continue
         valid_evidence = [
-            anchor for anchor in claim.evidence if _quote_found(anchor.quote, artifact.text)
+            anchor
+            for anchor in claim.evidence
+            if find_quote(anchor.quote, artifact.text) is not None
         ]
         if len(valid_evidence) == len(claim.evidence):
             checked_claims.append(claim)
@@ -1226,16 +1658,21 @@ def _load_json_object(raw_json: str) -> dict[str, object]:
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise AnalysisError("Paper reading response was not valid JSON.") from exc
+        raise AnalysisError(
+            f"Paper reading response was not valid JSON (line {exc.lineno}, column {exc.colno})."
+        ) from exc
     if not isinstance(payload, dict):
         raise AnalysisError("Paper reading JSON must be an object.")
     return payload
 
 
 def _extract_json_object_text(text: str) -> str:
-    if text.startswith("{"):
+    if text.startswith(("{", "[")):
         return text
     start = text.find("{")
+    array_start = text.find("[")
+    if array_start >= 0 and (start < 0 or array_start < start):
+        return text[array_start:]
     if start < 0:
         return text
     depth = 0
@@ -1475,6 +1912,7 @@ def _parse_claim_units(value: object, artifact: Artifact) -> list[ClaimUnit]:
                 evidence=evidence,
                 claim_id=claim_id,
                 publishable_default=_bool_value(publishable_default),
+                method=parse_method_assertion(item.get("method")),
             )
         )
     return units
@@ -1568,6 +2006,8 @@ def _optional_string(
 
 
 def _string_list(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
     if not isinstance(value, list):
         return []
     return [text for item in value if (text := _readable_text(item))]
@@ -1595,27 +2035,3 @@ def _bool_value(value: object) -> bool:
 def _require_anchor(evidence: list[EvidenceAnchor], section: str) -> None:
     if not evidence:
         raise AnalysisError(f"Paper reading section has no evidence anchors: {section}")
-
-
-def _quote_found(quote: str, text: str) -> bool:
-    normalized_quote = _normalize_evidence_text(quote)
-    if not normalized_quote:
-        return False
-    normalized_text = _normalize_evidence_text(text)
-    if normalized_quote in normalized_text:
-        return True
-    compact_quote = _compact_evidence_text(normalized_quote)
-    if len(compact_quote) < 12:
-        return False
-    return compact_quote in _compact_evidence_text(normalized_text)
-
-
-def _normalize_evidence_text(text: str) -> str:
-    without_controls = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", "", text)
-    without_soft_hyphen = without_controls.replace("\xad", "")
-    dehyphenated = re.sub(r"(?<=[a-zA-Z])-\s+(?=[a-zA-Z])", "", without_soft_hyphen)
-    return re.sub(r"\s+", " ", dehyphenated).strip().lower()
-
-
-def _compact_evidence_text(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", text.lower())

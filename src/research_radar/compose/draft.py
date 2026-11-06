@@ -8,7 +8,6 @@ from typing import Any
 
 from research_radar.analysis.explanation_policy import (
     claim_section_text,
-    explanation_fallbacks,
     public_explanation,
 )
 from research_radar.analysis.paper_reading import ReaderExplanation
@@ -363,11 +362,11 @@ def _deep_read_entries(
     for index, reading in enumerate(readings):
         source = deep_read_sources[index] if index < len(deep_read_sources) else None
         reading_claims = _claims_for_reading(reading, source, verified)
-        fallbacks = explanation_fallbacks(reading_claims)
         reader_explanation, explanation_audit = public_explanation(
             _reading_explanation(reading),
             reading_claims,
-            fallbacks=fallbacks,
+            source_url=(source.url if source
+                        and getattr(reading, "source_url", "") == source.url else ""),
         )
         entries.append(
             {
@@ -375,21 +374,21 @@ def _deep_read_entries(
                 "source": _source_entry(source, language=language, deep_read=True)
                 if source
                 else None,
-                "essence": fallbacks.get("core_thesis", ""),
+                "essence": reader_explanation.get("core_thesis", ""),
                 "reader_explanation": reader_explanation,
-                "problem": {"core": fallbacks.get("problem_walkthrough", "")},
-                "solution": {"core": fallbacks.get("solution_walkthrough", "")},
+                "problem": {"core": reader_explanation.get("problem_walkthrough", "")},
+                "solution": {"core": reader_explanation.get("solution_walkthrough", "")},
                 "experiments": {
-                    "summary": fallbacks.get("experiment_interpretation", "")
+                    "summary": reader_explanation.get("experiment_interpretation", "")
                 },
                 "related_work": {
-                    "novelty": fallbacks.get("related_work_context", "")
+                    "novelty": reader_explanation.get("related_work_context", "")
                 },
                 "limitations": {
                     "explicit_limitations": [
-                        fallbacks["limitations_discussion"]
+                        reader_explanation["limitations_discussion"]
                     ]
-                    if fallbacks.get("limitations_discussion")
+                    if reader_explanation.get("limitations_discussion")
                     else []
                 },
                 "critical_assessment": {
@@ -463,9 +462,11 @@ def _claims_for_reading(
     matches = []
     for claim in verified:
         for anchor in claim.evidence:
-            if source_url and anchor.source_url == source_url:
-                matches.append(claim)
-                break
+            if source_url and anchor.source_url:
+                if anchor.source_url == source_url:
+                    matches.append(claim)
+                    break
+                continue
             if source_title and anchor.source_title == source_title:
                 matches.append(claim)
                 break

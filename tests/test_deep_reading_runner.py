@@ -1,5 +1,6 @@
+from reader_fixtures import OfflineStaticProvider as StaticProvider
+
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
-from research_radar.analysis.providers import StaticProvider
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
 
 

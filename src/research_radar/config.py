@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
+from research_radar.analysis.reader_input import ReaderContextBudget
 from research_radar.exceptions import ConfigError
 
 
@@ -66,6 +67,7 @@ class ModelProviderConfig:
     reasoning_effort: str | None = None
     max_tokens: int | None = None
     stream: bool = False
+    reader_contexts: dict[str, ReaderContextBudget] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -422,8 +424,28 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             reasoning_effort=reasoning_effort,
             max_tokens=max_tokens,
             stream=stream,
+            reader_contexts=_reader_contexts(item.get("reader_contexts", {})),
         )
     return configs
+
+
+def _reader_contexts(raw: object) -> dict[str, ReaderContextBudget]:
+    contexts = _mapping(raw, "reader_contexts")
+    result = {}
+    fields = {"context_window_tokens", "output_reserve_tokens", "overhead_reserve_tokens"}
+    for model, value in contexts.items():
+        if not isinstance(model, str) or not model.strip() or model != model.strip():
+            raise ConfigError("reader_contexts requires exact, non-empty model names.")
+        item = _mapping(value, f"reader_contexts.{model}")
+        if set(item) != fields:
+            raise ConfigError(
+                f"reader_contexts.{model} requires exactly: {', '.join(sorted(fields))}.",
+            )
+        try:
+            result[model] = ReaderContextBudget(**item)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"Invalid reader_contexts.{model}: {exc}") from exc
+    return result
 
 
 def _default_model_providers() -> dict[str, ModelProviderConfig]:

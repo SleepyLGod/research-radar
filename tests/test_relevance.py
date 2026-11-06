@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -643,3 +644,174 @@ def test_llm_inference_concept_profile_rejects_adjacent_noise() -> None:
     for source in sources:
         scored = score_source(source, topic)
         assert scored.metadata["relevance"]["status"] != "relevant"
+
+
+def _semantic_query_concept_topic() -> TopicConfig:
+    return TopicConfig(
+        id="semantic-query-processing",
+        queries=["LLM semantic query processing"],
+        concept_groups={
+            "semantic_operations": ["semantic filter", "semantic join", "semantic aggregate"],
+            "query_processing": ["database", "query optimization", "dataframe"],
+            "negative_security": ["SQL injection"],
+        },
+    )
+
+
+@pytest.mark.parametrize("summary", [
+    "We execute semantic filter operations over a database with cost-quality guarantees.",
+    "We optimize semantic join operators using query optimization and LLM cost estimates.",
+    "A semantic aggregate implementation on a dataframe.",
+])
+def test_custom_concept_groups_require_each_group_but_allow_alternative_aliases(
+    summary: str,
+) -> None:
+    source = SourceCandidate(
+        title="Semantic Operators for Data Processing",
+        url="https://example.invalid/semantic-operators",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+        summary=summary,
+    )
+
+    scored = score_source(source, _semantic_query_concept_topic())
+
+    assert scored.metadata["relevance"]["status"] == "relevant"
+    gate = scored.metadata["relevance"]["concept_gate"]
+    assert gate["passed"] is True
+    assert gate["decision_rule"] == "all_positive_groups"
+    assert gate["matched_groups"] == ["query_processing", "semantic_operations"]
+
+
+@pytest.mark.parametrize("summary", [
+    "An LLM generates SQL for database query optimization from natural language.",
+    "An LLM uses a vector database for retrieval augmented generation.",
+    "A semantic filter for image annotation, without a data execution context.",
+    "A quantum thermalization study of response theory.",
+])
+def test_custom_concept_groups_do_not_admit_single_group_or_adjacent_noise(summary: str) -> None:
+    source = SourceCandidate(
+        title="A Related LLM Study",
+        url="https://example.invalid/adjacent",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+        summary=summary,
+    )
+
+    scored = score_source(source, _semantic_query_concept_topic())
+
+    assert scored.metadata["relevance"]["status"] != "relevant"
+    assert scored.metadata["relevance"]["concept_gate"]["passed"] is False
+
+
+def test_custom_positive_groups_are_not_tied_to_specific_names() -> None:
+    topic = replace(_semantic_query_concept_topic(), concept_groups={
+        "operator": ["semantic join"], "execution": ["database"],
+    })
+    source = SourceCandidate(
+        title="Semantic Join for Database Analytics",
+        url="https://example.invalid/renamed-groups",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    )
+
+    assert score_source(source, topic).metadata["relevance"]["status"] == "relevant"
+
+
+def test_custom_concept_groups_keep_negative_veto() -> None:
+    source = SourceCandidate(
+        title="SQL Injection into a Database Semantic Join Operator",
+        url="https://example.invalid/negative",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    )
+
+    scored = score_source(source, _semantic_query_concept_topic())
+
+    assert scored.metadata["relevance"]["status"] != "relevant"
+    assert scored.metadata["relevance"]["concept_gate"]["matched_negative_aliases"] == [
+        "SQL injection",
+    ]
+
+
+def test_memory_benchmark_anchor_does_not_bypass_custom_required_groups() -> None:
+    topic = replace(_semantic_query_concept_topic(), concept_groups={
+        "evaluation": ["LongMemEval"], "query_processing": ["semantic join"],
+    })
+    source = SourceCandidate(
+        title="LongMemEval Memory Benchmark",
+        url="https://example.invalid/unrelated-benchmark",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    )
+
+    scored = score_source(source, topic)
+
+    assert scored.metadata["relevance"]["status"] != "relevant"
+    assert scored.metadata["relevance"]["concept_gate"]["passed"] is False
+
+
+def test_negative_only_groups_do_not_give_unmatched_sources_a_concept_bonus() -> None:
+    topic = replace(_semantic_query_concept_topic(), concept_groups={
+        "negative_security": ["SQL injection"],
+    })
+    source = SourceCandidate(
+        title="A Study of Stars",
+        url="https://example.invalid/no-positive-groups",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    )
+
+    assert score_source(source, topic).metadata["relevance"]["concept_gate"]["passed"] is False
+
+
+def test_incomplete_legacy_concept_profile_is_not_treated_as_a_custom_single_group() -> None:
+    topic = replace(_agent_memory_concept_topic(), concept_groups={
+        "agent_context": ["agent memory"],
+    })
+    source = SourceCandidate(
+        title="Agent Memory Packaging Guide",
+        url="https://example.invalid/legacy-context-only",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    )
+
+    scored = score_source(source, topic)
+
+    assert scored.metadata["relevance"]["status"] != "relevant"
+    assert scored.metadata["relevance"]["concept_gate"]["passed"] is False
+
+
+def test_custom_topic_reaches_deep_selection_with_read_only_history(tmp_path: Path) -> None:
+    from research_radar.discovery.source_centrality import score_source_centrality
+    from research_radar.discovery.source_quality import score_source_quality
+    from research_radar.discovery.source_role import classify_source_role
+    from research_radar.discovery.source_selection import select_deep_candidates
+    from research_radar.storage.source_history import annotate_source_history, is_deep_read_eligible
+
+    topic = _semantic_query_concept_topic()
+    sources = [SourceCandidate(
+        title="LLM Semantic Join Query Optimization",
+        summary="We execute semantic filter and join operators over a database.",
+        url="https://example.invalid/semantic-join",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    ), SourceCandidate(
+        title="LLM Text-to-SQL Query Optimization",
+        summary="We generate SQL for database queries.",
+        url="https://example.invalid/text-to-sql",
+        source_type=SourceType.PAPER,
+        source_name="offline-fixture",
+    )]
+    scored, _, _ = gate_relevant_sources(sources, topic)
+    scored = [score_source_centrality(
+        score_source_quality(classify_source_role(source)), topic,
+    ) for source in scored]
+    annotated, _ = annotate_source_history(tmp_path, topic.id, scored, run_id="offline-test")
+    selected = select_deep_candidates(
+        [source for source in annotated if is_deep_read_eligible(source)],
+        4, source_intent=topic.source_intent,
+    )
+
+    assert [source.url for source in selected] == [sources[0].url]
+    assert not list(tmp_path.rglob("*.jsonl"))

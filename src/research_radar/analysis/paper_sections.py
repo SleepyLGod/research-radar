@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from research_radar.exceptions import AnalysisError
 from research_radar.models import Artifact
 
-DEFAULT_READING_PACKET_BUDGET = 24_000
 _PAGE_MARKER = re.compile(r"(?m)^\[page (?P<page>\d+)\]\s*$")
 _REFERENCE_HEADING = re.compile(r"(?im)^\s*(references|bibliography)\s*$")
+_NUMBERED_HEADING = re.compile(
+    r"^(?:\d+(?:\.\d+)+[.)]?[ \t]*|\d+[.)]?[ \t]+|[A-Z](?:\.\d+)*[.)]?[ \t]+)"
+    r"(?=[A-Z])[A-Za-z][^\n.!?;=]{1,90}$"
+)
+_NAMED_HEADING = re.compile(
+    r"^(?:abstract|introduction|related work|background|method|approach|framework|architecture|"
+    r"experiments?|evaluation|results?|analysis|limitations?|discussion|conclusions?|"
+    r"future work|references|bibliography)$", re.IGNORECASE,
+)
+_TITLE_WORD = r"[A-Z][a-z]+(?:[A-Z][a-z]+|[-‑–][A-Z]?[a-z]+)*"
+_TITLE_HEADING = re.compile(rf"{_TITLE_WORD}(?:[ \t]+{_TITLE_WORD}){{1,5}}")
+_CAMEL_HEADING = re.compile(r"[A-Z][a-z]+(?:[A-Z][a-z0-9]+)+")
 
 
 @dataclass(frozen=True)
@@ -26,42 +38,61 @@ class PaperSectionChunk:
 
 @dataclass(frozen=True)
 class PaperReadingPacket:
-    """The bounded full-paper packet sent to the reader."""
+    """Complete extracted text with a page/section index, never selected excerpts."""
 
     chunks: list[PaperSectionChunk]
     warnings: list[str] = field(default_factory=list)
-    char_budget: int = DEFAULT_READING_PACKET_BUDGET
+    source_text: str = ""
+    coverage: list[dict[str, object]] = field(default_factory=list)
 
 
 def build_paper_sections(artifact: Artifact) -> list[PaperSectionChunk]:
-    """Split extracted paper text into page-aware section chunks."""
+    """Split explicit sections while preserving page and exact source spans."""
 
     chunks: list[PaperSectionChunk] = []
-    in_references = False
-    for page_number, text in _pages_from_text(artifact.text):
-        normalized = text.strip()
-        if not normalized:
-            continue
-        if _is_references_start(normalized):
-            role = "references"
-            in_references = True
-        elif in_references and not _is_appendix_start(normalized):
-            role = "references"
-        else:
-            in_references = False
-            role = _classify_role(page_number, normalized)
-        chunks.append(
-            PaperSectionChunk(
-                role=role,
-                page_start=page_number,
-                page_end=page_number,
-                text=normalized,
+    role, heading, section_id = "other", "", 0
+    for page_number, page_start, page_end in _page_spans(artifact.text):
+        text = artifact.text[page_start:page_end]
+        headings = [match for match in re.finditer(r"(?m)^[^\n]+$", text)
+                    if _is_heading(match.group().strip())]
+        headings = [match for i, match in enumerate(headings)
+                    if _NUMBERED_HEADING.fullmatch(match.group().strip())
+                    or _NAMED_HEADING.fullmatch(match.group().strip())
+                    or _is_appendix_start(match.group().strip())
+                    or re.search(r"[.!?。](?=\s|$)", text[match.end():
+                                 headings[i + 1].start() if i + 1 < len(headings) else len(text)])]
+        boundaries = sorted({0, len(text), *(match.start() for match in headings)})
+        heading_at = {match.start(): match.group().strip() for match in headings}
+        for start, end in zip(boundaries, boundaries[1:], strict=False):
+            raw = text[start:end]
+            normalized = raw.strip()
+            if not normalized:
+                continue
+            if start in heading_at:
+                heading = heading_at[start]
+                section_id += 1
+                if _is_references_start(heading):
+                    role = "references"
+                elif role == "references" and not _is_appendix_start(heading):
+                    role = "references"
+                else:
+                    classified = _classify_role(page_number, heading)
+                    if classified == "other":
+                        classified = _classify_role(page_number, normalized)
+                    role = classified if classified != "other" else (
+                        "other" if role == "references" else role
+                    )
+            elif not heading:
+                role = _classify_role(page_number, normalized)
+            source_start = page_start + start + len(raw) - len(raw.lstrip())
+            chunks.append(PaperSectionChunk(
+                role=role, page_start=page_number, page_end=page_number, text=normalized,
                 metadata={
-                    "priority_score": _priority_score(role, normalized),
-                    "char_count": len(normalized),
+                    "char_count": len(normalized), "heading": heading,
+                    "section_id": section_id, "source_start": source_start,
+                    "source_end": source_start + len(normalized),
                 },
-            )
-        )
+            ))
     return chunks
 
 
@@ -69,32 +100,50 @@ def build_reading_packet(
     artifact: Artifact,
     *,
     sections: list[PaperSectionChunk] | None = None,
-    char_budget: int = DEFAULT_READING_PACKET_BUDGET,
+    char_budget: int | None = None,
 ) -> PaperReadingPacket:
-    """Build a bounded packet that samples the whole paper conservatively."""
+    """Preserve all extracted text; an explicit character cap rejects, never clips."""
 
     chunks = sections if sections is not None else build_paper_sections(artifact)
-    warnings = _coverage_warnings(chunks)
-    selected = _select_chunks(chunks, char_budget=char_budget)
+    if char_budget is not None:
+        if type(char_budget) is not int or char_budget <= 0:
+            raise ValueError("Reading packet character budget must be positive.")
+        if len(artifact.text) > char_budget:
+            raise AnalysisError("Complete reading input exceeds the explicit character cap.")
+    selected_chunks = [replace(chunk, selected=True) for chunk in chunks]
+    coverage = []
+    for index, chunk in enumerate(chunks):
+        coverage.append({
+            "chunk_id": index + 1, "role": chunk.role, "heading": chunk.metadata.get("heading", ""),
+            "page_start": chunk.page_start, "page_end": chunk.page_end,
+            "source_start": chunk.metadata.get("source_start"),
+            "source_end": chunk.metadata.get("source_end"),
+            "retained_chars": len(chunk.text), "source_chars": len(chunk.text),
+            "status": "complete",
+        })
+    warnings = _coverage_warnings(selected_chunks)
     return PaperReadingPacket(
-        chunks=selected,
+        chunks=selected_chunks,
         warnings=warnings,
-        char_budget=char_budget,
+        source_text=artifact.text,
+        coverage=coverage,
     )
 
 
-def render_reading_packet(packet: PaperReadingPacket) -> str:
-    """Render a reading packet for prompt and audit output."""
-
+def reading_packet_index(
+    packet: PaperReadingPacket,
+) -> tuple[list[str], list[tuple[int, str, str, str, str, str]]]:
+    """Build the section index shared by literal and compact packet presentations."""
     lines = [
-        "FULL PAPER READING PACKET",
-        f"Character budget: {packet.char_budget}",
+        "FULL PAPER READING PACKET (complete extracted text; not visual PDF inspection)",
+        f"Source characters: {len(packet.source_text)}",
         "",
     ]
     if packet.warnings:
-        lines.append("Coverage warnings:")
+        lines.append("Section-index warnings (no source text omitted):")
         lines.extend(f"- {warning}" for warning in packet.warnings)
         lines.append("")
+    rows = []
     for index, chunk in enumerate(packet.chunks, start=1):
         pages = (
             f"page {chunk.page_start}"
@@ -102,27 +151,49 @@ def render_reading_packet(packet: PaperReadingPacket) -> str:
             else f"pages {chunk.page_start}-{chunk.page_end}"
         )
         reason = chunk.metadata.get("selection_reason", "selected")
+        source_end = chunk.metadata.get(
+            "selected_source_end", chunk.metadata.get("source_end", "?"),
+        )
+        rows.append((index, chunk.role, pages, str(reason),
+                     str(chunk.metadata.get("heading") or "unlabeled"),
+                     f"{chunk.metadata.get('source_start', '?')}:{source_end}"))
+    return lines, rows
+
+
+def render_reading_packet(
+    packet: PaperReadingPacket, *, rendered_source: str | None = None,
+) -> str:
+    """Render a reading packet for prompt and audit output."""
+    lines, rows = reading_packet_index(packet)
+    for index, role, pages, reason, heading, span in rows:
         lines.extend(
             [
-                f"[chunk {index}] role={chunk.role} pages={pages} reason={reason}",
-                chunk.text.strip(),
+                f"[chunk {index}] role={role} pages={pages} reason={reason}",
+                f"Section: {heading}; source span: {span}",
                 "",
             ]
         )
-    return "\n".join(lines).strip() + "\n"
+    source = packet.source_text if rendered_source is None else rendered_source
+    return "\n".join(lines) + "\nSOURCE TEXT\n" + source + "\nEND SOURCE TEXT\n"
 
 
-def _pages_from_text(text: str) -> list[tuple[int, str]]:
+def _page_spans(text: str) -> list[tuple[int, int, int]]:
     matches = list(_PAGE_MARKER.finditer(text))
     if not matches:
-        return [(1, text)]
-    pages: list[tuple[int, str]] = []
+        return [(1, 0, len(text))]
+    pages: list[tuple[int, int, int]] = []
     for index, match in enumerate(matches):
         page_number = int(match.group("page"))
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        pages.append((page_number, text[start:end]))
+        pages.append((page_number, start, end))
     return pages
+
+
+def _is_heading(line: str) -> bool:
+    return bool(_NUMBERED_HEADING.fullmatch(line) or _NAMED_HEADING.fullmatch(line)
+                or _TITLE_HEADING.fullmatch(line) or _CAMEL_HEADING.fullmatch(line)
+                or re.fullmatch(r"(?i:appendix)(?:[ \t]+(?:[A-Za-z]|\d+))?", line))
 
 
 def _classify_role(page_number: int, text: str) -> str:
@@ -204,7 +275,11 @@ def _is_references_start(text: str) -> bool:
 
 def _is_appendix_start(text: str) -> bool:
     return bool(
-        re.search(r"(?m)^\s*(APPENDIX|[A-Z]\s+[A-Z][A-Z\s,&-]{3,})\s*$", text[:2500])
+        re.search(
+            r"(?m)^[ \t]*(?:(?i:appendix)(?:[ \t]+(?:[A-Za-z]|\d+))?"
+            r"|[A-Z]\s+[A-Z][A-Z\s,&-]{3,})[ \t]*$",
+            text[:2500],
+        )
     )
 
 
@@ -222,66 +297,6 @@ def _keyword_count(text: str, keywords: tuple[str, ...]) -> int:
     return sum(text.count(keyword) for keyword in keywords)
 
 
-def _priority_score(role: str, text: str) -> int:
-    role_scores = {
-        "abstract": 90,
-        "introduction": 80,
-        "method": 75,
-        "experiments_results": 85,
-        "limitations_conclusion": 82,
-        "related_work": 70,
-        "other": 30,
-        "references": 0,
-    }
-    role_keywords = {
-        "method": (
-            "framework",
-            "method",
-            "approach",
-            "architecture",
-            "module",
-            "information extraction",
-            "memory management",
-            "memory storage",
-            "retrieval",
-        ),
-        "experiments_results": (
-            "benchmark",
-            "result",
-            "table",
-            "ablation",
-            "cost",
-            "locomo",
-            "longmemeval",
-            "robustness",
-            "scalability",
-        ),
-        "limitations_conclusion": (
-            "limitation",
-            "future work",
-            "conclusion",
-            "lessons",
-            "opportunities",
-            "challenge",
-        ),
-        "related_work": ("related work", "related works", "prior work", "baseline"),
-    }
-    keyword_bonus = _keyword_count(
-        text.casefold(),
-        role_keywords.get(
-            role,
-            (
-                "benchmark",
-                "result",
-                "limitation",
-                "locomo",
-                "longmemeval",
-            ),
-        ),
-    )
-    return role_scores.get(role, 30) + min(keyword_bonus, 20)
-
-
 def _coverage_warnings(chunks: list[PaperSectionChunk]) -> list[str]:
     roles = {chunk.role for chunk in chunks if chunk.role != "references"}
     warnings = []
@@ -293,128 +308,5 @@ def _coverage_warnings(chunks: list[PaperSectionChunk]) -> list[str]:
     }
     for label, group in required_groups.items():
         if not roles.intersection(group):
-            warnings.append(f"missing section role: {label}")
+            warnings.append(f"section heading not identified: {label}; no source text omitted")
     return warnings
-
-
-def _select_chunks(
-    chunks: list[PaperSectionChunk],
-    *,
-    char_budget: int,
-) -> list[PaperSectionChunk]:
-    selected: list[PaperSectionChunk] = []
-    selected_ids: set[int] = set()
-    remaining = char_budget
-
-    def add(chunk: PaperSectionChunk, reason: str) -> None:
-        nonlocal remaining
-        if id(chunk) in selected_ids or chunk.role == "references" or remaining <= 0:
-            return
-        text = _bounded_text(
-            chunk.text,
-            min(remaining, _chunk_char_limit(chunk.role, char_budget)),
-        )
-        if not text:
-            return
-        if len(text) < 80 and len(chunk.text) > len(text):
-            return
-        selected_ids.add(id(chunk))
-        remaining -= len(text)
-        selected.append(
-            PaperSectionChunk(
-                role=chunk.role,
-                page_start=chunk.page_start,
-                page_end=chunk.page_end,
-                text=text,
-                selected=True,
-                metadata={
-                    **chunk.metadata,
-                    "selection_reason": reason,
-                    "selected_char_count": len(text),
-                },
-            )
-        )
-
-    role_groups = {
-        role: sorted(
-            [chunk for chunk in chunks if chunk.role == role],
-            key=lambda chunk: (
-                -int(chunk.metadata.get("priority_score", 0)),
-                chunk.page_start,
-            ),
-        )
-        for role in {
-            "abstract",
-            "introduction",
-            "method",
-            "experiments_results",
-            "limitations_conclusion",
-            "related_work",
-        }
-    }
-
-    coverage_pass = [
-        ("abstract", 1),
-        ("introduction", 1),
-        ("method", 1),
-        ("experiments_results", 2),
-        ("limitations_conclusion", 1),
-        ("related_work", 1),
-    ]
-    extra_pass = [
-        ("experiments_results", 2),
-        ("limitations_conclusion", 1),
-        ("method", 1),
-        ("related_work", 1),
-    ]
-
-    for role, limit in [*coverage_pass, *extra_pass]:
-        candidates = sorted(
-            [
-                chunk
-                for chunk in role_groups.get(role, [])
-                if id(chunk) not in selected_ids
-            ],
-            key=lambda chunk: (
-                -int(chunk.metadata.get("priority_score", 0)),
-                chunk.page_start,
-            ),
-        )
-        for chunk in candidates[:limit]:
-            add(chunk, f"role coverage: {role}")
-
-    filler = sorted(
-        [chunk for chunk in chunks if id(chunk) not in selected_ids],
-        key=lambda chunk: (
-            -int(chunk.metadata.get("priority_score", 0)),
-            chunk.page_start,
-        ),
-    )
-    for chunk in filler:
-        add(chunk, "budget filler")
-
-    return sorted(selected, key=lambda chunk: chunk.page_start)
-
-
-def _chunk_char_limit(role: str, char_budget: int) -> int:
-    role_limits = {
-        "abstract": 2_500,
-        "introduction": 3_000,
-        "method": 4_500,
-        "experiments_results": 4_500,
-        "limitations_conclusion": 3_500,
-        "related_work": 3_000,
-        "other": 1_500,
-    }
-    return min(role_limits.get(role, 1_500), max(800, char_budget // 2))
-
-
-def _bounded_text(text: str, budget: int) -> str:
-    if budget <= 0:
-        return ""
-    normalized = re.sub(r"\n{3,}", "\n\n", text.strip())
-    if len(normalized) <= budget:
-        return normalized
-    if budget < 50:
-        return normalized[:budget].rstrip()
-    return normalized[: max(0, budget - 20)].rstrip() + "\n[truncated]"

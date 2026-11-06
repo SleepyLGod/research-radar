@@ -226,7 +226,14 @@ def _concept_gate(topic: TopicConfig, text: str) -> dict[str, object]:
     matched_negative_groups = sorted(
         group for group in matched_aliases if _is_negative_concept_group(group)
     )
-    benchmark_anchor = any(
+    positive_groups = {
+        group for group in topic.concept_groups if not _is_negative_concept_group(group)
+    }
+    # Existing generated profiles use these names for context + (mechanism or evaluation).
+    legacy_profile = bool(
+        positive_groups & {"agent_context", "memory_mechanism", "evaluation_signal"}
+    )
+    benchmark_anchor = legacy_profile and any(
         _normalize(alias) in BENCHMARK_ANCHOR_ALIASES
         for aliases in matched_aliases.values()
         for alias in aliases
@@ -234,10 +241,15 @@ def _concept_gate(topic: TopicConfig, text: str) -> dict[str, object]:
     has_agent_context = "agent_context" in matched_groups
     has_memory_mechanism = "memory_mechanism" in matched_groups
     has_evaluation_signal = "evaluation_signal" in matched_groups
-    passed = benchmark_anchor or (
-        has_agent_context and (has_memory_mechanism or has_evaluation_signal)
-    )
-    if benchmark_anchor:
+    if legacy_profile:
+        passed = benchmark_anchor or (
+            has_agent_context and (has_memory_mechanism or has_evaluation_signal)
+        )
+    else:
+        passed = bool(positive_groups) and positive_groups.issubset(matched_groups)
+    if not legacy_profile and passed:
+        decision_rule = "all_positive_groups"
+    elif benchmark_anchor:
         decision_rule = "benchmark_anchor"
     elif has_agent_context and has_memory_mechanism:
         decision_rule = "agent_context+memory_mechanism"

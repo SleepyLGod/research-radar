@@ -5,21 +5,31 @@ from __future__ import annotations
 import codecs
 import json
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
+
+from research_radar.security.redaction import redact_text
 
 _MAX_STREAM_CHARS = 1_048_576
 _LINE_END = re.compile(r"\r\n|\r|\n")
+_ERROR_IDENTIFIER = re.compile(r"[A-Za-z0-9_.:/\[\]$~-]{1,128}")
+_MODEL_ENVELOPE = re.compile(
+    r"[\"'](?:reasoning_content|reasoning|choices|messages|content|delta|authorization|headers)[\"']\s*:",
+    re.IGNORECASE,
+)
 
 
 class ChatStreamError(ValueError):
-    """A fixed diagnostic code, never a model response or reasoning excerpt."""
+    """A fixed failure state and optional sanitized, bounded provider error fields."""
 
-    def __init__(self, state: str) -> None:
+    def __init__(self, state: str, *, provider_error: dict[str, object] | None = None) -> None:
         super().__init__(state)
         self.state = state
+        self.provider_error = provider_error or {}
 
 
-def parse_chat_stream(chunks: Iterable[bytes]) -> dict[str, object]:
+def parse_chat_stream(
+    chunks: Iterable[bytes], *, redact_error: Callable[[str], str] = redact_text,
+) -> dict[str, object]:
     """Collect final-answer deltas; require one terminal choice and a DONE event."""
 
     content: list[str] = []
@@ -45,7 +55,10 @@ def parse_chat_stream(chunks: Iterable[bytes]) -> dict[str, object]:
         if not isinstance(payload, dict):
             raise ChatStreamError("stream_invalid_shape")
         if "error" in payload:
-            raise ChatStreamError("stream_provider_error")
+            raise ChatStreamError(
+                "stream_provider_error",
+                provider_error=_provider_error_fields(payload["error"], redact_error),
+            )
         reported = payload.get("model")
         if isinstance(reported, str) and reported:
             if model is not None and reported != model:
@@ -82,6 +95,35 @@ def parse_chat_stream(chunks: Iterable[bytes]) -> dict[str, object]:
                 raise ChatStreamError("stream_invalid_shape")
             finish = reason
     raise ChatStreamError("stream_missing_done")
+
+
+def _provider_error_fields(
+    error: object, redact: Callable[[str], str],
+) -> dict[str, object]:
+    """Copy scalar error fields only; never stringify an envelope or nested payload."""
+    if isinstance(error, str):
+        error = {"message": error}
+    if not isinstance(error, dict):
+        return {}
+    safe: dict[str, object] = {}
+    for key in ("code", "type", "param"):
+        if key not in error:
+            continue
+        value = error[key]
+        if value is None:
+            safe[key] = None
+        elif key == "code" and type(value) is int and abs(value) <= 10**12:
+            safe[key] = value
+        elif isinstance(value, str) and _ERROR_IDENTIFIER.fullmatch(value):
+            sanitized = redact(value)
+            if len(sanitized) <= 128:
+                safe[key] = sanitized
+    message = error.get("message")
+    if isinstance(message, str) and message.strip() and not _MODEL_ENVELOPE.search(message):
+        # Redact before cutting: a credential crossing the boundary must not leak a prefix.
+        message = "".join(char if char.isprintable() else " " for char in redact(message))
+        safe["message"] = message if len(message) <= 500 else message[:497] + "..."
+    return safe
 
 
 def _event_data(chunks: Iterable[bytes]) -> Iterator[str]:

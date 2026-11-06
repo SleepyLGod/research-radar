@@ -26,6 +26,13 @@ _RESPONSE_FAILURES = {
     "missing_final_answer": "response did not contain a final answer",
     "invalid_message_content": "response content was not text",
 }
+_PROVIDER_ERROR_KINDS = {
+    "invalid_json_schema": "schema_rejected",
+    "invalid_api_key": "authentication",
+    "rate_limit_exceeded": "rate_limit",
+    "insufficient_quota": "quota",
+    "server_error": "service",
+}
 
 
 class OpenAICompatibleProvider:
@@ -43,12 +50,18 @@ class OpenAICompatibleProvider:
         reasoning_effort: str | None = None,
         max_tokens: int | None = None,
         stream: bool = False,
+        response_schema: dict[str, object] | None = None,
+        json_output: bool = False,
         cancellation_event: Event | None = None,
     ) -> None:
         if max_tokens is not None and (type(max_tokens) is not int or max_tokens < 1):
             raise ValueError("max_tokens must be a positive integer.")
         if type(stream) is not bool:
             raise ValueError("stream must be a boolean.")
+        if type(json_output) is not bool:
+            raise ValueError("json_output must be a boolean.")
+        if json_output and response_schema is not None:
+            raise ValueError("Choose JSON object output or a specific response schema, not both.")
         self.name = name
         self.endpoint = endpoint
         self._api_key_secret = api_key_secret
@@ -58,6 +71,11 @@ class OpenAICompatibleProvider:
         self.reasoning_effort = reasoning_effort
         self.max_tokens = max_tokens
         self.stream = stream
+        self.json_output = json_output
+        self._schema_json = (
+            json.dumps(response_schema, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            if response_schema is not None else None
+        )
         self._cancellation_event = cancellation_event
         identity_parts = [f"endpoint_sha256={hashlib.sha256(endpoint.encode('utf-8')).hexdigest()}"]
         if thinking is not None:
@@ -68,7 +86,18 @@ class OpenAICompatibleProvider:
             identity_parts.append(f"max_tokens={max_tokens}")
         if stream:
             identity_parts.append("stream=true")
+        if json_output:
+            identity_parts.append("json_output=true")
+        if self._schema_json is not None:
+            identity_parts.append(
+                f"response_schema_sha256={hashlib.sha256(self._schema_json.encode()).hexdigest()}"
+            )
         self.cache_identity = ";".join(identity_parts)
+
+    @property
+    def response_schema(self) -> dict[str, object] | None:
+        """Expose a copy so callers cannot mutate an identified request contract."""
+        return json.loads(self._schema_json) if self._schema_json is not None else None
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Call a chat completions endpoint and return normalized content."""
@@ -89,6 +118,14 @@ class OpenAICompatibleProvider:
             payload["max_tokens"] = self.max_tokens
         if self.stream:
             payload["stream"] = True
+        if self._schema_json is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "paper_reading", "strict": True,
+                                "schema": self.response_schema},
+            }
+        elif self.json_output:
+            payload["response_format"] = {"type": "json_object"}
         if self.thinking != "enabled" and self.reasoning_effort is None:
             payload["temperature"] = 0.2
         request = Request(
@@ -109,7 +146,13 @@ class OpenAICompatibleProvider:
             try:
                 with urlopen(request, timeout=timeout) as response:
                     if self.stream:
-                        data = parse_chat_stream(self._stream_chunks(response, deadline))
+                        data = parse_chat_stream(
+                            self._stream_chunks(response, deadline),
+                            redact_error=lambda value: _safe_excerpt(
+                                value.replace(request.full_url, "[REQUEST_ENDPOINT]"),
+                                request=request,
+                            ),
+                        )
                     else:
                         raw_response = response.read().decode("utf-8")
                         data = json.loads(raw_response)
@@ -181,6 +224,17 @@ class OpenAICompatibleProvider:
                 ) else None,
             )
         reported_model = data.get("model")
+        if self.json_output:
+            try:
+                if not isinstance(json.loads(message["content"]), dict):
+                    raise ValueError("JSON output must be an object.")
+            except (ValueError, RecursionError) as exc:
+                raise self._transport_error(
+                    exc, model=model, summary="response did not contain a valid JSON object",
+                    request=request, attempt_count=attempt,
+                    elapsed_seconds=time.monotonic() - started_at,
+                    response_state="invalid_json_output",
+                ) from None
         if (
             not isinstance(reported_model, str) or not reported_model
             or len(reported_model) > 200 or any(c.isspace() for c in reported_model)
@@ -198,6 +252,7 @@ class OpenAICompatibleProvider:
                 "attempt_count": attempt,
                 "reported_model": reported_model,
                 "finish_reason": finish_reason,
+                **({"response_schema_requested": True} if self._schema_json is not None else {}),
             },
         )
 
@@ -248,6 +303,7 @@ class OpenAICompatibleProvider:
             diagnostics["elapsed_seconds"] = round(elapsed_seconds, 3)
         if response_state is not None:
             diagnostics.update(response_state=response_state, finish_reason=finish_reason)
+        payload = {}
         if request is not None:
             diagnostics["request_byte_count"] = len(request.data or b"")
             try:
@@ -263,6 +319,17 @@ class OpenAICompatibleProvider:
                 effort = payload.get("reasoning_effort")
                 if isinstance(effort, str) and effort in {"low", "medium", "high", "xhigh", "max"}:
                     diagnostics["reasoning_effort"] = effort
+        if isinstance(exc, ChatStreamError) and exc.state == "stream_provider_error":
+            details = exc.provider_error
+            kind = _PROVIDER_ERROR_KINDS.get(details.get("code"), "unclassified")
+            schema_requested = (
+                isinstance(payload, dict)
+                and isinstance(payload.get("response_format"), dict)
+                and payload["response_format"].get("type") == "json_schema"
+            )
+            if kind == "schema_rejected" and not schema_requested:
+                kind = "unclassified"
+            diagnostics.update(provider_error=details, provider_error_kind=kind)
         diagnostics.update(attempt_count=attempt_count, retryable=_is_transient_disconnect(exc))
         return ProviderTransportError(_failure_message(diagnostics), diagnostics)
 
@@ -371,6 +438,8 @@ def _failure_message(diagnostics: dict[str, object]) -> str:
         "transport_state",
         "response_state",
         "finish_reason",
+        "provider_error_kind",
+        "provider_error",
         "response_excerpt",
     ):
         if key in diagnostics and diagnostics[key] is not None:

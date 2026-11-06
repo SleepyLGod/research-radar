@@ -84,6 +84,20 @@ def test_daily_transport_recovery_and_cancellation_use_real_bridge(
 def offline_io(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[tuple[str, str]]:
     """Replace only discovery, HTTP, and PDFKit IO; forbid all other external IO."""
     requests: list[tuple[str, str]] = []
+    from reader_fixtures import OFFLINE_READER_CONTEXTS
+
+    from research_radar.application import daily as application_daily
+
+    resolve = application_daily.resolve_task_route
+
+    def offline_route(*args: object, **kwargs: object):
+        route = resolve(*args, **kwargs)
+        if route.provider is not None:
+            route.provider.reader_contexts = OFFLINE_READER_CONTEXTS
+        return route
+
+    # Declare synthetic reader capacity without extending the App configuration schema.
+    monkeypatch.setattr(application_daily, "resolve_task_route", offline_route)
     discovery = FrozenDiscovery(tmp_path)
     monkeypatch.setattr(
         ArxivConnector, "discover", lambda self, context: discovery.discover(context)

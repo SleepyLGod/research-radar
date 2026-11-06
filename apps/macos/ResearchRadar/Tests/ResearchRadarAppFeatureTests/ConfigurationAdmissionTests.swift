@@ -171,6 +171,7 @@ struct AdmissionSecrets: SecretStoring {
             codexExecutable: codex ? URL(fileURLWithPath: "/usr/bin/true") : nil)
         config.topics = [TopicRecordV1(id: "memory", displayName: "Memory", researchFocus: "Recall",
             queries: ["memory"], paperQueries: ["memory"], reportLanguage: .english)]
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         return AppStore(configuration: config, scheduleSnapshot: ScheduleSnapshotV1(schedules: schedules),
             runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: secrets)
     }

@@ -26,11 +26,18 @@ from research_radar.analysis.paper_reading import (
     reading_to_dict,
     render_deep_reading_report,
 )
+from research_radar.analysis.paper_sections import build_reading_packet
 from research_radar.analysis.providers import LLMProvider
 from research_radar.analysis.public_style import audit_public_writing_text
+from research_radar.analysis.reader_input import ReaderInputError
 from research_radar.analysis.research_outcome import assess_research_outcome
 from research_radar.analysis.research_plan import build_research_plan, research_plan_to_dict
-from research_radar.analysis.review import model_review_publishable_claims, rule_based_review
+from research_radar.analysis.review import (
+    model_review_publishable_claims,
+    review_publication_facts,
+    reviewed_analysis_claims,
+    rule_based_review,
+)
 from research_radar.analysis.source_gist import attach_source_gists
 from research_radar.analysis.triage import heuristic_claims
 from research_radar.compose.draft import apply_research_outcome, build_daily_draft
@@ -71,7 +78,7 @@ from research_radar.models import (
 )
 from research_radar.pipeline.progress import ProgressListener, ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
-from research_radar.pipeline.reporting import render_review_report
+from research_radar.pipeline.reporting import render_review_report, write_failed_run
 from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.security.redaction import redact_text
 from research_radar.storage.files import write_json, write_jsonl, write_text
@@ -281,6 +288,7 @@ def run_daily(
     anchor_resolutions = []
     anchor_repairs = []
     reader_attempts = []
+    reading_inputs = []
     selected_deep_candidates: list[SourceCandidate] = []
     deep_reading_status_by_url: dict[str, str] = {}
     deep_candidate_pool: list[SourceCandidate] = []
@@ -404,14 +412,20 @@ def run_daily(
             )
             reader_cache_before = provider_cache_stats(deep_reader)
             repair_cache_before = provider_cache_stats(anchor_repair_provider)
+            reading_packet = build_reading_packet(artifact)
+            reading_inputs.append({"source_url": candidate.url,
+                                   **dataclass_to_dict(reading_packet)})
+            write_jsonl(run_dir / "paper_reading_inputs.jsonl", reading_inputs)
             try:
                 deep_result = run_artifact_deep_reading(
                     artifact,
                     deep_reader,
                     model=deep_model or config.models.analyst,
                     language=ANALYSIS_LANGUAGE,
+                    packet=reading_packet,
                     anchor_repair_provider=anchor_repair_provider,
                     anchor_repair_model=anchor_repair_model,
+                    facts_only=report_language == "zh",
                 )
             except AnalysisError as exc:
                 deep_reading_status_by_url[candidate.url] = "reading_failed"
@@ -425,6 +439,19 @@ def run_daily(
                     error_type=type(exc).__name__,
                     error=str(exc),
                 )
+                if isinstance(exc, ReaderInputError):
+                    reading_inputs[-1]["input_budget"] = exc.audit
+                    write_jsonl(run_dir / "paper_reading_inputs.jsonl", reading_inputs)
+                    write_jsonl(run_dir / "reader_attempts.jsonl", [
+                        *reader_attempts, *exc.reader_attempts,
+                    ])
+                    manifest.metadata["failure"] = {
+                        "stage": "reader", "code": exc.code, "message": str(exc),
+                        "reader_attempt_count": len(reader_attempts) + len(exc.reader_attempts),
+                    }
+                    update_manifest(run_dir, manifest)
+                    write_json(run_dir / "run_error.json", manifest.metadata["failure"])
+                    raise
                 findings.append(
                     ReviewFinding(
                         severity="error",
@@ -460,6 +487,9 @@ def run_daily(
             deep_reading_status_by_url[candidate.url] = "succeeded"
             selected_family_keys.update(family_keys)
             readings.append(deep_result.reading)
+            if deep_result.artifact is not None:
+                deep_artifacts = [deep_result.artifact if a is artifact else a
+                                  for a in deep_artifacts]
             deep_claims.extend(deep_result.claims)
             findings.extend(deep_result.findings)
             anchor_resolutions.extend(deep_result.anchor_resolutions)
@@ -494,6 +524,91 @@ def run_daily(
     claims, policy_findings = rule_based_review(claims)
     findings.extend(policy_findings)
 
+    verified_facts = report_language == "zh" and any(r.claim_units for r in readings)
+    if verified_facts:
+        if verifier is None:
+            exc = AnalysisError("Chinese factual composition requires a Verifier before writing.")
+            progress.record("verifier", "failed", scope="facts", error=str(exc))
+            write_failed_run(run_dir, manifest, "verifier", None,
+                              verifier_model or config.models.verifier, exc)
+            raise exc
+        write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(r) for r in readings])
+        progress.record("verifier", "started", scope="facts", provider=verifier.name,
+                        model=verifier_model or config.models.verifier)
+        write_claims(run_dir / "reader_claims.jsonl", claims)
+        try:
+            fact_review = review_publication_facts(claims, verifier,
+                model=verifier_model or config.models.verifier, readings=readings,
+                artifacts=deep_artifacts, topic_id=topic.id, queries=topic.queries)
+        except AnalysisError as exc:
+            progress.record("verifier", "failed", scope="facts", error=str(exc))
+            write_failed_run(run_dir, manifest, "verifier", verifier.name,
+                              verifier_model or config.models.verifier, exc)
+            raise
+        claims = fact_review.claims
+        readings = fact_review.readings
+        findings.extend(fact_review.findings)
+        write_claims(run_dir / "fact_claims.jsonl", claims)
+        write_text(run_dir / "fact_review.json", fact_review.raw_feedback or "{}")
+        progress.record("verifier", "succeeded", scope="facts",
+                        reviewed_count=fact_review.reviewed_count)
+
+    display_readings = readings
+    display_claims = claims
+    display_sources = list({source.url: source for source in [
+        *reportable_candidates, *selected_deep_candidates,
+    ]}.values())
+    localization_attempts = []
+    if report_language == "zh":
+        write_jsonl(run_dir / "readings.jsonl", [reading_to_dict(item) for item in readings])
+        write_claims(run_dir / "claims.jsonl", claims)
+        progress.record(
+            "localization",
+            "started",
+            provider=localizer.name if localizer is not None else "local",
+            model=localization_model or "local",
+            reading_count=len(readings),
+            claim_count=sum(1 for claim in claims if claim.is_publishable()),
+        )
+        localization_cache_before = provider_cache_stats(localizer)
+        localization = localize_report_content(
+            readings=readings,
+            claims=claims,
+            sources=display_sources,
+            provider=localizer,
+            model=localization_model,
+            language=report_language,
+            verified_facts=verified_facts,
+        )
+        display_readings = localization.readings
+        display_claims = localization.claims
+        display_sources = localization.sources
+        localization_attempts = localization.attempts
+        write_jsonl(run_dir / "publication_candidates.jsonl",
+                    [reading_to_dict(item) for item in localization.readings])
+        write_claims(run_dir / "publication_claims.jsonl", display_claims)
+        findings.extend(localization.findings)
+        status = localization.status
+        if localization_failed(localization):
+            _write_localization_failed_daily(
+                run_dir,
+                manifest,
+                progress,
+                localization_attempts,
+                status=status,
+            )
+            raise AnalysisError(
+                "Chinese report localization failed for at least one display chunk; "
+                "no zh public article was generated."
+            )
+        progress.record(
+            "localization",
+            "completed",
+            provider=localizer.name if localizer is not None else "local",
+            model=localization_model or "local",
+            status_detail=status,
+            **provider_cache_delta(localization_cache_before, localizer),
+        )
     model_feedback = None
     verification_actions = []
     verifier_reviewed_count = 0
@@ -510,13 +625,21 @@ def run_daily(
         verifier_cache_before = provider_cache_stats(verifier)
         try:
             review_result = model_review_publishable_claims(
-                claims,
+                display_claims,
                 verifier,
                 model=verifier_model or config.models.verifier,
                 topic_id=topic.id,
                 queries=topic.queries,
+                readings=display_readings,
+                artifacts=deep_artifacts,
+                analysis_claims=claims,
+                require_fact_receipts=report_language == "zh",
             )
-            claims = review_result.claims
+            display_claims = review_result.claims
+            display_readings = review_result.readings
+            claims = reviewed_analysis_claims(claims, display_claims)
+            if report_language != "zh":
+                readings = display_readings
             model_findings = review_result.findings
             model_feedback = review_result.raw_feedback
             verification_actions = review_result.actions
@@ -530,6 +653,8 @@ def run_daily(
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
+            write_failed_run(run_dir, manifest, "verifier", verifier.name,
+                              verifier_model or config.models.verifier, exc)
             raise
         findings.extend(model_findings)
         claims, post_model_policy_findings = rule_based_review(claims)
@@ -578,63 +703,37 @@ def run_daily(
         selected_deep_candidates,
         source_intent=topic.source_intent,
     )
-    display_readings = readings
-    display_claims = claims
-    display_sources = public_reportable_candidates
-    display_deep_sources = selected_deep_candidates
+    localized_source_by_url = {source.url: source for source in display_sources}
+    display_sources = [
+        localized_source_by_url.get(source.url, source) for source in public_reportable_candidates
+    ]
+    display_deep_sources = [
+        localized_source_by_url.get(source.url, source) for source in selected_deep_candidates
+    ]
     display_figures_by_source_url = figures_by_source_url
-    localization_attempts = []
-    if report_language == "zh":
-        progress.record(
-            "localization",
-            "started",
-            provider=localizer.name if localizer is not None else "local",
-            model=localization_model or "local",
-            reading_count=len(readings),
-            claim_count=sum(1 for claim in claims if claim.is_publishable()),
+    if report_language == "zh" and figures_by_source_url:
+        # Figures are selected only after review; their optional caption translation
+        # cannot replace the already reviewed Chinese claims or paragraphs.
+        progress.record("localization", "started", scope="figures")
+        figure_cache_before = provider_cache_stats(localizer)
+        figure_localization = localize_report_content(
+            readings=[], claims=[], sources=[], figures_by_source_url=figures_by_source_url,
+            provider=localizer, model=localization_model, language=report_language,
         )
-        localization_cache_before = provider_cache_stats(localizer)
-        localization = localize_report_content(
-            readings=readings,
-            claims=claims,
-            sources=public_reportable_candidates,
-            figures_by_source_url=figures_by_source_url,
-            provider=localizer,
-            model=localization_model,
-            language=report_language,
-        )
-        display_readings = localization.readings
-        display_claims = localization.claims
-        display_sources = localization.sources
-        localized_source_by_url = {source.url: source for source in display_sources}
-        display_deep_sources = [
-            localized_source_by_url.get(source.url, source)
-            for source in selected_deep_candidates
-        ]
-        display_figures_by_source_url = localization.figures_by_source_url
-        localization_attempts = localization.attempts
-        findings.extend(localization.findings)
-        status = localization.status
-        if localization_failed(localization):
+        localization_attempts.extend(figure_localization.attempts)
+        findings.extend(figure_localization.findings)
+        if localization_failed(figure_localization):
             _write_localization_failed_daily(
-                run_dir,
-                manifest,
-                progress,
-                localization_attempts,
-                status=status,
+                run_dir, manifest, progress, localization_attempts,
+                status=localization_status_from_attempts(localization_attempts),
             )
             raise AnalysisError(
-                "Chinese report localization failed for at least one display chunk; "
-                "no zh public article was generated."
+                "Chinese figure localization failed; no zh public article was generated."
             )
-        progress.record(
-            "localization",
-            "completed",
-            provider=localizer.name if localizer is not None else "local",
-            model=localization_model or "local",
-            status_detail=status,
-            **provider_cache_delta(localization_cache_before, localizer),
-        )
+        display_figures_by_source_url = figure_localization.figures_by_source_url
+        progress.record("localization", "completed", scope="figures",
+                        **provider_cache_delta(figure_cache_before, localizer))
+
     manifest = replace(
         manifest,
         source_count=len(candidates),

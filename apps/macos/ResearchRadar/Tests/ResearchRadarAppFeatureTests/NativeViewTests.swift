@@ -57,6 +57,7 @@ import Testing
             let root = try task3Root(); defer { task3Trash(root) }
             var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"),
                 codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+            config = ReaderBudgetTestConfiguration.declaringBudgets(config)
             config.topics = [.init(id: "memory", displayName: "Agent memory", researchFocus: "智能体的长期记忆",
                 queries: ["memory"], paperQueries: ["memory"], reportLanguage: .chinese)]
             let runner = CancellingPaperRunner(twoPapers: true)

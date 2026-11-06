@@ -34,6 +34,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         let report = ReportRecordV1(topicID: "memory", reportDate: "2026-09-19", runDirectory: "/fake/empty", articleDraftPath: "/fake/empty/a", reportHTMLPath: "/fake/empty/h", title: "Empty", summary: "", sourceCount: 1, deepReadCount: 0, publishableClaimCount: 0, deliveries: [], createdAt: Date())
         let useful = ReportRecordV1(topicID: "memory", reportDate: report.reportDate, runDirectory: "/fake/useful", articleDraftPath: "/fake/useful/a", reportHTMLPath: "/fake/useful/h", title: "Useful", summary: "", sourceCount: 2, deepReadCount: 1, publishableClaimCount: 1, deliveries: [], createdAt: Date(timeIntervalSince1970: 1))
         let store = AppStore(configuration: config, reportSnapshot: .init(reports: priorUseful ? [report, useful] : [report]), runtime: .init(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
@@ -83,7 +84,8 @@ private actor BootstrapRunner: EngineProcessRunning {
 
     @Test func scheduleRecoveryValidatesDiskAndCannotUndoQuit() async throws {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
-        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        let config = ReaderBudgetTestConfiguration.declaringBudgets(AppConfigurationDefaults.make(
+            workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true")))
         let disk = AtomicJSONStore(root: root)
         try disk.write(config, to: "config/app-config.json")
         try disk.write(ScheduleSnapshotV1(), to: "state/schedules.json")
@@ -113,6 +115,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         let run = root.appending(path: "workspace/run")
         let report = ReportRecordV1(topicID: "memory", reportDate: "2026-09-19", runDirectory: run.path,
             articleDraftPath: run.appending(path: "article.json").path, reportHTMLPath: run.appending(path: "report.html").path,
@@ -149,6 +152,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         let runner = SuspendedAppRunner()
         let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, engineURL: URL(fileURLWithPath: "/fake/engine"), runner: runner, secretStore: AdmissionSecrets())
         let command = Task { await store.testConnections() }
@@ -206,6 +210,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         let store = AppStore(configuration: config, runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
         await store.enqueueRunNow(topicID: "memory", reportDate: "2026-09-19")
         #expect(store.behaviorChangesBlocked)
@@ -223,6 +228,7 @@ private actor BootstrapRunner: EngineProcessRunning {
         let root = try appStoreRoot(); defer { try? trashAppStoreRoot(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
         config.topics = [testTopic()]
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         let report = ReportRecordV1(topicID: "memory", reportDate: "2026-09-19", runDirectory: "/fake/run", articleDraftPath: "/fake/run/a", reportHTMLPath: "/fake/run/h", title: "Report", summary: "", sourceCount: 1, deepReadCount: 1, publishableClaimCount: 1, deliveries: [], createdAt: Date())
         let store = AppStore(configuration: config, reportSnapshot: ReportIndexV1(reports: [report]), runtime: AppRuntimeStateV1(updatedAt: Date()), appSupportRoot: root, secretStore: AdmissionSecrets())
         await store.enqueueRunNow(topicID: "memory", reportDate: "2026-09-19")

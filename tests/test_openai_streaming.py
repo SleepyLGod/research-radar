@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request
 
 import pytest
+from reader_fixtures import source_response
 from test_pipeline_fake import (
     DEEP_READING_FIXTURE_TEXT,
     FakeConnector,
@@ -39,10 +40,14 @@ def secrets() -> SecretManager:
 
 
 def provider(**kwargs: object) -> transport.OpenAICompatibleProvider:
-    return transport.OpenAICompatibleProvider(
+    from reader_fixtures import OFFLINE_READER_CONTEXTS
+
+    result = transport.OpenAICompatibleProvider(
         name="offline", endpoint="https://example.invalid/chat/completions",
         api_key_secret="offline.key", secrets=secrets(), **kwargs,
     )
+    result.reader_contexts = OFFLINE_READER_CONTEXTS
+    return result
 
 
 def event(
@@ -164,7 +169,8 @@ def test_stream_reassembles_split_utf8_and_ignores_reasoning(
         (event([], finish="stop") + DONE, "invalid_message_content"),
         (event("{}", finish="unexpected") + DONE, "invalid_finish_reason"),
         (b"data: private malformed JSON\n\n" + DONE, "stream_invalid_json"),
-        (frame({"error": {"message": "private error offline-only-key"}}) + DONE,
+        (frame({"error": {"message": "Provider validation failed offline-only-key",
+                          "reasoning_content": "private reasoning"}}) + DONE,
          "stream_provider_error"),
         (frame({"choices": [1]}) + DONE, "stream_invalid_shape"),
         (frame({"choices": [{"index": 1, "delta": {"content": "private"}}]}) + DONE,
@@ -565,7 +571,17 @@ def test_reader_and_verifier_transport_reach_existing_daily_report(
     def request(req: Request, **_kwargs: object) -> io.BytesIO:
         payload = json.loads(req.data)
         payloads.append(payload)
-        answer = answers[payload["model"]]
+        reply = answers[payload["model"]]
+        if payload["model"] == "offline-verifier":
+            references = [json.loads(line.removeprefix("CLAIM REFERENCE: "))
+                          for line in payload["messages"][-1]["content"].splitlines()
+                          if line.startswith("CLAIM REFERENCE: ")]
+            reply = json.dumps({"decisions": [{
+                "claim_index": reference["claim_index"],
+                "status": "supported" if reference["claim_index"] == 1 else "needs_review",
+            } for reference in references]})
+        answer = source_response(reply,
+                                 [Message(**m) for m in payload["messages"]])
         if enabled:
             return io.BytesIO(event(extra={"reasoning_content": "private reasoning"})
                               + event(answer[:100]) + event(answer[100:], finish="stop") + DONE)

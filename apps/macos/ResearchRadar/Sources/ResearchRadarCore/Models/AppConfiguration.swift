@@ -103,16 +103,19 @@ public struct ProviderRecordV1: Codable, Equatable, Identifiable, Sendable {
     public var timeoutSeconds: Int
     public var thinking: String?
     public var reasoningEffort: String?
+    public var readerContexts: [String: ReaderContextBudgetV1]?
 
     public init(
         id: String, kind: String, baseURL: String? = nil, apiKeySecret: String? = nil,
         commandPath: String? = nil, timeoutSeconds: Int,
-        thinking: String? = nil, reasoningEffort: String? = nil
+        thinking: String? = nil, reasoningEffort: String? = nil,
+        readerContexts: [String: ReaderContextBudgetV1]? = nil
     ) {
         self.id = id; self.kind = kind; self.baseURL = baseURL
         self.apiKeySecret = apiKeySecret; self.commandPath = commandPath
         self.timeoutSeconds = timeoutSeconds; self.thinking = thinking
         self.reasoningEffort = reasoningEffort
+        self.readerContexts = readerContexts
     }
 }
 
@@ -292,6 +295,12 @@ public struct AppConfigurationV1: Codable, Equatable, Sendable, ValidatableDurab
         for provider in providers {
             guard !provider.id.isEmpty, !provider.kind.isEmpty, provider.timeoutSeconds > 0 else {
                 throw DurableStateValidationError.invalidValue
+            }
+            for (model, budget) in provider.readerContexts ?? [:] {
+                guard !model.isEmpty, model == model.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                    throw DurableStateValidationError.invalidValue
+                }
+                try budget.validate()
             }
         }
         for route in routes {

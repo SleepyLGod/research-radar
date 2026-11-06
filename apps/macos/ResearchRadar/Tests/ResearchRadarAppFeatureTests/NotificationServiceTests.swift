@@ -228,6 +228,7 @@ import Testing
         runtime: AppRuntimeStateV1 = .init(updatedAt: Date()), runner: (any EngineProcessRunning)? = nil) -> AppStore {
         var config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"),
             codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         config.topics = [.init(id: "memory", displayName: "Unpublished private_canary",
             researchFocus: "Agent memory", queries: ["agent memory"], paperQueries: ["agent memory"], reportLanguage: .english)]
         return AppStore(configuration: config, runtime: runtime, appSupportRoot: root,

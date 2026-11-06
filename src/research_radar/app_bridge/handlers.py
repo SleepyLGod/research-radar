@@ -135,10 +135,11 @@ def handle_preflight(
     dependencies = dependency_report()
     if not all(item.get("available") for item in dependencies.values()):
         checks[0]["status"] = "unavailable"
-    if payload.live_probe and config is not None:
+    if config is not None:
         checks.extend(_configured_route_checks(
-            config, cast(SecretManager, secrets), cancellation_event,
+            config, cast(SecretManager, secrets), cancellation_event, live_probe=payload.live_probe,
         ))
+    if payload.live_probe and config is not None:
         search = config.research.discovery.web_search
         search_status = "optional"
         search_message = "Search not checked: this connectivity probe supports Tavily only."
@@ -400,22 +401,32 @@ def _configured_route_checks(
     config: LoadedAppConfigurationV1,
     secrets: SecretManager,
     cancellation_event: Event | None = None,
+    *,
+    live_probe: bool = True,
 ) -> list[dict[str, object]]:
     checks: list[dict[str, object]] = []
     probe_status: dict[tuple[str, str], str | None] = {}
     for task, route in sorted(config.research.models.task_routes.items()):
         key = (route.provider, route.model)
-        if key not in probe_status:
-            try:
-                resolved = resolve_task_route(
-                    config.research, secrets, task, cancellation_event=cancellation_event,
-                )
-                if resolved.provider is not None:
-                    probe_provider(resolved, probe="small")
-                probe_status[key] = None
-            except ResearchRadarError as exc:
-                probe_status[key] = probe_excerpt(str(exc)) or "Provider check failed."
-        failure = probe_status[key]
+        provider = config.research.model_providers[route.provider]
+        failure = None
+        if (task in {"deep_reading", "verifier"} and provider.kind != "local"
+                and route.model not in provider.reader_contexts):
+            failure = "reader_context_unknown: Declare reader_contexts for this exact model."
+        elif not live_probe:
+            continue
+        elif provider.kind != "local":
+            if key not in probe_status:
+                try:
+                    resolved = resolve_task_route(
+                        config.research, secrets, task, cancellation_event=cancellation_event,
+                    )
+                    if resolved.provider is not None:
+                        probe_provider(resolved, probe="small")
+                    probe_status[key] = None
+                except ResearchRadarError as exc:
+                    probe_status[key] = probe_excerpt(str(exc)) or "Provider check failed."
+            failure = probe_status[key]
         ready = failure is None
         checks.append(
             {

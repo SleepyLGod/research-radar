@@ -1,9 +1,48 @@
-"""Pipeline report rendering."""
+"""Pipeline report rendering and failure persistence."""
 
 from __future__ import annotations
 
-from research_radar.analysis.paper_reading import ReaderAttempt
-from research_radar.models import ReviewFinding, VerificationAction
+from dataclasses import replace
+from pathlib import Path
+
+from research_radar.analysis.paper_reading import ReaderAttempt, reading_to_dict
+from research_radar.analysis.review import PublicationReviewError
+from research_radar.evidence.ledger import write_claims
+from research_radar.exceptions import ResearchRadarError
+from research_radar.models import ReviewFinding, RunManifest, VerificationAction
+from research_radar.storage.files import write_json, write_jsonl, write_text
+
+
+def write_failed_run(
+    run_dir: Path,
+    manifest: RunManifest,
+    stage: str,
+    provider: str | None,
+    model: str | None,
+    exc: ResearchRadarError,
+) -> None:
+    """Persist a failed-run envelope and any completed publication review evidence."""
+    failure = {
+        "stage": stage,
+        "provider": provider,
+        "model": model,
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+    }
+    diagnostics = getattr(exc, "diagnostics", None)
+    if isinstance(diagnostics, dict):
+        failure["transport"] = diagnostics
+    failed_manifest = replace(
+        manifest,
+        metadata={**manifest.metadata, "failure": failure},
+    )
+    write_json(run_dir / "manifest.json", failed_manifest)
+    write_json(run_dir / "run_error.json", failure)
+    if isinstance(exc, PublicationReviewError):
+        write_text(run_dir / "final_review.json", exc.raw_feedback)
+        write_claims(run_dir / "final_review_claims.jsonl", exc.claims)
+        write_jsonl(run_dir / "final_review_readings.jsonl",
+                    [reading_to_dict(reading) for reading in exc.readings])
 
 
 def render_review_report(

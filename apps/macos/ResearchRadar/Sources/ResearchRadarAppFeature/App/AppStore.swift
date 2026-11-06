@@ -142,6 +142,14 @@ public final class AppStore {
         if secretLookupFailed { return "keychain_lookup_failed" }
         guard secretPresenceLoaded else { return "credentials_unchecked" }
         if researchSecretNames.contains(where: { secretPresence[$0] != true }) { return "credentials_missing" }
+        for route in configuration.routes where ["deep_reading", "verifier"].contains(route.task) {
+            guard let provider = configuration.providers.first(where: { $0.id == route.providerID }) else {
+                return "invalid_configuration"
+            }
+            if provider.kind != "local", provider.readerContexts?[route.model] == nil {
+                return "reader_context_unknown"
+            }
+        }
         return nil
     }
 
@@ -953,6 +961,22 @@ public final class AppStore {
         guard let id else { selectedReportID = nil; return }
         guard selectedTopicReports.contains(where: { $0.id == id }) else { return }
         selectedReportID = id
+    }
+
+    public func setReaderContextBudget(
+        providerID: String, model: String, budget: ReaderContextBudgetV1
+    ) throws {
+        try requireBehaviorChange()
+        try budget.validate()
+        guard let index = configuration.providers.firstIndex(where: { $0.id == providerID }),
+              configuration.routes.contains(where: {
+                  ["deep_reading", "verifier"].contains($0.task) && $0.providerID == providerID && $0.model == model
+              }) else { throw AppStoreError.researchConfiguration("reader_context_invalid") }
+        var candidate = configuration
+        var budgets = candidate.providers[index].readerContexts ?? [:]
+        budgets[model] = budget
+        candidate.providers[index].readerContexts = budgets
+        try persistConfiguration(candidate)
     }
 
     public func saveTopic(_ topic: TopicRecordV1, creating: Bool = false) throws {

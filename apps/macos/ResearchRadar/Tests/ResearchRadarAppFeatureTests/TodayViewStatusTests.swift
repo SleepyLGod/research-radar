@@ -9,6 +9,7 @@ import Testing
         let root = FileManager.default.temporaryDirectory.appending(path: "overview-\(UUID())")
         var configuration = AppConfigurationDefaults.make(workspaceRoot: root,
             codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        configuration = ReaderBudgetTestConfiguration.declaringBudgets(configuration)
         configuration.topics = [.init(id: "memory", displayName: "Memory", researchFocus: "Memory",
             queries: ["memory"], paperQueries: ["memory"], reportLanguage: .english)]
         let report = ReportRecordV1(topicID: "memory", reportDate: ReportDate.string(for: Date()),

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from research_radar.analysis.providers import LLMProvider, Message, ModelResponse
+from research_radar.exceptions import AnalysisError
 from research_radar.storage.files import ensure_dir, read_json, write_json
 
 CACHE_SCHEMA_VERSION = 2
@@ -29,6 +30,8 @@ class CachedLLMProvider:
     ) -> None:
         self._provider = provider
         self.name = provider.name
+        self.reader_contexts = getattr(provider, "reader_contexts", {})
+        self.max_tokens = getattr(provider, "max_tokens", None)
         self.cache_root = ensure_dir(cache_dir)
         self.cache_dir = ensure_dir(self.cache_root / task_name)
         self.task_name = task_name
@@ -38,18 +41,70 @@ class CachedLLMProvider:
         self.miss_count = 0
         self.maintenance_error: str | None = None
 
-    def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
-        """Return a cached model response or call the wrapped provider."""
+    @property
+    def response_schema(self) -> dict[str, object] | None:
+        """Expose the wrapped request constraint for preflight budgeting."""
+        return getattr(self._provider, "response_schema", None)
+
+    @property
+    def json_output(self) -> bool:
+        """Expose the wrapped format mode for complete request budgeting."""
+        return bool(getattr(self._provider, "json_output", False))
+
+    @property
+    def supports_response_schema(self) -> bool:
+        """Expose only an underlying adapter's explicit per-request capability."""
+        return bool(getattr(self._provider, "supports_response_schema", False))
+
+    def complete(
+        self, messages: list[Message], *, model: str,
+        validate_response: Callable[[str], object] | None = None,
+    ) -> ModelResponse:
+        """Return a task-validated cache hit or validate a fresh reply before writing."""
+
+        return self._complete(messages, model=model, response_schema=None,
+                              validate_response=validate_response)
+
+    def complete_with_schema(
+        self, messages: list[Message], *, model: str, response_schema: dict[str, object],
+        validate_response: Callable[[str], object] | None = None,
+    ) -> ModelResponse:
+        """Cache a scoped schema request without changing provider state or counters."""
+        if not self.supports_response_schema:
+            raise AnalysisError("This provider has no per-request response-schema adapter.")
+        return self._complete(messages, model=model, response_schema=response_schema,
+                              validate_response=validate_response)
+
+    def _complete(
+        self, messages: list[Message], *, model: str, response_schema: dict[str, object] | None,
+        validate_response: Callable[[str], object] | None = None,
+    ) -> ModelResponse:
+        def validate(content: str) -> None:
+            if validate_response is not None:
+                validate_response(content)
+            else:
+                _validate_review_cache(content, response_schema)
+
+        identity = self.provider_cache_identity
+        if response_schema is not None:
+            encoded = json.dumps(response_schema, sort_keys=True,
+                                 ensure_ascii=False, allow_nan=False)
+            identity += f";response_schema_sha256={hashlib.sha256(encoded.encode()).hexdigest()}"
 
         cache_key = model_call_cache_key(
             provider_name=self.name,
             model=model,
             task_name=self.task_name,
             messages=messages,
-            provider_cache_identity=self.provider_cache_identity,
+            provider_cache_identity=identity,
         )
         cache_path = self.cache_dir / f"{cache_key}.json"
         cached = _read_cached_response(cache_path, cache_key)
+        if cached is not None:
+            try:
+                validate(str(cached["content"]))
+            except AnalysisError:
+                cached = None  # A rejected historical reply is a miss, not a retry.
         if cached is not None:
             self.hit_count += 1
             if self.cache_limit_bytes is not None:
@@ -66,7 +121,13 @@ class CachedLLMProvider:
             )
 
         self.miss_count += 1
-        response = self._provider.complete(messages, model=model)
+        if response_schema is None:
+            response = self._provider.complete(messages, model=model)
+        else:
+            response = self._provider.complete_with_schema(
+                messages, model=model, response_schema=response_schema,
+            )
+        validate(response.content)
         _write_cached_response(
             cache_path,
             cache_key=cache_key,
@@ -101,6 +162,23 @@ class CachedLLMProvider:
             self.maintenance_error = None
         except OSError as exc:
             self.maintenance_error = str(exc)
+
+
+def _validate_review_cache(content: str, schema: dict | None) -> None:
+    """Never treat an incomplete constrained review as a reusable successful response."""
+    from research_radar.analysis.review_targets import (
+        COMPARISON_SCHEMA_ID,
+        LEGACY_EVIDENCE_SCHEMA_ID,
+        LEGACY_SELECTION_SCHEMA_ID,
+        REVIEW_SCHEMA_ID,
+        validate_review_response,
+    )
+
+    if schema is not None and schema.get("$id") in (
+        COMPARISON_SCHEMA_ID, REVIEW_SCHEMA_ID,
+        LEGACY_SELECTION_SCHEMA_ID, LEGACY_EVIDENCE_SCHEMA_ID,
+    ):
+        validate_review_response(content, schema)
 
 
 def enforce_model_cache_limit(

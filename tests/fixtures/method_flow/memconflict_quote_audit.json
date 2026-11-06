@@ -1,0 +1,24 @@
+{
+  "source_url": "http://arxiv.org/abs/2605.20926v1",
+  "description": "Bounded verbatim excerpts and three unchanged Reader claims from the stopped live method batch. Literal anchor controls are editorial tests, not repaired live output or semantic approvals.",
+  "source_excerpts": [
+    "Given the simulated timeline T𝑢 and the session-level information constructed in Section 3.3,\nMemConflict converts each session slot into a natural multi-turn dialogue. For session 𝑠𝑡, the\ninformation to be verbalized may include dynamic updates Δ𝑡, static information P𝑡, conditional\nbindings B𝑡, and distractor informationE𝑡. The goal of dialogue generation is to express these items\nnaturally in conversation while preserving the coherence of the user’s long-horizon interaction\nhistory. MemConflict uses a two-stage process: synopsis generation followed by dialogue realization.",
+    "every non-empty information item in Δ𝑡, P𝑡, B𝑡, and E𝑡 must be explicitly\nrealized in the dialogue",
+    "For black-box evaluation, we use Answer Accuracy (AA):\nAA= 1\n𝑁\n𝑁∑︁\n𝑖=1\n1( ˆ𝑦𝑖 =𝑦 ∗\n𝑖 ),(11)",
+    "For white-box evaluation, we first check whether the top-𝐾 retrieved memory items contain the\nmemory item consistent with the gold answer. Support Evidence Hit@K (SEH@K) is defined as:\nSEH@K= 1\n𝑁\n𝑁∑︁\n𝑖=1\n1(𝑚∗\n𝑖 ∈𝑅 𝐾\n𝑖 ).(12)"
+  ],
+  "reader_claims": [
+    {"claim_id":"c9","section":"solution","claim_kind":"fact","text":"The benchmark uses LLM-generated session synopses and dialogues, with each assigned non-empty update, static fact, conditional binding, or distractor required to appear explicitly.","evidence":[{"quote":"MemConflict converts each session slot into a natural multi-turn dialogue. MemConflict uses a two-stage process: synopsis generation followed by dialogue realization.","location":"PDF p.12, Section 3.4"},{"quote":"every non-empty information item in Δ𝑡, P𝑡, B𝑡, and E𝑡 must be explicitly realized in the dialogue","location":"PDF p.12, Section 3.4"}]},
+    {"claim_id":"c13","section":"experiment","claim_kind":"fact","text":"Answer Accuracy (AA) is the fraction of evaluated queries whose normalized system answer matches the gold answer.","evidence":[{"quote":"AA= 1 / 𝑁 ∑ 1( ˆ𝑦𝑖 =𝑦 ∗𝑖 )","location":"PDF p.14, Section 3.6"}]},
+    {"claim_id":"c14","section":"experiment","claim_kind":"fact","text":"Support Evidence Hit@K (SEH@K) is the fraction of queries for which the top-K retrieved items contain the gold supporting memory.","evidence":[{"quote":"SEH@K= 1 / 𝑁 ∑ 1(𝑚∗𝑖 ∈𝑅𝐾𝑖 ).","location":"PDF p.14, Section 3.6"}]}
+  ],
+  "literal_c9_control": [
+    "MemConflict uses a two-stage process: synopsis generation followed by dialogue realization.",
+    "every non-empty information item in Δ𝑡, P𝑡, B𝑡, and E𝑡 must be explicitly\nrealized in the dialogue"
+  ],
+  "algorithm_io": "Require:Persona seeds{𝑧 𝑢 }, construction configuration\nEnsure:Multi-session dialoguesG, evaluation queries𝑄, gold labels𝑌",
+  "role_examples": [
+    {"claim_id":"c4","text":"The simulated timeline spans January 2022 through December 2025, with session slots organized monthly.","reader_role":"step_claim_ids","review":"This describes a timeline setting, not the operation of simulating a timeline."},
+    {"claim_id":"c12","text":"The benchmark contains 12 virtual-user instances; each averages 52.33 sessions, 2,349.17 dialogue turns, 203,910.83 tokens, and 124.33 evaluation queries.","reader_role":"output_claim_ids","review":"These describe dataset statistics, not the returned dialogues, queries and gold labels specified by Algorithm 1."}
+  ]
+}

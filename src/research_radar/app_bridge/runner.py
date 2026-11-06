@@ -19,6 +19,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Any, Protocol, cast
 
+from research_radar.analysis.reader_input import ReaderInputError
 from research_radar.app_bridge import BRIDGE_SCHEMA_VERSION
 from research_radar.app_bridge.configuration import (
     AppConfigurationError,
@@ -395,6 +396,11 @@ def run_bridge(
             )
         write_error_once(code=code, message=message, stage=active_stage(), retryable=retryable)
         write_failure_event(code, message, retryable=retryable)
+        return 1
+    except ReaderInputError as exc:
+        message = redact_text(str(exc))
+        write_error_once(code=exc.code, message=message, stage=active_stage(), retryable=False)
+        write_failure_event(exc.code, message, retryable=False)
         return 1
     except ResearchRadarError as exc:
         message = redact_text(str(exc)) or "The task could not be completed."

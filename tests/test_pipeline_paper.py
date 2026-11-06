@@ -2,9 +2,12 @@ import json
 from http.client import IncompleteRead
 from pathlib import Path
 
+from reader_fixtures import OFFLINE_READER_CONTEXTS, source_response
+from reader_fixtures import OfflineStaticProvider as StaticProvider
+
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
-from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
+from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.config import parse_config
 from research_radar.exceptions import AnalysisError, ResearchRadarError
 from research_radar.models import Artifact, ClaimStatus, SourceCandidate, SourceType
@@ -18,6 +21,7 @@ class CapturingProvider:
     """Test provider that records prompts before returning fixture JSON."""
 
     name = "capturing"
+    reader_contexts = OFFLINE_READER_CONTEXTS
 
     def __init__(self, content: str) -> None:
         self.content = content
@@ -27,13 +31,14 @@ class CapturingProvider:
         """Return fixture content and keep the request for assertions."""
 
         self.messages.append(messages)
-        return ModelResponse(content=self.content, model=model)
+        return ModelResponse(content=source_response(self.content, messages), model=model)
 
 
 class SequenceProvider:
     """Test provider that returns a sequence of responses."""
 
     name = "sequence"
+    reader_contexts = OFFLINE_READER_CONTEXTS
 
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
@@ -43,13 +48,14 @@ class SequenceProvider:
 
         if not self.responses:
             raise AssertionError("No more fixture responses")
-        return ModelResponse(content=self.responses.pop(0), model=model)
+        return ModelResponse(content=source_response(self.responses.pop(0), messages), model=model)
 
 
 class FailingProvider:
     """Test provider that raises an analysis error."""
 
     name = "failing-reader"
+    reader_contexts = OFFLINE_READER_CONTEXTS
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Raise a deterministic analysis failure."""
@@ -61,6 +67,7 @@ class CountingProvider:
     """Provider that returns fixed content and counts real model calls."""
 
     name = "counting"
+    reader_contexts = OFFLINE_READER_CONTEXTS
 
     def __init__(self, content: str) -> None:
         self.content = content
@@ -68,7 +75,15 @@ class CountingProvider:
 
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         self.call_count += 1
-        return ModelResponse(content=self.content, model=model, metadata={"provider": self.name})
+        return ModelResponse(content=source_response(self.content, messages), model=model,
+                             metadata={"provider": self.name})
+
+
+def _supported_verifier(count: int) -> StaticProvider:
+    return StaticProvider(json.dumps({"decisions": [
+        {"claim_index": index, "status": "supported", "reason": "Fixture evidence matches."}
+        for index in range(1, count + 1)
+    ]}))
 
 
 def test_build_direct_paper_source_from_arxiv_pdf_url() -> None:
@@ -258,8 +273,14 @@ def test_single_paper_pipeline_sends_only_publishable_claims_to_verifier(
     verifier_prompt = verifier.messages[0][1].content
     verifier_stage = next(stage for stage in runtime["stages"] if stage["stage"] == "verifier")
 
-    assert broad_claim not in verifier_prompt
-    assert supported_claim in verifier_prompt
+    claim_request, full_context = verifier_prompt.split(
+        "FULL SOURCE CONTEXT AND PARAGRAPHS (JSON):\n", 1,
+    )
+    assertions = [line.split('. CLAIM: ',1)[1] for line in claim_request.splitlines()
+                  if '. CLAIM: ' in line]
+    assert not any(broad_claim in text for text in assertions)
+    assert any(supported_claim in text for text in assertions)
+    assert broad_claim in json.loads(full_context)["full_sources"][0]["reading_packet"]
     assert verifier_stage["verifier_input_count"] == 1
     assert verifier_stage["verifier_skipped_claim_count"] == 1
     assert [claim["status"] for claim in claims] == [
@@ -287,6 +308,7 @@ def test_single_paper_pipeline_persists_transport_diagnostics(
         secrets=manager,
         timeout_seconds=17,
     )
+    reader.reader_contexts = OFFLINE_READER_CONTEXTS
     partial = b'{"choices":[{"message":{"content":"partial model answer'
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
@@ -358,6 +380,7 @@ def test_single_paper_pipeline_writes_auditable_outputs(monkeypatch, tmp_path: P
         "https://arxiv.org/pdf/2604.01707v1",
         provider,
         model="fake-analyst",
+        verifier=_supported_verifier(6),
     )
 
     manifest = read_json(run_dir / "manifest.json")
@@ -386,8 +409,8 @@ def test_single_paper_pipeline_writes_auditable_outputs(monkeypatch, tmp_path: P
     assert "LOCOMO and LONGMEMEVAL" in brief
     assert "overclaims universal coverage" not in brief
     assert "overclaims universal coverage" not in deep_report
-    assert "evidence_anchor_unmatched" in str(findings)
-    assert "No evidence anchors for this claim were found" in report
+    assert "999" in str(findings)  # Source-backed ranges still do not support invented quantities.
+    assert "999" in report
 
 
 def test_single_paper_pipeline_writes_reader_attempt_audit_after_retry(
@@ -485,6 +508,7 @@ def test_single_paper_pipeline_repairs_missing_table_anchor(
         model="fake-reader",
         anchor_repair_provider=repair,
         anchor_repair_model="fake-repair",
+        verifier=_supported_verifier(1),
     )
 
     claims = read_jsonl(run_dir / "claims.jsonl")
@@ -583,6 +607,7 @@ def test_single_paper_pipeline_uses_late_full_paper_sections(
         "https://arxiv.org/pdf/2604.01707v1",
         provider,
         model="fake-analyst",
+        verifier=_supported_verifier(2),
     )
 
     prompt = provider.messages[0][1].content
@@ -621,17 +646,7 @@ def test_single_paper_pipeline_supports_chinese_report_language(
         }
     )
     reader = CapturingProvider(_paper_reading_json())
-    verifier = StaticProvider(
-        """
-        {
-          "decisions": [
-            {"claim_index": 1, "status": "supported", "risk": "low", "reason": "grounded"},
-            {"claim_index": 2, "status": "supported", "risk": "low", "reason": "grounded"},
-            {"claim_index": 3, "status": "supported", "risk": "low", "reason": "grounded"}
-          ]
-        }
-        """
-    )
+    verifier = _supported_verifier(6)
     localizer = CapturingProvider(_paper_localization_json())
 
     def fake_ingest_source(source: SourceCandidate, artifact_dir: Path) -> Artifact:
@@ -676,7 +691,7 @@ def test_single_paper_pipeline_supports_chinese_report_language(
     assert manifest["metadata"]["report_language"] == "zh"
     assert manifest["metadata"]["localization"]["status"] == "succeeded"
     assert "Simplified Chinese" not in reader_prompt
-    assert "Translate verified ResearchRadar display text into Simplified Chinese" in (
+    assert "Translate ResearchRadar publication candidates into Simplified Chinese" in (
         localization_prompt
     )
     assert "Keep technical terms" in localization_prompt
@@ -696,7 +711,7 @@ def test_single_paper_pipeline_supports_chinese_report_language(
 
 
 def _paper_reading_json() -> str:
-    return """
+    raw = """
     {
       "deep_readings": {
         "area_context": {
@@ -741,6 +756,12 @@ def _paper_reading_json() -> str:
       }
     }
     """
+    body = json.loads(raw)["deep_readings"]
+    body["critical_assessment"]["evidence"] = [{
+        "quote": "The paper reports no deployment evaluation."}]
+    body["critical_assessment"]["bottom_line"] = (
+        "The paper overclaims universal coverage across 999 deployments.")
+    return json.dumps({"deep_readings": body})
 
 
 def _paper_localization_json() -> str:
@@ -787,7 +808,10 @@ def _paper_localization_json() -> str:
       "claims": [
         {"index": 0, "text": "Problem: 论文评估 LLM agent 中的 memory 方法。"},
         {"index": 1, "text": "Solution: 它把方法组织进一个 unified framework。"},
-        {"index": 2, "text": "Experiment: 论文使用 LOCOMO 和 LONGMEMEVAL 进行评估。"}
+        {"index": 2, "text": "Related work: 它把已有方法组织进统一框架。"},
+        {"index": 3, "text": "Experiment: 论文使用 LOCOMO 和 LONGMEMEVAL 进行评估。"},
+        {"index": 4, "text": "Limitations: 论文没有 deployment evaluation。"},
+        {"index": 5, "text": "Essence: 论文把分散的 LLM memory 设计整理成共同比较框架。"}
       ],
       "sources": [
         {

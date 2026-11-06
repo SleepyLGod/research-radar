@@ -8,6 +8,7 @@ from urllib.error import URLError
 from urllib.request import Request
 
 import pytest
+from reader_fixtures import OFFLINE_READER_CONTEXTS
 
 from research_radar.analysis import openai_compatible as transport
 from research_radar.analysis.cli_providers import CodexCliProvider
@@ -31,10 +32,12 @@ def make_provider(
 ) -> transport.OpenAICompatibleProvider:
     manager = SecretManager(InMemorySecretBackend())
     manager.backend.set_secret("offline.key", "offline-only-key")
-    return transport.OpenAICompatibleProvider(
+    provider = transport.OpenAICompatibleProvider(
         name="same-provider", endpoint=endpoint, api_key_secret="offline.key", secrets=manager,
         **kwargs,
     )
+    provider.reader_contexts = OFFLINE_READER_CONTEXTS
+    return provider
 
 
 def test_output_budget_flows_from_config_to_payload_and_cache(

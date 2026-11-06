@@ -12,6 +12,30 @@ import pytest
 from research_radar.app_bridge.runner import BridgeDependencies, run_bridge
 
 
+@pytest.mark.parametrize("code", [
+    "reader_context_unknown", "reader_context_exceeded", "reader_output_reserve_insufficient",
+])
+def test_reader_budget_error_reaches_app_without_generic_failure_or_retry(
+    tmp_path: Path, code: str,
+) -> None:
+    from research_radar.analysis.reader_input import ReaderInputError
+
+    request, events, result, error, _ = _job(
+        tmp_path, command="preflight", payload={"live_probe": False},
+    )
+
+    def blocked(*args: object, **kwargs: object) -> None:
+        raise ReaderInputError(code, "No complete-input request was sent.", {})
+
+    dependencies = replace(BridgeDependencies.testing(), preflight=blocked)
+    assert run_bridge(request_path=request, events_path=events, result_path=result,
+                      error_path=error, establish_session=False, watch_parent=False,
+                      dependencies=dependencies) == 1
+    terminal = json.loads(error.read_text())
+    assert terminal["code"] == code and terminal["retryable"] is False
+    assert not result.exists()
+
+
 def test_codex_failure_keeps_terminal_reason_across_pipeline_and_bridge(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:

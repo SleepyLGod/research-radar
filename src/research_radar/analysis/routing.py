@@ -147,6 +147,7 @@ def build_provider(
         raise ConfigError(f"Unknown model provider: {provider_name}") from exc
 
     provider = _build_provider(provider_name, provider_config, secrets, cancellation_event)
+    provider.reader_contexts = provider_config.reader_contexts
     health_check = getattr(provider, "health_check", None)
     if callable(health_check):
         health_check()

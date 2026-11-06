@@ -12,6 +12,7 @@ from threading import Event
 from unittest.mock import patch
 
 from offline_frozen.inputs import FrozenDiscovery, FrozenModel
+from research_radar.analysis.reader_input import ReaderContextBudget
 from research_radar.analysis.routing import TaskModelRoute
 from research_radar.app_bridge.handlers import (
     handle_retry_delivery,
@@ -109,6 +110,10 @@ def dependencies(root: Path) -> BridgeDependencies:
     """Reuse production handlers and application service with external IO overrides."""
     local = TaskModelRoute(provider=None, model=None, provider_name="local")
     model = FrozenModel()
+    model.reader_contexts = {
+        name: ReaderContextBudget(1_000_000, 32768, 4096)
+        for name in ("fixture-reader", "fixture-verifier")
+    }
     routes = {
         task: local
         for task in (

@@ -1,0 +1,176 @@
+{
+  "provenance": "Source excerpts and final decisions from the saved 2026-11-03 MemGuide batch. The extra source selection is an explicitly editorial offline control, not a model repair or approval.",
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "facts": {
+    "c29": {
+      "analysis_text": "Experiment: The main MS-TOD evaluation uses held-out sessions annotated with confirmation-type responses and associated gold task goals and slot-value sets.",
+      "chinese_text": "Experiment: MS-TOD 主评估使用带确认型响应标注的留出会话，并关联金标准任务目标和槽位值集合。",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Confirmation-Type Response Annotation\nTo evaluate long-term task fulfillment in dialogue systems,\nwe annotate the final session of each task withconfirmation-\ntype responses. Each marks the utterance confirming task\ncompletion and associated slot-value goal with manually\nlabels (confirmation/non-confirmation). These annotations\nserve two purposes: (1) Supervising Memory Selection ,\nindicating when to trigger memory retrieval; and (2) Sup-\nporting Evaluation, evaluating if the system recalls goal-\nrelevant content and generates accurate confirmations.",
+          "location": "page 3; source block ba9f103f34252b832:33",
+          "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Memory Bank Construction\nSince multi-session interactions are organized around indi-\nviduals, we group dialogues into individual memory banks\n(Figure 2), where each bank stores temporally ordered ses-\nsions. During construction, we ensure that intents within the\nsame bank are distinct and non-conflicting, enabling consis-\ntent memory usage and avoiding cross-intent interference.\nEach bank contains over 20 sessions spanning at least six\ntask intents (Table 2), with one held-out evaluation session\nper intent for confirmation-type assessment. For each com-\npleted session, we use GPT-4 to generate an intent descrip-\ntion along with a set of QA pairs, each capturing a slot-\nspecific fact for retrieval. This QA-style format is moti-\nvated by prior work (Chen et al. 2023) showing that ques-\ntion–answer structures facilitate more accurate and efficient\nretrieval compared to unstructured text. To maintain causal\nconsistency, memory access is limited to sessions prior to\nthe current evaluation point.",
+          "location": "page 3; source block ba9f103f34252b832:34",
+          "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Experiments\nTo enable fine-grained assessment of long-term memory uti-\nlization and task completion, we evaluate MemGuide on ses-\nsions from the MS-TOD benchmark that are annotated with\nconfirmation-type responses, in which the final utterance ex-\nplicitly confirms that the user goal has been achieved. Each\nsession is associated with a gold-standard task goal and cor-\nresponding slot-value set, enabling precise evaluation using\nstandard metrics of task success and response quality.",
+          "location": "page 5; source block ba9f103f34252b832:52",
+          "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+          "confidence": 0.7
+        }
+      ],
+      "matched_contexts": [
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Confirmation-Type Response Annotation\nTo evaluate long-term task fulfillment in dialogue systems,\nwe annotate the final session of each task withconfirmation-\ntype responses. Each marks the utterance confirming task\ncompletion and associated slot-value goal with manually\nlabels (confirmation/non-confirmation). These annotations\nserve two purposes: (1) Supervising Memory Selection ,\nindicating when to trigger memory retrieval; and (2) Sup-\nporting Evaluation, evaluating if the system recalls goal-\nrelevant content and generates accurate confirmations.",
+          "text": "Confirmation-Type Response Annotation\nTo evaluate long-term task fulfillment in dialogue systems,\nwe annotate the final session of each task withconfirmation-\ntype responses. Each marks the utterance confirming task\ncompletion and associated slot-value goal with manually\nlabels (confirmation/non-confirmation). These annotations\nserve two purposes: (1) Supervising Memory Selection ,\nindicating when to trigger memory retrieval; and (2) Sup-\nporting Evaluation, evaluating if the system recalls goal-\nrelevant content and generates accurate confirmations.\nMemory Bank Construction\nSince multi-session interactions are organized around indi-\nviduals, we group dialogues into individual memory banks\n(Figure 2), where each bank stores temporally ordered ses-\nsions. During construction, we ensure that intents within the\nsame bank are distinct and non-conflicting, enabling consis-\ntent memory usage and avoiding cross-intent interference.\nEach bank contains over 20 sessions spanning at least six\ntask intents (Table 2), with one held-out evaluation session\nper intent for confirmation-type assessment. For each com-\npleted session, we use GPT-4 to generate an intent descrip-",
+          "location": "page 3"
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Experiments\nTo enable fine-grained assessment of long-term memory uti-\nlization and task completion, we evaluate MemGuide on ses-\nsions from the MS-TOD benchmark that are annotated with\nconfirmation-type responses, in which the final utterance ex-\nplicitly confirms that the user goal has been achieved. Each\nsession is associated with a gold-standard task goal and cor-\nresponding slot-value set, enabling precise evaluation using\nstandard metrics of task success and response quality.",
+          "text": "Experiments\nTo enable fine-grained assessment of long-term memory uti-\nlization and task completion, we evaluate MemGuide on ses-\nsions from the MS-TOD benchmark that are annotated with\nconfirmation-type responses, in which the final utterance ex-\nplicitly confirms that the user goal has been achieved. Each\nsession is associated with a gold-standard task goal and cor-\nresponding slot-value set, enabling precise evaluation using\nstandard metrics of task success and response quality.\nExperimental Setups\nEvaluation Metrics. We use four core automatic metrics\nand human evaluation to evaluate response performance: 1)\nGPT-4 score, (1–10) 3 evaluates response quality in terms\nof fluency, coherence, and informativeness; 2) Joint Goal\nAccuracy (JGA) measures slot prediction accuracy; 3) Dia-\nlogue Turn Efficiency (DTE) captures the number of turns\nrequired to complete a task, and 4) Success Rate (S.R.) in-\ndicates whether the user goal is achieved. 5) Human eval-\nuation further assesses Accuracy, Informativeness, and Co-\nherence, with A.I.C. denoting their average.\nBaselines. We evaluate MemGuide against three represen-\ntative categories of baselines: 1) General-purpose LLMs.",
+          "location": "page 5"
+        }
+      ],
+      "final_decision": {
+        "evidence_refs": [
+          "e66",
+          "e52",
+          "e102"
+        ],
+        "reason": "The main evaluation description identifies confirmation-annotated sessions and associated gold task goals and slot-value sets; the memory-bank construction limits access to prior sessions.",
+        "status": "supported"
+      },
+      "paper_reading": {
+        "source": "claim_units",
+        "claim_id": "c29",
+        "section": "experiment",
+        "claim_kind": "fact",
+        "publishable_default": true,
+        "status_reason": "supported by supplied evidence",
+        "method": {
+          "kind": "condition",
+          "from_claim_id": null,
+          "to_claim_id": null
+        }
+      },
+      "fact_review": {
+        "status": "supported",
+        "requested_status": "supported",
+        "reviewed_text": "Experiment: The main MS-TOD evaluation uses held-out sessions annotated with confirmation-type responses and associated gold task goals and slot-value sets.",
+        "risk": "",
+        "reason": "The evaluation uses held-out confirmation-type sessions, and the paper associates sessions with gold task goals and slot-value sets.",
+        "binding_sha256": "f935f19c57f7873efc2e2e96150310f7219c4dd350627e4383d1154c6acda185",
+        "provider": "codex",
+        "model": "gpt-6-luna"
+      }
+    },
+    "c55": {
+      "analysis_text": "Critical assessment: Because MS-TOD dialogues are generated from SGD task goals and the main evaluation targets held-out confirmation sessions, the results do not by themselves establish performance on naturally occurring or open-ended long-term agent interactions.",
+      "chinese_text": "Critical assessment: 由于 MS-TOD 对话由 SGD 任务目标生成，且主评估针对留出的确认会话，结果本身并不能确立其在自然发生或开放式长期智能体交互中的性能。",
+      "evidence": [
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Multi-Session Dialogue Generation\nWe begin by generating multi-session dialogues for each\ntask goal sampled from the SGD dataset (Rastogi et al.\n2020). For every task, we synthesize three temporally or-\ndered sessions using GPT-4, each conditioned on the slot-\nfilling status of the previous session. This simulates how\nusers revisit and revise the same task across time. Specif-\nically, Session 1 presents an incomplete task with missing\nslots; Session 2 introduces updates; and Session 3 concludes\nwith final confirmation. This staged construction reflects\nreal-world dialogue dynamics while avoiding overfitting, as\nmost SGD tasks involve fewer than ten slots.",
+          "location": "page 3; source block ba9f103f34252b832:32",
+          "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Human Validation\nTo ensure coherence, correctness, and usability, we apply a\nstructured multi-stage validation process involving three an-\nnotators experienced in NLP. The process includes: (1) Ver-\nifying each session preserves the intended goal and correct\nslot values; (2) Removing dialogues with excessive redun-\ndancy across sessions; (3) Verifying that confirmation-type\nutterances match the expected slot-value goals; (4) Remov-\ning sessions that fail to complete defined task goals or lack\nconfirmation turns; and (5) Excluding episodes with unnat-\nural repetition of similar intents. We additionally conduct\ninter-annotator agreement evaluation to ensure labeling con-\nsistency.",
+          "location": "page 4; source block ba9f103f34252b832:42",
+          "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+          "confidence": 0.7
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Experiments\nTo enable fine-grained assessment of long-term memory uti-\nlization and task completion, we evaluate MemGuide on ses-\nsions from the MS-TOD benchmark that are annotated with\nconfirmation-type responses, in which the final utterance ex-\nplicitly confirms that the user goal has been achieved. Each\nsession is associated with a gold-standard task goal and cor-\nresponding slot-value set, enabling precise evaluation using\nstandard metrics of task success and response quality.",
+          "location": "page 5; source block ba9f103f34252b832:52",
+          "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+          "confidence": 0.7
+        }
+      ],
+      "matched_contexts": [
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Multi-Session Dialogue Generation\nWe begin by generating multi-session dialogues for each\ntask goal sampled from the SGD dataset (Rastogi et al.\n2020). For every task, we synthesize three temporally or-\ndered sessions using GPT-4, each conditioned on the slot-\nfilling status of the previous session. This simulates how\nusers revisit and revise the same task across time. Specif-\nically, Session 1 presents an incomplete task with missing\nslots; Session 2 introduces updates; and Session 3 concludes\nwith final confirmation. This staged construction reflects\nreal-world dialogue dynamics while avoiding overfitting, as\nmost SGD tasks involve fewer than ten slots.",
+          "text": "Table 2: MS-TOD dataset statistics for evaluation.\nMulti-Session Dialogue Generation\nWe begin by generating multi-session dialogues for each\ntask goal sampled from the SGD dataset (Rastogi et al.\n2020). For every task, we synthesize three temporally or-\ndered sessions using GPT-4, each conditioned on the slot-\nfilling status of the previous session. This simulates how\nusers revisit and revise the same task across time. Specif-\nically, Session 1 presents an incomplete task with missing\nslots; Session 2 introduces updates; and Session 3 concludes\nwith final confirmation. This staged construction reflects\nreal-world dialogue dynamics while avoiding overfitting, as\nmost SGD tasks involve fewer than ten slots.\nConfirmation-Type Response Annotation\nTo evaluate long-term task fulfillment in dialogue systems,\nwe annotate the final session of each task withconfirmation-\ntype responses. Each marks the utterance confirming task\ncompletion and associated slot-value goal with manually\nlabels (confirmation/non-confirmation). These annotations\nserve two purposes: (1) Supervising Memory Selection ,\nindicating when to trigger memory retrieval; and (2) Sup-",
+          "location": "page 3"
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Human Validation\nTo ensure coherence, correctness, and usability, we apply a\nstructured multi-stage validation process involving three an-\nnotators experienced in NLP. The process includes: (1) Ver-\nifying each session preserves the intended goal and correct\nslot values; (2) Removing dialogues with excessive redun-\ndancy across sessions; (3) Verifying that confirmation-type\nutterances match the expected slot-value goals; (4) Remov-\ning sessions that fail to complete defined task goals or lack\nconfirmation turns; and (5) Excluding episodes with unnat-\nural repetition of similar intents. We additionally conduct\ninter-annotator agreement evaluation to ensure labeling con-\nsistency.",
+          "text": "Figure 3: Overflow of our MemGuide framework, which comprises Intent-Aligned Retrieval and Missing-Slot Guided Filtering.\nHuman Validation\nTo ensure coherence, correctness, and usability, we apply a\nstructured multi-stage validation process involving three an-\nnotators experienced in NLP. The process includes: (1) Ver-\nifying each session preserves the intended goal and correct\nslot values; (2) Removing dialogues with excessive redun-\ndancy across sessions; (3) Verifying that confirmation-type\nutterances match the expected slot-value goals; (4) Remov-\ning sessions that fail to complete defined task goals or lack\nconfirmation turns; and (5) Excluding episodes with unnat-\nural repetition of similar intents. We additionally conduct\ninter-annotator agreement evaluation to ensure labeling con-\nsistency.\nMemGuide\nMemGuide is a two-stage framework for multi-session\nTOD, as shown in Figure 3. It first performs Intent-Aligned\nRetrieval, extracting the current user intent via an LLM and\nretrieving QA-formatted memory units from the memory\nbank that align with this intent using semantic similarity.\nThen, Missing-Slot Guided Filtering identifies unfilled task",
+          "location": "page 4"
+        },
+        {
+          "source_url": "http://arxiv.org/abs/2505.20231v2",
+          "quote": "Experiments\nTo enable fine-grained assessment of long-term memory uti-\nlization and task completion, we evaluate MemGuide on ses-\nsions from the MS-TOD benchmark that are annotated with\nconfirmation-type responses, in which the final utterance ex-\nplicitly confirms that the user goal has been achieved. Each\nsession is associated with a gold-standard task goal and cor-\nresponding slot-value set, enabling precise evaluation using\nstandard metrics of task success and response quality.",
+          "text": "Experiments\nTo enable fine-grained assessment of long-term memory uti-\nlization and task completion, we evaluate MemGuide on ses-\nsions from the MS-TOD benchmark that are annotated with\nconfirmation-type responses, in which the final utterance ex-\nplicitly confirms that the user goal has been achieved. Each\nsession is associated with a gold-standard task goal and cor-\nresponding slot-value set, enabling precise evaluation using\nstandard metrics of task success and response quality.\nExperimental Setups\nEvaluation Metrics. We use four core automatic metrics\nand human evaluation to evaluate response performance: 1)\nGPT-4 score, (1–10) 3 evaluates response quality in terms\nof fluency, coherence, and informativeness; 2) Joint Goal\nAccuracy (JGA) measures slot prediction accuracy; 3) Dia-\nlogue Turn Efficiency (DTE) captures the number of turns\nrequired to complete a task, and 4) Success Rate (S.R.) in-\ndicates whether the user goal is achieved. 5) Human eval-\nuation further assesses Accuracy, Informativeness, and Co-\nherence, with A.I.C. denoting their average.\nBaselines. We evaluate MemGuide against three represen-\ntative categories of baselines: 1) General-purpose LLMs.",
+          "location": "page 5"
+        }
+      ],
+      "final_decision": {
+        "evidence_refs": [
+          "e96",
+          "e148"
+        ],
+        "reason": "The evidence supports that MS-TOD dialogues are generated from SGD task goals and that evaluation uses confirmation-annotated sessions. The supplied direct evidence does not establish the paragraph's additional qualifier that these evaluation sessions are held out, so that scope remains unresolved.",
+        "status": "needs_review"
+      },
+      "paper_reading": {
+        "source": "claim_units",
+        "claim_id": "c55",
+        "section": "critical_assessment",
+        "claim_kind": "critique",
+        "publishable_default": false,
+        "status_reason": "not publishable by default"
+      },
+      "fact_review": {
+        "status": "supported",
+        "requested_status": "supported",
+        "reviewed_text": "Critical assessment: Because MS-TOD dialogues are generated from SGD task goals and the main evaluation targets held-out confirmation sessions, the results do not by themselves establish performance on naturally occurring or open-ended long-term agent interactions.",
+        "risk": "",
+        "reason": "The benchmark dialogues are synthesized from SGD goals and evaluation uses held-out confirmation sessions, so these results alone do not establish performance on naturally occurring or open-ended interactions.",
+        "binding_sha256": "d76ad7389c3c5a66acb93b9c39b22d5ce56332ad575e70916bef0f2099af108a",
+        "provider": "codex",
+        "model": "gpt-6-luna"
+      }
+    }
+  },
+  "original_paragraph": {
+    "text": "MS-TOD 的对话由 SGD 任务目标生成，主评估针对带确认标注的留出会话；因此这些结果本身不能证明系统在自然发生或开放式长期智能体交互中的表现。",
+    "supporting_claim_ids": [
+      "c55"
+    ],
+    "review": null
+  },
+  "paragraph_decision": {
+    "covered_claim_ids": [
+      "c55"
+    ],
+    "evidence_refs": [
+      "e96",
+      "e148"
+    ],
+    "reason": "The paragraph accurately reports SGD-based dialogue generation and evaluation on confirmation-annotated sessions. The supplied direct evidence does not establish that those evaluation sessions are held out, so the paragraph's scope remains unresolved.",
+    "status": "needs_review"
+  },
+  "explicit_source_selection": {
+    "source_id": "ba9f103f34252b832:34",
+    "quote": "Memory Bank Construction\nSince multi-session interactions are organized around indi-\nviduals, we group dialogues into individual memory banks\n(Figure 2), where each bank stores temporally ordered ses-\nsions. During construction, we ensure that intents within the\nsame bank are distinct and non-conflicting, enabling consis-\ntent memory usage and avoiding cross-intent interference.\nEach bank contains over 20 sessions spanning at least six\ntask intents (Table 2), with one held-out evaluation session\nper intent for confirmation-type assessment. For each com-\npleted session, we use GPT-4 to generate an intent descrip-\ntion along with a set of QA pairs, each capturing a slot-\nspecific fact for retrieval. This QA-style format is moti-\nvated by prior work (Chen et al. 2023) showing that ques-\ntion–answer structures facilitate more accurate and efficient\nretrieval compared to unstructured text. To maintain causal\nconsistency, memory access is limited to sessions prior to\nthe current evaluation point.\n\n",
+    "location": "page 3; source block ba9f103f34252b832:34",
+    "status": "unreviewed_editorial_proposal"
+  }
+}

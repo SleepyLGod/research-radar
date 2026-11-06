@@ -112,6 +112,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
             workspaceRoot: root.appending(path: "workspace"),
             codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
+        configuration = ReaderBudgetTestConfiguration.declaringBudgets(configuration)
         configuration.topics = [TopicRecordV1(
             id: "memory",
             displayName: "Agent Memory",
@@ -156,6 +157,7 @@ private actor FakeDailyWorkflowRunner: EngineProcessRunning {
             workspaceRoot: root.appending(path: "workspace"),
             codexExecutable: URL(fileURLWithPath: "/usr/bin/true")
         )
+        configuration = ReaderBudgetTestConfiguration.declaringBudgets(configuration)
         configuration.topics = [TopicRecordV1(
             id: "memory",
             displayName: "Agent Memory",
