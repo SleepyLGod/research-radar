@@ -276,12 +276,7 @@ def localize_report_content(
             findings=findings,
         )
         localized_readings[index] = localized_reading
-        if changed_id_count or any(
-            item.metadata.get("kind") == "report_localization_missing_paragraphs"
-            or (item.metadata.get("kind") == "report_localization_quantity_changed"
-                and str(item.metadata.get("field", "")).startswith("reader_explanation."))
-            for item in findings[finding_start:]
-        ):
+        if changed_id_count or _required_translation_failed(findings[finding_start:], "reading"):
             attempts[-1] = replace(attempt, status="failed", error_message=(
                 "Required Chinese explanation translation was unusable; "
                 "originals retained for audit."
@@ -324,9 +319,7 @@ def localize_report_content(
         else:
             finding_start = len(findings)
             localized_claims = _localized_claims(claims, payload.get("claims"), findings=findings)
-            if any(item.metadata.get("kind") == "report_localization_quantity_changed"
-                   and str(item.metadata.get("field", "")).startswith("claims[")
-                   for item in findings[finding_start:]):
+            if _required_translation_failed(findings[finding_start:], "display"):
                 attempts[-1] = replace(attempt, status="failed", error_message=(
                     "Required Chinese claim translation changed quantities; "
                     "originals retained for audit."
@@ -664,6 +657,25 @@ Display candidate payload:
 """
 
 
+class _UnusableTranslation(AnalysisError):
+    """Keep rejected translations available for the existing audit projection."""
+
+    def __init__(self, payload: dict[str, object], message: str) -> None:
+        super().__init__(message)
+        self.payload = payload
+
+
+def _required_translation_failed(findings: list[ReviewFinding], scope: str) -> bool:
+    prefix = "reader_explanation." if scope == "reading" else "claims["
+    return any(
+        (scope == "reading"
+            and item.metadata.get("kind") == "report_localization_missing_paragraphs")
+        or (item.metadata.get("kind") == "report_localization_quantity_changed"
+            and str(item.metadata.get("field", "")).startswith(prefix))
+        for item in findings
+    )
+
+
 def _localization_payload(
     provider: LLMProvider,
     model: str,
@@ -683,23 +695,22 @@ def _localization_payload(
         sources=sources,
         figures_by_source_url=figures_by_source_url,
     )
+    messages = [
+        Message(
+            role="system",
+            content=(
+                "You localize research candidates before final publication review. "
+                "Return strict JSON only."
+            ),
+        ),
+        Message(role="user", content=prompt),
+    ]
     response_content = ""
-    try:
-        response = provider.complete(
-            [
-                Message(
-                    role="system",
-                    content=(
-                        "You localize research candidates before final publication review. "
-                        "Return strict JSON only."
-                    ),
-                ),
-                Message(role="user", content=prompt),
-            ],
-            model=model,
-        )
-        response_content = response.content
-        payload = _load_json_object(response.content)
+
+    def validate(content: str) -> dict[str, object]:
+        nonlocal response_content
+        response_content = content
+        payload = _load_json_object(content)
         for key, count in (("readings", len(readings)), ("claims", len(claims))):
             entries = _entries_by_index(payload.get(key))
             if count and set(entries) != set(range(count)):
@@ -709,8 +720,33 @@ def _localization_payload(
                 for entry in entries.values()
             ):
                 raise AnalysisError("Required claim translations must be nonempty text.")
+        findings: list[ReviewFinding] = []
+        for position, reading in enumerate(readings):
+            _, changed_ids = _localized_reading(
+                reading, _entries_by_index(payload.get("readings"))[position], findings=findings,
+            )
+            if changed_ids or _required_translation_failed(findings, "reading"):
+                raise _UnusableTranslation(
+                    payload, "Required Chinese explanation translation was unusable; "
+                    "originals retained for audit.",
+                )
+        _localized_claims(claims, payload.get("claims"), findings=findings)
+        if _required_translation_failed(findings, "display"):
+            raise _UnusableTranslation(
+                payload, "Required Chinese claim translation changed quantities; "
+                "originals retained for audit.",
+            )
+        return payload
+
+    try:
+        if isinstance(provider, CachedLLMProvider):
+            response = provider.complete(messages, model=model, validate_response=validate)
+        else:
+            response = provider.complete(messages, model=model)
+        payload = validate(response.content)
     except AnalysisError as exc:
-        return None, LocalizationAttempt(
+        rejected_payload = exc.payload if isinstance(exc, _UnusableTranslation) else None
+        return rejected_payload, LocalizationAttempt(
             provider=provider_name,
             model=model,
             language=language,

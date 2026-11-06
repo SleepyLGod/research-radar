@@ -2,6 +2,7 @@ import json
 from http.client import IncompleteRead
 from pathlib import Path
 
+import pytest
 from reader_fixtures import OFFLINE_READER_CONTEXTS, source_response
 from reader_fixtures import OfflineStaticProvider as StaticProvider
 
@@ -708,6 +709,39 @@ def test_single_paper_pipeline_supports_chinese_report_language(
     assert [attempt["scope"] for attempt in attempts] == ["reading", "display"]
     assert "深度阅读报告" in deep_report
     assert "# 深度阅读报告" in deep_report
+
+
+def test_failed_legacy_translation_can_recover_on_explicit_paper_rerun(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = parse_config({"project": {"name": "ResearchRadar"},
+                           "topics": [{"id": "memory", "queries": ["agent memory"]}]})
+    text = (
+        "The paper evaluates memory in LLM agents. "
+        "It organizes methods into a unified framework. "
+        "LOCOMO and LONGMEMEVAL are used for evaluation. "
+        "The paper reports no deployment evaluation."
+    )
+    monkeypatch.setattr(paper, "ingest_source", lambda source, artifact_dir: Artifact(
+        source=source, text=text, artifact_path=str(artifact_dir / "paper.pdf"),
+        content_type="application/pdf",
+    ))
+    writer = SequenceProvider(["{}", _paper_localization_json(), _paper_localization_json()])
+    cache = CachedLLMProvider(writer, cache_dir=tmp_path / "cache", task_name="report_localization")
+
+    def run() -> Path:
+        return run_paper(tmp_path, config, "memory", "https://arxiv.org/pdf/2604.01707v1",
+            CapturingProvider(_paper_reading_json()), model="fake-analyst",
+            verifier=_supported_verifier(6), verifier_model="fake-reviewer",
+            localizer=cache, localization_model="fake-localizer", language="zh")
+
+    with pytest.raises(AnalysisError, match="localization"):
+        run()
+    assert not list(cache.cache_dir.glob("*.json"))
+    assert not list((tmp_path / "runs").rglob("paper.md"))
+    result = run()
+    assert "论文评估 LLM agent 中的 memory 方法。" in (result / "paper.md").read_text()
+    assert writer.responses == []
 
 
 def _paper_reading_json() -> str:
