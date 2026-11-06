@@ -1,16 +1,98 @@
 # Reader Output Reliability: Diagnosis and Conservative Fix
 
-Status: historical diagnosis and offline checkpoints, starting 2026-10-30. The unreleased
-source now includes scoped Codex schemas and two-stage Chinese publication review. The
-latest saved-material pair completed real fact/write/final acceptance; see
-[current contracts, quality and limits](chinese-publication.md). The statements below about
-pending runs and test totals describe their dated checkpoints, not the latest outcome.
+Status: unreleased shared Python contracts, with historical provider/Reader checkpoints below.
+The saved LOTUS Chinese candidate completed real final review; the later plain-review context
+and failure-attribution repairs are offline-only. See [current acceptance](#current-acceptance-and-limits),
+[Chinese publication scope](chinese-publication.md) and
+[dated LOTUS history](acceptance-history.md#lotus-v3-checkpoints-2026-11-06).
 Hosted GLM constrained-output support remains unconfirmed. Installed packages are unchanged.
 
 The subsequent [Reader-to-report quality audit](reader-chain-audit.md) checks fixed real
 papers and saved responses across evidence, review, translation and composition. It identifies
 both false acceptance and missing useful context; the conservative fallback below is a safety
 boundary, not proof of a coherent or factually complete research synthesis.
+
+## Bounded Fact Amendments Before Chinese Composition
+
+The shared paper/daily paths permit one source-selected amendment per affected paper after
+factual review and before Chinese writing. Only uncertain factual units required by the
+method or evaluation-condition index are eligible. Explicit model refutations are not retried;
+declined, unchanged or unresolved amendments cannot start a repair loop.
+
+The Reader receives complete source text and explicit target/source IDs. It may clarify the
+same assertion or select offered source blocks, not invent quotations, alter IDs or method
+roles, add unrelated results, or choose a side of a source conflict. Strict parsing, local
+source/table checks, independent fact/method decisions and final-language review remain required.
+A locally reviewable table ambiguity is not an automatic approval.
+
+Both structured and plain Verifier requests carry the prior assertion and its exact evidence,
+bound to the current target. They share the instruction to preserve necessary qualifications
+and comparison scope. Plain requests place this history before the unchanged full-source
+context and include it in budget/cache identity. An exact repeat can still hit cache; a
+different prior assertion cannot reuse the same plain-review response merely because the
+new sentence is identical. No output format or evidence threshold is relaxed.
+
+Reuse requires unchanged source hashes and exact target-bound receipts. Previously assembled
+receipts are rebuilt from their constituent originals; merged approval lists are not trusted.
+Changed assertions and dependencies require new independent decisions. Plain Verifiers cannot
+reuse old target-bound approvals and review the complete eligible set.
+
+`fact_revision.json` preserves initial claims/readings/decisions, source hashes, candidates,
+local rejections and attempt status. Failed proposal/review attempts also record the actual
+`stage/provider/model`. The shared failure route keeps progress, manifest and failure artifacts
+consistent: Reader proposal failures are not labelled as Verifier calls, while a subsequent
+Verifier failure remains a Verifier failure. Existing exception types and transport diagnostics
+are retained. No new wire stage, command, provider, retry mechanism or configuration is added.
+
+Extra work is at most one logical Reader amendment per affected paper, then the existing
+possibly batched review of pending targets. Provider-level transport behavior still applies;
+this is not an exact HTTP or monetary cap. Ordinary unamended requests keep their existing
+input, and the same Chinese Writer and final review remain mandatory.
+
+## Numeric Notation And Failure Diagnostics
+
+Anchor checking recognizes literal spaced thousands, explicit percentage ranges and matching
+metric cutoffs. A cutoff is part of a named metric, not evidence for a measured score.
+Coordinated cutoffs require matching repeated annotations; aliases and citation/value pairs
+are not guessed. Source identity and table row/column checks remain separate.
+
+Localization compares exact count magnitudes, such as `5.5 million = 550万`, without sorting
+quantities, changing recognized physical units or dropping signs/qualifiers. Decimal exponents
+avoid float rounding. Exact source quotes and evidence bindings are not rewritten.
+
+Reader evaluation-reference failures identify the dimension, reference index, bounded/redacted
+claim ID/kind and evidence count. Failed-run persistence retains attached Reader attempts and
+their existing bounded excerpts, not full reasoning or credentials. The original lost LOTUS
+Reader answer is still unavailable; better diagnostics do not retrospectively recover it.
+
+## Current Acceptance And Limits
+
+The saved LOTUS Chinese candidate completed real final-language review on 2026-11-06:
+56 facts and 15 unchanged paragraphs, five Codex `gpt-6-luna/xhigh` launches, about
+12 minutes 8 seconds. Its 71 targets used the shared dynamic v4 evidence schema because no v5
+comparison units were present. Existing Codex login was used; there was no direct
+DeepSeek/NVIDIA HTTP request or API-key backend lookup. Backend requests, serving weights,
+usage and cost remain unknown. This establishes saved-candidate acceptance, not a fresh Reader,
+same-version normal CLI, packaged App or independent reproduction of the paper's results.
+
+The two subsequent repairs to plain-review amendment context and failure attribution are
+offline-only. Original Chinese candidates/reports remain unchanged; no live call or App update
+is part of those repairs. Eight new positive/negative regressions cover exact prior evidence,
+plain approval/refusal, cache separation and both production failure routes. Full Python:
+2,533 passed, with two existing opt-in frozen-engine tests skipped. Ruff, privacy, links, diff
+and scoped independent review passed. Prior checkpoints and their exact test totals are preserved in
+[dated acceptance history](acceptance-history.md#lotus-v3-checkpoints-2026-11-06).
+
+c35 remains outside public facts. Original PDF page 9 contains its four values, but the current
+wrapped-label table parser cannot establish a complete grid and its linear fallback assigns
+the following table caption to the quoted rows. The BioDEX method-row error is misleading.
+Do not repair this by guessing columns or adding a dataset whitelist. The paper's broad
+attributed superiority statement is also not proof of a win on every metric.
+
+Methods and main experimental conditions are readable, but per-metric comparisons and some
+mechanical wording remain limited. Keep source conflicts, missing evidence and deferred
+VoiceOver/multi-display/accessibility/help-focus checks visible. Another identical paid run
+is not the next acceptance step.
 
 ## Codex Reader Schema Integration (Offline)
 

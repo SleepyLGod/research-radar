@@ -7,56 +7,48 @@ drive the research model.
 
 ## Current State
 
-Updated 2026-11-06. Source changes below are **unreleased**; the published v0.3.0b1
+Updated 2026-11-07. Shared source changes are **unreleased**; the published v0.3.0b1
 App/DMG has not been rebuilt with them.
 
-- **Shared research implementation:** complete extracted Reader input with explicit capacity
-  declarations; scoped schemas; exact source/table/method bindings; fact review, Chinese
-  composition and final-language paragraph review. CLI and App use the same Python services.
-- **Existing workspace:** native paper progress, cross-report ledger, saved-paper organization
-  and typed relationship browsing remain available in unreleased source. Automatic/incremental
-  organization and periodic consolidation are not implemented; see the dated feature sections below.
-- **Latest real acceptance:** saved MemConflict and MemGuide extractions completed the same
-  shared fact/write/final path. One authorized local writing/final revision per paper restored
-  reviewed experimental settings and clarified source attribution. Total: six Codex starts,
-  four DeepSeek HTTP requests, about 48 minutes elapsed. Both reports are usable for local
-  reading with documented source conflicts and omissions, not independently proved facts.
-- **Acceptance scope:** this was an isolated saved-material run with byte estimates treated
-  as warnings. It did not rerun Reader, validate normal hard-budget CLI configuration,
-  or establish packaged App end-to-end acceptance. Production defaults are unchanged;
-  existing configurations need exact-model capacity declarations before complete-input work.
-- **Remaining research limits:** selected method facts are not an exhaustive workflow; two
-  depth/entity exclusions remain; original tables/definitions can conflict. Keep uncertainty
-  and omitted material visible rather than inventing reconciliation or promising all-model quality.
-- **App manual checks remain deferred:** VoiceOver, multiple displays, accessibility appearance
-  settings, and help dismissal/focus are not replaced by offline tests.
-- **Closeout verification:** 2,395 Python tests passed; two opt-in frozen-engine cases also passed
-  when explicitly enabled (nine-test suite). Swift passed 408 tests in 75 suites, including
-  frozen workflow, ledger, saved report decoding and configuration export. Privacy, Ruff,
-  changed-document links and diff checks passed; both latest report HTML hashes are unchanged.
-  Review fixed selected-source position loss, invalid-response cache reuse, missing failure audits,
-  and inconsistent budget admission/decoding. No real services were called during closeout.
-- **Follow-up repairs (offline):** legacy translation validates required content before caching
-  and rechecks old hits; malformed, missing, changed-ID or quantity-invalid replies are not reused
-  as successes. The source App exposes the Chinese writer's existing exact-model budget and
-  checks it for the requested/scheduled Chinese topic, without blocking English or local routes.
-  No model defaults, capacity requirements or evidence thresholds were added. These repairs
-  have not been packaged or manually accepted; prior deferred interaction checks remain open.
-  Follow-up checks: 2,403 Python tests passed (two opt-in cases initially skipped), followed by
-  nine passing frozen-engine tests with those cases enabled on a freshly built test-only engine.
-  Swift passed 410 tests in 75 suites, including frozen workflow, ledger, saved Chinese report
-  decoding, configuration export and mixed-language budget admission. Ruff, privacy, diff and
-  independent read-only review passed. The earlier permission/clipboard-limited attempt remains
-  a failed attempt; its 128 logged temporary directories were later moved to Trash with explicit
-  authorization. The successful offline rerun required no additional product-code change.
-- **Next:** scope one normal-configuration CLI acceptance before recommending the new source
-  as the everyday route. No new real run, packaging, automatic model choice or delivery is
-  authorized by this roadmap; manual App checks remain deferred.
+- **Implemented:** complete extracted Reader input and explicit budget declarations; scoped
+  schemas, exact source/table/method bindings, factual review, one bounded source-selected
+  amendment, Chinese composition and final-language review. CLI and App share Python services.
+- **Latest real report:** the saved LOTUS Chinese candidate completed final review without
+  rewriting its 56 translations or 15 paragraphs: five Codex `gpt-6-luna/xhigh` launches,
+  about 12 minutes 8 seconds, no Reader/Writer rerun or direct HTTP request. Internal CLI
+  requests, serving weights, usage and cost remain unknown.
+- **Earlier two-paper acceptance:** saved MemConflict and MemGuide materials completed the
+  shared fact/write/final path with the documented local revisions. This is separate from
+  the LOTUS final-only run, not the latest full fresh-paper acceptance.
+- **Acceptance limits:** neither saved-material run establishes a fresh same-version normal
+  CLI end-to-end run or packaged-App acceptance. Operator-declared byte estimates are not
+  measured server context capacity. Existing real configurations and packages are unchanged.
+- **Current offline repairs:** plain and schema Verifiers receive the prior assertion/evidence
+  for amended facts. Reader amendment and subsequent Verifier failures retain their actual
+  route in progress, manifest and audit records. These two fixes have no new live acceptance.
+  Quantity/cutoff guards preserve ordered values, qualifiers and source bindings.
+- **Known quality limits:** c35 remains unapproved because the wrapped-label table has no
+  reliable parsed column mapping; the BioDEX row-role diagnostic is misleading, not proof
+  of fabricated values. Broad author comparisons are not per-metric wins. Selected method
+  facts are not exhaustive; original source conflicts and the prior depth/entity exclusions
+  remain documented.
+- **Workspace scope:** paper progress, cross-report ledger, explicit saved-paper organization
+  and typed relationship browsing exist in unreleased source. Automatic/incremental
+  organization and periodic consolidation are not implemented.
+- **Manual App checks deferred:** VoiceOver, multiple displays, accessibility appearance,
+  and help dismissal/focus remain open; offline tests do not replace them.
+- **Latest offline verification:** eight new regressions cover plain-review preservation/refusal,
+  cache identity and both paper/daily failure routes. Full Python: 2,533 passed, two existing
+  opt-in frozen-engine tests skipped. Ruff, privacy, links, diff and scoped read-only review
+  passed. Original saved candidates and reports remain unchanged; no live call was made.
+- **Next:** verify the PR checks and review the unreleased change set before any merge or
+  package update. Fresh same-version normal CLI/App acceptance and the c35 table-input repair
+  remain separate scopes. This roadmap does not authorize paid reruns, delivery or a release.
 
 See [current report quality and checks](chinese-publication.md),
-[input contract](reader-input-evidence.md) and [Reader output boundaries](reader-output-reliability.md).
-Earlier failures, repairs, measurement counts and App checkpoints are preserved in the
-[dated acceptance history](acceptance-history.md), not repeated as current blockers.
+[Reader contract and acceptance](reader-output-reliability.md), and the
+[dated LOTUS checkpoints](acceptance-history.md#lotus-v3-checkpoints-2026-11-06).
+Earlier failures and test totals remain history, not repeated current blockers.
 
 ## Non-Negotiable Quality Rules
 

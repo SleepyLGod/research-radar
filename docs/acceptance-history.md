@@ -4,6 +4,590 @@ These dated records preserve what was checked at each checkpoint. They are not t
 acceptance status, permission to run services, or a claim that changes shipped in a package.
 See [current roadmap](todo.md#current-state) and [current Chinese publication status](chinese-publication.md).
 
+## LOTUS v3 Checkpoints (2026-11-06)
+
+### Plain-Review Context And Failure Attribution Repaired (Offline)
+
+Two confirmed pre-commit P2s were reproduced before changes. Plain/non-schema Verifier requests
+omitted the prior assertion/evidence; Reader proposal errors were persisted as Verifier calls.
+Both review paths now share the existing amendment-preservation instruction. Plain history is
+bound by exact claim index/ID/source, enters the existing budget/cache identity, and does not
+change the response format or evidence gate. Different prior assertions cannot share a plain
+review cache hit just because their new sentence is identical; exact repeats still hit.
+
+The existing amendment audit now records its actual failing stage/provider/model. Paper and
+daily progress, run error and manifest use that same explicit route, retaining original
+exception types/transport diagnostics. A subsequent Verifier error remains a Verifier error.
+No wire stage/command, retry system, model default, App or real configuration was added/changed.
+
+Eight new regression cases failed on the old behavior and pass after the repairs. Full Python:
+2,533 passed, two existing opt-in frozen-engine cases skipped. Ruff, privacy, links, diff and
+scoped independent read-only review passed. Current roadmap/Reader docs were shortened while
+the prior snapshots below were retained. This is offline verification, not another real-model
+or App acceptance. Original candidates/reports remain unchanged; no key read, service request,
+delivery, packaging, staging, commit or push occurred.
+
+These are archived roadmap and implementation snapshots, not current instructions or live-run
+permission. Later checkpoints supersede earlier pending states, not their original failure
+evidence. The later review found the plain-Verifier provenance and failure-attribution gaps;
+their offline repairs are described in the current Reader contract.
+
+### Roadmap Snapshot Before The Two P2 Repairs
+
+
+Updated 2026-11-06. Source changes below are **unreleased**; the published v0.3.0b1
+App/DMG has not been rebuilt with them.
+
+- **Shared research implementation:** complete extracted Reader input with explicit capacity
+  declarations; scoped schemas; exact source/table/method bindings; fact review, Chinese
+  composition and final-language paragraph review. CLI and App use the same Python services.
+- **Existing workspace:** native paper progress, cross-report ledger, saved-paper organization
+  and typed relationship browsing remain available in unreleased source. Automatic/incremental
+  organization and periodic consolidation are not implemented; see the dated feature sections below.
+- **Latest real saved-material acceptance:** saved MemConflict and MemGuide extractions completed the same
+  shared fact/write/final path. One authorized local writing/final revision per paper restored
+  reviewed experimental settings and clarified source attribution. Total: six Codex starts,
+  four DeepSeek HTTP requests, about 48 minutes elapsed. Both reports are usable for local
+  reading with documented source conflicts and omissions, not independently proved facts.
+- **Acceptance scope:** this was an isolated saved-material run with byte estimates treated
+  as warnings. It did not rerun Reader, validate normal hard-budget CLI configuration,
+  or establish packaged App end-to-end acceptance. Production defaults are unchanged;
+  existing configurations need exact-model capacity declarations before complete-input work.
+- **Normal CLI attempts (2026-11-06):** the first LOTUS v3 Reader run stopped on an evaluation
+  reference error after about 9 minutes 17 seconds (one Codex start, no DeepSeek requests).
+  Missing target diagnostics and discarded Reader attempt records were repaired offline;
+  its lost answer remains unavailable, so the original reference failure is not resolved.
+  A separately authorized recheck passed Reader and three fact/method batches, then stopped
+  before Chinese writing because c8's threshold-equality coverage remained `needs_review`.
+  Four Codex starts, no DeepSeek HTTP requests, about 13 minutes 32 seconds; no final report.
+- **Numeric notation repair (offline):** shared anchor checking now recognizes spaced comma
+  groups, explicit percentage ranges and equivalent literal metric cutoffs without borrowing
+  metric indices as measured values. Saved c32/c48 become locally reviewable, not fact-approved;
+  c35 still needs explicit BioDEX context. The saved c8 decision, method gate, prompts and
+  evidence requirements are unchanged. Tests distinguish incomplete coverage from permission
+  to approve or label the whole method false. Full Python: 2,441 passed, two opt-in frozen
+  tests skipped; Ruff, privacy and diff checks passed. Original results are preserved. No new
+  service call, credential read, App change or package update occurred for this repair.
+- **Bounded fact amendments (offline):** the shared paper/daily paths can reconsider local
+  eligibility and request one source-selected amendment per affected paper for required
+  uncertain method/condition facts. Changed assertions and dependencies are rechecked;
+  only exact unchanged approvals are reused, including validated original batch receipts.
+  Explicit refutations, malformed output and unresolved amendments are not silently repaired
+  or approved. Initial decisions and candidates stay in a separate private audit artifact.
+  Editorial offline controls reach Chinese writing and final review, including minimized
+  LOTUS c8/c35 with c32/c48. This is not a new real LOTUS report or packaged-App acceptance.
+  Checks: 2,461 Python tests passed, two opt-in frozen-engine tests skipped; Ruff, privacy,
+  diff and scoped independent read-only review passed. Original real results remain unchanged.
+- **Saved-material completion attempt (2026-11-06, startup blocked):** original LOTUS PDF,
+  full text, reading and receipts passed offline restoration checks. The single Codex launch
+  exited during local App Server initialization with permission errors and an unwritable
+  state database. The batch stopped after about 17 seconds: no amendment returned, zero
+  DeepSeek HTTP requests, no writing/final review or Chinese report. Backend usage is unknown.
+  This tests neither model quality nor the amended contract. Nine isolated runner controls
+  and 63 focused shared tests passed; original materials remain unchanged. No retry occurred.
+- **Normal-environment completion (2026-11-06, partial):** normal execution permissions fixed
+  local Codex initialization without changing the runner or research logic. One amendment and
+  two independent review batches completed in about 6 minutes 58 seconds (three Codex starts,
+  zero DeepSeek HTTP). Twenty targets were reviewed and 42 unchanged receipts reused; facts
+  with exact supporting receipts increased from 49 to 54, with no prior approval withdrawn.
+  c8 remains uncertain because the original PDF's Algorithm 1 and prose disagree about the
+  lower-threshold equality case; prior prose-only diagnosis was incomplete. The method gate
+  stopped before writing, so no Chinese report or final-language acceptance is claimed.
+  c21 still lacks selected FEVER context; c35 has incomplete source selection plus a local
+  dataset/method-row classification issue. No extra amendment, rerun or whitelist was added.
+  Nine isolated runner controls passed; original materials/shared source remained unchanged.
+- **Source-conflict/context follow-up (offline):** existing fields and gates already support a
+  separately reviewed, accurately attributed conflict account; no new conflict state or relaxed
+  method check was needed. The amendment prompt now asks for both source descriptions and
+  identifying task context, without adding unrelated results. Mapped-table caption/header role
+  uncertainty uses the existing fresh candidate admission, not automatic approval; known rows,
+  values, missing columns and missing identities remain strict. Real c21/c35 bad selections are
+  still rejected; explicit editorial context controls pass local checks, not real factual review.
+  Fifteen new regressions and scoped independent review covered source-conflict propagation and
+  caption-masked wrong-row attribution. Full Python: 2,476 passed, two opt-in cases skipped;
+  Ruff, privacy and diff passed. No model, credential, App or original-result change occurred.
+- **Revised-contract real completion (2026-11-06, partial):** the new authorized attempt reused
+  the latest reading and 54 bound facts. c8's attributed source conflict and c21's FEVER context
+  passed independent review; facts reached 56 supported entries. Two Codex starts and one
+  DeepSeek HTTP request took about 4 minutes 19 seconds. The writer returned 56 translations
+  and 15 Chinese paragraphs, but local quantity checks rejected the correct `5.5 million` to
+  `550 万` conversion. c35 separately hit a metric-cutoff representation error: the 10 in
+  `and at 10 (RP@10)` was treated as an additional numeric value. No final review or public
+  report followed; the Chinese candidate remains unapproved. No patch/retry or further paid
+  request occurred. Forty-four offline checks, Ruff, privacy and diff passed; 178 protected
+  files remained unchanged. Actual source-conflict improvement is confirmed, not end-to-end
+  Chinese acceptance; per-metric experimental detail and exact final prose still need review.
+- **Count-scale/cutoff repair (offline):** exact Decimal magnitude comparison accepts the saved
+  `5.5 million = 550万` translation without sorting quantities or dropping known units, signs
+  or qualifiers. Explicit matching repeated metric annotations identify coordinated cutoffs,
+  not measured scores. Forty-nine new regressions cover positive and negative cases, including
+  the shared Chinese composition entry. A saved-answer replay retains all 56 translations and
+  15 original Chinese paragraphs/support IDs; all 60 protected saved files remain unchanged.
+  c35's numeric mismatch is resolved, but its complete anchor check still rejects BioDEX's
+  table-role/selection context. No new fact/final approval is claimed or manufactured. The
+  original Chinese candidate is preserved; no live call, key access or App update occurred.
+  Full Python: 2,525 passed, two existing opt-in frozen-engine tests skipped; Ruff, privacy,
+  diff and scoped read-only review passed. Deferred manual App checks are unchanged.
+- **Saved LOTUS Chinese final review (real, 2026-11-06):** the existing 56 translations and
+  15 paragraphs completed shared final-publication review unchanged. Five planned Codex
+  `gpt-6-luna/xhigh` launches took about 12 minutes 8 seconds; all 71 target decisions and the
+  final method/context-coverage checks passed. No Reader/Writer rerun, direct HTTP request,
+  API-key backend access, retry launch, search, model switch or delivery occurred. Existing
+  Codex login was used; internal requests, serving weights, usage and cost remain unknown.
+  All locked source and original material fingerprints remained unchanged. The private final
+  report and before/after comparison are local artifacts, not new checked-in reports or a Release.
+  c35 remains unapproved: original PDF inspection confirms its four values but exposes a
+  wrapped-label table-input/role limitation and misleading BioDEX rejection, not invented scores.
+  The report is useful for reading methods/conditions, not a complete per-metric benchmark review.
+  This final-only acceptance does not establish a fresh same-version normal CLI or App full run.
+  Closeout: 12 isolated runner controls and 49 quantity/cutoff controls passed; full Python
+  2,525 passed with two existing opt-in cases skipped. Ruff, privacy, diff and local HTML checks
+  passed; all 207 locked files still matched after export. No extra model call followed.
+- **Remaining research limits:** selected method facts are not an exhaustive workflow; two
+  depth/entity exclusions remain; original tables/definitions can conflict. Keep uncertainty
+  and omitted material visible rather than inventing reconciliation or promising all-model quality.
+- **App manual checks remain deferred:** VoiceOver, multiple displays, accessibility appearance
+  settings, and help dismissal/focus are not replaced by offline tests.
+- **Closeout verification:** 2,395 Python tests passed; two opt-in frozen-engine cases also passed
+  when explicitly enabled (nine-test suite). Swift passed 408 tests in 75 suites, including
+  frozen workflow, ledger, saved report decoding and configuration export. Privacy, Ruff,
+  changed-document links and diff checks passed; both latest report HTML hashes are unchanged.
+  Review fixed selected-source position loss, invalid-response cache reuse, missing failure audits,
+  and inconsistent budget admission/decoding. No real services were called during closeout.
+- **Follow-up repairs (offline):** legacy translation validates required content before caching
+  and rechecks old hits; malformed, missing, changed-ID or quantity-invalid replies are not reused
+  as successes. The source App exposes the Chinese writer's existing exact-model budget and
+  checks it for the requested/scheduled Chinese topic, without blocking English or local routes.
+  No model defaults, capacity requirements or evidence thresholds were added. These repairs
+  have not been packaged or manually accepted; prior deferred interaction checks remain open.
+  Follow-up checks: 2,403 Python tests passed (two opt-in cases initially skipped), followed by
+  nine passing frozen-engine tests with those cases enabled on a freshly built test-only engine.
+  Swift passed 410 tests in 75 suites, including frozen workflow, ledger, saved Chinese report
+  decoding, configuration export and mixed-language budget admission. Ruff, privacy, diff and
+  independent read-only review passed. The earlier permission/clipboard-limited attempt remains
+  a failed attempt; its 128 logged temporary directories were later moved to Trash with explicit
+  authorization. The successful offline rerun required no additional product-code change.
+- **Next:** the saved LOTUS Chinese report has completed real final-language review. Read the
+  report and review cumulative unreleased changes before closeout; another identical paid run
+  is not the next gate. Keep c35's remaining table-input limitation separate from the completed
+  report and do not add it as an approved fact. A future table repair must establish literal
+  row/column ownership, not guess from dataset names or neighbouring captions. Same-version
+  normal CLI end-to-end acceptance and packaged-App acceptance remain separate open scopes.
+  Do not patch model output or weaken evidence rules to pass either LOTUS attempt.
+  No new real run, packaging, automatic model choice or delivery is authorized by this roadmap;
+  manual App checks remain deferred.
+
+See [current report quality and checks](chinese-publication.md),
+[input contract](reader-input-evidence.md) and [Reader output boundaries](reader-output-reliability.md).
+Earlier failures, repairs, measurement counts and App checkpoints are preserved in the
+[dated acceptance history](acceptance-history.md), not repeated as current blockers.
+
+
+### Detailed Reader Reliability Checkpoints
+
+#### Bounded Fact Amendments Before Chinese Composition (Offline)
+
+The shared single-paper and daily paths now offer one amendment pass per affected paper
+after fact review and before Chinese writing. This is a new bounded model workflow, not a
+claim that another parser bug caused c8. Installed Apps and the real LOTUS results are unchanged.
+
+Only explicit factual units referenced by the method or evaluation-condition index are
+eligible. The current local checks first reconsider unreviewed local rejections, so corrected
+numeric notation can reach factual review without rewriting a valid extraction. An explicit
+negative model decision is not retried. Unchanged approved facts need no amendment call.
+
+For remaining eligible uncertainty, the existing Reader route receives the complete source
+with its offered source IDs and the exact target IDs, text and feedback. It may minimally
+clarify the same assertion or select supporting blocks from that source. It cannot change
+the paper, IDs, claim kinds, method roles, edges or task scope. It may decline instead of
+inventing a qualifier. Output is scoped schema when supported, strictly validated JSON on
+other existing adapters, with no JSON repair request. All target IDs must occur exactly once;
+missing/foreign/duplicate IDs or invalid source selections fail closed. Request and schema
+remain subject to the existing complete-input budget before any provider/cache access.
+
+Accepted candidates still pass the existing local evidence checks. A fresh, source-bound
+table-semantic ambiguity remains eligible for its existing explicit Verifier admission; it
+is neither automatically approved nor discarded simply because local semantic review is
+still needed. A no-op or declined amendment does not trigger another review for that unit.
+The one-pass marker prevents a returned attempt from entering an automatic amendment loop.
+
+The existing Verifier rechecks changed assertions and dependencies. Its targets also carry
+`revision_of`, so it can check preserved meaning and necessary qualifications against the
+previous assertion, rather than approve a conveniently shortened replacement. This amendment
+instruction is sent only for amended targets; normal review requests and their budgets are
+unchanged. Exact fact bindings include amendment provenance. Changed text, evidence or
+dependencies cannot retain an old approval.
+
+Reuse requires unchanged complete source hashes and original target-bound receipts. Batched
+and previously assembled receipts are rebuilt from their constituent originals and validated
+for exact target coverage, disjointness, evidence bindings and normalized decisions; the merged
+status list is not trusted. An assembled receipt cannot pretend to be a fresh model response.
+Plain legacy feedback is not reused as an exact approval: it requires a new complete review.
+This preserves provenance, not independent proof that a model decision is scientifically true.
+
+`fact_revision.json` retains the initial claims, readings and review, source fingerprints,
+offered targets, candidate selections, bounded redacted explanations, local rejection reasons
+and attempt status. It is also saved when proposal/review fails. Existing result files from
+earlier runs are not changed. `reviewed` denotes completion of the review step, not approval
+of every fact: remaining uncertainty still blocks writing wherever the existing contract
+requires that fact. The same Chinese writer and final-language review remain mandatory.
+
+Offline controls reach Chinese output through the real single-paper pipeline for both a
+MemConflict method amendment and minimized LOTUS c8/c35 amendments with c32/c48 conditions.
+These are declared editorial proposals, writing and model-decision doubles, not new live
+reading-quality measurements or a complete LOTUS report. The original three-batch LOTUS
+receipt was also revalidated read-only: 57 targets, 55 supported raw decisions, without
+reusing the uncertain c8 fact. A supported raw relation still needs approved endpoints.
+
+The per-paper extra cost is at most one logical Reader amendment call, followed by the
+existing dynamically batched review of pending targets; a non-schema Verifier cannot reuse
+the old approvals and therefore reviews the complete eligible set. Existing provider-level
+transport behavior still applies; this is not an exact HTTP-count or monetary cap. Chinese
+writing and final review add their normal calls. Any real acceptance needs a separately
+confirmed whole-run budget. No real service, credential access, App update or delivery was
+performed in this offline implementation.
+
+Validation: 2,461 Python tests passed; two opt-in frozen-engine tests remained skipped.
+Ruff, privacy, diff and a scoped independent read-only review passed. The review reproduced
+and led to regressions for assembled-receipt reuse and premature rejection of a reviewable
+table amendment; both were fixed and rechecked. Failure-persistence integration verifies
+that an amendment error retains the initial review and produces no public report. No App
+or frozen engine was rebuilt, and deferred manual acceptance is unchanged.
+
+##### Saved-Material Completion Attempt: Startup Blocked (2026-11-06)
+
+The separately authorized one-pass completion used the real saved LOTUS reading and original
+fact receipts, not the editorial controls. PDF/text hashes and lossless saved-record restoration
+passed offline checks. The shared amendment selector offered six existing required gaps,
+including c8 and c35, in one request. No second extraction or search was attempted.
+
+One Codex process started, then exited during local initialization: its diagnostics reported
+an unwritable state database and `failed to initialize in-process app-server client:
+Operation not permitted`. The isolated batch stopped after about 17 seconds, with no returned
+amendment, no DeepSeek HTTP request and no final Chinese report. This is a local execution
+environment failure, not evidence of an incorrect model answer or failed evidence review.
+Backend request count, token usage and cost were not obtained; they are not reported as zero.
+
+The runner was not restarted or moved to another environment after this failure. Original
+research materials and source fingerprints remained unchanged during execution. Nine offline
+runner controls and 63 focused shared tests passed; Ruff, privacy and diff checks passed.
+The amendment workflow therefore remains live-unaccepted. A further authorized attempt should
+use the previously working execution environment, without changing the paper contract, model
+route or evidence threshold merely to address this launch permission failure. App acceptance
+and deferred manual checks remain unchanged.
+
+##### Normal-Environment Completion Attempt (2026-11-06)
+
+A separately authorized batch reused the same real LOTUS reading and original receipts,
+with an identical isolated runner but normal execution permissions and the minimal login
+environment. Codex initialized and returned actual answers; no research code, prompt, schema,
+global settings or real research configuration was changed to solve the launch failure.
+
+The batch took about 6 minutes 58 seconds: three Codex starts (one amendment and two fact/method
+review batches), no DeepSeek HTTP request, no final-language review and no Chinese report.
+Twenty targets were newly reviewed in batches of 18 and two; 42 exact original target receipts
+were reused. Independently supported facts increased from 49 to 54, restoring c20, c32, c34,
+c42 and c48 without withdrawing an old supported fact. These counts are not a quality score.
+
+The remaining method blocker is a verified source conflict, not another startup or JSON error.
+Original PDF page 5, Algorithm 1, routes a score equal to the lower threshold to the oracle
+when the lower threshold is below the upper one. Page 6 prose says scores at or below the
+lower threshold fail. The amendment repeated the prose without noting the disagreement;
+the Verifier retained `needs_review`. Earlier diagnosis based only on the prose was incomplete.
+The existing mandatory-method gate stopped composition before any writer request. A future
+qualified account should preserve the method and explicitly attribute the conflicting boundary
+descriptions; neither deleting the gate nor silently choosing a side establishes correctness.
+
+Two other candidates remain unavailable: c21 selected blocks that omitted the FEVER name;
+c35 added table values while still omitting the BioDEX name from its selected blocks, and
+the local table checker also treated BioDEX as a method-row entity. The latter is a concrete
+role-classification issue, but correcting it alone would not prove the whole candidate valid.
+No dataset whitelist, inferred citation or extra model request was introduced in this batch.
+
+Nine isolated runner controls passed in this attempt. Original material and shared source
+fingerprints were unchanged. Earlier failures remain recorded, no second amendment or rerun
+occurred, and App/manual acceptance remains deferred. Backend model/usage/cost are unknown.
+
+##### Source-Conflict and Table-Role Follow-Up (Offline, 2026-11-06)
+
+Further replay corrected an overbroad diagnosis: the existing claim text, multiple source
+anchors, method review and Chinese final-review path already represent an accurately attributed
+account of conflicting source descriptions. The new production-entry control passed before any
+publication-gate change. No new conflict state, schema, pipeline or weaker method gate is needed.
+The saved live c8 remains uncertain; the follow-up does not manufacture a fresh model approval.
+
+The bounded amendment prompt now asks for both descriptions and their source selections when
+the full source disagrees, preserving the shared method rather than choosing an allegedly
+definitive boundary. It also asks for identifying task context and prohibits adding unrelated
+result values merely to repair missing context. The existing Verifier instruction about
+accurately attributed discrepancies now covers source statements rather than measurements
+alone. Every proposed account still requires independently bound fact/method decisions and
+final-language review. Prompt clarity is not proof a real model will follow it.
+
+An independent code issue was reproduced with BioDEX and another previously unknown caption
+name: spelling-based method detection treated a name present in table scope as a missing row.
+For tables with an existing literal column mapping, a caption/header-only entity can now receive
+the existing fresh `table_semantics` candidate marker. It is not locally publishable; only an
+explicit independent target decision can support it. Missing column mappings, missing identity,
+wrong values and wrong selected rows remain blocking. Known row labels in the matched table's
+literal context take precedence over caption ambiguity; captions never select replacement rows.
+No benchmark-name whitelist was added, and row/column extraction itself was not rewritten.
+
+Real saved c21/c35 candidates still fail their original incomplete selections. Separate editorial
+controls demonstrate the minimal remedy: select the identifying FEVER context for c21; retain
+c35's original metric-only assertion with explicit BioDEX context, rather than add table values.
+They pass local checks without altering the original artifacts, but have no new factual approval.
+This distinguishes model source-selection quality from a deterministic role-checking defect.
+
+Fifteen positive/negative regressions cover qualified conflict prose reaching the shared paper
+entry and renderer, continued blocking after uncertain fact/final decisions, table scope roles,
+missing models/columns and known wrong-row attribution. The `one_side` editorial control tests
+propagation of an explicit refusal, not automatic discovery of omitted evidence. Initial broader
+admission exposed the existing MemGuide missing-layout regression; the fix was narrowed rather
+than relaxing that test. Scoped independent review reproduced a caption-masked wrong-row case;
+its negative regression failed before the correction and passed afterward.
+
+Validation: 2,476 Python tests passed, two opt-in frozen-engine cases skipped. Ruff, privacy and
+diff checks passed. No model/provider call, credential read, App/build change, delivery, commit
+or push occurred in this follow-up. The real LOTUS Chinese report and real-model behavior under
+the revised prompt remain unaccepted; manual App checks remain deferred.
+
+##### Revised-Contract Real Completion: Writer Returned, Local Check Blocked (2026-11-06)
+
+A separately authorized new attempt restored the latest real reading, source and 54 exact
+fact approvals without changing them. It preserved the prior amendment audit separately,
+offered only c8/c21/c35 to one amendment call, and used the revised shared paths. Codex
+`gpt-6-luna/xhigh` completed the amendment and one ten-target fact/method batch, reusing 53
+unchanged target receipts. c8's attributed prose/algorithm disagreement and c21's FEVER
+context were explicitly supported; the fact ledger reached 56 supported entries.
+
+DeepSeek `deepseek-flash` returned complete JSON with 56 fact translations and 15 Chinese
+paragraphs, with `stop` and the same reported model label. The request retained thinking/high,
+streaming and `max_tokens=131072`, with no JSON repair or disconnect retry. Composition then
+stopped locally before final review. Total: two Codex starts, one HTTP request, about 4 minutes
+19 seconds. There is an unapproved Chinese candidate, not a final accepted report.
+
+Offline replay of all 56 translations identified one quantity/prefix failure: c19 translated
+`5.5 million` Wikipedia articles as `550 万`, preserving its prefix. These are exactly equal,
+but the lexical checker records `5.5/million` versus `550/no unit` and rejects it. The failure
+is a deterministic representation limitation, not a changed article count. The saved generic
+error remains intact; no post-failure patch or extra request was used to convert it to success.
+
+c35 was also rejected locally before review. Its candidate includes `rank-precision at 5
+(RP@5) and at 10 (RP@10)` plus four table values present in the selected source. The matcher
+reads `and at 10` as a possible metric phrase, leaves the 10 as an unbound numeric value and
+requires a non-cutoff occurrence of 10 in the source. The other table values are not missing.
+This is distinct from the model's unnecessary addition of table results during context repair;
+neither issue authorizes automatic factual approval or guessed citation/value mappings.
+
+Manual candidate reading found coherent method descriptions and useful experimental settings,
+but not final acceptance: the Chinese conflict paragraph identifies disagreement while leaving
+the prose-side rejection rule implicit; BioDEX metric detail remains absent, and attributed
+author-level comparison claims are not a substitute for per-metric table analysis. No final
+paragraph decisions were obtained, so none of these observations is a new public approval.
+
+Forty-four offline loader/guard/shared checks passed; Ruff, privacy and diff passed. All 178
+protected materials/source files were unchanged. No Reader rerun, search, extra probe, model
+switch, App/configuration change, delivery, commit or push occurred. Backend weights, Codex
+internal requests, token usage and costs remain unknown. Further quantity-check repairs and
+any final review require a separate task/authorization; this stopped batch was not restarted.
+
+##### Exact Count Scales and Coordinated Cutoffs (Offline, 2026-11-06)
+
+Two deterministic false rejections from the stopped batch are repaired in shared Python,
+without changing Reader/Writer prompts, model routes, evidence requirements or App code.
+
+The localization guard compares count magnitudes exactly with Decimal exponents: `5.5 million`
+and `550万` describe the same count. Quantities remain in source order, with their comparison,
+approximation, explicit sign and recognized physical units. This is not number sorting or a
+physical-unit conversion system. Existing aliases remain available; the unit registry also
+distinguishes Chinese metre/gram/kilogram labels from count-scale prefixes. Long decimals do
+not pass through floating point or rounded Decimal multiplication. Incorrect scales, changed
+units, reordered quantities and changed parameter/reference identities remain guarded.
+
+The anchor numeric projection recognizes the literal coordinated form `(RP@5) and at 10
+(RP@10)` only when both annotations explicitly name the same metric and the repeated cutoff
+matches. No metric alias is inferred. A wrong/missing annotation or a score of `10` cannot borrow
+evidence from `RP@10`; row attribution and independent factual review remain separate gates.
+Stored candidate prose, quotes and source bindings are not rewritten by this projection.
+
+A blocked-network/credential replay used the actual saved writer answer, not newly generated
+prose: all 56 translations pass quantity checks, and the shared composition parser retains all
+15 Chinese paragraphs and their support IDs unchanged. This restores candidate preparation,
+not final-language approval. The original 60 files across the three saved material/result
+directories remain byte-identical. The replay is private and excluded from source control.
+
+For c35, both literal selected quotes and their individually resolved full-source contexts now
+pass the numeric check. Full anchor checking still rejects the candidate with `table anchor row
+missing method entity: BioDEX`. This remaining table-role/selection gate is not bypassed here;
+c35 receives no new approval. There was no new Verifier decision or final accepted LOTUS report.
+
+Forty-nine positive/negative regressions include the minimized real c19/c35 failures, exact
+magnitudes, long decimals, signs, units, ordering, metric identity and the shared Chinese
+composition entry. Read-only review found scale parsing could lose a Chinese physical-unit
+suffix and Decimal comparison could lose negative zero's explicit sign. Both were reproduced,
+corrected and regression-tested before closeout. No model request, credential read, Reader or
+Writer rerun, App/configuration change, delivery, packaging, commit or push occurred.
+
+Closeout: 2,525 Python tests passed, with two existing opt-in frozen-engine tests skipped.
+Ruff, privacy and diff checks passed. The reviewer rechecked the reported cases and matching-unit
+positives after correction. No Swift/App or real-model acceptance is claimed for this slice.
+
+##### Original Chinese Candidate: Real Final Review Completed (2026-11-06)
+
+The separately authorized final-only run reused the saved 56 fact translations and 15 Chinese
+paragraphs, without Reader, amendment or Writer calls. It used the shared final-publication path
+and the existing Codex executable, requested `gpt-6-luna/xhigh`, disabled the local model cache,
+and sent five preplanned structured review batches. There was no extra launch, JSON repair,
+model switch, search, DeepSeek/NVIDIA request or delivery. Total: five Codex starts and about
+12 minutes 8 seconds; the run's credential backend and direct HTTP count were both zero.
+Codex used its existing login. Internal CLI requests, server weights, usage and cost remain
+unknown; five launches is not a claim of five backend billable requests.
+
+Production planning covered all 71 unique targets: 56 translated facts and 15 exact final-language
+paragraphs. The dynamic schema was v4 target/evidence review: these targets had no v5 comparison
+units. No static schema or model answer was substituted. All returned explicit supported
+decisions, and the shared source-binding, fact-receipt, method and required-context coverage
+checks passed. The report retained all 15 paragraphs and their support IDs without rewriting
+them. The source/configuration/executable and saved materials matched the locked fingerprints
+at completion. The original Chinese candidate, earlier failures and original reports are intact.
+
+This establishes real final-language acceptance of that saved candidate, not a fresh Reader run,
+normal CLI end-to-end acceptance on one version, packaged-App acceptance, or independent
+reproduction of the paper's results. Per-request byte estimates remained operator-declared
+planning bounds, not measured server context capacity. No production code or real configuration
+was changed during this final-only task.
+
+Manual inspection of original PDF page 9 also clarified c35's remaining rejection. Its four
+proposed values are literal Table 3 values, and BioDEX is explicitly selected. The positioned
+extractor cannot establish a complete cell grid for the wrapped-label layout; linear context
+then collects a preceding row fragment as headers and the following Table 4 caption. Therefore
+the `missing method entity: BioDEX` diagnostic is misleading. This is a table-input/role-check
+limitation, not proof of fabricated scores or an unreadable original PDF. It was not patched
+with a dataset whitelist, guessed columns or a new approval: c35 remains outside public facts.
+
+The resulting report explains filter/join/group-by/top-k mechanisms and preserves key datasets,
+model settings, sample sizes, evaluation conditions and source conflicts. It remains limited:
+BioDEX per-metric comparisons are not supplied by c35, the paper's attributed broad superiority
+claim is not an independent per-metric win, and some prose is still mechanical. The original
+Table 3 has LOTUS Join + Rank RP@5 above DocETL Join + Rank but RP@10 below it. The filter section
+flags the prose/algorithm equality disagreement, but could explain the prose-side rule more
+directly. These are quality qualifications, not a reason to rewrite already reviewed text
+silently or start another paid run.
+
+Twelve offline runner controls covered exact requests, five-launch limits, deadline/reaping,
+forbidden repair paths and failure-before-rendering; the 49 quantity/cutoff regressions also
+passed. Local HTML/Markdown reports, the unchanged original candidate, section-by-section
+comparison and detailed private diagnostics were saved outside source control. No App/DMG,
+Release, staging, commit or push change is included. Deferred manual App checks remain open.
+Closeout checks: 2,525 Python tests passed, two existing opt-in frozen-engine cases skipped;
+Ruff, privacy and diff checks passed. Local HTML checks confirmed all 15 original paragraphs,
+valid comparison links, UTF-8 text and no remotely loaded scripts/styles/images. All 207 locked
+files still matched after export. No extra model request was made for these checks.
+
+#### LOTUS v3 Numeric Notation and Method Review (2026-11-06)
+
+The separately authorized recheck passed Reader parsing and three fact/method review batches,
+then stopped before Chinese writing. Total: four Codex starts, zero DeepSeek HTTP requests,
+about 13 minutes 32 seconds. Its saved results and original PDF remain unchanged. This is
+not final Chinese report acceptance, and the earlier lost Reader answer remains unresolved.
+
+Offline replay confirmed three lexical mismatches in the shared anchor checker:
+
+- PDF text `65, 000` was split into `65` and `000`, rejecting the correctly extracted 65,000.
+- `rank-precision at 5` and `rank-precision@5` were not treated as the same metric cutoff.
+- The explicit range `16 - 32%` did not retain the percent unit for its first endpoint.
+
+The checker now recognizes horizontally spaced three-digit comma groups and the shared unit
+of an explicit two-ended percentage range. It does not join arbitrary spaces, newlines or
+malformed groups, or copy units across a list or mixed units. Metric cutoffs remain bound to
+their literal metric names and indices, separately from measured values. An explicit `@`
+notation establishes which name has a cutoff; its matching `at` spelling is equivalent, not
+an inferred abbreviation or a metric allowlist. A cutoff cannot substantiate an experiment
+score. Existing retrieval-set handling keeps comma-separated members separate from thousands.
+No original quotation, claim text, table cell, review receipt or model instruction is rewritten.
+
+The original full extracted source and saved Reader assertions give this local-only comparison:
+
+| Target | Before | After this repair |
+| --- | --- | --- |
+| c32: BioDEX corpus and label counts | Rejected as missing numbers | Exact original evidence matches; still needs factual review |
+| c35: rank-precision cutoffs | Rejected as missing numbers | Numeric notation matches, but the original selected quote still lacks BioDEX identity |
+| c48: execution-time reduction range | Rejected as missing numbers | Exact original evidence matches; still needs factual review |
+
+The c35 positive control supplies another explicit, same-paper quotation naming BioDEX;
+the product does not silently attach that context. Tests retain the original single-quote
+failure. Numeric matching is only a local prerequisite, not model verification, comparison
+approval or permission to reuse an old receipt for a changed target.
+
+##### What the c8 Decision Does and Does Not Establish
+
+The source explicitly includes equality at the filter thresholds. The Reader says "above"
+and "below" without specifying equality. This is incomplete boundary coverage, not an
+explicit claim that equality must be handled oppositely. The saved Verifier decision is
+`needs_review`, not `unsupported`; it identifies this omission. The complete boundary is in
+the selected source quote, so this is not lost input, an invalid ID or number parsing.
+
+Whether that level of detail must appear in a high-level summary is a review-scope question;
+it cannot be settled by treating a missing detail as a proven factual inversion. Nor does
+this justify programmatically approving the operation. The existing method contract requires
+available reviewed operations before composition, so this saved candidate still stops there.
+The relation into c8 also remains unavailable because its endpoint is not approved, rather
+than because a neighbouring model reason was assigned to the wrong target.
+
+No c8 exception, automatic inequality insertion, status promotion, prompt change or weaker
+publication requirement was added. An offline regression preserves its saved text, evidence
+and uncertain review decision through local anchor checking, and keeps composition blocked.
+This test checks our program's handling of a decision, not the accuracy of a new model review.
+
+Validation: the new minimized public-source fixture and 28 offline cases cover the observed
+forms, changed values/units/cutoffs, malformed groups, explicit source context and preservation
+of c8's decision. Eleven tests failed before implementation; all now pass. Full Python:
+2,441 passed, two opt-in frozen-engine tests skipped. Existing retrieval and table regressions,
+Ruff, privacy and diff checks passed. No model call, credential read, App change or report
+rewrite was performed. A reliable final Chinese report has not been produced by this repair.
+
+#### LOTUS v3 Evaluation Reference Failure (2026-11-06)
+
+One separately authorized normal-CLI run used Codex `gpt-6-luna/xhigh` for the Reader
+on arXiv `2407.11418v3`. It stopped after about 9 minutes 17 seconds, with one Codex
+start and no DeepSeek requests. The Reader returned JSON that reached the local evaluation
+reference check; no fact/method review, Chinese writing or final review ran. No final report
+was generated. This was not an observed timeout or context-capacity rejection.
+
+The check requires evaluation references to name existing `fact` claims with nonempty
+evidence. Its original message combined two failures without identifying the dimension or
+claim ID. Reader parsing attached a bounded, redacted attempt record to the exception, but
+the single-paper failure path saved attempts only for input-budget exceptions. These are
+confirmed diagnostic defects in our code, not evidence that the model is incapable.
+
+The diagnostic now identifies the evaluation dimension and reference index, a redacted and
+bounded claim ID and kind, and the parsed evidence count. The shared failed-run writer saves
+existing attached Reader attempts, including the input audit and existing redacted response
+excerpt (up to 800 characters plus an ellipsis). It does not add full-answer, reasoning or
+credential capture. Input-budget failure records use that same persistence path.
+
+Offline regressions exercise real source-selection parsing and the single-paper pipeline:
+valid factual references retain their identity and source text; nonfacts and missing evidence
+remain rejected. A schema-capable offline provider is called once on failure; Verifier and
+writer are not called, and no public report is written. Diagnostic fields and excerpts are
+bounded and redacted. No prompt, schema, semantic acceptance rule or retry policy changed.
+
+The lost LOTUS output cannot be reconstructed from its saved generic error. The new fixtures
+are synthetic branch reproductions, not the recovered live answer. Whether that answer had
+a nonfact reference, absent evidence or another upstream cause remains unknown; the repair
+does not establish model fault, fix reading quality or complete CLI acceptance. No additional
+real request, credential access, App update or report rewrite was performed for this repair.
+
+Validation: 2,413 Python tests passed; the two opt-in frozen-engine tests remained skipped.
+Ruff, privacy and diff checks passed. The first full run caught an empty input-budget attempt
+file regression from centralizing persistence; the fix preserves empty attempt lists too.
+Three privacy tests also required rerunning outside the ignored build directory, where their
+fixtures had been skipped by design. No privacy-scanner or evidence-policy change was made.
+
+
+## Earlier Research And App Checkpoints
+
 - **Shared Chinese report pair completed (2026-11-06, local reading with caveats):**
   explicitly authorized continuation reused the exact MemConflict fact request/decisions
   and Chinese candidate, then completed its final review and MemGuide's fact/write/final
