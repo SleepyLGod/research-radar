@@ -58,11 +58,11 @@ public actor EngineCommandClient {
 
     public func cancel() async { await gate.cancel() }
 
-    public func readTopicKnowledge(topicID: String) async throws -> TopicKnowledgeV1 {
+    public func readTopicKnowledge(topicID: String, reports: [LedgerReportReferenceV1]? = nil) async throws -> TopicKnowledgeV1 {
         let request = try EngineRequestV1(requestID: UUID(), command: .readTopicKnowledge, createdAt: clock(),
             appSupportRoot: appSupportRoot.path,
             configPath: appSupportRoot.appending(path: "config/app-config.json").path,
-            payload: .readTopicKnowledge(.init(topicID: topicID)))
+            payload: .readTopicKnowledge(.init(topicID: topicID, reports: reports)))
         guard let knowledge = try await execute(request).knowledge else {
             throw EngineJobCoordinatorError.invalidTerminalArtifact
         }

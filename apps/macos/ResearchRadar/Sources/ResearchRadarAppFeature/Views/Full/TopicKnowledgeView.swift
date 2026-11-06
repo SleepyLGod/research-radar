@@ -5,6 +5,7 @@ struct TopicKnowledgeView: View {
     let store: AppStore
     let model: TopicKnowledgeModel
     let localization: LocalizationStore
+    var openPaper: ((String) -> Void)? = nil
     @State private var confirming = false
     @State private var confirmedScope: OrganizeTopicPayloadV1?
     @State private var showingInfo = false
@@ -18,6 +19,9 @@ struct TopicKnowledgeView: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            if let coverage = model.coverage(for: topicID), coverage.needsUpdate {
+                KnowledgeCoverageControl(coverage: coverage, localization: localization, openPaper: openPaper)
+            }
             Button { showingInfo.toggle() } label: { Image(systemName: "info.circle") }
                 .buttonStyle(.borderless).help(localization.text("knowledge.title"))
                 .accessibilityLabel(localization.text("knowledge.title"))
@@ -28,7 +32,8 @@ struct TopicKnowledgeView: View {
                 }.disabled(store.cancellationRequested || progress.job?.state == .pending)
             } else {
                 Button { confirmedScope = store.selectedTopicOrganization; confirming = true } label: {
-                    Label(localization.text(model.current(for: topicID) == nil ? "knowledge.organize" : "knowledge.reorganize"),
+                    Label(localization.text(model.current(for: topicID) == nil ? "knowledge.organize" :
+                        (model.coverage(for: topicID)?.needsUpdate == true ? "knowledge.update" : "knowledge.reorganize")),
                           systemImage: "square.stack.3d.up")
                 }.disabled(store.behaviorChangesBlocked || store.selectedTopicOrganization == nil)
             }
@@ -58,6 +63,10 @@ struct TopicKnowledgeView: View {
                 }
                 Text(String(summary.createdAt.prefix(10))).monospacedDigit().foregroundStyle(.secondary)
             } else { Text(localization.text("knowledge.empty")) }
+            Text(localization.text(model.coverage(for: topicID)?.status == .current ?
+                "knowledge.coverage.current" : (model.coverage(for: topicID)?.needsUpdate == true ?
+                    "knowledge.coverage.pending" : "knowledge.coverage.unknown")))
+                .foregroundStyle(.secondary)
             if let graph = model.graph(for: topicID) {
                 let selected = model.graphSelection(for: topicID).facetID
                 if let facet = graph.facets.first(where: { $0.id == selected }) {
@@ -88,7 +97,8 @@ struct TopicKnowledgeNotice: View {
     var body: some View {
         let status = progress.statusKey.flatMap { $0 == "knowledge.ready" ? nil : $0 }
         let errorCode = progress.isActive ? nil : progress.job?.error?.code
-        if status != nil || errorCode != nil || model.error(for: topicID) != nil {
+        let unknown = model.coverage(for: topicID)?.status == .unknown && !progress.isActive && !model.isLoading(topicID: topicID)
+        if status != nil || errorCode != nil || model.error(for: topicID) != nil || unknown {
             VStack(alignment: .leading, spacing: 6) {
                 if let status {
                     Text(localization.text(store.cancellationRequested && progress.isActive ? "today.cancelling" : status))
@@ -97,6 +107,7 @@ struct TopicKnowledgeNotice: View {
                     Text(UserFacingErrorCatalog(localization: localization).message(for: errorCode)).foregroundStyle(.secondary)
                 }
                 if let key = model.error(for: topicID) { Text(localization.text(key)).foregroundStyle(.secondary) }
+                else if unknown { Text(localization.text("knowledge.coverage.unknown")).foregroundStyle(.secondary) }
             }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20).padding(.bottom, 10)
         }

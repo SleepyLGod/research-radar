@@ -37,7 +37,8 @@ struct PaperLedgerView: View {
                 TopicSelectionView(store: store, localization: localization)
                 Spacer()
                 if organizationControlsVisible {
-                    TopicKnowledgeView(store: store, model: knowledge, localization: localization)
+                    TopicKnowledgeView(store: store, model: knowledge, localization: localization,
+                        openPaper: { model.select($0) })
                 }
                 Button { Task { await load(force: true) } } label: {
                     Image(systemName: "arrow.clockwise")
@@ -188,6 +189,12 @@ struct PaperLedgerView: View {
                                 Spacer()
                                 Text(localization.text(occurrence.paperIndex == nil ? "ledger.source_only" : "ledger.reading"))
                             }.font(.system(size: 12)).foregroundStyle(.secondary)
+                            if occurrence.paperIndex != nil, let topicID = store.selectedTopic?.id {
+                                let status = knowledge.paperCoverage(topicID: topicID, paperID: paper.id, version: occurrence.version)?.status
+                                Label(localization.text(status?.localizationKey ?? "knowledge.coverage.unknown"),
+                                    systemImage: status == .included ? "checkmark.circle" : "circle.dotted")
+                                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                            }
                             if occurrence.title != paper.title { Text(occurrence.title).font(.system(size: 14)) }
                             HStack(spacing: 16) {
                                 Button(localization.text("ledger.report")) { open(occurrence, false, false) }
@@ -211,6 +218,7 @@ struct PaperLedgerView: View {
 
     private func load(force: Bool = false) async {
         guard let topicID = store.selectedTopic?.id else { return }
+        knowledge.invalidateCoverage(topicID: topicID)
         guard !store.behaviorChangesBlocked else { model.deferLoad(for: topicID); return }
         model.deferLoad(for: nil)
         await model.load(topicID: topicID, reports: references, force: force) { topic, reports in

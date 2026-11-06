@@ -14,6 +14,7 @@ private actor KnowledgeOfflineRunner: EngineProcessRunning {
     private(set) var commands: [EngineCommand] = []
     private(set) var cancelCount = 0
     private(set) var readTopics: [String] = []
+    private(set) var readReports: [[LedgerReportReferenceV1]?] = []
 
     init(mode: Mode = .success, current: TopicKnowledgeV1? = nil) { self.mode = mode; self.current = current }
     func run(executable: URL, arguments: [String], eventsURL: URL) async throws -> EngineProcessOutcome {
@@ -36,6 +37,7 @@ private actor KnowledgeOfflineRunner: EngineProcessRunning {
         let value: TopicKnowledgeV1
         if case .readTopicKnowledge(let payload) = request.payload {
             readTopics.append(payload.topicID)
+            readReports.append(payload.reports)
             value = current ?? .init(topicID: payload.topicID, current: nil)
         } else if case .organizeTopic(let payload) = request.payload {
             if mode == .hold {
@@ -82,6 +84,18 @@ private struct KnowledgeNoSecrets: SecretStoring {
 }
 
 @MainActor @Suite struct TopicKnowledgeWorkflowTests {
+    @Test func coverageReadUsesSavedReportScopeWithoutEnqueuingOrganization() async throws {
+        let fixture = try KnowledgeFixture(); defer { try? fixture.trash() }
+        let runner = KnowledgeOfflineRunner()
+        let store = fixture.store(runner: runner)
+        _ = try await store.readTopicKnowledge(topicID: "memory")
+        let scopes = await runner.readReports
+        #expect(scopes.count == 1)
+        #expect(scopes[0]?.map(\.reportID) == [fixture.report.id])
+        #expect(store.jobs.isEmpty)
+        #expect(await runner.commands == [.readTopicKnowledge])
+    }
+
     @Test(arguments: [false, true])
     func organizationUsesQueueButNeverCreatesReportsDeliveriesOrNotifications(recoverRunning: Bool) async throws {
         let fixture = try KnowledgeFixture(); defer { try? fixture.trash() }
@@ -224,6 +238,8 @@ private struct KnowledgeNoSecrets: SecretStoring {
         let store = AppStore(configuration: config, reportSnapshot: .init(reports: [fixture.report]),
             runtime: .init(windowMode: .full, updatedAt: Date()), appSupportRoot: fixture.root,
             engineURL: URL(fileURLWithPath: "/offline-engine"), runner: runner, secretStore: KnowledgeNoSecrets())
+        store.topicKnowledge.accept(.init(topicID: "memory", current: nil,
+            coverage: .init(status: .current, papers: [])))
         let model = PaperLedgerModel()
         let host = NSHostingView(rootView: PaperLedgerView(store: store,
             localization: LocalizationStore(preference: .english), presentation: WindowPresentationState(),
@@ -239,6 +255,7 @@ private struct KnowledgeNoSecrets: SecretStoring {
             try await Task.sleep(for: .milliseconds(10))
         }
         try #require(await runner.commands.first == .readPaperLedger)
+        #expect(store.topicKnowledge.coverage(for: "memory")?.status != .current)
         try store.selectTopic("other")
         host.layoutSubtreeIfNeeded()
         try await Task.sleep(for: .milliseconds(100))

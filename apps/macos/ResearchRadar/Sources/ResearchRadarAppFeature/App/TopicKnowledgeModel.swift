@@ -8,22 +8,40 @@ import ResearchRadarCore
     private var errors: [String: String] = [:]
     private var requests: [String: UUID] = [:]
     private var selections: [String: KnowledgeGraphSelection] = [:]
+    private var loading: Set<String> = []
 
     func current(for topicID: String) -> KnowledgeSummaryV1? { values[topicID]?.current }
     func error(for topicID: String) -> String? { errors[topicID] }
     func graph(for topicID: String) -> KnowledgeGraphV1? { values[topicID]?.graph }
     func graphSelection(for topicID: String) -> KnowledgeGraphSelection { selections[topicID] ?? .init() }
+    func isLoading(topicID: String) -> Bool { loading.contains(topicID) }
+    func invalidateCoverage(topicID: String) {
+        requests[topicID] = UUID()
+        loading.remove(topicID)
+        guard let value = values[topicID] else { return }
+        values[topicID] = .init(topicID: value.topicID, current: value.current, graph: value.graph)
+    }
+    func coverage(for topicID: String) -> KnowledgeCoverageV1? {
+        if loading.contains(topicID) || errors[topicID] != nil { return .init(status: .unknown, papers: []) }
+        return values[topicID]?.coverage
+    }
+    func paperCoverage(topicID: String, paperID: String, version: String?) -> KnowledgeCoverageV1.Paper? {
+        coverage(for: topicID)?.papers.first { $0.paperID == paperID && $0.version == version }
+    }
 
     func accept(_ value: TopicKnowledgeV1) {
         requests[value.topicID] = UUID()
         values[value.topicID] = value
         errors[value.topicID] = nil
+        loading.remove(value.topicID)
         reconcileSelection(topicID: value.topicID)
     }
 
     func load(topicID: String, fetch: (String) async throws -> TopicKnowledgeV1) async {
         let request = UUID()
         requests[topicID] = request
+        loading.insert(topicID)
+        defer { if requests[topicID] == request { loading.remove(topicID) } }
         do {
             let value = try await fetch(topicID)
             guard requests[topicID] == request else { return }

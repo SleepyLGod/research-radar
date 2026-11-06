@@ -35,12 +35,20 @@ App/DMG has not been rebuilt with them.
 - **Workspace scope:** paper progress, cross-report ledger, explicit saved-paper organization
   and typed relationship browsing exist in unreleased source. Automatic/incremental
   organization and periodic consolidation are not implemented.
+- **Material coverage (unreleased):** current source compares saved public deep reads with the
+  topic snapshot, distinguishes new papers/versions and changed provenance, and exposes an
+  explicit full-scope update through the existing organizer. Source-only reports do not imply
+  pending deep reads; unreadable inputs remain unknown. A separately signed native candidate
+  passed the offline update/failure/stop and original-evidence navigation flow using a saved
+  organizer-response replay; this is not new real-model quality evidence. See the
+  [implementation and offline acceptance](superpowers/plans/2026-11-07-knowledge-material-coverage.md).
 - **Manual App checks deferred:** VoiceOver, multiple displays, accessibility appearance,
   and help dismissal/focus remain open; offline tests do not replace them.
-- **Latest offline verification:** eight new regressions cover plain-review preservation/refusal,
-  cache identity and both paper/daily failure routes. Full Python: 2,533 passed, two existing
-  opt-in frozen-engine tests skipped. Ruff, privacy, links, diff and scoped read-only review
-  passed. Original saved candidates and reports remain unchanged; no live call was made.
+- **Latest offline verification:** material coverage and scoped bridge/native reads now have
+  regressions, including invalidation while the ledger read is pending and retention of the
+  existing graph/camera. Full Python: 2,540 passed, two existing opt-in frozen-engine tests
+  skipped; Swift: 414 tests in 76 suites passed. Ruff, privacy, diff, bundle/signature checks and
+  independent read-only review passed. Original reports remain unchanged; no live call was made.
 - **Next:** verify the PR checks and review the unreleased change set before any merge or
   package update. Fresh same-version normal CLI/App acceptance and the c35 table-input repair
   remain separate scopes. This roadmap does not authorize paid reruns, delivery or a release.

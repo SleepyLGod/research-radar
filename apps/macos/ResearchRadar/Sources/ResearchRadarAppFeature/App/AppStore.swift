@@ -371,7 +371,10 @@ public final class AppStore {
         }
         commandActive = true; isEngineRunning = true; cancellationRequested = false
         defer { finishCommand() }
-        return try await commandClient.readTopicKnowledge(topicID: topicID)
+        let scope = reports.filter { $0.topicID == topicID }.map {
+            LedgerReportReferenceV1(reportID: $0.id, reportDate: $0.reportDate, runDirectory: $0.runDirectory)
+        }
+        return try await commandClient.readTopicKnowledge(topicID: topicID, reports: scope)
     }
 
     public func bootstrapTopic(description: String, language: ReportLanguageV1) async {
