@@ -27,6 +27,7 @@ def test_probe_failure_is_bounded_redacted_and_retains_diagnostic(monkeypatch) -
     private_path = "/" + "Users/test/private.txt"
     route = SimpleNamespace(provider="codex", model="gpt-6-luna")
     config = SimpleNamespace(research=SimpleNamespace(
+        topics=[],
         models=SimpleNamespace(task_routes={"verifier": route}),
         model_providers={"codex": ModelProviderConfig(kind="codex_cli", reader_contexts={
             "gpt-6-luna": ReaderContextBudget(200000, 10000, 5000),
@@ -50,6 +51,7 @@ def test_probe_failure_is_bounded_redacted_and_retains_diagnostic(monkeypatch) -
 def test_configured_route_checks_call_shared_provider_probe(monkeypatch) -> None:
     route = SimpleNamespace(provider="deepseek", model="deepseek-flash")
     research = SimpleNamespace(
+        topics=[],
         model_providers={"deepseek": ModelProviderConfig(kind="openai_compatible", reader_contexts={
             "deepseek-flash": ReaderContextBudget(200000, 10000, 5000),
         })},
@@ -138,6 +140,7 @@ def test_preflight_search_is_explicit_separate_and_affects_readiness(
 
     monkeypatch.setattr(handlers, "probe_web_search", probe)
     config = SimpleNamespace(research=SimpleNamespace(
+        topics=[],
         models=SimpleNamespace(task_routes={}),
         discovery=SimpleNamespace(web_search=WebSearchConfig(provider="tavily")),
     ))
@@ -170,6 +173,7 @@ def test_preflight_does_not_fail_unprobed_search_configurations(monkeypatch, pro
 
     monkeypatch.setattr(handlers, "probe_web_search", forbidden)
     config = SimpleNamespace(research=SimpleNamespace(
+        topics=[],
         models=SimpleNamespace(task_routes={}),
         discovery=SimpleNamespace(web_search=WebSearchConfig(provider=provider)),
     ))

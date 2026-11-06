@@ -406,11 +406,14 @@ def _configured_route_checks(
 ) -> list[dict[str, object]]:
     checks: list[dict[str, object]] = []
     probe_status: dict[tuple[str, str], str | None] = {}
+    budget_tasks = {"deep_reading", "verifier"}
+    if any(topic.report_language == "zh" for topic in config.research.topics):
+        budget_tasks.add("report_localization")
     for task, route in sorted(config.research.models.task_routes.items()):
         key = (route.provider, route.model)
         provider = config.research.model_providers[route.provider]
         failure = None
-        if (task in {"deep_reading", "verifier"} and provider.kind != "local"
+        if (task in budget_tasks and provider.kind != "local"
                 and route.model not in provider.reader_contexts):
             failure = "reader_context_unknown: Declare reader_contexts for this exact model."
         elif not live_probe:

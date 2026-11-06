@@ -68,12 +68,14 @@ Even if you already use the CLI, check the topic, providers, recipient, and sche
 
 ## 2. Set Up Your First Topic
 
-**Unreleased source only:** full-input Reader and Verifier limits can be declared under
+**Unreleased source only:** full-input Reader, Verifier and Chinese writer limits can be declared under
 **Settings > Full-paper reading limits**, separately for each exact model. Use documented
 context capacity and output/thinking/overhead reserves; unknown or insufficient capacity
 stops rather than shortening papers. A connection check does not establish these limits.
 The source App passes declarations through to the same CLI research configuration; it does
 not guess capacities or migrate old settings automatically; changes require an explicit save.
+Chinese topics also check the writer's exact model before admission. English topics do not
+require a capacity declaration for an unused Chinese writer; local routes remain exempt.
 This is not included in the downloadable
 v0.3.0b1 package. [Publication integration and limitations](chinese-publication.md).
 

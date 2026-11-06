@@ -36,9 +36,22 @@ App/DMG has not been rebuilt with them.
   changed-document links and diff checks passed; both latest report HTML hashes are unchanged.
   Review fixed selected-source position loss, invalid-response cache reuse, missing failure audits,
   and inconsistent budget admission/decoding. No real services were called during closeout.
-- **Next:** review the local source/documentation commits, then scope one normal-configuration
-  CLI acceptance before recommending the new source as the everyday route. No new real run,
-  packaging, automatic model choice or delivery is authorized by this roadmap.
+- **Follow-up repairs (offline):** legacy translation validates required content before caching
+  and rechecks old hits; malformed, missing, changed-ID or quantity-invalid replies are not reused
+  as successes. The source App exposes the Chinese writer's existing exact-model budget and
+  checks it for the requested/scheduled Chinese topic, without blocking English or local routes.
+  No model defaults, capacity requirements or evidence thresholds were added. These repairs
+  have not been packaged or manually accepted; prior deferred interaction checks remain open.
+  Follow-up checks: 2,403 Python tests passed (two opt-in cases initially skipped), followed by
+  nine passing frozen-engine tests with those cases enabled on a freshly built test-only engine.
+  Swift passed 410 tests in 75 suites, including frozen workflow, ledger, saved Chinese report
+  decoding, configuration export and mixed-language budget admission. Ruff, privacy, diff and
+  independent read-only review passed. The earlier permission/clipboard-limited attempt remains
+  a failed attempt; its 128 logged temporary directories were later moved to Trash with explicit
+  authorization. The successful offline rerun required no additional product-code change.
+- **Next:** scope one normal-configuration CLI acceptance before recommending the new source
+  as the everyday route. No new real run, packaging, automatic model choice or delivery is
+  authorized by this roadmap; manual App checks remain deferred.
 
 See [current report quality and checks](chinese-publication.md),
 [input contract](reader-input-evidence.md) and [Reader output boundaries](reader-output-reliability.md).

@@ -80,6 +80,47 @@ def test_preflight_local_routes_need_no_reader_budget_or_provider_probe(
     assert loaded.research.model_providers["local"].reader_contexts == {}
 
 
+@pytest.mark.parametrize("language", ["zh", "en"])
+def test_preflight_checks_independent_writer_only_for_chinese_reports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, language: str,
+) -> None:
+    from types import SimpleNamespace
+
+    from research_radar.app_bridge import handlers, runner
+
+    value = _app_config(tmp_path, topics=[{
+        "id": "memory", "display_name": "Memory", "research_focus": "Agent memory",
+        "queries": ["agent memory"], "paper_queries": ["agent memory"],
+        "report_language": language,
+    }])
+    reader = next(r for r in value["routes"] if r["task"] == "deep_reading")
+    verifier = next(r for r in value["routes"] if r["task"] == "verifier")
+    value["routes"].append({"task": "report_localization",
+                            "provider_id": reader["provider_id"], "model": "independent-writer"})
+    limits = {"context_window_tokens": 200000, "output_reserve_tokens": 10000,
+              "overhead_reserve_tokens": 5000}
+    for route in (reader, verifier):
+        provider = next(p for p in value["providers"] if p["id"] == route["provider_id"])
+        provider.setdefault("reader_contexts", {})[route["model"]] = limits
+    loaded = load_app_configuration(_write_config(tmp_path, value), require_topics=False)
+    monkeypatch.setattr(runner, "dependency_report", lambda: {"offline": {"available": True}})
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("Local readiness must not probe providers or read secrets")
+
+    monkeypatch.setattr(handlers, "resolve_task_route", forbidden)
+    result = handlers.handle_preflight(
+        SimpleNamespace(payload=SimpleNamespace(live_probe=False)), config=loaded,
+        secrets=SecretManager(InMemorySecretBackend()), events=object(), pdf_helper_path=None,
+    )
+    assert result["ready"] is (language == "en")
+    checks = [check for check in result["checks"] if check["id"] == "report_localization"]
+    if language == "zh":
+        assert len(checks) == 1 and checks[0]["status"] == "action_required"
+    else:
+        assert checks == []
+
+
 def test_app_exact_model_budget_reaches_the_shared_provider(tmp_path: Path) -> None:
     value = _app_config(tmp_path)
     limits = {"context_window_tokens": 200000, "output_reserve_tokens": 10000,

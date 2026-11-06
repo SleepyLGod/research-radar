@@ -88,7 +88,7 @@ public final class AppStore {
         guard !behaviorChangesBlocked else { lastErrorCode = "engine_busy"; return }
         guard selectedTopic?.isPaused == false else { lastErrorCode = "topic_invalid"; return }
         do {
-            try validateResearchConfiguration()
+            try validateResearchConfiguration(topicID: selectedTopic?.id)
             try completeOnboarding()
         } catch AppStoreError.researchConfiguration(let code) { lastErrorCode = code; return }
         catch { lastErrorCode = "configuration_write_failed"; return }
@@ -117,6 +117,10 @@ public final class AppStore {
 
     /// Local readiness only. Saved credentials do not imply a verified connection.
     public var researchConfigurationErrorCode: String? {
+        researchConfigurationErrorCode(for: selectedTopic?.id)
+    }
+
+    private func researchConfigurationErrorCode(for topicID: String?) -> String? {
         do { try configuration.validate() } catch { return "invalid_configuration" }
         let tasks = ["source_gist", "deep_reading", "anchor_repair", "report_localization", "verifier"]
         for task in tasks {
@@ -142,7 +146,8 @@ public final class AppStore {
         if secretLookupFailed { return "keychain_lookup_failed" }
         guard secretPresenceLoaded else { return "credentials_unchecked" }
         if researchSecretNames.contains(where: { secretPresence[$0] != true }) { return "credentials_missing" }
-        for route in configuration.routes where ["deep_reading", "verifier"].contains(route.task) {
+        let chinese = configuration.topics.first { $0.id == topicID }?.reportLanguage == .chinese
+        for route in readerBudgetRoutes where route.task != "report_localization" || chinese {
             guard let provider = configuration.providers.first(where: { $0.id == route.providerID }) else {
                 return "invalid_configuration"
             }
@@ -151,6 +156,10 @@ public final class AppStore {
             }
         }
         return nil
+    }
+
+    var readerBudgetRoutes: [RouteRecordV1] {
+        configuration.routes.filter { ["deep_reading", "verifier", "report_localization"].contains($0.task) }
     }
 
     private var researchSecretNames: Set<String> {
@@ -167,9 +176,9 @@ public final class AppStore {
             && !directory.boolValue && FileManager.default.isExecutableFile(atPath: path)
     }
 
-    private func validateResearchConfiguration() throws {
+    private func validateResearchConfiguration(topicID: String? = nil) throws {
         refreshSecretPresence()
-        if let code = researchConfigurationErrorCode { throw AppStoreError.researchConfiguration(code) }
+        if let code = researchConfigurationErrorCode(for: topicID) { throw AppStoreError.researchConfiguration(code) }
     }
 
     public var todayPresentation: TodayPresentation {
@@ -546,7 +555,7 @@ public final class AppStore {
             lastErrorCode = nil
             return
         }
-        do { try validateResearchConfiguration() }
+        do { try validateResearchConfiguration(topicID: topicID) }
         catch AppStoreError.researchConfiguration(let code) { lastErrorCode = code; return }
         catch { lastErrorCode = "invalid_configuration"; return }
         admissionCount += 1
@@ -867,7 +876,7 @@ public final class AppStore {
         if enabled, legacyScheduleTopics.contains(topicID) {
             throw AppStoreError.legacyScheduleConflict(topicID)
         }
-        if enabled { try validateResearchConfiguration() }
+        if enabled { try validateResearchConfiguration(topicID: topicID) }
         guard (0...23).contains(hour), (0...59).contains(minute) else {
             throw AppStoreError.invalidScheduleTime
         }
@@ -969,8 +978,8 @@ public final class AppStore {
         try requireBehaviorChange()
         try budget.validate()
         guard let index = configuration.providers.firstIndex(where: { $0.id == providerID }),
-              configuration.routes.contains(where: {
-                  ["deep_reading", "verifier"].contains($0.task) && $0.providerID == providerID && $0.model == model
+              readerBudgetRoutes.contains(where: {
+                  $0.providerID == providerID && $0.model == model
               }) else { throw AppStoreError.researchConfiguration("reader_context_invalid") }
         var candidate = configuration
         var budgets = candidate.providers[index].readerContexts ?? [:]
@@ -1077,7 +1086,7 @@ public final class AppStore {
             do {
                 if let next, next.kind == .research {
                     refreshSecretPresence()
-                    if let code = researchConfigurationErrorCode {
+                    if let code = researchConfigurationErrorCode(for: next.topicID) {
                         try await queue.transition(jobID: next.id, to: .cancelled,
                             error: RedactedEngineErrorV1(code: code, message: "Research configuration needs attention.", retryable: false))
                         lastErrorCode = code
@@ -1140,12 +1149,17 @@ public final class AppStore {
         if !runtime.schedulesPaused, schedules.contains(where: \.isEnabled) {
             refreshSecretPresence()
         }
-        let blocked = researchConfigurationErrorCode
+        let blocked = researchConfigurationErrorCode(for: nil)
+        let eligibleTopics = configuration.topics.filter { researchConfigurationErrorCode(for: $0.id) == nil }
         schedulingBlockedByConfiguration = !runtime.schedulesPaused
-            && schedules.contains(where: \.isEnabled) && blocked != nil
-        if !runtime.schedulesPaused, schedules.contains(where: \.isEnabled), let blocked { lastErrorCode = blocked }
+            && schedules.contains(where: { schedule in
+                schedule.isEnabled && !eligibleTopics.contains(where: { $0.id == schedule.topicID })
+            })
+        if schedulingBlockedByConfiguration {
+            lastErrorCode = blocked ?? "reader_context_unknown"
+        }
         await scheduleSource.update(ScheduleInputs(
-            schedules: schedules, topics: configuration.topics,
+            schedules: schedules, topics: eligibleTopics,
             reports: reports, paused: runtime.schedulesPaused || blocked != nil
         ))
     }
@@ -1153,7 +1167,9 @@ public final class AppStore {
     private func rearmRecoveredSchedules() {
         guard schedulingBlockedByConfiguration, !isShuttingDown, !requiresReconciliation,
               !runtime.schedulesPaused, schedules.contains(where: \.isEnabled),
-              researchConfigurationErrorCode == nil else { return }
+              schedules.contains(where: { schedule in
+                  schedule.isEnabled && researchConfigurationErrorCode(for: schedule.topicID) == nil
+              }) else { return }
         schedulingBlockedByConfiguration = false
         Task { await startScheduling() }
     }

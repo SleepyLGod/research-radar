@@ -93,6 +93,10 @@ Provider records carry optional `reader_contexts` keyed by exact model. The sour
 atomically save declared context capacity, output/thinking and overhead reserves; Python converts
 them into the same shared CLI budget type. Failed saves retain the previous valid configuration.
 Capacity failures use stable localized errors rather than a generic engine-crash message.
+Chinese topics include the independent `report_localization` model in admission checks and
+the budget editor; English topics do not require that unused writer budget. Scheduling checks
+the scheduled topic, not whichever topic happens to be selected. Metadata-only preflight checks
+the writer declaration when Chinese topics are configured, without constructing a provider.
 
 Declarations are operator-supplied planning limits, not measured counts or discovered capacities.
 Old configurations without declarations stop before complete-input work; they are not silently
@@ -116,6 +120,29 @@ Local closeout review reproduced and repaired these engineering defects without 
 - Missing exact-model reading/review budgets prevent App admission and preflight readiness, without
   probing models to discover a capacity. Swift rejects unknown nested budget fields instead of
   dropping data that the shared Python loader would reject.
+
+The follow-up repair also validates legacy translation replies before cache writes and on old
+cache hits, using the same existing completeness, support-ID and quantity checks. Rejected replies
+remain available to the audit projection but cannot become reusable successes. Optional source
+gists and figure translations keep their existing fallback behavior. This is an offline repair,
+not a new model-quality or packaged-App acceptance result; an explicit later run may make a fresh
+request instead of reusing an invalid cached reply.
+
+Follow-up verification: **2,403 Python tests passed**, with two opt-in frozen-engine cases
+initially skipped. The test-only engine was then rebuilt from the same source and its nine-test
+Python suite passed with both opt-in cases enabled. **410 Swift tests in 75 suites passed**,
+including mixed-language budget admission, the frozen workflow and ledger, saved Chinese report
+decoding and Swift configuration export. No additional product-code change was needed for this
+rerun. Ruff, changed-file privacy scanning and diff checks passed; independent read-only review
+found no further actionable defect.
+
+The earlier restricted Swift attempt failed on temporary-file permissions and clipboard access;
+it is retained as a failed attempt, not counted as a passing run. Its 128 logged temporary
+directories were subsequently moved to Trash after explicit authorization. The successful rerun
+used normal local system access, fake credentials and an engine that blocks network access.
+These are offline integration results, not native manual interaction or real-model acceptance.
+The distributed App/DMG and real configuration were not changed; earlier deferred manual checks
+remain open.
 
 The latest report-delivery checkpoint passed 44 isolated-entry/scope guards. The unchanged shared
 source passed 2,344 Python tests with two existing opt-in frozen-engine skips; Ruff, privacy and

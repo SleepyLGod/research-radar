@@ -291,7 +291,7 @@
 "check.name.source_gist" = "来源摘要";
 "check.name.deep_reading" = "全文精读";
 "check.name.anchor_repair" = "证据锚点";
-"check.name.report_localization" = "报告翻译";
+"check.name.report_localization" = "中文写作／翻译";
 "check.name.verifier" = "证据核验";
 "check.name.generic" = "配置检查";
 "reader.invalidReport" = "无法安全打开这份报告或其中的文件。";

@@ -7,7 +7,7 @@ struct ReaderBudgetSettingsView: View {
 
     var body: some View {
         DisclosureGroup(localization.text("setting.reader_budget")) {
-            ForEach(routes, id: \.task) { route in
+            ForEach(store.readerBudgetRoutes, id: \.task) { route in
                 ReaderBudgetEditor(store: store, localization: localization, route: route)
                     .id("\(route.providerID):\(route.model):\(route.task)")
             }
@@ -16,9 +16,6 @@ struct ReaderBudgetSettingsView: View {
         }
     }
 
-    private var routes: [RouteRecordV1] {
-        store.configuration.routes.filter { ["deep_reading", "verifier"].contains($0.task) }
-    }
 }
 
 private struct ReaderBudgetEditor: View {

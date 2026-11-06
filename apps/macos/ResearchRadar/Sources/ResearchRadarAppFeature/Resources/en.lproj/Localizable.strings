@@ -291,7 +291,7 @@
 "check.name.source_gist" = "Source summaries";
 "check.name.deep_reading" = "Full-text reading";
 "check.name.anchor_repair" = "Evidence anchors";
-"check.name.report_localization" = "Report translation";
+"check.name.report_localization" = "Chinese writing / translation";
 "check.name.verifier" = "Evidence verification";
 "check.name.generic" = "Configuration check";
 "reader.invalidReport" = "This report or one of its files could not be opened safely.";
