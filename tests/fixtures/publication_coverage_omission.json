@@ -1,0 +1,34 @@
+{
+  "description": "Selected verbatim assertions and writer paragraph from the stopped real MemConflict batch. Review decisions in tests are offline controls, not new model results.",
+  "source_url": "http://arxiv.org/abs/2605.20926v1",
+  "facts": [
+    {
+      "claim_id": "c11",
+      "text": "Experiment: The evaluated systems are A-Mem, LangMem, Letta, MemOS, Mem0, and Memobase.",
+      "context_field": null,
+      "translation": "Experiment: 评估的系统为 A-Mem、LangMem、Letta、MemOS、Mem0 和 Memobase。"
+    },
+    {
+      "claim_id": "c12",
+      "text": "Experiment: The default evaluation uses direct queries, medium dialogue length, distractor injection, medium conflict distance, and top-3 white-box retrieval.",
+      "context_field": null,
+      "translation": "Experiment: 默认评估使用直接查询、中等对话长度、注入 distractor、中等冲突距离，以及 top-3 白盒检索。"
+    },
+    {
+      "claim_id": "context-8f706441703b6b46",
+      "text": "Experiment: Each query is issued after a conflict becomes evaluable, using only the history prefix available after that session is ingested.",
+      "context_field": "evaluation_context.available_inputs",
+      "translation": "Experiment: 每个查询在冲突变得可评估后发出，并且只使用该会话被摄入后可用的历史前缀。"
+    },
+    {
+      "claim_id": "context-8495d05328c66338",
+      "text": "Experiment: Overall averages are macro-averages over conflict types rather than averages weighted by query frequency.",
+      "context_field": "evaluation_context.outcome_measurement",
+      "translation": "Experiment: 总体平均值是对冲突类型取的宏平均，而不是按查询频率加权的平均值。"
+    }
+  ],
+  "writer_paragraph": {
+    "text": "评估覆盖 A-Mem、LangMem、Letta、MemOS、Mem0 和 Memobase 六个代表性长期记忆系统。默认配置使用直接查询、中等对话长度、注入干扰项（distractor）、中等冲突距离，以及 top-3 白盒检索。",
+    "supporting_claim_ids": ["c11", "c12"]
+  }
+}

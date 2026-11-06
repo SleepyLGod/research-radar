@@ -29,7 +29,7 @@ import Testing
         #expect(attempt["recorded_stage"] as? String == "source_gist")
         #expect(attempt["error_code"] as? String == "model_transport_failed")
         let routes = try #require(report["routes"] as? [[String: String]])
-        #expect(routes.contains { $0["task"] == "verifier" && $0["model"] == "gpt-5.6-luna"
+        #expect(routes.contains { $0["task"] == "verifier" && $0["model"] == "gpt-6-luna"
             && $0["provider"] == "Codex" && $0["reasoning_effort"] == "xhigh" })
         #expect(routes.contains { $0["task"] == "deep_reading" && $0["model"] == "deepseek-flash" })
         let lastReport = try #require(report["latest_report"] as? [String: Any])

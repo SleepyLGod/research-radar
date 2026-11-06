@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from reader_fixtures import OFFLINE_READER_CONTEXTS, source_response
 
 from research_radar.analysis.paper_reading import (
     AreaContext,
@@ -40,6 +41,7 @@ class SequenceProvider:
     """Test provider that returns a sequence of model responses."""
 
     name = "sequence"
+    reader_contexts = OFFLINE_READER_CONTEXTS
 
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
@@ -51,7 +53,7 @@ class SequenceProvider:
         self.messages.append(messages)
         if not self.responses:
             raise AssertionError("No more fixture responses")
-        return ModelResponse(content=self.responses.pop(0), model=model)
+        return ModelResponse(content=source_response(self.responses.pop(0), messages), model=model)
 
 
 def test_heuristic_paper_reading_extracts_researcher_rubric() -> None:
@@ -245,9 +247,12 @@ def test_research_workflow_prompts_cover_planner_wide_deep_and_outline() -> None
     assert "ranked_sources" in wide
     assert "deep_reading_candidates" in wide
     assert "deep-reading stage" in deep
-    assert "perspective_questions" in deep
-    assert "2-4 concrete sentences per field" in deep
-    assert "exact substring copied from the full paper reading packet" in deep
+    assert "perspective_questions" not in deep
+    assert "- evidence_index:" not in deep
+    assert "2-4 concrete sentences per field" not in deep
+    assert "concise research notes" in deep
+    assert "an empty list" in deep
+    assert "program copies the exact substring" in deep
     assert "ResearchRadar research contract" in deep
     assert "claim_units" in deep
     assert "required list of atomic claims" in deep
@@ -286,7 +291,7 @@ def test_paper_reading_prompt_can_request_chinese_without_translating_quotes() -
     prompt = paper_reading_prompt(_artifact(), language="zh")
 
     assert "Simplified Chinese" in prompt
-    assert "Only evidence quote fields may remain in the original source language" in prompt
+    assert "program retrieves the original text" in prompt
 
 
 def test_parse_model_json_into_paper_reading() -> None:
@@ -941,6 +946,37 @@ def test_author_reported_superlative_claim_can_remain_publishable() -> None:
     assert claims[0].status == ClaimStatus.SUPPORTED
 
 
+@pytest.mark.parametrize("selection", ["best of five rounds", "best-of-5 runs"])
+def test_reported_trial_selection_is_not_a_superiority_claim(selection: str) -> None:
+    reading = parse_paper_reading(
+        _claim_unit_fixture(
+            section="experiment", claim_kind="fact",
+            text=f"The reported result is Round 3, described as the {selection}.",
+        ),
+        _artifact(),
+    )
+
+    claims, _ = validate_paper_reading(reading)
+
+    assert claims[0].is_publishable()
+
+
+@pytest.mark.parametrize("assertion", [
+    "The best of five methods is our system.",
+    "The best of five rounds proves state-of-the-art performance.",
+    "The best of five rounds proves that our system outperforms all baselines.",
+])
+def test_trial_selection_does_not_excuse_other_unattributed_superlatives(assertion: str) -> None:
+    reading = parse_paper_reading(
+        _claim_unit_fixture(section="experiment", claim_kind="fact", text=assertion),
+        _artifact(),
+    )
+
+    claims, _ = validate_paper_reading(reading)
+
+    assert claims[0].status == ClaimStatus.NEEDS_REVIEW
+
+
 def test_setup_facet_bundle_claim_needs_review() -> None:
     artifact = _artifact()
     raw = _claim_unit_fixture(
@@ -998,7 +1034,7 @@ def test_result_and_cost_bundle_claim_needs_review() -> None:
     )
 
 
-def test_method_and_result_bundle_claim_needs_review() -> None:
+def test_method_with_unattributed_superlative_still_needs_review() -> None:
     artifact = _artifact()
     raw = _claim_unit_fixture(
         section="solution",
@@ -1014,7 +1050,7 @@ def test_method_and_result_bundle_claim_needs_review() -> None:
 
     assert claims[0].status == ClaimStatus.NEEDS_REVIEW
     assert claims[0].metadata["paper_reading"]["status_reason"] == (
-        "claim too broad; split method and result"
+        "author-reported superlative needs attribution"
     )
 
 
@@ -1381,6 +1417,121 @@ def _artifact() -> Artifact:
         ),
         text="Memory benchmark fixture.",
     )
+
+
+@pytest.mark.parametrize(
+    ("inner", "outer", "expected"),
+    [
+        ([], ["Outer rejection"], ["Outer rejection"]),
+        (["Inner rejection"], [], ["Inner rejection"]),
+        (["Shared", "Inner"], ["Shared", "Outer"], ["Shared", "Inner", "Outer"]),
+        (["Shared", "Shared", ""], ["Shared"], ["Shared"]),
+        (None, None, []),
+    ],
+)
+def test_rejected_records_merge_without_promoting_claims(
+    inner: list[str] | None, outer: list[str] | None, expected: list[str],
+) -> None:
+    from research_radar.compose.draft import build_daily_draft
+    from research_radar.models import dataclass_to_dict
+
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))
+    payload["deep_readings"]["unsupported_or_rejected_claims"] = inner
+    payload["unsupported_or_rejected_claims"] = outer
+    provider = SequenceProvider([json.dumps(payload)])
+    artifact = _artifact()
+    result = model_paper_reading_with_attempts(artifact, provider, model="offline")
+    claims, _ = validate_paper_reading(result.reading, artifact)
+    draft = build_daily_draft(
+        "memory", [artifact.source], claims,
+        readings=[result.reading], deep_read_sources=[artifact.source],
+    )
+
+    assert result.reading.unsupported_or_rejected_claims == expected
+    assert [claim.text for claim in claims if claim.is_publishable()] == [
+        "Experiment: Memory benchmark fixture."
+    ]
+    for rejected in expected:
+        assert any(c.text == rejected and c.status == ClaimStatus.UNSUPPORTED for c in claims)
+        assert rejected not in json.dumps(dataclass_to_dict(draft))
+    assert len(provider.messages) == 1
+
+
+def test_unwrapped_legacy_rejections_are_not_duplicated() -> None:
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))["deep_readings"]
+    payload["unsupported_or_rejected_claims"] = ["Rejected", "Rejected"]
+
+    reading = parse_paper_reading(json.dumps(payload), _artifact())
+
+    assert reading.unsupported_or_rejected_claims == ["Rejected"]
+
+
+def test_legacy_global_evidence_index_remains_readable() -> None:
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))
+    for key in ("problem_solution", "related_work", "limitations", "critical_assessment"):
+        payload["deep_readings"][key].pop("evidence")
+    payload["evidence_index"] = [{"quote": "Memory benchmark fixture.", "location": "page 1"}]
+
+    reading = parse_paper_reading(json.dumps(payload), _artifact())
+
+    assert reading.problem_solution.evidence[0].location == "page 1"
+    assert reading.critical_assessment.evidence[0].quote == "Memory benchmark fixture."
+
+
+def test_concise_reading_preserves_experiment_conditions_and_support_ids() -> None:
+    from research_radar.analysis.explanation_policy import public_explanation
+
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))
+    deep = payload["deep_readings"]
+    deep["claim_units"][0]["claim_id"] = "c1"
+    deep["experiments"] = {
+        "summary": "2 conversations, 304 QA; Round 3, best of 5; not a full benchmark run.",
+        "evidence": [{"quote": "Memory benchmark fixture."}],
+    }
+    deep["reader_explanation"] = {
+        "solution_walkthrough": [{"text": "A concise mechanism.", "supporting_claim_ids": ["c1"]}],
+        "experiment_interpretation": [],
+    }
+
+    reading = parse_paper_reading(json.dumps(payload), _artifact())
+    claims, _ = validate_paper_reading(reading, _artifact())
+    prose, _ = public_explanation(reading.reader_explanation, claims)
+
+    assert reading.experiment_summary == deep["experiments"]["summary"]
+    assert reading.reader_explanation.solution_walkthrough[0].text == "A concise mechanism."
+    assert prose["solution_walkthrough"] == ""
+    assert "Memory benchmark fixture." in prose["experiment_interpretation"]
+    assert reading.reader_explanation.experiment_interpretation == []
+    assert reading.claim_units[0].claim_id == "c1"
+
+
+def test_scalar_note_fields_are_preserved_without_splitting_or_promoting() -> None:
+    payload = json.loads(_claim_units_fixture(["Memory benchmark fixture."]))
+    deep = payload["deep_readings"]
+    deep["limitations"].update({
+        "explicit_limitations": "Only 2 of 10 conversations; best of 5 rounds.",
+        "inferred_weaknesses": "Not evidence of full-benchmark performance.",
+        "future_work": "Evaluate the complete benchmark.",
+    })
+    deep["critical_assessment"].update({
+        "weak_evaluations": "304 questions, with an LLM judge.",
+        "missing_ablations": "No per-channel contribution breakdown.",
+    })
+    reading = parse_paper_reading(json.dumps(payload), _artifact())
+    claims, _ = validate_paper_reading(reading, _artifact())
+
+    assert reading.limitations.explicit_limitations == [deep["limitations"]["explicit_limitations"]]
+    assert reading.limitations.inferred_weaknesses == [deep["limitations"]["inferred_weaknesses"]]
+    assert reading.limitations.future_work == [deep["limitations"]["future_work"]]
+    assert reading.critical_assessment.weak_evaluations == [
+        deep["critical_assessment"]["weak_evaluations"]
+    ]
+    assert reading.critical_assessment.missing_ablations == [
+        deep["critical_assessment"]["missing_ablations"]
+    ]
+    assert [c.text for c in claims if c.is_publishable()] == [
+        "Experiment: Memory benchmark fixture."
+    ]
 
 
 def _claim_unit_fixture(*, section: str, claim_kind: str, text: str) -> str:

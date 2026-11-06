@@ -1,9 +1,65 @@
-"""Pipeline report rendering."""
+"""Pipeline report rendering and failure persistence."""
 
 from __future__ import annotations
 
-from research_radar.analysis.paper_reading import ReaderAttempt
-from research_radar.models import ReviewFinding, VerificationAction
+from dataclasses import replace
+from pathlib import Path
+
+from research_radar.analysis.paper_reading import ReaderAttempt, reading_to_dict
+from research_radar.analysis.review import PublicationReviewError
+from research_radar.evidence.ledger import write_claims
+from research_radar.exceptions import ResearchRadarError
+from research_radar.models import ReviewFinding, RunManifest, VerificationAction
+from research_radar.storage.files import write_json, write_jsonl, write_text
+
+
+def failure_route(
+    exc: ResearchRadarError, stage: str, provider: str | None, model: str | None,
+) -> tuple[str, str | None, str | None]:
+    """Use the explicit amendment failure route, otherwise keep the pipeline's route."""
+    audit = getattr(exc, "fact_revision_audit", None) or {}
+    failure = audit.get("failure", {})
+    return (failure.get("stage", stage), failure.get("provider", provider),
+            failure.get("model", model))
+
+
+def write_failed_run(
+    run_dir: Path,
+    manifest: RunManifest,
+    stage: str,
+    provider: str | None,
+    model: str | None,
+    exc: ResearchRadarError,
+) -> None:
+    """Persist a failed-run envelope and any completed publication review evidence."""
+    stage, provider, model = failure_route(exc, stage, provider, model)
+    failure = {
+        "stage": stage,
+        "provider": provider,
+        "model": model,
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+    }
+    diagnostics = getattr(exc, "diagnostics", None)
+    if isinstance(diagnostics, dict):
+        failure["transport"] = diagnostics
+    failed_manifest = replace(
+        manifest,
+        metadata={**manifest.metadata, "failure": failure},
+    )
+    write_json(run_dir / "manifest.json", failed_manifest)
+    write_json(run_dir / "run_error.json", failure)
+    reader_attempts = getattr(exc, "reader_attempts", None)
+    if reader_attempts is not None:
+        write_jsonl(run_dir / "reader_attempts.jsonl", reader_attempts)
+    revision_audit = getattr(exc, "fact_revision_audit", None)
+    if revision_audit is not None:
+        write_json(run_dir / "fact_revision.json", revision_audit)
+    if isinstance(exc, PublicationReviewError):
+        write_text(run_dir / "final_review.json", exc.raw_feedback)
+        write_claims(run_dir / "final_review_claims.jsonl", exc.claims)
+        write_jsonl(run_dir / "final_review_readings.jsonl",
+                    [reading_to_dict(reading) for reading in exc.readings])
 
 
 def render_review_report(

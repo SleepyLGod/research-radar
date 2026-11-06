@@ -1,0 +1,6 @@
+{
+  "source_url": "https://arxiv.org/pdf/2407.11418v3",
+  "provenance": "Public Algorithm 1 excerpt and saved review reason from the 2026-11-06 LOTUS run. The prose counterpart is cases.c8.quote in lotus_numeric_notation.json. No repaired answer or fresh model decision.",
+  "algorithm_quote": "𝜏+ ← max(𝜏+, 𝜏− )\n𝑇 ′ ← ∅\n// Evaluate predicate for each tuple\nfor 𝑡 ∈ 𝑇 do\nif 𝐴(𝑡 ) ≥ 𝜏+ then\n𝑇 ′ ← 𝑇 ′ ∪ { 𝑡 }\nelse if 𝐴(𝑡 ) ≥ 𝜏− then\nif 𝑀 (𝑡 ) then\n𝑇 ′ ← 𝑇 ′ ∪ { 𝑡 }\nend\nreturn 𝑇 ′",
+  "review_reason": "The inclusive lower-threshold boundary is inconsistent in the source: prose rejects scores at or below it, while the algorithm routes equality to the oracle unless the thresholds coincide."
+}

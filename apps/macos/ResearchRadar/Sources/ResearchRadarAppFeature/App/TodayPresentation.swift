@@ -140,7 +140,7 @@ public struct TodayPresentation: Equatable, Sendable {
             [.running, .cancelling].contains($0.state) && $0.topicID != topic?.id
         }?.topicID
         self.schedulesPaused = schedulesPaused
-        let scopedJobs = jobs.filter { $0.topicID == topic?.id }.sorted {
+        let scopedJobs = jobs.filter { $0.topicID == topic?.id && $0.kind != .organization }.sorted {
             if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
             return $0.id.uuidString > $1.id.uuidString
         }

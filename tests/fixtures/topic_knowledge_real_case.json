@@ -1,0 +1,1117 @@
+{
+  "provenance": {
+    "description": "Public excerpt of the 2026-10-29 real two-paper organization, not a complete report or a new model result.",
+    "source_prompt_version": "topic-knowledge:1",
+    "source_snapshot_sha256": "31743a407fec362a2e992416fa382d588624ab7b12f8515b5e2e63ee34b09f36",
+    "omissions": "Keywords, synthesis, questions, other features and unreferenced input claims are omitted; retained statements and evidence are unchanged.",
+    "reviewed_replay": "Hand-edited offline replay: omit unused facets and weak edges, attach the missing protocol/retrieval references. Not evidence of prompt-v2 model quality."
+  },
+  "research_question": "围绕 LLM agent long-term memory：这两篇研究分别处理什么问题、采用什么 mechanism、依赖哪些 assumptions、如何 evaluation？哪些联系值得一起读，哪些实验条件不能直接比较？",
+  "materials": {
+    "topic_id": "llm-agent-long-term-memory-benchmarks",
+    "papers": [
+      {
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "paper_id": "8df82b90ea33d2f1ee690aff59321a0335258aed30e8c6009253e72e9774d817",
+        "version": "v2",
+        "title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+        "source_urls": [
+          "http://arxiv.org/abs/2505.20231v2"
+        ],
+        "ref_ids": [
+          "410e6c74d40df5ad11a798eca5dfb8ad6880b47e17d78d40b26ee160b3b9783d",
+          "69c667316361c8ebd379afd2ee9bc6e435f5ec025e513bdbfcb2dc38cfe5fce5",
+          "e7eb6808e9ecc6c8e252775e6a508364621f137d2ea7c606e6567110b15f9cb5",
+          "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766",
+          "3654d9acb92662a659347fc6c125d0d923fafdebbf6258c04c879f55550b5155",
+          "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+          "83325e5cbfa4a51da4291117acd48f1fe5ac055e13bd5082181e95dcafdee474",
+          "e18360bac85628991094709d5f0e58488e5edc848e592c394ecb2aef49439ad4",
+          "73e87184f0b8df98bab3e72d7b29e2100743627b6ea563a3674df0c40510f982",
+          "6d95bb5867307144e6d988e1d1f389d12c73ce10c2b316e8cb2d9525df84f89f",
+          "842fc1f86899a1be1bd96b41210114c1631859d20c76f6de8adbd067c0c04542",
+          "9758cb337c07e03d4441504636750acf4d713b7e0959f5bf91b1421b9a9e1d43",
+          "82ccf088f188484a017752a0bed321ad884a355e826c5390ddba5ab6f9947d52",
+          "c59d1c05b8dc254e19bef84224051b4a3ecf17bb4ba41e62af5a5439947e0383",
+          "ddf6c9664c55f6d1e33302e79ceacd9d7cc6d4554610ff5466112502dc8186db",
+          "ecd9f8a5df0b58d7953af4b0e278ac47d6342536edce45153caa29ec6380dfae"
+        ]
+      },
+      {
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "paper_id": "39c4184be2548aa2a69a6520475997e61a6d00dd5f9cc331837014294313b4db",
+        "version": "v1",
+        "title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+        "source_urls": [
+          "http://arxiv.org/abs/2605.20926v1"
+        ],
+        "ref_ids": [
+          "35fb7cf6179e9ffd5be66bf052a9717e88009987e77760553a931e34961d4451",
+          "b2f68c37a4a8dfc80e388f5d63f3874f4651e1d77629f471ebcf420ff2805b8d",
+          "74d1c968176a1be119e2a964976c68dad42bec0a6a652c8daf3fd2f3661d1104",
+          "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8",
+          "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+          "4b1c7594bbcf06ed89c8d4faa5b91c434554080fbd35ab648a35cb0ab253c6b2",
+          "7e8d1821a7fc31a7cd4e989602ceafcee2da5fb6f18d1692d34bed833ea3dc7c",
+          "807ab424199fc40973d90babe1c2688a7d48796c0e6e002a50796bdb46414e7c",
+          "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+          "9be7cf61072b0ab7564e461237ae7027848de9ad46cb7dfddedecc8dfcc02d74",
+          "ca9ed85613e9028662b663d1ac9723add5b8149e4c65afdc8eb60085c3269060",
+          "24774a91281ac6aa3bf31da7ba124ddc6e326a02438ad11ea47bece5e86ffa7b",
+          "377c390ea59c8e52541081eb8ab67e231f2f7c318944eb78b29bd1350f4692c8",
+          "b76f4c4b394f003c821635546e194541d2a97e5bdfa326547717ce8c5c690bb4",
+          "df8e7ee94bf306d3d571d5a2a5157a936de1c04fc32577a12e1f8ff38818a617",
+          "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869",
+          "43f1b9e66ac882f2035e880cf86eba2d14b04322f62daec62e7d7b29f2c4966b",
+          "e860ed4d24f489823989643d9717d2ae5f0a369f1945a4e220e869a87c857551"
+        ]
+      }
+    ],
+    "references": [
+      {
+        "ref_id": "35fb7cf6179e9ffd5be66bf052a9717e88009987e77760553a931e34961d4451",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/0",
+        "text": "问题：用户特定信息可能随时间演变、与相互矛盾的提及并存，或仅在特定条件下适用。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "component for maintaining persistent user information over time [20].\nHowever, building such systems reliably is challenging because user-specific information is not\nstatic: it may evolve over time, coexist with contradictory mentions, or apply only under particular\nconditions. A memory system may therefore contain earlier states, later updates, contradictory\nstatements, condition-specific preferences, and semantically similar non-target details at the same\ntime [15, 34]. The core challenge is not simply to recall past information, but to retrieve and rank",
+            "location": "Page 2, Introduction"
+          }
+        ]
+      },
+      {
+        "ref_id": "b2f68c37a4a8dfc80e388f5d63f3874f4651e1d77629f471ebcf420ff2805b8d",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/1",
+        "text": "问题：核心挑战在于检索并排序对当前查询有效的记忆项，而不是简单地回忆过去信息。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "The core challenge is not simply to recall past information, but to retrieve and rank",
+            "location": "page 2, Introduction"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "memory items that are valid for the current query",
+            "location": "page 2, Introduction"
+          }
+        ]
+      },
+      {
+        "ref_id": "74d1c968176a1be119e2a964976c68dad42bec0a6a652c8daf3fd2f3661d1104",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/2",
+        "text": "问题：现有的长期记忆评估主要关注记忆更新，对其他有效性挑战考察不足。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "Many studies focus primarily on memory updating, which captures temporal change but leaves other validity challenges underexamined",
+            "location": "page 2, Introduction"
+          }
+        ]
+      },
+      {
+        "ref_id": "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/3",
+        "text": "方法：MemConflict 沿时间、事实和上下文有效性维度，将动态、静态和条件冲突形式化。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "memory-level differences in long-term memory reliability.\nOur main contributions are as follows:\n• To the best of our knowledge, MemConflict is among the first diagnostic evaluation frame-\nworks for memory conflicts in long-term memory systems, formalizing dynamic, static, and\nconditional conflicts along temporal, factual, and contextual validity dimensions.\n• We construct a controlled multi-session benchmark that instantiates these conflicts in long-\nhorizon user histories, introducing cross-session conflicts and semantically similar distractors",
+            "location": "Page 3, Contributions"
+          }
+        ]
+      },
+      {
+        "ref_id": "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/4",
+        "text": "方法：每个虚拟用户都由一个结构化用户画像初始化，该画像包含动态状态、不变背景信息、条件依赖偏好、人格特质与人生目标，以及相关实体。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "structured profile containing dynamic states, invariant background information, condition-dependent preferences, personality traits and life goals, and related entities",
+            "location": "page 9, Section 3.2"
+          }
+        ]
+      },
+      {
+        "ref_id": "4b1c7594bbcf06ed89c8d4faa5b91c434554080fbd35ab648a35cb0ab253c6b2",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/5",
+        "text": "方法：动态状态属性包括当前居住地、婚姻状况、子女状况、就业状况、健康状态、社交状态和职业方向。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "Dynamic state attributes include current residence, marital status, child status, employment status, health state, social state, and career direction",
+            "location": "page 9, Section 3.2"
+          }
+        ]
+      },
+      {
+        "ref_id": "7e8d1821a7fc31a7cd4e989602ceafcee2da5fb6f18d1692d34bed833ea3dc7c",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/6",
+        "text": "方法：条件偏好属性编码稳定但依赖条件的偏好模式，并为条件冲突提供基础。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "Conditional preference attributes encode stable but condition-dependent preference patterns and provide the basis for conditional conflicts.",
+            "location": "page 9, Section 3.2"
+          }
+        ]
+      },
+      {
+        "ref_id": "807ab424199fc40973d90babe1c2688a7d48796c0e6e002a50796bdb46414e7c",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/7",
+        "text": "方法：相关实体信息支持构建语义相似的干扰项。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "Related-entity information describes other entities in the user’s environment and supports the construction of semantically similar distractors.",
+            "location": "page 9, Section 3.2"
+          }
+        ]
+      },
+      {
+        "ref_id": "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/8",
+        "text": "方法：MemConflict 模拟用户随时间推移的合理演变，然后在生成的时间线中实例化动态、静态和条件冲突。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "MemConflict first simulates plausible user evolution over time and then instantiates dynamic, static, and conditional conflicts within the resulting timelines.",
+            "location": "page 9, Section 3.3"
+          }
+        ]
+      },
+      {
+        "ref_id": "9be7cf61072b0ab7564e461237ae7027848de9ad46cb7dfddedecc8dfcc02d74",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/9",
+        "text": "方法：MemConflict 将每个查询建立在查询时可得的历史前缀上，而不是完整交互历史。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "MemConflict treats each query as grounded in the history prefix available at query time, rather than in the full interaction history.",
+            "location": "page 9, Section 3.1"
+          }
+        ]
+      },
+      {
+        "ref_id": "ca9ed85613e9028662b663d1ac9723add5b8149e4c65afdc8eb60085c3269060",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/10",
+        "text": "方法：基准构建保证每个查询有唯一的 gold maximizer。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "The benchmark construction guarantees a unique maximizer for each query.",
+            "location": "page 9, Section 3.1"
+          }
+        ]
+      },
+      {
+        "ref_id": "24774a91281ac6aa3bf31da7ba124ddc6e326a02438ad11ea47bece5e86ffa7b",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/12",
+        "text": "方法：MemConflict 用 Persona Hub 的 persona seed 初始化每个用户。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "MemConflict initializes each user from a persona seed",
+            "location": "page 9, Section 3.2"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "sampled from Persona Hub2",
+            "location": "page 9, Section 3.2"
+          }
+        ]
+      },
+      {
+        "ref_id": "377c390ea59c8e52541081eb8ab67e231f2f7c318944eb78b29bd1350f4692c8",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/13",
+        "text": "实验：主要评估覆盖六个长期记忆系统。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "We evaluate six representative long-term memory systems with MemConflict",
+            "location": "page 4, Contributions"
+          }
+        ]
+      },
+      {
+        "ref_id": "b76f4c4b394f003c821635546e194541d2a97e5bdfa326547717ce8c5c690bb4",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/15",
+        "text": "实验：黑盒指标是 AA、UOCS 和 CRS；白盒指标是 SEH@K 和 SRS。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "Black-box Metrics\nAA\nUOCS\nCRS\nWhite-box Metrics\nSEH@K\nSRS",
+            "location": "page 18, Figure 3"
+          }
+        ]
+      },
+      {
+        "ref_id": "df8e7ee94bf306d3d571d5a2a5157a936de1c04fc32577a12e1f8ff38818a617",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/22",
+        "text": "实验：在大多数系统和冲突类型中，检索失败占错误的主导份额。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "Across most systems and conflict types, retrieval failures account for the dominant share of errors",
+            "location": "page 28, Section 4.5.2"
+          }
+        ]
+      },
+      {
+        "ref_id": "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/25",
+        "text": "方法：论文报告了一个两级评估协议，将最终答案正确性与 gold memory item 的检索和排序分开。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "two-level evaluation protocol that combines black-box answer assessment with white-box memory analysis, separating final-answer correctness from retrieval and ranking of the gold memory item.",
+            "location": "page 4, Contributions"
+          }
+        ]
+      },
+      {
+        "ref_id": "43f1b9e66ac882f2035e880cf86eba2d14b04322f62daec62e7d7b29f2c4966b",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/35",
+        "text": "局限：论文建议检索应辅以冲突感知的重排序机制。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "retrieval should be complemented with conflict-aware reranking mechanisms",
+            "location": "page 28, Section 4.6"
+          }
+        ]
+      },
+      {
+        "ref_id": "e860ed4d24f489823989643d9717d2ae5f0a369f1945a4e220e869a87c857551",
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/0/claims/37",
+        "text": "本质：MemConflict 是一个用于长期记忆系统中记忆冲突的诊断性评估框架。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "diagnostic evaluation frame-",
+            "location": "page 4, Contributions"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2605.20926v1",
+            "quote": "works for memory conflicts in long-term memory systems",
+            "location": "page 4, Contributions"
+          }
+        ]
+      },
+      {
+        "ref_id": "410e6c74d40df5ad11a798eca5dfb8ad6880b47e17d78d40b26ee160b3b9783d",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/0",
+        "text": "问题：论文指出，基于语义相似度的记忆选择忽视任务意图，并可能降低多会话对话中的任务连贯性。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "task intent",
+            "location": "abstract, page 1"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "reducing task coherence",
+            "location": "abstract, page 1"
+          }
+        ]
+      },
+      {
+        "ref_id": "69c667316361c8ebd379afd2ee9bc6e435f5ec025e513bdbfcb2dc38cfe5fce5",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/1",
+        "text": "问题：论文称多会话 TOD 需要回忆关键的 slot-value 对。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "recall key slot-value pairs",
+            "location": "introduction, page 2"
+          }
+        ]
+      },
+      {
+        "ref_id": "e7eb6808e9ecc6c8e252775e6a508364621f137d2ea7c606e6567110b15f9cb5",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/2",
+        "text": "问题：论文称多会话 TOD 需要主动解决缺失或过时的信息。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "proactively resolve missing or outdated information",
+            "location": "introduction, page 2"
+          }
+        ]
+      },
+      {
+        "ref_id": "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/3",
+        "text": "方法：MemGuide 被提出作为一个两阶段记忆选择框架。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "two-stage framework",
+            "location": "abstract, page 1"
+          }
+        ]
+      },
+      {
+        "ref_id": "3654d9acb92662a659347fc6c125d0d923fafdebbf6258c04c879f55550b5155",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/4",
+        "text": "方法：Intent-Aligned Retrieval 将当前对话上下文与存储的意图描述匹配，并检索具有相同目标的 QA 格式记忆单元。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "Intent-Aligned Retrieval matches the",
+            "location": "abstract, page 1"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "QA-formatted memory units that share the same goal",
+            "location": "abstract, page 1"
+          }
+        ]
+      },
+      {
+        "ref_id": "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/5",
+        "text": "方法：Missing-Slot Guided Filtering 使用 chain-of-thought slot reasoner 枚举未填充的 slot。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "share the same goal. (2) Missing-Slot Guided Filtering em-\nploys a chain-of-thought slot reasoner to enumerate unfilled\nslots, then uses a fine-tuned LLaMA-8B filter to re-rank the\nretrieved units by marginal slot-completion gain. The result-\ning memory units inform a proactive strategy that minimizes\nconversational turns by directly addressing information gaps.\nBased on this framework, we introduce the MS-TOD1, the\nfirst multi-session TOD benchmark comprising 132 diverse\npersonas, 956 task goals, and annotated intent-aligned mem-\nory targets, supporting efficient multi-session task comple-",
+            "location": "page 1, Abstract"
+          }
+        ]
+      },
+      {
+        "ref_id": "83325e5cbfa4a51da4291117acd48f1fe5ac055e13bd5082181e95dcafdee474",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/6",
+        "text": "方法：一个微调过的 LLaMA-8B 过滤器根据边际 slot 完成增益对检索到的单元重新排序。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "fine-tuned LLaMA-8B filter",
+            "location": "abstract, page 1"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "marginal slot-completion gain",
+            "location": "abstract, page 1"
+          }
+        ]
+      },
+      {
+        "ref_id": "e18360bac85628991094709d5f0e58488e5edc848e592c394ecb2aef49439ad4",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/7",
+        "text": "方法：该方法选择 top-K 个 QA 对，以 K=5 为例。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "K=5",
+            "location": "method, page 5"
+          }
+        ]
+      },
+      {
+        "ref_id": "73e87184f0b8df98bab3e72d7b29e2100743627b6ea563a3674df0c40510f982",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/8",
+        "text": "方法：LLM reader 接收对话上下文、核心记忆答案和缺失 slot 作为 prompt 输入。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "LLM reader receives the dialogue context c, the core facts Acore, and missing slots Lmiss",
+            "location": "method, page 5"
+          }
+        ]
+      },
+      {
+        "ref_id": "6d95bb5867307144e6d988e1d1f389d12c73ce10c2b316e8cb2d9525df84f89f",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/10",
+        "text": "方法：记忆库以 QA 形式构建。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "QA-style memory bank construction",
+            "location": "dataset construction, page 3"
+          }
+        ]
+      },
+      {
+        "ref_id": "842fc1f86899a1be1bd96b41210114c1631859d20c76f6de8adbd067c0c04542",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/11",
+        "text": "实验：MS-TOD 是一个基于 SGD 任务目标构建的多会话 TOD 基准。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "derived from Schema-Guided Dialogue (SGD)",
+            "location": "introduction, page 2"
+          }
+        ]
+      },
+      {
+        "ref_id": "9758cb337c07e03d4441504636750acf4d713b7e0959f5bf91b1421b9a9e1d43",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/12",
+        "text": "实验：MS-TOD 包含 132 个模拟说话人。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "132 simulated speakers",
+            "location": "introduction, page 2"
+          }
+        ]
+      },
+      {
+        "ref_id": "82ccf088f188484a017752a0bed321ad884a355e826c5390ddba5ab6f9947d52",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/13",
+        "text": "实验：MS-TOD 包含 956 个任务目标。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "956 task goals",
+            "location": "abstract, page 1"
+          }
+        ]
+      },
+      {
+        "ref_id": "c59d1c05b8dc254e19bef84224051b4a3ecf17bb4ba41e62af5a5439947e0383",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/14",
+        "text": "实验：论文使用 GPT-4 为每个任务合成三个按时间排序的会话。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "synthesize three temporally ordered sessions using GPT-4",
+            "location": "dataset construction, page 3"
+          }
+        ]
+      },
+      {
+        "ref_id": "ddf6c9664c55f6d1e33302e79ceacd9d7cc6d4554610ff5466112502dc8186db",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/23",
+        "text": "实验：检索基线包括稀疏 BM25、稠密 text-embedding-small-32 和混合检索。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "BM25",
+            "location": "experimental setup, page 3"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "dense (text-embedding-small-32)",
+            "location": "experimental setup, page 3"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "hybrid retrieval",
+            "location": "experimental setup, page 3"
+          }
+        ]
+      },
+      {
+        "ref_id": "ecd9f8a5df0b58d7953af4b0e278ac47d6342536edce45153caa29ec6380dfae",
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c",
+        "json_pointer": "/sections/1/metadata/deep_reads/1/claims/42",
+        "text": "本质：MemGuide 是一个用于多会话任务型对话的两阶段记忆选择流水线。",
+        "admission": "saved_public_claim",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "two-stage framework",
+            "location": "abstract, page 1"
+          },
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "multi-session TOD task",
+            "location": "introduction, page 2"
+          }
+        ]
+      }
+    ],
+    "reports": [
+      {
+        "report_id": "809a0166-4daa-4280-93fb-68aa31372041",
+        "report_date": "2026-10-24",
+        "sha256": "e65b71785a7cbe25764399d3b7f5cd935bb3fe9a32f5200060332d16212cb26c"
+      }
+    ],
+    "coverage": {
+      "reports": 1,
+      "deep_reads": 2,
+      "excluded_claims": 0,
+      "readings_without_public_claims": 0
+    }
+  },
+  "observed_organization": {
+    "facets": [
+      {
+        "id": "problem_framing",
+        "label": "Problem framing",
+        "description": "论文将长期记忆中的哪类失效或可靠性问题作为核心，以及该问题对当前查询或任务的影响。"
+      },
+      {
+        "id": "memory_mechanism",
+        "label": "Memory mechanism",
+        "description": "用于记忆表示、检索、排序、过滤或诊断的机制；区分系统方法与评估框架。"
+      },
+      {
+        "id": "assumption_scope",
+        "label": "Assumption scope",
+        "description": "论文在构造或方法中明确依赖，或可由方法描述限定的查询、任务或数据假设；不把未说明内容当作作者主张。"
+      },
+      {
+        "id": "evaluation_design",
+        "label": "Evaluation design",
+        "description": "基准或数据集来源、场景构造、被评系统、指标和报告条件。"
+      },
+      {
+        "id": "comparability_boundary",
+        "label": "Comparability boundary",
+        "description": "结果可比较的范围与不可直接比较的实验条件；共享合成多会话设置不等于同一实验。"
+      },
+      {
+        "id": "contribution_type",
+        "label": "Contribution type",
+        "description": "论文主要交付物是可用系统流水线、诊断基准，还是两者兼有。"
+      }
+    ],
+    "papers": [
+      {
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "keywords": [],
+        "features": [
+          {
+            "name": "Mechanism",
+            "value": "两阶段框架：Intent-Aligned Retrieval 将当前对话上下文与存储的意图描述匹配，检索具有相同目标的 QA 格式记忆单元；Missing-Slot Guided Filtering 用 chain-of-thought slot reasoner 枚举未填充 slots，再由微调 LLaMA-8B filter 按 marginal slot-completion gain 重排，取 top-K（示例 K=5）QA 对供 LLM reader。",
+            "basis": "source_statement",
+            "ref_ids": [
+              "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766",
+              "3654d9acb92662a659347fc6c125d0d923fafdebbf6258c04c879f55550b5155",
+              "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+              "83325e5cbfa4a51da4291117acd48f1fe5ac055e13bd5082181e95dcafdee474",
+              "e18360bac85628991094709d5f0e58488e5edc848e592c394ecb2aef49439ad4",
+              "73e87184f0b8df98bab3e72d7b29e2100743627b6ea563a3674df0c40510f982"
+            ],
+            "missing_reason": null
+          },
+          {
+            "name": "Contribution type",
+            "value": "交付两阶段记忆选择流水线，属于 system/pipeline；不是冲突诊断基准。",
+            "basis": "synthesis",
+            "ref_ids": [
+              "ecd9f8a5df0b58d7953af4b0e278ac47d6342536edce45153caa29ec6380dfae",
+              "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766"
+            ],
+            "missing_reason": null
+          }
+        ]
+      },
+      {
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "keywords": [],
+        "features": [
+          {
+            "name": "Mechanism",
+            "value": "MemConflict 是诊断评估框架：沿 temporal、factual、contextual validity 形式化 dynamic、static、conditional conflicts；构建受控 multi-session benchmark，包含 cross-session conflicts 和 semantically similar distractors；每个虚拟用户由结构化 profile 初始化，含 dynamic states、invariant background、condition-dependent preferences、personality traits/life goals、related entities；先模拟用户演化，再在时间线中实例化冲突；query 以查询时历史前缀为依据，并保证唯一 gold maximizer。论文还用 two-level evaluation protocol 分离最终答案正确性与 gold memory item 的检索/排序。",
+            "basis": "source_statement",
+            "ref_ids": [
+              "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8",
+              "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+              "4b1c7594bbcf06ed89c8d4faa5b91c434554080fbd35ab648a35cb0ab253c6b2",
+              "7e8d1821a7fc31a7cd4e989602ceafcee2da5fb6f18d1692d34bed833ea3dc7c",
+              "807ab424199fc40973d90babe1c2688a7d48796c0e6e002a50796bdb46414e7c",
+              "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+              "9be7cf61072b0ab7564e461237ae7027848de9ad46cb7dfddedecc8dfcc02d74",
+              "ca9ed85613e9028662b663d1ac9723add5b8149e4c65afdc8eb60085c3269060",
+              "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869"
+            ],
+            "missing_reason": null
+          },
+          {
+            "name": "Contribution type",
+            "value": "交付诊断性评估框架与受控 benchmark，配套 black-box/white-box 两级协议；不是提出新的长期记忆系统。",
+            "basis": "synthesis",
+            "ref_ids": [
+              "e860ed4d24f489823989643d9717d2ae5f0a369f1945a4e220e869a87c857551",
+              "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869"
+            ],
+            "missing_reason": null
+          }
+        ]
+      }
+    ],
+    "groups": [
+      {
+        "facet_id": "problem_framing",
+        "label": "Memory validity under multi-session histories",
+        "members": [
+          {
+            "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+            "reason": "把语义相似度记忆选择忽视 task intent、以及 missing/outdated information 的处理作为 multi-session TOD 问题。",
+            "ref_ids": [
+              "410e6c74d40df5ad11a798eca5dfb8ad6880b47e17d78d40b26ee160b3b9783d",
+              "69c667316361c8ebd379afd2ee9bc6e435f5ec025e513bdbfcb2dc38cfe5fce5",
+              "e7eb6808e9ecc6c8e252775e6a508364621f137d2ea7c606e6567110b15f9cb5"
+            ]
+          },
+          {
+            "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+            "reason": "把 evolving、contradictory、condition-specific 信息的检索排序有效性作为长期记忆核心挑战。",
+            "ref_ids": [
+              "35fb7cf6179e9ffd5be66bf052a9717e88009987e77760553a931e34961d4451",
+              "b2f68c37a4a8dfc80e388f5d63f3874f4651e1d77629f471ebcf420ff2805b8d",
+              "74d1c968176a1be119e2a964976c68dad42bec0a6a652c8daf3fd2f3661d1104"
+            ]
+          }
+        ]
+      },
+      {
+        "facet_id": "evaluation_design",
+        "label": "Synthetic multi-session construction",
+        "members": [
+          {
+            "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+            "reason": "MS-TOD 由 SGD task goals 派生，用 GPT-4 合成三个按时间排序会话，并使用 132 simulated speakers 与 956 task goals。",
+            "ref_ids": [
+              "842fc1f86899a1be1bd96b41210114c1631859d20c76f6de8adbd067c0c04542",
+              "c59d1c05b8dc254e19bef84224051b4a3ecf17bb4ba41e62af5a5439947e0383",
+              "9758cb337c07e03d4441504636750acf4d713b7e0959f5bf91b1421b9a9e1d43",
+              "82ccf088f188484a017752a0bed321ad884a355e826c5390ddba5ab6f9947d52"
+            ]
+          },
+          {
+            "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+            "reason": "用 Persona Hub persona seed 初始化用户，先模拟用户演化，再在时间线中实例化 dynamic/static/conditional conflicts。",
+            "ref_ids": [
+              "24774a91281ac6aa3bf31da7ba124ddc6e326a02438ad11ea47bece5e86ffa7b",
+              "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+              "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+              "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8"
+            ]
+          }
+        ]
+      },
+      {
+        "facet_id": "contribution_type",
+        "label": "System pipeline",
+        "members": [
+          {
+            "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+            "reason": "提出两阶段记忆选择框架，并以 Intent-Aligned Retrieval 与 Missing-Slot Guided Filtering 构成可运行 pipeline。",
+            "ref_ids": [
+              "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766",
+              "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e"
+            ]
+          }
+        ]
+      },
+      {
+        "facet_id": "contribution_type",
+        "label": "Diagnostic benchmark",
+        "members": [
+          {
+            "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+            "reason": "提出 MemConflict 诊断评估框架，并围绕 memory conflicts 构造受控 benchmark 与两级评估协议。",
+            "ref_ids": [
+              "e860ed4d24f489823989643d9717d2ae5f0a369f1945a4e220e869a87c857551",
+              "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8"
+            ]
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "source": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "target": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "kind": "shared_problem",
+        "basis": "synthesis",
+        "reason": "两篇都围绕 long-term memory 在多会话历史中的有效选择/检索：MemGuide 关注 task intent 与 missing/outdated slots 对 multi-session TOD 的影响，MemConflict 关注 dynamic/static/conditional conflicts 下检索并排序 valid memory item。一起读可对比任务意图中心与冲突有效性中心的问题框定，但两者的具体失效类型不同。",
+        "ref_ids": [
+          "410e6c74d40df5ad11a798eca5dfb8ad6880b47e17d78d40b26ee160b3b9783d",
+          "69c667316361c8ebd379afd2ee9bc6e435f5ec025e513bdbfcb2dc38cfe5fce5",
+          "e7eb6808e9ecc6c8e252775e6a508364621f137d2ea7c606e6567110b15f9cb5",
+          "35fb7cf6179e9ffd5be66bf052a9717e88009987e77760553a931e34961d4451",
+          "b2f68c37a4a8dfc80e388f5d63f3874f4651e1d77629f471ebcf420ff2805b8d",
+          "74d1c968176a1be119e2a964976c68dad42bec0a6a652c8daf3fd2f3661d1104"
+        ]
+      },
+      {
+        "source": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "target": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "kind": "different_assumption",
+        "basis": "synthesis",
+        "reason": "MemGuide 的方法设定依赖 slot-value TOD 结构、可枚举缺失 slots 与 QA 记忆单元；MemConflict 的基准假设 query 以历史前缀为依据、每个 query 有唯一 gold maximizer，并把 condition-dependent preferences 建模为稳定但依赖条件的模式。这些假设决定了各自能覆盖和不能覆盖的记忆问题。",
+        "ref_ids": [
+          "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+          "6d95bb5867307144e6d988e1d1f389d12c73ce10c2b316e8cb2d9525df84f89f",
+          "ca9ed85613e9028662b663d1ac9723add5b8149e4c65afdc8eb60085c3269060",
+          "9be7cf61072b0ab7564e461237ae7027848de9ad46cb7dfddedecc8dfcc02d74",
+          "7e8d1821a7fc31a7cd4e989602ceafcee2da5fb6f18d1692d34bed833ea3dc7c"
+        ]
+      },
+      {
+        "source": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "target": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "kind": "shared_evaluation",
+        "basis": "synthesis",
+        "reason": "两篇都以合成或受控多会话历史为 evaluation 载体：MemGuide 在 SGD 派生、GPT-4 合成的 MS-TOD 上评任务指标和人工评价；MemConflict 在 Persona Hub 初始化并模拟演化的冲突数据上评六个记忆系统。共享合成多会话风格不表示实验可比，因为数据集、任务与指标不同。",
+        "ref_ids": [
+          "842fc1f86899a1be1bd96b41210114c1631859d20c76f6de8adbd067c0c04542",
+          "c59d1c05b8dc254e19bef84224051b4a3ecf17bb4ba41e62af5a5439947e0383",
+          "9758cb337c07e03d4441504636750acf4d713b7e0959f5bf91b1421b9a9e1d43",
+          "82ccf088f188484a017752a0bed321ad884a355e826c5390ddba5ab6f9947d52",
+          "ddf6c9664c55f6d1e33302e79ceacd9d7cc6d4554610ff5466112502dc8186db",
+          "24774a91281ac6aa3bf31da7ba124ddc6e326a02438ad11ea47bece5e86ffa7b",
+          "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+          "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+          "377c390ea59c8e52541081eb8ab67e231f2f7c318944eb78b29bd1350f4692c8",
+          "b76f4c4b394f003c821635546e194541d2a97e5bdfa326547717ce8c5c690bb4"
+        ]
+      },
+      {
+        "source": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "target": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "kind": "related_mechanism",
+        "basis": "synthesis",
+        "reason": "两篇都把 memory item 的检索/排序视为关键操作点：MemGuide 实现 missing-slot guided reranking（fine-tuned LLaMA-8B filter），MemConflict 的诊断发现 retrieval failures 占主导并建议 conflict-aware reranking。一起读可区分已实现的 reranker 与评估得出的 reranking 建议，但材料未表明二者可直接组合或效果可比。",
+        "ref_ids": [
+          "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+          "83325e5cbfa4a51da4291117acd48f1fe5ac055e13bd5082181e95dcafdee474",
+          "df8e7ee94bf306d3d571d5a2a5157a936de1c04fc32577a12e1f8ff38818a617",
+          "43f1b9e66ac882f2035e880cf86eba2d14b04322f62daec62e7d7b29f2c4966b"
+        ]
+      }
+    ],
+    "synthesis": [],
+    "open_questions": []
+  },
+  "reviewed_replay": {
+    "facets": [
+      {
+        "id": "problem_framing",
+        "label": "Problem framing",
+        "description": "论文将长期记忆中的哪类失效或可靠性问题作为核心，以及该问题对当前查询或任务的影响。"
+      },
+      {
+        "id": "evaluation_design",
+        "label": "Evaluation design",
+        "description": "基准或数据集来源、场景构造、被评系统、指标和报告条件。"
+      },
+      {
+        "id": "contribution_type",
+        "label": "Contribution type",
+        "description": "论文主要交付物是可用系统流水线、诊断基准，还是两者兼有。"
+      }
+    ],
+    "papers": [
+      {
+        "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "keywords": [],
+        "features": [
+          {
+            "name": "Mechanism",
+            "value": "两阶段框架：Intent-Aligned Retrieval 将当前对话上下文与存储的意图描述匹配，检索具有相同目标的 QA 格式记忆单元；Missing-Slot Guided Filtering 用 chain-of-thought slot reasoner 枚举未填充 slots，再由微调 LLaMA-8B filter 按 marginal slot-completion gain 重排，取 top-K（示例 K=5）QA 对供 LLM reader。",
+            "basis": "source_statement",
+            "ref_ids": [
+              "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766",
+              "3654d9acb92662a659347fc6c125d0d923fafdebbf6258c04c879f55550b5155",
+              "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+              "83325e5cbfa4a51da4291117acd48f1fe5ac055e13bd5082181e95dcafdee474",
+              "e18360bac85628991094709d5f0e58488e5edc848e592c394ecb2aef49439ad4",
+              "73e87184f0b8df98bab3e72d7b29e2100743627b6ea563a3674df0c40510f982"
+            ],
+            "missing_reason": null
+          },
+          {
+            "name": "Contribution type",
+            "value": "交付两阶段记忆选择流水线，属于 system/pipeline；不是冲突诊断基准。",
+            "basis": "synthesis",
+            "ref_ids": [
+              "ecd9f8a5df0b58d7953af4b0e278ac47d6342536edce45153caa29ec6380dfae",
+              "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766"
+            ],
+            "missing_reason": null
+          }
+        ]
+      },
+      {
+        "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "keywords": [],
+        "features": [
+          {
+            "name": "Mechanism",
+            "value": "MemConflict 是诊断评估框架：沿 temporal、factual、contextual validity 形式化 dynamic、static、conditional conflicts；构建受控 multi-session benchmark，包含 cross-session conflicts 和 semantically similar distractors；每个虚拟用户由结构化 profile 初始化，含 dynamic states、invariant background、condition-dependent preferences、personality traits/life goals、related entities；先模拟用户演化，再在时间线中实例化冲突；query 以查询时历史前缀为依据，并保证唯一 gold maximizer。论文还用 two-level evaluation protocol 分离最终答案正确性与 gold memory item 的检索/排序。",
+            "basis": "source_statement",
+            "ref_ids": [
+              "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8",
+              "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+              "4b1c7594bbcf06ed89c8d4faa5b91c434554080fbd35ab648a35cb0ab253c6b2",
+              "7e8d1821a7fc31a7cd4e989602ceafcee2da5fb6f18d1692d34bed833ea3dc7c",
+              "807ab424199fc40973d90babe1c2688a7d48796c0e6e002a50796bdb46414e7c",
+              "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+              "9be7cf61072b0ab7564e461237ae7027848de9ad46cb7dfddedecc8dfcc02d74",
+              "ca9ed85613e9028662b663d1ac9723add5b8149e4c65afdc8eb60085c3269060",
+              "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869"
+            ],
+            "missing_reason": null
+          },
+          {
+            "name": "Contribution type",
+            "value": "交付诊断性评估框架与受控 benchmark，配套 black-box/white-box 两级协议；不是提出新的长期记忆系统。",
+            "basis": "synthesis",
+            "ref_ids": [
+              "e860ed4d24f489823989643d9717d2ae5f0a369f1945a4e220e869a87c857551",
+              "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869"
+            ],
+            "missing_reason": null
+          }
+        ]
+      }
+    ],
+    "groups": [
+      {
+        "facet_id": "problem_framing",
+        "label": "Memory validity under multi-session histories",
+        "members": [
+          {
+            "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+            "reason": "把语义相似度记忆选择忽视 task intent、以及 missing/outdated information 的处理作为 multi-session TOD 问题。",
+            "ref_ids": [
+              "410e6c74d40df5ad11a798eca5dfb8ad6880b47e17d78d40b26ee160b3b9783d",
+              "69c667316361c8ebd379afd2ee9bc6e435f5ec025e513bdbfcb2dc38cfe5fce5",
+              "e7eb6808e9ecc6c8e252775e6a508364621f137d2ea7c606e6567110b15f9cb5"
+            ]
+          },
+          {
+            "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+            "reason": "把 evolving、contradictory、condition-specific 信息的检索排序有效性作为长期记忆核心挑战。",
+            "ref_ids": [
+              "35fb7cf6179e9ffd5be66bf052a9717e88009987e77760553a931e34961d4451",
+              "b2f68c37a4a8dfc80e388f5d63f3874f4651e1d77629f471ebcf420ff2805b8d",
+              "74d1c968176a1be119e2a964976c68dad42bec0a6a652c8daf3fd2f3661d1104"
+            ]
+          }
+        ]
+      },
+      {
+        "facet_id": "evaluation_design",
+        "label": "Synthetic multi-session construction",
+        "members": [
+          {
+            "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+            "reason": "MS-TOD 由 SGD task goals 派生，用 GPT-4 合成三个按时间排序会话，并使用 132 simulated speakers 与 956 task goals。",
+            "ref_ids": [
+              "842fc1f86899a1be1bd96b41210114c1631859d20c76f6de8adbd067c0c04542",
+              "c59d1c05b8dc254e19bef84224051b4a3ecf17bb4ba41e62af5a5439947e0383",
+              "9758cb337c07e03d4441504636750acf4d713b7e0959f5bf91b1421b9a9e1d43",
+              "82ccf088f188484a017752a0bed321ad884a355e826c5390ddba5ab6f9947d52"
+            ]
+          },
+          {
+            "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+            "reason": "用 Persona Hub persona seed 初始化用户，先模拟用户演化，再在时间线中实例化 dynamic/static/conditional conflicts。",
+            "ref_ids": [
+              "24774a91281ac6aa3bf31da7ba124ddc6e326a02438ad11ea47bece5e86ffa7b",
+              "31f4a1084a0611349c2ddba39fda5d7a468b5f0f7368f35c12b958288625910f",
+              "0703606eda72059d170b1cdc848b8c1f35d55514c92969318ff2653d76b54664",
+              "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8"
+            ]
+          }
+        ]
+      },
+      {
+        "facet_id": "contribution_type",
+        "label": "System pipeline",
+        "members": [
+          {
+            "paper_key": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+            "reason": "提出两阶段记忆选择框架，并以 Intent-Aligned Retrieval 与 Missing-Slot Guided Filtering 构成可运行 pipeline。",
+            "ref_ids": [
+              "e74adb8fecc1a425e27f7e197dec221e06f08280bf881e8dfe4e3af9f39e2766",
+              "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+              "3654d9acb92662a659347fc6c125d0d923fafdebbf6258c04c879f55550b5155"
+            ]
+          }
+        ]
+      },
+      {
+        "facet_id": "contribution_type",
+        "label": "Diagnostic benchmark",
+        "members": [
+          {
+            "paper_key": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+            "reason": "提出 MemConflict 诊断评估框架，并围绕 memory conflicts 构造受控 benchmark 与两级评估协议。",
+            "ref_ids": [
+              "e860ed4d24f489823989643d9717d2ae5f0a369f1945a4e220e869a87c857551",
+              "df112c291eaf7bc49733b1655ab3f0638f3e5182a4273f4eb4568146cedb24b8",
+              "7c19c5ca41524dcc53dadfba9213e7fedf86febc05c58a6126c30508b5d95869"
+            ]
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "source": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "target": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "kind": "shared_problem",
+        "basis": "synthesis",
+        "reason": "两篇都围绕 long-term memory 在多会话历史中的有效选择/检索：MemGuide 关注 task intent 与 missing/outdated slots 对 multi-session TOD 的影响，MemConflict 关注 dynamic/static/conditional conflicts 下检索并排序 valid memory item。一起读可对比任务意图中心与冲突有效性中心的问题框定，但两者的具体失效类型不同。",
+        "ref_ids": [
+          "410e6c74d40df5ad11a798eca5dfb8ad6880b47e17d78d40b26ee160b3b9783d",
+          "69c667316361c8ebd379afd2ee9bc6e435f5ec025e513bdbfcb2dc38cfe5fce5",
+          "e7eb6808e9ecc6c8e252775e6a508364621f137d2ea7c606e6567110b15f9cb5",
+          "35fb7cf6179e9ffd5be66bf052a9717e88009987e77760553a931e34961d4451",
+          "b2f68c37a4a8dfc80e388f5d63f3874f4651e1d77629f471ebcf420ff2805b8d",
+          "74d1c968176a1be119e2a964976c68dad42bec0a6a652c8daf3fd2f3661d1104"
+        ]
+      },
+      {
+        "source": "2f05827f719738a1faef81cefad8433b20a9fa185f20d03175d6c00a783fc58f",
+        "target": "4c59d79f161646be8020dfcc55d89389886bb47dafc3eaeb535e652a6069bcd3",
+        "kind": "related_mechanism",
+        "basis": "synthesis",
+        "reason": "两篇都把 memory item 的检索/排序视为关键操作点：MemGuide 实现 missing-slot guided reranking（fine-tuned LLaMA-8B filter），MemConflict 的诊断发现 retrieval failures 占主导并建议 conflict-aware reranking。一起读可区分已实现的 reranker 与评估得出的 reranking 建议，但材料未表明二者可直接组合或效果可比。",
+        "ref_ids": [
+          "6cc5bcda913b1672fd75ebdd0f587ed1e93c6b134966ab85269011ef58223d2e",
+          "83325e5cbfa4a51da4291117acd48f1fe5ac055e13bd5082181e95dcafdee474",
+          "df8e7ee94bf306d3d571d5a2a5157a936de1c04fc32577a12e1f8ff38818a617",
+          "43f1b9e66ac882f2035e880cf86eba2d14b04322f62daec62e7d7b29f2c4966b"
+        ]
+      }
+    ],
+    "synthesis": [],
+    "open_questions": []
+  }
+}

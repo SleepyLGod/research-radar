@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from research_radar.analysis.providers import Message, ModelResponse, StaticProvider
+from reader_fixtures import OFFLINE_READER_CONTEXTS, source_response
+from reader_fixtures import OfflineStaticProvider as StaticProvider
+
+from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.config import parse_config
 from research_radar.discovery.base import DiscoveryContext
 from research_radar.exceptions import IngestionError, ResearchRadarError
@@ -65,6 +68,7 @@ class SequenceProvider:
     """Test provider that returns responses in order."""
 
     name = "sequence"
+    reader_contexts = OFFLINE_READER_CONTEXTS
 
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
@@ -76,7 +80,7 @@ class SequenceProvider:
         self.messages.append(messages)
         if not self.responses:
             raise AssertionError("No more fixture responses")
-        return ModelResponse(content=self.responses.pop(0), model=model)
+        return ModelResponse(content=source_response(self.responses.pop(0), messages), model=model)
 
 
 class CapturingPaperConnector:
@@ -1905,7 +1909,7 @@ def test_daily_pipeline_localizes_public_report_after_english_reading(
     assert manifest["metadata"]["report_language"] == "zh"
     assert manifest["metadata"]["localization"]["status"] == "succeeded"
     assert "Simplified Chinese" not in reader_prompt
-    assert "Translate verified ResearchRadar display text into Simplified Chinese" in (
+    assert "Translate ResearchRadar publication candidates into Simplified Chinese" in (
         localization_prompt
     )
     assert "请先确认答案是否有 cited memory evidence" in daily_text
@@ -2176,7 +2180,8 @@ def _daily_localization_json() -> str:
         },
         {"index": 3, "text": "Experiment: 实验运行在 fixture benchmark 上。"},
         {"index": 4, "text": "Limitations: 它只评估 benchmark-style tasks。"},
-        {"index": 5, "text": "Critical assessment: 主要贡献是 evaluation lens。"}
+        {"index": 5, "text": "Critical assessment: 主要贡献是 evaluation lens。"},
+        {"index": 6, "text": "Essence: 论文把 memory quality 重新表述为 grounded recall。"}
       ],
       "sources": [
         {

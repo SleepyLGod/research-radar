@@ -1,0 +1,45 @@
+{
+  "title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "provenance": "Editorial extraction and Chinese writing controls, not a saved live model answer. Source excerpts are verbatim from the saved full text, physical PDF pages 4-5.",
+  "source_excerpts": [
+    "Given a dialogue contextc = {u1, r1, . . . , ut−1, rt−1, ut}\nand a user-specific long-term memory bank M, the goal is\nto generate the next system response rt.",
+    "TOD, as shown in Figure 3. It first performs Intent-Aligned\nRetrieval, extracting the current user intent via an LLM and\nretrieving QA-formatted memory units from the memory\nbank that align with this intent using semantic similarity.\nThen, Missing-Slot Guided Filtering identifies unfilled task\nslots through a CoT reasoner and re-ranks retrieved memo-\nries with a fine-tuned LLaMA-8B filter based on their ability\nto fill these slots. Finally, Response Generation leverages\nthe filtered memories to produce proactive responses, reduc-\ning conversational turns and boosting task success.",
+    "The final response is generated using the top- K memorys\nAcore = {a1, a2, . . . , aK}, omitting auxiliary questions qi,j.\nAn LLM reader receives the dialogue context c, the core\nfacts Acore, and missing slots Lmiss as prompt inputs."
+  ],
+  "claim_units": [
+    {"claim_id":"m1","section":"solution","claim_kind":"fact","text":"The method receives a dialogue context and a user-specific long-term memory bank.","evidence":[{"quote":"Given a dialogue contextc = {u1, r1, . . . , ut−1, rt−1, ut}\nand a user-specific long-term memory bank M, the goal is\nto generate the next system response rt.","location":"PDF p.4, method inputs"}],"publishable_default":true},
+    {"claim_id":"m2","section":"solution","claim_kind":"fact","text":"Intent-Aligned Retrieval extracts the current user intent and retrieves aligned QA-formatted memory units.","evidence":[{"quote":"It first performs Intent-Aligned\nRetrieval, extracting the current user intent via an LLM and\nretrieving QA-formatted memory units from the memory\nbank that align with this intent using semantic similarity.","location":"PDF p.4, framework overview"}],"publishable_default":true},
+    {"claim_id":"m3","section":"solution","claim_kind":"fact","text":"Missing-Slot Guided Filtering identifies unfilled task slots and re-ranks retrieved memories by their ability to fill those slots.","evidence":[{"quote":"Then, Missing-Slot Guided Filtering identifies unfilled task\nslots through a CoT reasoner and re-ranks retrieved memo-\nries with a fine-tuned LLaMA-8B filter based on their ability\nto fill these slots.","location":"PDF p.4, framework overview"}],"publishable_default":true},
+    {"claim_id":"m4","section":"solution","claim_kind":"fact","text":"The response reader receives dialogue context, core memory facts and missing slots, omitting auxiliary questions.","evidence":[{"quote":"The final response is generated using the top- K memorys\nAcore = {a1, a2, . . . , aK}, omitting auxiliary questions qi,j.\nAn LLM reader receives the dialogue context c, the core\nfacts Acore, and missing slots Lmiss as prompt inputs.","location":"PDF p.5, Response Generation"}],"publishable_default":true},
+    {"claim_id":"r1","section":"solution","claim_kind":"fact","text":"Intent-aligned retrieval precedes missing-slot filtering of the retrieved memories.","evidence":[{"quote":"It first performs Intent-Aligned\nRetrieval, extracting the current user intent via an LLM and\nretrieving QA-formatted memory units from the memory\nbank that align with this intent using semantic similarity.\nThen, Missing-Slot Guided Filtering identifies unfilled task\nslots through a CoT reasoner and re-ranks retrieved memo-\nries with a fine-tuned LLaMA-8B filter based on their ability\nto fill these slots.","location":"PDF p.4, first and then"}],"publishable_default":true},
+    {"claim_id":"r2","section":"solution","claim_kind":"fact","text":"Response generation follows missing-slot filtering and uses the filtered memories.","evidence":[{"quote":"Then, Missing-Slot Guided Filtering identifies unfilled task\nslots through a CoT reasoner and re-ranks retrieved memo-\nries with a fine-tuned LLaMA-8B filter based on their ability\nto fill these slots. Finally, Response Generation leverages\nthe filtered memories to produce proactive responses, reduc-\ning conversational turns and boosting task success.","location":"PDF p.4, filtering to response"}],"publishable_default":true}
+  ],
+  "operation_records": [
+    {"scope":"Memory selection","operation_claim_id":"m2","inputs":[{"name":"dialogue context and memory bank","supporting_claim_ids":["m1"]}],"outputs":[{"name":"intent-aligned QA memory candidates","supporting_claim_ids":["m2"]}],"conditions":[]},
+    {"scope":"Memory selection","operation_claim_id":"m3","inputs":[{"name":"retrieved memory candidates","supporting_claim_ids":["m2","r1"]}],"outputs":[{"name":"re-ranked memory candidates","supporting_claim_ids":["m3"]}],"conditions":[{"name":"ability to fill unfilled task slots","supporting_claim_ids":["m3"]}]},
+    {"scope":"Response generation","operation_claim_id":"m4","inputs":[{"name":"dialogue context","supporting_claim_ids":["m1"]},{"name":"core memory facts and missing slots","supporting_claim_ids":["m4"]}],"outputs":[],"conditions":[{"name":"auxiliary questions are omitted","supporting_claim_ids":["m4"]}]}
+  ],
+  "method_flow": {
+    "input_claim_ids": ["m1"], "step_claim_ids": ["m2", "m3"], "output_claim_ids": ["m4"],
+    "links": [
+      {"from_claim_id":"m2","to_claim_id":"m3","supporting_claim_ids":["r1"]},
+      {"from_claim_id":"m3","to_claim_id":"m4","supporting_claim_ids":["r2"]}
+    ],
+    "gaps": []
+  },
+  "writer_control": {
+    "reader_explanation": {"solution_walkthrough": [
+      {"text":"MemGuide 的输入是当前对话和用户的长期记忆库。它先提取当前任务意图，检索与这个意图对齐的问答记忆；随后识别当前任务还缺哪些槽位，再按候选记忆填补这些槽位的能力重排。两阶段分别处理主题相关性和当前任务的信息缺口。","supporting_claim_ids":["m1","m2","m3","r1"]},
+      {"text":"筛选后的记忆进入响应生成阶段。响应模型接收当前对话、核心记忆答案和缺失槽位，不再把辅助问题一并传入。这样就把“检索到了什么”与“最终交给响应模型什么”区分开来。","supporting_claim_ids":["m3","m4","r2"]}
+    ]},
+    "claims": [
+      {"claim_id":"m1","text":"Solution: 方法接收当前对话和用户的长期记忆库。"},
+      {"claim_id":"m2","text":"Solution: 意图对齐检索提取当前用户意图，并检索与之对齐的问答记忆。"},
+      {"claim_id":"m3","text":"Solution: 缺失槽位引导的筛选识别未填槽位，并按填补这些槽位的能力重排检索到的记忆。"},
+      {"claim_id":"m4","text":"Solution: 响应模型接收对话、核心记忆事实与缺失槽位，省略辅助问题。"},
+      {"claim_id":"r1","text":"Solution: 意图对齐检索先于对所检索记忆的缺失槽位筛选。"},
+      {"claim_id":"r2","text":"Solution: 响应生成在缺失槽位筛选之后进行，并使用筛选后的记忆。"}
+    ]
+  }
+}

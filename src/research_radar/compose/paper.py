@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from research_radar.analysis.explanation_policy import (
     claim_section_text,
-    explanation_fallbacks,
     public_explanation,
 )
 from research_radar.analysis.paper_reading import PaperReading
@@ -21,10 +20,13 @@ def render_paper_brief(
     """Render a conservative, evidence-backed paper brief."""
 
     verified = publishable_claims(claims)
+    if reading.source_url:
+        verified = [claim for claim in verified
+                    if {a.source_url for a in claim.evidence} == {reading.source_url}]
     explanation, _ = public_explanation(
         reading.reader_explanation,
         verified,
-        fallbacks=explanation_fallbacks(verified),
+        source_url=reading.source_url,
     )
     labels = _paper_labels(language)
     lines = [

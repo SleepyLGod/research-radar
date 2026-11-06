@@ -1,0 +1,3016 @@
+{
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "provenance": "Literal excerpts of real claims, original grid labels/values and final-review responses; unrelated geometry omitted. No corrected decisions.",
+  "cases": [
+    {
+      "claim": {
+        "text": "Experiment: Table 3报告混合的JGA变化：LLaMA3-8B从0.64降至0.63，Qwen-7B保持0.66，Mistral-7B从0.73升至0.80，GPT-4o-mini从0.67升至0.70。",
+        "status": "supported",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "LLaMA3-8B FCP 4.89 0.64 5.37 0.82 0.56 1.47 1.74 1.26\nMemGuide 6.39 0.63 3.46 0.92 0.61 1.98 2.16 1.58\nQwen-7B FCP 6.26 0.66 4.93 0.83 0.43 1.24 1.85 1.17\nMemGuide 6.81 0.66 4.31 0.87 0.54 1.70 2.30 1.51\nMistral-7B FCP 6.20 0.73 2.52 1.00 0.58 1.63 1.99 1.40\nMemGuide 6.48 0.80 1.21 1.00 0.61 2.06 2.08 1.58\nGPT-4o-mini FCP 6.93 0.67 6.03 0.88 0.62 1.83 1.90 1.78\nMemGuide 7.14 0.70 3.19 0.99 0.65 2.38 2.48 2.17",
+            "location": "page 6; source block ba9f103f34252b832:60",
+            "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+            "confidence": 0.7
+          }
+        ],
+        "rationale": "The Table 3 JGA cells show the stated mixed changes: 0.64 to 0.63, 0.66 to 0.66, 0.73 to 0.80, and 0.67 to 0.70.",
+        "metadata": {
+          "paper_reading": {
+            "source": "claim_units",
+            "claim_id": "c33",
+            "section": "experiment",
+            "claim_kind": "fact",
+            "publishable_default": true,
+            "status_reason": "supported by supplied evidence"
+          },
+          "anchor_resolution": {
+            "evidence_contexts": [
+              {
+                "source_url": "http://arxiv.org/abs/2505.20231v2",
+                "quote": "LLaMA3-8B FCP 4.89 0.64 5.37 0.82 0.56 1.47 1.74 1.26\nMemGuide 6.39 0.63 3.46 0.92 0.61 1.98 2.16 1.58\nQwen-7B FCP 6.26 0.66 4.93 0.83 0.43 1.24 1.85 1.17\nMemGuide 6.81 0.66 4.31 0.87 0.54 1.70 2.30 1.51\nMistral-7B FCP 6.20 0.73 2.52 1.00 0.58 1.63 1.99 1.40\nMemGuide 6.48 0.80 1.21 1.00 0.61 2.06 2.08 1.58\nGPT-4o-mini FCP 6.93 0.67 6.03 0.88 0.62 1.83 1.90 1.78\nMemGuide 7.14 0.70 3.19 0.99 0.65 2.38 2.48 2.17",
+                "positioned": {
+                  "table": {
+                    "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+                    "source_url": "http://arxiv.org/abs/2505.20231v2",
+                    "document_sha256": "8df7c74771f1106f6d3307bbcdf8bd9de0ebebd026e8b6f0b3b74f732dee2793",
+                    "source_text_sha256": "862f621242ee43c35d6accffc021ca369a758e8cfd4e693c894a9b654cde0c0a",
+                    "label": "Table 3",
+                    "physical_page": 6,
+                    "binding": "positioned",
+                    "complete_grid": true,
+                    "cells": [
+                      {
+                        "cell_id": "c1",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "4.89"
+                      },
+                      {
+                        "cell_id": "c2",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.64"
+                      },
+                      {
+                        "cell_id": "c3",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "5.37"
+                      },
+                      {
+                        "cell_id": "c4",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "0.82"
+                      },
+                      {
+                        "cell_id": "c5",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.56"
+                      },
+                      {
+                        "cell_id": "c6",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "1.47"
+                      },
+                      {
+                        "cell_id": "c7",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "1.74"
+                      },
+                      {
+                        "cell_id": "c8",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.26"
+                      },
+                      {
+                        "cell_id": "c9",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "6.39"
+                      },
+                      {
+                        "cell_id": "c10",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.63"
+                      },
+                      {
+                        "cell_id": "c11",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "3.46"
+                      },
+                      {
+                        "cell_id": "c12",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "0.92"
+                      },
+                      {
+                        "cell_id": "c13",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.61"
+                      },
+                      {
+                        "cell_id": "c14",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "1.98"
+                      },
+                      {
+                        "cell_id": "c15",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "2.16"
+                      },
+                      {
+                        "cell_id": "c16",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.58"
+                      },
+                      {
+                        "cell_id": "c17",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "6.26"
+                      },
+                      {
+                        "cell_id": "c18",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.66"
+                      },
+                      {
+                        "cell_id": "c19",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "4.93"
+                      },
+                      {
+                        "cell_id": "c20",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "0.83"
+                      },
+                      {
+                        "cell_id": "c21",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.43"
+                      },
+                      {
+                        "cell_id": "c22",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "1.24"
+                      },
+                      {
+                        "cell_id": "c23",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "1.85"
+                      },
+                      {
+                        "cell_id": "c24",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.17"
+                      },
+                      {
+                        "cell_id": "c25",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "6.81"
+                      },
+                      {
+                        "cell_id": "c26",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.66"
+                      },
+                      {
+                        "cell_id": "c27",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "4.31"
+                      },
+                      {
+                        "cell_id": "c28",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "0.87"
+                      },
+                      {
+                        "cell_id": "c29",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.54"
+                      },
+                      {
+                        "cell_id": "c30",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "1.70"
+                      },
+                      {
+                        "cell_id": "c31",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "2.30"
+                      },
+                      {
+                        "cell_id": "c32",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.51"
+                      },
+                      {
+                        "cell_id": "c33",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "6.20"
+                      },
+                      {
+                        "cell_id": "c34",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.73"
+                      },
+                      {
+                        "cell_id": "c35",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "2.52"
+                      },
+                      {
+                        "cell_id": "c36",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "1.00"
+                      },
+                      {
+                        "cell_id": "c37",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.58"
+                      },
+                      {
+                        "cell_id": "c38",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "1.63"
+                      },
+                      {
+                        "cell_id": "c39",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "1.99"
+                      },
+                      {
+                        "cell_id": "c40",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.40"
+                      },
+                      {
+                        "cell_id": "c41",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "6.48"
+                      },
+                      {
+                        "cell_id": "c42",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.80"
+                      },
+                      {
+                        "cell_id": "c43",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "1.21"
+                      },
+                      {
+                        "cell_id": "c44",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "1.00"
+                      },
+                      {
+                        "cell_id": "c45",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.61"
+                      },
+                      {
+                        "cell_id": "c46",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "2.06"
+                      },
+                      {
+                        "cell_id": "c47",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "2.08"
+                      },
+                      {
+                        "cell_id": "c48",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.58"
+                      },
+                      {
+                        "cell_id": "c49",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "6.93"
+                      },
+                      {
+                        "cell_id": "c50",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.67"
+                      },
+                      {
+                        "cell_id": "c51",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "6.03"
+                      },
+                      {
+                        "cell_id": "c52",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "0.88"
+                      },
+                      {
+                        "cell_id": "c53",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.62"
+                      },
+                      {
+                        "cell_id": "c54",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "1.83"
+                      },
+                      {
+                        "cell_id": "c55",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "1.90"
+                      },
+                      {
+                        "cell_id": "c56",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "1.78"
+                      },
+                      {
+                        "cell_id": "c57",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "GPT-4"
+                        ],
+                        "value": "7.14"
+                      },
+                      {
+                        "cell_id": "c58",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "JGA"
+                        ],
+                        "value": "0.70"
+                      },
+                      {
+                        "cell_id": "c59",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "DTE"
+                        ],
+                        "value": "3.19"
+                      },
+                      {
+                        "cell_id": "c60",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "S.R."
+                        ],
+                        "value": "0.99"
+                      },
+                      {
+                        "cell_id": "c61",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A."
+                        ],
+                        "value": "0.65"
+                      },
+                      {
+                        "cell_id": "c62",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "I."
+                        ],
+                        "value": "2.38"
+                      },
+                      {
+                        "cell_id": "c63",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "C."
+                        ],
+                        "value": "2.48"
+                      },
+                      {
+                        "cell_id": "c64",
+                        "row_headers": [
+                          "GPT-4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "A.I.C."
+                        ],
+                        "value": "2.17"
+                      }
+                    ]
+                  },
+                  "selected_cell_ids": [
+                    "c1",
+                    "c2",
+                    "c3",
+                    "c4",
+                    "c5",
+                    "c6",
+                    "c7",
+                    "c8",
+                    "c9",
+                    "c10",
+                    "c11",
+                    "c12",
+                    "c13",
+                    "c14",
+                    "c15",
+                    "c16",
+                    "c17",
+                    "c18",
+                    "c19",
+                    "c20",
+                    "c21",
+                    "c22",
+                    "c23",
+                    "c24",
+                    "c25",
+                    "c26",
+                    "c27",
+                    "c28",
+                    "c29",
+                    "c30",
+                    "c31",
+                    "c32",
+                    "c33",
+                    "c34",
+                    "c35",
+                    "c36",
+                    "c37",
+                    "c38",
+                    "c39",
+                    "c40",
+                    "c41",
+                    "c42",
+                    "c43",
+                    "c44",
+                    "c45",
+                    "c46",
+                    "c47",
+                    "c48",
+                    "c49",
+                    "c50",
+                    "c51",
+                    "c52",
+                    "c53",
+                    "c54",
+                    "c55",
+                    "c56",
+                    "c57",
+                    "c58",
+                    "c59",
+                    "c60",
+                    "c61",
+                    "c62",
+                    "c63",
+                    "c64"
+                  ]
+                }
+              }
+            ]
+          },
+          "localization": {
+            "original_text": "Experiment: Table 3 reports mixed JGA changes: LLaMA3-8B decreases from 0.64 to 0.63, Qwen-7B remains 0.66, Mistral-7B rises from 0.73 to 0.80, and GPT-4o-mini rises from 0.67 to 0.70."
+          }
+        }
+      },
+      "proposal": {
+        "result_id": "r4",
+        "question": "How does MemGuide compare with FCP on JGA across the tested readers?",
+        "conditions": [
+          "Evaluation uses confirmation-type responses from MS-TOD.",
+          "The metric is JGA, the paper's measure of slot-prediction accuracy."
+        ],
+        "metric": "JGA",
+        "observations": [
+          {
+            "subject": "LLaMA3-8B FCP to MemGuide",
+            "value": "0.64 to 0.63"
+          },
+          {
+            "subject": "Qwen-7B FCP to MemGuide",
+            "value": "0.66 to 0.66"
+          },
+          {
+            "subject": "Mistral-7B FCP to MemGuide",
+            "value": "0.73 to 0.80"
+          },
+          {
+            "subject": "GPT-4o-mini FCP to MemGuide",
+            "value": "0.67 to 0.70"
+          }
+        ],
+        "comparison_scope": [
+          "Table 3 paired FCP and MemGuide settings under four reader models"
+        ],
+        "uncertainty": [],
+        "supporting_claim_ids": [
+          "c31",
+          "c33"
+        ],
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "LLaMA3-8B FCP 4.89 0.64 5.37 0.82 0.56 1.47 1.74 1.26\nMemGuide 6.39 0.63 3.46 0.92 0.61 1.98 2.16 1.58\nQwen-7B FCP 6.26 0.66 4.93 0.83 0.43 1.24 1.85 1.17\nMemGuide 6.81 0.66 4.31 0.87 0.54 1.70 2.30 1.51\nMistral-7B FCP 6.20 0.73 2.52 1.00 0.58 1.63 1.99 1.40\nMemGuide 6.48 0.80 1.21 1.00 0.61 2.06 2.08 1.58\nGPT-4o-mini FCP 6.93 0.67 6.03 0.88 0.62 1.83 1.90 1.78\nMemGuide 7.14 0.70 3.19 0.99 0.65 2.38 2.48 2.17\n",
+            "location": "page 6; source block ba9f103f34252b832:60",
+            "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+            "confidence": 1
+          }
+        ],
+        "source_kind": "table",
+        "source_label": "Table 3",
+        "physical_page": 6,
+        "binding_status": "text_bound"
+      },
+      "binding": {
+        "result_id": "r4",
+        "source_url": "http://arxiv.org/abs/2505.20231v2",
+        "source_text_sha256": "862f621242ee43c35d6accffc021ca369a758e8cfd4e693c894a9b654cde0c0a",
+        "source_evidence": {
+          "status": "positioned",
+          "spans": [
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "quote": "LLaMA3-8B FCP 4.89 0.64 5.37 0.82 0.56 1.47 1.74 1.26\nMemGuide 6.39 0.63 3.46 0.92 0.61 1.98 2.16 1.58\nQwen-7B FCP 6.26 0.66 4.93 0.83 0.43 1.24 1.85 1.17\nMemGuide 6.81 0.66 4.31 0.87 0.54 1.70 2.30 1.51\nMistral-7B FCP 6.20 0.73 2.52 1.00 0.58 1.63 1.99 1.40\nMemGuide 6.48 0.80 1.21 1.00 0.61 2.06 2.08 1.58\nGPT-4o-mini FCP 6.93 0.67 6.03 0.88 0.62 1.83 1.90 1.78\nMemGuide 7.14 0.70 3.19 0.99 0.65 2.38 2.48 2.17\n",
+              "location": "page 6; source block ba9f103f34252b832:60",
+              "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+              "confidence": 1,
+              "start": 27124,
+              "end": 27536,
+              "source_text_sha256": "862f621242ee43c35d6accffc021ca369a758e8cfd4e693c894a9b654cde0c0a"
+            }
+          ],
+          "cells": [
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c1",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "4.89",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c2",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.64",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c3",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "5.37",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c4",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "0.82",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c5",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.56",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c6",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "1.47",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c7",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "1.74",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c8",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.26",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c9",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "6.39",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c10",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.63",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c11",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "3.46",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c12",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "0.92",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c13",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.61",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c14",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "1.98",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c15",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "2.16",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c16",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.58",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c17",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "6.26",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c18",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.66",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c19",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "4.93",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c20",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "0.83",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c21",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.43",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c22",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "1.24",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c23",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "1.85",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c24",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.17",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c25",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "6.81",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c26",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.66",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c27",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "4.31",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c28",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "0.87",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c29",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.54",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c30",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "1.70",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c31",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "2.30",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c32",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.51",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c33",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "6.20",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c34",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.73",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c35",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "2.52",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c36",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "1.00",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c37",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.58",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c38",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "1.63",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c39",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "1.99",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c40",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.40",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c41",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "6.48",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c42",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.80",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c43",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "1.21",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c44",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "1.00",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c45",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.61",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c46",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "2.06",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c47",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "2.08",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c48",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.58",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c49",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "6.93",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c50",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.67",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c51",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "6.03",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c52",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "0.88",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c53",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.62",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c54",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "1.83",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c55",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "1.90",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c56",
+              "row_headers": [
+                "GPT-4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "1.78",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c57",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "GPT-4"
+              ],
+              "value": "7.14",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c58",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "JGA"
+              ],
+              "value": "0.70",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c59",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "DTE"
+              ],
+              "value": "3.19",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c60",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "S.R."
+              ],
+              "value": "0.99",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c61",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A."
+              ],
+              "value": "0.65",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c62",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "I."
+              ],
+              "value": "2.38",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c63",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "C."
+              ],
+              "value": "2.48",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-475ff9254430c5c725ed2f8ed0d37db2a992ecad924e7ea6c24d6efdc213f390",
+              "cell_id": "c64",
+              "row_headers": [
+                "GPT-4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "A.I.C."
+              ],
+              "value": "2.17",
+              "anchor_indexes": [
+                0
+              ]
+            }
+          ]
+        },
+        "observations": [
+          {
+            "observation": {
+              "subject": "LLaMA3-8B FCP to MemGuide",
+              "value": "0.64 to 0.63"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          },
+          {
+            "observation": {
+              "subject": "Qwen-7B FCP to MemGuide",
+              "value": "0.66 to 0.66"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          },
+          {
+            "observation": {
+              "subject": "Mistral-7B FCP to MemGuide",
+              "value": "0.73 to 0.80"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          },
+          {
+            "observation": {
+              "subject": "GPT-4o-mini FCP to MemGuide",
+              "value": "0.67 to 0.70"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          }
+        ],
+        "assertions": [
+          {
+            "claim_id": "c31",
+            "status": "unresolved",
+            "cell_ids": [],
+            "text": "Experiment: Table 3在LLaMA3-8B、Qwen-7B、Mistral-7B和GPT-4o-mini reader设置下成对给出FCP和MemGuide结果。",
+            "claim_status": "supported",
+            "assertion_sha256": "4bcc27989f29571c415623e0b63caa89f27fce3ca5062263f8abd1963d532943",
+            "cells": []
+          },
+          {
+            "claim_id": "c33",
+            "status": "unresolved",
+            "cell_ids": [],
+            "text": "Experiment: Table 3报告混合的JGA变化：LLaMA3-8B从0.64降至0.63，Qwen-7B保持0.66，Mistral-7B从0.73升至0.80，GPT-4o-mini从0.67升至0.70。",
+            "claim_status": "supported",
+            "assertion_sha256": "77cfc795384884f4b09a73df7d812b66137960a89effd7790dca2e3d54b41b1c",
+            "cells": []
+          }
+        ],
+        "binding_sha256": "b158645d0df940f5133a6eb5a1d3d8ee127ad13cc8ff78ed8f76a6ea087e8398"
+      },
+      "original_target_id": "ta7f1d779627d456573084996d263d7d9bca1dacff9ca81f7797c015826d5885d",
+      "original_schema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "unsupported",
+              "needs_review",
+              "speculative"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "e496",
+                "e265",
+                "e694",
+                "e655",
+                "e352",
+                "e470",
+                "e625",
+                "e177",
+                "e294",
+                "e665",
+                "e449",
+                "e295",
+                "e507",
+                "e1",
+                "e395",
+                "e704",
+                "e448",
+                "e426",
+                "e554",
+                "e332",
+                "e190",
+                "e360",
+                "e72",
+                "e454",
+                "e609",
+                "e329",
+                "e75",
+                "e668",
+                "e234",
+                "e65",
+                "e567",
+                "e67",
+                "e403",
+                "e693",
+                "e25",
+                "e430",
+                "e210",
+                "e440",
+                "e479",
+                "e539",
+                "e247",
+                "e218",
+                "e387",
+                "e60",
+                "e222",
+                "e586",
+                "e135",
+                "e531",
+                "e57",
+                "e611",
+                "e176",
+                "e245",
+                "e447",
+                "e277",
+                "e713",
+                "e94",
+                "e361",
+                "e706",
+                "e432",
+                "e344",
+                "e152",
+                "e80",
+                "e468",
+                "e23"
+              ]
+            },
+            "maxItems": 64
+          }
+        },
+        "required": [
+          "status",
+          "reason",
+          "evidence_refs"
+        ],
+        "additionalProperties": false
+      },
+      "original_decision": {
+        "evidence_refs": [
+          "e265",
+          "e665",
+          "e426",
+          "e329",
+          "e693",
+          "e135",
+          "e611",
+          "e706"
+        ],
+        "reason": "各模型的 FCP 和 MemGuide JGA 单元格支持 LLaMA3-8B 下降、Qwen 持平、Mistral 与 GPT-4o-mini 上升。",
+        "status": "supported"
+      }
+    },
+    {
+      "claim": {
+        "text": "Experiment: Table 12报告MemGuide下混合的槽准确率变化：LLaMA3-8B和Mistral-7B下降，Qwen-7B和GPT-4o-mini上升。",
+        "status": "supported",
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "LLaMA3-8B FCP 0.62 10.47 28.59\nMemGuide 0.56 9.86 30.39\nQwen-7B FCP 0.48 10.33 29.77\nMemGuide 0.55 10.90 31.28\nMistral-7B FCP 0.59 10.09 28.42\nMemGuide 0.56 6.66 24.64\nGPT4o-mini FCP 0.61 20.30 43.49\nMemGuide 0.68 13.6 35.20",
+            "location": "page 12; source block ba9f103f34252b832:126",
+            "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+            "confidence": 0.7
+          }
+        ],
+        "rationale": "The Table 12 slot-accuracy cells show decreases for LLaMA3-8B and Mistral-7B and increases for Qwen-7B and GPT-4o-mini.",
+        "metadata": {
+          "paper_reading": {
+            "source": "claim_units",
+            "claim_id": "c48",
+            "section": "experiment",
+            "claim_kind": "fact",
+            "publishable_default": true,
+            "status_reason": "supported by supplied evidence"
+          },
+          "anchor_resolution": {
+            "evidence_contexts": [
+              {
+                "source_url": "http://arxiv.org/abs/2505.20231v2",
+                "quote": "LLaMA3-8B FCP 0.62 10.47 28.59\nMemGuide 0.56 9.86 30.39\nQwen-7B FCP 0.48 10.33 29.77\nMemGuide 0.55 10.90 31.28\nMistral-7B FCP 0.59 10.09 28.42\nMemGuide 0.56 6.66 24.64\nGPT4o-mini FCP 0.61 20.30 43.49\nMemGuide 0.68 13.6 35.20",
+                "positioned": {
+                  "table": {
+                    "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+                    "source_url": "http://arxiv.org/abs/2505.20231v2",
+                    "document_sha256": "8df7c74771f1106f6d3307bbcdf8bd9de0ebebd026e8b6f0b3b74f732dee2793",
+                    "source_text_sha256": "862f621242ee43c35d6accffc021ca369a758e8cfd4e693c894a9b654cde0c0a",
+                    "label": "Table 12",
+                    "physical_page": 12,
+                    "binding": "positioned",
+                    "complete_grid": true,
+                    "cells": [
+                      {
+                        "cell_id": "c1",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.62"
+                      },
+                      {
+                        "cell_id": "c2",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "10.47"
+                      },
+                      {
+                        "cell_id": "c3",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "28.59"
+                      },
+                      {
+                        "cell_id": "c4",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.56"
+                      },
+                      {
+                        "cell_id": "c5",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "9.86"
+                      },
+                      {
+                        "cell_id": "c6",
+                        "row_headers": [
+                          "LLaMA3-8B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "30.39"
+                      },
+                      {
+                        "cell_id": "c7",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.48"
+                      },
+                      {
+                        "cell_id": "c8",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "10.33"
+                      },
+                      {
+                        "cell_id": "c9",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "29.77"
+                      },
+                      {
+                        "cell_id": "c10",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.55"
+                      },
+                      {
+                        "cell_id": "c11",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "10.90"
+                      },
+                      {
+                        "cell_id": "c12",
+                        "row_headers": [
+                          "Qwen-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "31.28"
+                      },
+                      {
+                        "cell_id": "c13",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.59"
+                      },
+                      {
+                        "cell_id": "c14",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "10.09"
+                      },
+                      {
+                        "cell_id": "c15",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "28.42"
+                      },
+                      {
+                        "cell_id": "c16",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.56"
+                      },
+                      {
+                        "cell_id": "c17",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "6.66"
+                      },
+                      {
+                        "cell_id": "c18",
+                        "row_headers": [
+                          "Mistral-7B",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "24.64"
+                      },
+                      {
+                        "cell_id": "c19",
+                        "row_headers": [
+                          "GPT4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.61"
+                      },
+                      {
+                        "cell_id": "c20",
+                        "row_headers": [
+                          "GPT4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "20.30"
+                      },
+                      {
+                        "cell_id": "c21",
+                        "row_headers": [
+                          "GPT4o-mini",
+                          "FCP"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "43.49"
+                      },
+                      {
+                        "cell_id": "c22",
+                        "row_headers": [
+                          "GPT4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "Slot Accuracy"
+                        ],
+                        "value": "0.68"
+                      },
+                      {
+                        "cell_id": "c23",
+                        "row_headers": [
+                          "GPT4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "BLEU"
+                        ],
+                        "value": "13.6"
+                      },
+                      {
+                        "cell_id": "c24",
+                        "row_headers": [
+                          "GPT4o-mini",
+                          "MemGuide"
+                        ],
+                        "column_headers": [
+                          "ROUGE"
+                        ],
+                        "value": "35.20"
+                      }
+                    ]
+                  },
+                  "selected_cell_ids": [
+                    "c1",
+                    "c2",
+                    "c3",
+                    "c4",
+                    "c5",
+                    "c6",
+                    "c7",
+                    "c8",
+                    "c9",
+                    "c10",
+                    "c11",
+                    "c12",
+                    "c13",
+                    "c14",
+                    "c15",
+                    "c16",
+                    "c17",
+                    "c18",
+                    "c19",
+                    "c20",
+                    "c21",
+                    "c22",
+                    "c23",
+                    "c24"
+                  ]
+                }
+              }
+            ]
+          },
+          "localization": {
+            "original_text": "Experiment: Table 12 reports mixed slot-accuracy changes under MemGuide: decreases for LLaMA3-8B and Mistral-7B, increases for Qwen-7B and GPT-4o-mini."
+          }
+        }
+      },
+      "proposal": {
+        "result_id": "r19",
+        "question": "How does MemGuide compare with FCP on slot accuracy in Table 12?",
+        "conditions": [
+          "The metric is slot accuracy.",
+          "The comparison is for the table's task-oriented dialogue evaluation."
+        ],
+        "metric": "Slot accuracy",
+        "observations": [
+          {
+            "subject": "LLaMA3-8B FCP to MemGuide",
+            "value": "0.62 to 0.56"
+          },
+          {
+            "subject": "Qwen-7B FCP to MemGuide",
+            "value": "0.48 to 0.55"
+          },
+          {
+            "subject": "Mistral-7B FCP to MemGuide",
+            "value": "0.59 to 0.56"
+          },
+          {
+            "subject": "GPT-4o-mini FCP to MemGuide",
+            "value": "0.61 to 0.68"
+          }
+        ],
+        "comparison_scope": [
+          "Four paired FCP and MemGuide reader settings in Table 12"
+        ],
+        "uncertainty": [],
+        "supporting_claim_ids": [
+          "c48"
+        ],
+        "evidence": [
+          {
+            "source_url": "http://arxiv.org/abs/2505.20231v2",
+            "quote": "LLaMA3-8B FCP 0.62 10.47 28.59\nMemGuide 0.56 9.86 30.39\nQwen-7B FCP 0.48 10.33 29.77\nMemGuide 0.55 10.90 31.28\nMistral-7B FCP 0.59 10.09 28.42\nMemGuide 0.56 6.66 24.64\nGPT4o-mini FCP 0.61 20.30 43.49\nMemGuide 0.68 13.6 35.20\n",
+            "location": "page 12; source block ba9f103f34252b832:126",
+            "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+            "confidence": 1
+          }
+        ],
+        "source_kind": "table",
+        "source_label": "Table 12",
+        "physical_page": 12,
+        "binding_status": "text_bound"
+      },
+      "binding": {
+        "result_id": "r19",
+        "source_url": "http://arxiv.org/abs/2505.20231v2",
+        "source_text_sha256": "862f621242ee43c35d6accffc021ca369a758e8cfd4e693c894a9b654cde0c0a",
+        "source_evidence": {
+          "status": "positioned",
+          "spans": [
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "quote": "LLaMA3-8B FCP 0.62 10.47 28.59\nMemGuide 0.56 9.86 30.39\nQwen-7B FCP 0.48 10.33 29.77\nMemGuide 0.55 10.90 31.28\nMistral-7B FCP 0.59 10.09 28.42\nMemGuide 0.56 6.66 24.64\nGPT4o-mini FCP 0.61 20.30 43.49\nMemGuide 0.68 13.6 35.20\n",
+              "location": "page 12; source block ba9f103f34252b832:126",
+              "source_title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+              "confidence": 1,
+              "start": 59875,
+              "end": 60099,
+              "source_text_sha256": "862f621242ee43c35d6accffc021ca369a758e8cfd4e693c894a9b654cde0c0a"
+            }
+          ],
+          "cells": [
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c1",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.62",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c2",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "10.47",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c3",
+              "row_headers": [
+                "LLaMA3-8B",
+                "FCP"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "28.59",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c4",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.56",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c5",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "9.86",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c6",
+              "row_headers": [
+                "LLaMA3-8B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "30.39",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c7",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.48",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c8",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "10.33",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c9",
+              "row_headers": [
+                "Qwen-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "29.77",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c10",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.55",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c11",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "10.90",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c12",
+              "row_headers": [
+                "Qwen-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "31.28",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c13",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.59",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c14",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "10.09",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c15",
+              "row_headers": [
+                "Mistral-7B",
+                "FCP"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "28.42",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c16",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.56",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c17",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "6.66",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c18",
+              "row_headers": [
+                "Mistral-7B",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "24.64",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c19",
+              "row_headers": [
+                "GPT4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.61",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c20",
+              "row_headers": [
+                "GPT4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "20.30",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c21",
+              "row_headers": [
+                "GPT4o-mini",
+                "FCP"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "43.49",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c22",
+              "row_headers": [
+                "GPT4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "Slot Accuracy"
+              ],
+              "value": "0.68",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c23",
+              "row_headers": [
+                "GPT4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "BLEU"
+              ],
+              "value": "13.6",
+              "anchor_indexes": [
+                0
+              ]
+            },
+            {
+              "source_url": "http://arxiv.org/abs/2505.20231v2",
+              "table_id": "table-ebec08b72923354d2eec89d32cf84987486e98ec4e85e0afb3709ae8e7b47c99",
+              "cell_id": "c24",
+              "row_headers": [
+                "GPT4o-mini",
+                "MemGuide"
+              ],
+              "column_headers": [
+                "ROUGE"
+              ],
+              "value": "35.20",
+              "anchor_indexes": [
+                0
+              ]
+            }
+          ]
+        },
+        "observations": [
+          {
+            "observation": {
+              "subject": "LLaMA3-8B FCP to MemGuide",
+              "value": "0.62 to 0.56"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          },
+          {
+            "observation": {
+              "subject": "Qwen-7B FCP to MemGuide",
+              "value": "0.48 to 0.55"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          },
+          {
+            "observation": {
+              "subject": "Mistral-7B FCP to MemGuide",
+              "value": "0.59 to 0.56"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          },
+          {
+            "observation": {
+              "subject": "GPT-4o-mini FCP to MemGuide",
+              "value": "0.61 to 0.68"
+            },
+            "status": "unresolved",
+            "reason": "no_unique_quoted_cell",
+            "cell": null
+          }
+        ],
+        "assertions": [
+          {
+            "claim_id": "c48",
+            "status": "unresolved",
+            "cell_ids": [],
+            "text": "Experiment: Table 12报告MemGuide下混合的槽准确率变化：LLaMA3-8B和Mistral-7B下降，Qwen-7B和GPT-4o-mini上升。",
+            "claim_status": "supported",
+            "assertion_sha256": "fe478d3423b7b6d390f86074d8dbab6e79a0c6749fb07799b418766e60520ba9",
+            "cells": []
+          }
+        ],
+        "binding_sha256": "b6758574e2df83542d817c661e70c47521c910053c7f332d2e09b0b54c97aab4"
+      },
+      "original_target_id": "tf0b4c8f414829150022f53d0f65d26d2f8c86d5847041eccfef16e722f66ffe9",
+      "original_schema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "unsupported",
+              "needs_review",
+              "speculative"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "e435",
+                "e8",
+                "e627",
+                "e367",
+                "e407",
+                "e521",
+                "e712",
+                "e697",
+                "e149",
+                "e73",
+                "e205",
+                "e251",
+                "e319",
+                "e314",
+                "e83",
+                "e267",
+                "e157",
+                "e643",
+                "e340",
+                "e533",
+                "e323",
+                "e144",
+                "e529",
+                "e88"
+              ]
+            },
+            "maxItems": 24
+          }
+        },
+        "required": [
+          "status",
+          "reason",
+          "evidence_refs"
+        ],
+        "additionalProperties": false
+      },
+      "original_decision": {
+        "evidence_refs": [
+          "e435",
+          "e367",
+          "e712",
+          "e73",
+          "e319",
+          "e340",
+          "e323",
+          "e144",
+          "e435",
+          "e367",
+          "e712",
+          "e73",
+          "e319",
+          "e340",
+          "e323",
+          "e144"
+        ],
+        "reason": "表 12 中 FCP 与 MemGuide 的槽准确率单元格支持 LLaMA3-8B 和 Mistral-7B 下降、Qwen-7B 和 GPT-4o-mini 上升。",
+        "status": "supported"
+      }
+    }
+  ]
+}

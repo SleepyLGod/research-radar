@@ -227,7 +227,7 @@ def test_unanchored_evidence_does_not_invoke_or_blame_verifier(monkeypatch, tmp_
     draft = read_json(run / "article_draft.json")
     assert not verifier.messages
     assert draft["metadata"]["research_outcome"] == {
-        "status": "incomplete", "reasons": ["evidence_insufficient"],
+        "status": "incomplete", "reasons": ["reading_failed"],
     }
     assert draft["metadata"]["deep_read_count"] == 0
     assert "verification" not in draft["lede"].lower()

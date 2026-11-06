@@ -13,6 +13,7 @@ public struct UserFacingErrorCatalog {
             "codex_not_configured", "codex_path_invalid", "credentials_missing", "credentials_unchecked",
             "keychain_lookup_failed", "invalid_configuration", "research_failed", "delivery_failed",
             "engine_failed", "configuration_write_failed",
+            "knowledge_failed", "knowledge_no_material", "knowledge_confirmation_changed",
             "model_transport_failed", "model_response_interrupted", "model_response_retry_exhausted",
             "schedule_refresh_failed", "schedule_recovery_failed", "state_reconciliation_failed",
             "email_confirmation_changed", "email_report_missing", "email_password_missing", "delivery_retry_blocked",
@@ -20,6 +21,7 @@ public struct UserFacingErrorCatalog {
             "wechat_confirmation_changed", "wechat_report_missing", "wechat_credentials_missing",
             "wechat.no_public_report", "wechat.configure_first", "wechat.busy",
             "wechat_cover_invalid", "wechat_cover_unconfirmed", "wechat_cover_save_failed",
+            "reader_context_unknown", "reader_context_exceeded", "reader_output_reserve_insufficient", "reader_context_invalid",
         ])
 
     @MainActor public func message(for code: String) -> String {

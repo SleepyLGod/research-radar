@@ -1,0 +1,13 @@
+{
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "claim_id": "c42",
+  "original_text": "Experiment: For the LLaMA3-8B GPT-4 score comparison in Table 6, the table lists raw-history score 5.09 and intent-QA memory score 6.34, while the accompanying prose gives 5.05 and 6.34.",
+  "translated_text": "Experiment: 在Table 6的LLaMA3-8B GPT-4分数比较中，表列出原始历史分数5.09和intent-QA记忆分数6.34，而伴随正文给出5.05和6.34。",
+  "paragraph": {
+    "text": "Table 6 的 LLaMA3-8B GPT-4 分数比较存在文本与表格不一致：表列出原始历史 5.09、intent-QA 记忆 6.34，正文给出原始历史 5.05、intent-QA 记忆 6.34；这一原始历史取值未在来源中解决。",
+    "supporting_claim_ids": [
+      "c42"
+    ]
+  },
+  "provenance": "Literal excerpts from the stopped 2026-11-03 real Chinese composition; not a final-language approval."
+}

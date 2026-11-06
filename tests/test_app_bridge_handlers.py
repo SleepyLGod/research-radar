@@ -3,8 +3,10 @@ from types import SimpleNamespace
 import pytest
 
 from research_radar.analysis.providers import ModelResponse
+from research_radar.analysis.reader_input import ReaderContextBudget
 from research_radar.analysis.routing import TaskModelRoute
 from research_radar.app_bridge import handlers
+from research_radar.config import ModelProviderConfig
 from research_radar.exceptions import ResearchRadarError
 from research_radar.security.secrets import InMemorySecretBackend, SecretManager
 
@@ -23,9 +25,13 @@ class _Provider:
 def test_probe_failure_is_bounded_redacted_and_retains_diagnostic(monkeypatch) -> None:
     secret = "sk-" + "abcdefghijklmnopqrst"
     private_path = "/" + "Users/test/private.txt"
-    route = SimpleNamespace(provider="codex", model="gpt-5.6-luna")
+    route = SimpleNamespace(provider="codex", model="gpt-6-luna")
     config = SimpleNamespace(research=SimpleNamespace(
-        models=SimpleNamespace(task_routes={"verifier": route})
+        topics=[],
+        models=SimpleNamespace(task_routes={"verifier": route}),
+        model_providers={"codex": ModelProviderConfig(kind="codex_cli", reader_contexts={
+            "gpt-6-luna": ReaderContextBudget(200000, 10000, 5000),
+        })},
     ))
 
     def fail(*args, **kwargs):
@@ -45,6 +51,10 @@ def test_probe_failure_is_bounded_redacted_and_retains_diagnostic(monkeypatch) -
 def test_configured_route_checks_call_shared_provider_probe(monkeypatch) -> None:
     route = SimpleNamespace(provider="deepseek", model="deepseek-flash")
     research = SimpleNamespace(
+        topics=[],
+        model_providers={"deepseek": ModelProviderConfig(kind="openai_compatible", reader_contexts={
+            "deepseek-flash": ReaderContextBudget(200000, 10000, 5000),
+        })},
         models=SimpleNamespace(
             task_routes={"anchor_repair": route, "deep_reading": route}
         )
@@ -130,6 +140,7 @@ def test_preflight_search_is_explicit_separate_and_affects_readiness(
 
     monkeypatch.setattr(handlers, "probe_web_search", probe)
     config = SimpleNamespace(research=SimpleNamespace(
+        topics=[],
         models=SimpleNamespace(task_routes={}),
         discovery=SimpleNamespace(web_search=WebSearchConfig(provider="tavily")),
     ))
@@ -162,6 +173,7 @@ def test_preflight_does_not_fail_unprobed_search_configurations(monkeypatch, pro
 
     monkeypatch.setattr(handlers, "probe_web_search", forbidden)
     config = SimpleNamespace(research=SimpleNamespace(
+        topics=[],
         models=SimpleNamespace(task_routes={}),
         discovery=SimpleNamespace(web_search=WebSearchConfig(provider=provider)),
     ))

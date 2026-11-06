@@ -51,8 +51,8 @@ import Testing
     @Test func firstRunFailureUsesExistingRetryFlowAndDoesNotReopenWizard() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { trash(root) }
-        let config = AppConfigurationDefaults.make(workspaceRoot: root.appending(path: "workspace"),
-            codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        let config = ReaderBudgetTestConfiguration.declaringBudgets(AppConfigurationDefaults.make(
+            workspaceRoot: root.appending(path: "workspace"), codexExecutable: URL(fileURLWithPath: "/usr/bin/true")))
         let store = AppStore(configuration: config, runtime: .init(updatedAt: Date()), appSupportRoot: root,
             engineURL: URL(fileURLWithPath: "/fixture/engine"), runner: OnboardingRunner(), secretStore: AdmissionSecrets())
         try store.saveTopic(topic(), creating: true)

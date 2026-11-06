@@ -3,6 +3,34 @@ import pytest
 from research_radar.config import ConfigError, parse_config
 
 
+@pytest.mark.parametrize("budget", [None, 1, 32768])
+def test_openai_output_budget_is_optional(budget: int | None) -> None:
+    config = parse_config({
+        "topics": [{"id": "memory", "queries": ["agent memory"]}],
+        "model_providers": {"custom": {"kind": "openai_compatible", "max_tokens": budget}},
+    })
+
+    assert config.model_providers["custom"].max_tokens == budget
+    assert config.model_providers["deepseek"].max_tokens is None
+
+
+@pytest.mark.parametrize("budget", [0, -1, True, False, 1.5, "32768"])
+def test_invalid_openai_output_budget_is_rejected(budget: object) -> None:
+    with pytest.raises(ConfigError, match="max_tokens.*positive integer"):
+        parse_config({
+            "topics": [{"id": "memory", "queries": ["agent memory"]}],
+            "model_providers": {"custom": {"kind": "openai_compatible", "max_tokens": budget}},
+        })
+
+
+def test_output_budget_is_not_silently_ignored_by_cli_provider() -> None:
+    with pytest.raises(ConfigError, match="max_tokens.*only valid for openai_compatible"):
+        parse_config({
+            "topics": [{"id": "memory", "queries": ["agent memory"]}],
+            "model_providers": {"codex": {"kind": "codex_cli", "max_tokens": 32768}},
+        })
+
+
 def test_parse_config_allows_empty_topics_only_when_explicitly_requested() -> None:
     with pytest.raises(ConfigError, match="at least one topic"):
         parse_config({"project": {"name": "ResearchRadar"}, "topics": []})

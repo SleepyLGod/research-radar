@@ -1,0 +1,26 @@
+{
+  "provenance": "Minimal reproduction of the saved MemGuide Reader answer and verbatim page-5 text; not a new model result or repaired answer.",
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "title": "MemGuide: Intent-Driven Memory Selection for Goal-Oriented Multi-Session LLM Agents",
+  "source_excerpts": [
+    "To operationalize this, we fine-tune a smaller, efficient\nLLaMA-8B model (Meta AI 2024) to act as a specialized\nfilter. This filter estimates the probability that a given QA\npair provides an answer for one of the missing slots. For\neach QA pair (qi,j, ai,j) from Mcand, the model computes:\nsi,j = P (y = 1 | c, Lmiss, qi,j, ai,j) (1)\nwhere y = 1 signifies that the answer ai,j successfully fills\na slot presented in Lmiss. To supervise this filter, we con-\nstruct a training dataset using the same pipeline as MS-TOD\nmemory bank generation. Specifically, for each held-out ses-\nsion, we simulate missing-slot contexts and label each QA\npair from prior sessions as positive (if it fills a missing slot)\nor negative (otherwise). Detailed training configurations and\ndataset are provided in Appendix. The model is optimized\nusing a standard binary cross-entropy loss function:\nL = −\nX\ni,j\n[yi,j log si,j + (1 − yi,j) log(1 − si,j)] (2)\nTo balance the initial semantic relevance from the initial\nsemantic retrieval (denoted as spre\ni,j) with the slot-filling util-\nity score si,j from our filter, we compute a final score:\nsfinal,ij = α · spre\ni,j + (1 − α) · si,j (3)",
+    "where α is a hyperparameter. We select the top- K (e,g,.\nK=5) QA pairs with the highest sfinal,ij scores."
+  ],
+  "claims": [
+    {
+      "claim_id": "c13",
+      "text": "A fine-tuned LLaMA-8B filter estimates whether each retrieved QA pair answers one of the identified missing slots.",
+      "method": {"kind": "operation", "from_claim_id": null, "to_claim_id": null}
+    },
+    {
+      "claim_id": "c14",
+      "text": "The method combines semantic-retrieval and slot-filling scores using a weighted sum, then selects QA pairs by the combined score.",
+      "method": {"kind": "operation", "from_claim_id": null, "to_claim_id": null}
+    },
+    {
+      "claim_id": "c20",
+      "text": "The filter's slot-utility scores are available before the method combines them with semantic scores to rank QA pairs.",
+      "method": {"kind": "precedes", "from_claim_id": "c13", "to_claim_id": "c14"}
+    }
+  ]
+}

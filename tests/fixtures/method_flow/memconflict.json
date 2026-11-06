@@ -1,0 +1,66 @@
+{
+  "title": "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts",
+  "source_url": "http://arxiv.org/abs/2605.20926v1",
+  "provenance": "Editorial extraction and Chinese writing controls, not a saved live model answer. Source excerpts are verbatim from the saved full text, physical PDF pages 3, 9-13 and 19.",
+  "source_excerpts": [
+    "To improve realism and diversity, MemConflict initializes each user from a persona seed 𝑧𝑢\nsampled from Persona Hub2. Conditioned on 𝑧𝑢, an LLM generates the structured profile of user 𝑢\naccording to predefined attribute schemas:",
+    "Building on the initialized user profiles, MemConflict constructs long-horizon, cross-session inter-\naction histories in which user-related information accumulates, changes, and is revisited across\nsessions.",
+    "To this end, MemConflict first simulates plausible\nuser evolution over time and then instantiates dynamic, static, and conditional conflicts within\nthe resulting timelines.",
+    "Given the simulated timeline T𝑢 and the session-level information constructed in Section 3.3,\nMemConflict converts each session slot into a natural multi-turn dialogue.",
+    "MemConflict uses a two-stage process: synopsis generation followed by dialogue realization.",
+    "For each evaluable instance,\nMemConflict issues a query immediately after the corresponding session 𝑠𝑡 has been ingested\nand uses the history prefix 𝐻𝑡 as the memory available to the system.",
+    "MemConflict supports both black-box evaluation of final answers and white-box analysis of memory\nretrieval and ranking.",
+    "For the same\nconflict-targeted queries used in the black-box evaluation, we analyze the top-3 memory items\nreturned by each system and report SEH@3 and SRS."
+  ],
+  "claim_units": [
+    {"claim_id":"m1","section":"solution","claim_kind":"fact","text":"Each user is initialized with a structured profile generated from a persona seed sampled from Persona Hub.","evidence":[{"quote":"To improve realism and diversity, MemConflict initializes each user from a persona seed 𝑧𝑢\nsampled from Persona Hub2. Conditioned on 𝑧𝑢, an LLM generates the structured profile of user 𝑢\naccording to predefined attribute schemas:","location":"PDF p.9, Profile Initialization"}],"publishable_default":true},
+    {"claim_id":"m2","section":"solution","claim_kind":"fact","text":"The method simulates plausible user evolution over time.","evidence":[{"quote":"MemConflict first simulates plausible\nuser evolution over time","location":"PDF p.9, Timeline Simulation"}],"publishable_default":true},
+    {"claim_id":"m3","section":"solution","claim_kind":"fact","text":"The method instantiates dynamic, static and conditional conflicts within the simulated timelines.","evidence":[{"quote":"MemConflict first simulates plausible\nuser evolution over time and then instantiates dynamic, static, and conditional conflicts within\nthe resulting timelines.","location":"PDF p.9, Conflict Construction"}],"publishable_default":true},
+    {"claim_id":"m4","section":"solution","claim_kind":"fact","text":"Dialogue generation uses synopsis generation followed by dialogue realization.","evidence":[{"quote":"MemConflict uses a two-stage process: synopsis generation followed by dialogue realization.","location":"PDF p.12, Multi-Session Dialogue Generation"}],"publishable_default":true},
+    {"claim_id":"m5","section":"solution","claim_kind":"fact","text":"A query uses only the history prefix available after the corresponding evaluable session has been ingested.","evidence":[{"quote":"For each evaluable instance,\nMemConflict issues a query immediately after the corresponding session 𝑠𝑡 has been ingested\nand uses the history prefix 𝐻𝑡 as the memory available to the system.","location":"PDF p.13, Query and Label Construction"}],"publishable_default":true},
+    {"claim_id":"r1","section":"solution","claim_kind":"fact","text":"History construction builds on initialized user profiles.","evidence":[{"quote":"Building on the initialized user profiles, MemConflict constructs long-horizon, cross-session inter-\naction histories in which user-related information accumulates, changes, and is revisited across\nsessions.","location":"PDF p.9, profile to history"}],"publishable_default":true},
+    {"claim_id":"r2","section":"solution","claim_kind":"fact","text":"User evolution is simulated before conflicts are instantiated within the resulting timelines.","evidence":[{"quote":"MemConflict first simulates plausible\nuser evolution over time and then instantiates dynamic, static, and conditional conflicts within\nthe resulting timelines.","location":"PDF p.9, explicit first and then"}],"publishable_default":true},
+    {"claim_id":"r3","section":"solution","claim_kind":"fact","text":"Dialogue generation consumes the simulated timeline and constructed session-level information.","evidence":[{"quote":"Given the simulated timeline T𝑢 and the session-level information constructed in Section 3.3,\nMemConflict converts each session slot into a natural multi-turn dialogue.","location":"PDF p.12, construction to dialogue"}],"publishable_default":true},
+    {"claim_id":"r4","section":"solution","claim_kind":"fact","text":"The query is issued after the corresponding evaluable session has been ingested.","evidence":[{"quote":"For each evaluable instance,\nMemConflict issues a query immediately after the corresponding session 𝑠𝑡 has been ingested\nand uses the history prefix 𝐻𝑡 as the memory available to the system.","location":"PDF p.13, session to query"}],"publishable_default":true},
+    {"claim_id":"m6","section":"solution","claim_kind":"fact","text":"The benchmark evaluates final answers in black-box mode and memory retrieval and ranking in white-box mode.","evidence":[{"quote":"MemConflict supports both black-box evaluation of final answers and white-box analysis of memory\nretrieval and ranking.","location":"PDF p.3, evaluation modes"}],"publishable_default":true},
+    {"claim_id":"r5","section":"solution","claim_kind":"fact","text":"The same conflict-targeted queries are used for black-box evaluation and white-box memory analysis.","evidence":[{"quote":"For the same\nconflict-targeted queries used in the black-box evaluation, we analyze the top-3 memory items\nreturned by each system and report SEH@3 and SRS.","location":"PDF p.19, shared queries"}],"publishable_default":true}
+  ],
+  "operation_records": [
+    {"scope":"Dataset construction","operation_claim_id":"m1","inputs":[{"name":"Persona Hub persona seeds","supporting_claim_ids":["m1"]}],"outputs":[{"name":"structured user profiles","supporting_claim_ids":["m1"]}],"conditions":[]},
+    {"scope":"Dataset construction","operation_claim_id":"m2","inputs":[{"name":"initialized user profiles","supporting_claim_ids":["m1","r1"]}],"outputs":[{"name":"simulated timelines","supporting_claim_ids":["m2","r2"]}],"conditions":[]},
+    {"scope":"Dataset construction","operation_claim_id":"m3","inputs":[{"name":"simulated timelines","supporting_claim_ids":["r2"]}],"outputs":[{"name":"dynamic, static and conditional conflicts","supporting_claim_ids":["m3"]}],"conditions":[]},
+    {"scope":"Dataset construction","operation_claim_id":"m4","inputs":[{"name":"simulated timeline and session information","supporting_claim_ids":["r3"]}],"outputs":[{"name":"multi-turn dialogue","supporting_claim_ids":["r3"]}],"conditions":[]},
+    {"scope":"Query construction","operation_claim_id":"m5","inputs":[{"name":"ingested history prefix","supporting_claim_ids":["m5"]}],"outputs":[{"name":"conflict-targeted queries","supporting_claim_ids":["m5"]}],"conditions":[{"name":"only history available at query time","supporting_claim_ids":["m5"]}]},
+    {"scope":"Query evaluation","operation_claim_id":"m6","inputs":[{"name":"conflict-targeted queries","supporting_claim_ids":["r5"]}],"outputs":[{"name":"answer assessment and retrieval/ranking analysis","supporting_claim_ids":["m6"]}],"conditions":[{"name":"same queries for black-box and white-box evaluation","supporting_claim_ids":["r5"]}]}
+  ],
+  "method_flow": {
+    "input_claim_ids":["m1"],"step_claim_ids":["m2","m3","m4","m5"],"output_claim_ids":["m6"],
+    "links":[
+      {"from_claim_id":"m1","to_claim_id":"m2","supporting_claim_ids":["r1"]},
+      {"from_claim_id":"m2","to_claim_id":"m3","supporting_claim_ids":["r2"]},
+      {"from_claim_id":"m3","to_claim_id":"m4","supporting_claim_ids":["r3"]},
+      {"from_claim_id":"m4","to_claim_id":"m5","supporting_claim_ids":["r4"]},
+      {"from_claim_id":"m5","to_claim_id":"m6","supporting_claim_ids":["r5"]}
+    ],"gaps":[]
+  },
+  "writer_control": {
+    "reader_explanation":{"solution_walkthrough":[
+      {"text":"MemConflict 先用 Persona Hub 中的画像种子生成结构化用户档案，再以这些档案为基础模拟用户随时间的变化，在形成的时间线上设置动态、静态和条件冲突。","supporting_claim_ids":["m1","m2","m3","r1","r2"]},
+      {"text":"随后，系统把模拟时间线和已构造的会话信息写成对话：先生成会话概要，再展开为多轮对话。只有对应冲突已经具备可评估条件、相关会话已被摄入后，才发出查询；此时可用记忆只包含截至该会话的历史，不含未来会话。","supporting_claim_ids":["m3","m4","m5","r3","r4"]},
+      {"text":"同一组冲突查询接入两种评测：黑盒检查最终答案，白盒分析记忆检索与排序。因此，报告答案表现和分析检索环节是两条不同的评测视角。","supporting_claim_ids":["m5","m6","r5"]}
+    ]},
+    "claims":[
+      {"claim_id":"m1","text":"Solution: 每个用户用 Persona Hub 中采样的画像种子生成结构化档案来初始化。"},
+      {"claim_id":"m2","text":"Solution: 方法模拟用户随时间的合理演变。"},
+      {"claim_id":"m3","text":"Solution: 方法在模拟时间线上设置动态、静态和条件冲突。"},
+      {"claim_id":"m4","text":"Solution: 对话生成先产生会话概要，再将概要实现为对话。"},
+      {"claim_id":"m5","text":"Solution: 查询只使用对应可评估会话被摄入后可用的历史前缀。"},
+      {"claim_id":"r1","text":"Solution: 历史构建以初始化后的用户档案为基础。"},
+      {"claim_id":"r2","text":"Solution: 先模拟用户演变，再在形成的时间线上设置冲突。"},
+      {"claim_id":"r3","text":"Solution: 对话生成使用模拟时间线和构建好的会话信息。"},
+      {"claim_id":"r4","text":"Solution: 对应可评估会话被摄入后，才发出查询。"},
+      {"claim_id":"m6","text":"Solution: 基准用黑盒评估最终答案，用白盒分析记忆检索与排序。"},
+      {"claim_id":"r5","text":"Solution: 黑盒评估和白盒记忆分析使用同一组冲突查询。"}
+    ]
+  }
+}

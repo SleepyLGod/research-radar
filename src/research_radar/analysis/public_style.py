@@ -37,6 +37,11 @@ Chinese public writing style:
   "本质上", "赋能", "闭环", and "不仅仅是...更是...".
 - Keep professional register. Do not over-casualize technical explanations, and do not turn
   research limitations into comforting or promotional language.
+- Keep proper model/method names and metric symbols, but use Chinese for ordinary nouns and
+  actions. Introduce necessary English terminology alongside a short Chinese explanation;
+  do not turn every session, user, system or result into an English fragment.
+- Keep provenance in structured support fields and the evidence trail, not inline claim IDs.
+  Never remove IDs or rewrite prose after final verification; changed text needs new review.
 {PROTECTED_SPAN_RULES}
 """.strip()
 

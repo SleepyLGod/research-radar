@@ -1,3 +1,8 @@
+import json
+from dataclasses import replace
+
+import pytest
+
 from research_radar.analysis.localization import (
     localization_body_failed,
     localization_failed,
@@ -15,6 +20,8 @@ from research_radar.analysis.paper_reading import (
     RelatedWorkAssessment,
 )
 from research_radar.analysis.providers import Message, ModelResponse
+from research_radar.compose.draft import build_daily_draft
+from research_radar.compose.wechat import render_wechat_html
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
 
 
@@ -46,6 +53,150 @@ class SequenceProvider:
         if not self.responses:
             raise AssertionError("No more localization responses")
         return ModelResponse(content=self.responses.pop(0), model=model)
+
+
+@pytest.mark.parametrize(
+    ("original", "translated"),
+    [
+        ("Accuracy is 70.0%.", "准确率为99.9%。"),
+        ("Accuracy is 70.0%.", "准确率为70.0。"),
+        ("Accuracy is 70.0 percent.", "准确率为70.0。"),
+        ("Latency is 100 ms.", "延迟为100 s。"),
+        ("Memory is 4 GB.", "内存为4 MB。"),
+        ("The change is -5%.", "变化为+5%。"),
+        ("Latency is <10 ms.", "延迟为>10 ms。"),
+        ("The score is 0.01.", "分数为1。"),
+        ("Latency is 10 ms and storage is 20 MB.", "延迟为20 ms，存储为10 MB。"),
+        ("Throughput is 10 MB/s.", "吞吐量为10 MB/ms。"),
+        ("Speedup is 2×.", "加速为2。"),
+    ],
+)
+def test_localization_rejects_changed_quantities_before_publication(
+    original: str, translated: str,
+) -> None:
+    source = _source()
+    claim = replace(_claim(), text=f"Experiment: {original}")
+    provider = CapturingProvider(json.dumps({"claims": [{"index": 0, "text": translated}]}))
+
+    result = localize_report_content(
+        readings=[], claims=[claim], sources=[source],
+        provider=provider, model="offline", language="zh",
+    )
+    draft = build_daily_draft("offline", result.sources, result.claims, language="zh")
+
+    assert result.claims[0] == claim
+    assert draft.claims[0].text == claim.text
+    assert translated not in render_wechat_html(draft)
+    assert any(finding.metadata.get("kind") == "report_localization_quantity_changed"
+               for finding in result.findings)
+    assert len(provider.messages) == 1
+
+
+@pytest.mark.parametrize(
+    ("original", "translated"),
+    [
+        ("Accuracy is 70.0%.", "准确率为70.0%。"),
+        ("Accuracy is 70.0 percent.", "准确率为70.0%。"),
+        ("Latency is 100 ms.", "延迟为100毫秒。"),
+        ("Memory is 4 GB.", "内存为4 GB。"),
+        ("The change is -5%.", "变化为−5％。"),
+        ("Latency is <10 ms.", "延迟为<10 ms。"),
+        ("The score is 1e-3.", "分数为1e-3。"),
+        ("BM25 uses 4 GB.", "BM25 使用4 GB。"),
+        ("Throughput is 10 MB/s.", "吞吐量为10 MB/秒。"),
+    ],
+)
+def test_localization_accepts_preserved_quantities(original: str, translated: str) -> None:
+    claim = replace(_claim(), text=f"Experiment: {original}")
+    provider = CapturingProvider(json.dumps({"claims": [{"index": 0, "text": translated}]}))
+
+    result = localize_report_content(
+        readings=[], claims=[claim], sources=[],
+        provider=provider, model="offline", language="zh",
+    )
+
+    assert result.claims[0].text == f"Experiment: {translated}"
+    assert result.claims[0].status == claim.status
+    assert result.claims[0].evidence == claim.evidence
+    assert result.claims[0].metadata == claim.metadata
+    assert not result.findings
+
+
+def test_localization_preserves_original_explanation_and_figure_on_quantity_change() -> None:
+    source = _source()
+    reading = replace(_reading(), reader_explanation=ReaderExplanation(
+        experiment_interpretation=[_paragraph("Accuracy is 70.0% with latency of 100 ms.")],
+    ))
+    claim = replace(_claim(), text="Experiment: Accuracy is 70.0% with latency of 100 ms.")
+    figures = {source.url: [{
+        "title": "fig:latency", "caption": "Latency of 100 ms.",
+        "explanation": "The measured latency is 100 ms.",
+        "relative_path": "figures/latency.png", "renderable": True,
+    }]}
+    provider = SequenceProvider([
+        json.dumps({"readings": [{"index": 0, "reader_explanation": {
+            "experiment_interpretation": [{"text": "准确率为99.9%，延迟为100 ms。",
+                                           "supporting_claim_ids": ["c1"]}],
+        }}]}),
+        json.dumps({"claims": [{"index": 0, "text": claim.text}],
+                    "figures": [{"source_url": source.url, "title": "fig:latency",
+                                 "localized_caption": "延迟为100 s。",
+                                 "explanation": "测得延迟为100 s。"}]}),
+    ])
+
+    result = localize_report_content(
+        readings=[reading], claims=[claim], sources=[source], figures_by_source_url=figures,
+        provider=provider, model="offline", language="zh",
+    )
+    draft = build_daily_draft(
+        "offline", result.sources, result.claims, language="zh", readings=result.readings,
+        deep_read_sources=[source], figures_by_source_url=result.figures_by_source_url,
+    )
+
+    assert result.readings[0].reader_explanation == reading.reader_explanation
+    assert result.figures_by_source_url == figures
+    assert "99.9" not in render_wechat_html(draft)
+    assert len(result.findings) == 1
+    assert len(provider.messages) == 1
+    assert localization_failed(result)
+
+
+def test_figure_quantity_guards_remain_active_without_a_failed_body_chunk() -> None:
+    source = _source()
+    figures = {source.url: [{
+        "title": "fig:latency", "caption": "Latency of 100 ms.",
+        "explanation": "The measured latency is 100 ms.",
+        "relative_path": "figures/latency.png", "renderable": True,
+    }]}
+    provider = CapturingProvider(json.dumps({"figures": [{
+        "source_url": source.url, "title": "fig:latency",
+        "localized_caption": "延迟为100 s。", "explanation": "测得延迟为100 s。",
+    }]}))
+
+    result = localize_report_content(
+        readings=[], claims=[], sources=[], figures_by_source_url=figures,
+        provider=provider, model="offline", language="zh",
+    )
+
+    assert result.figures_by_source_url == figures
+    assert len(result.findings) == 2
+    assert len(provider.messages) == 1
+
+
+def test_localization_quantity_warning_does_not_include_generated_text() -> None:
+    source = replace(_source(), metadata={"source_gist": {"text": "Latency is 100 ms."}})
+    provider = CapturingProvider(json.dumps({"sources": [{
+        "url": source.url, "gist": "private-generated-marker: 延迟为100 s。",
+    }]}))
+
+    result = localize_report_content(
+        readings=[], claims=[], sources=[source], provider=provider,
+        model="offline", language="zh",
+    )
+
+    assert result.sources[0].metadata == source.metadata
+    assert len(result.findings) == 1
+    assert "private-generated-marker" not in repr(result.findings)
 
 
 def test_localization_prompt_preserves_terms_numbers_and_quotes() -> None:
@@ -264,7 +415,27 @@ def test_localization_failed_display_chunk_is_marked_failed() -> None:
               "readings": [
                 {
                   "index": 0,
-                  "problem_solution": {"problem": "论文评估 LLM agent memory。"}
+                  "problem_solution": {"problem": "论文评估 LLM agent memory。"},
+                  "reader_explanation": {
+                    "opening_context": [{"text": "论文解释 LOCOMO 与 LongMemEval 的评估。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "core_thesis": [{"text": "核心问题是评估目标不一致。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "problem_walkthrough": [{"text": "Raw、Source 和 Canonical 目标奖励不同内容。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "solution_walkthrough": [{"text": "论文明确比较这些目标。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "experiment_interpretation": [{"text": "70.4% 必须结合目标定义理解。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "related_work_context": [{"text": "BM25 作为 baseline。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "limitations_discussion": [{"text": "分析没有部署评估。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "plain_language_story": [{"text": "同一回答在不同目标下得分不同。",
+                      "supporting_claim_ids": ["c1"]}],
+                    "reader_takeaway": [{"text": "先看 benchmark 奖励什么，再看分数。",
+                      "supporting_claim_ids": ["c1"]}]
+                  }
                 }
               ],
               "claims": [],
@@ -461,3 +632,172 @@ def _reading() -> PaperReading:
 
 def _paragraph(text: str) -> ReaderExplanationParagraph:
     return ReaderExplanationParagraph(text=text, supporting_claim_ids=["c1"])
+
+
+@pytest.mark.parametrize(("original", "translated"), [
+    ("Storage is 10 PB.", "存储为10 EB。"),
+    ("The corpus has 10 million items.", "语料有10 billion个条目。"),
+    ("The change is - 5%.", "变化为+ 5%。"),
+    ("Latency is 10 MB/epoch.", "延迟为10 MB/step。"),
+    ("Storage is 10 XU.", "存储为10 YU。"),
+    ("The top-3 retrieved items.", "检索到的前4个条目。"),
+    ("The score is -3.", "分数为+3。"),
+])
+def test_translation_cannot_change_unrecognized_scale_sign_or_unit(
+    original: str, translated: str,
+) -> None:
+    claim = replace(_claim(), text=f"Experiment: {original}")
+    result = localize_report_content(
+        readings=[], claims=[claim], sources=[], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({"claims": [{"index": 0, "text": translated}]})),
+    )
+
+    assert result.claims[0] == claim
+    assert any(f.metadata.get("kind") == "report_localization_quantity_changed"
+               for f in result.findings)
+
+
+@pytest.mark.parametrize(("original", "translated"), [
+    ("The top-3 retrieved memory items.", "检索到的前3个记忆项。"),
+    ("The change is - 5%.", "变化为−5%。"),
+    ("The corpus has 10 million items.", "语料有10百万个条目。"),
+    ("Storage is 10 PB.", "存储为10 PB。"),
+    ("Throughput is 10 MB/epoch.", "吞吐量为10 MB/epoch。"),
+    ("Latency ranges from 10 - 20 ms.", "延迟范围为10到20 ms。"),
+])
+def test_translation_preserves_lexical_top_k_and_spaced_signs(
+    original: str, translated: str,
+) -> None:
+    claim = replace(_claim(), text=f"Experiment: {original}")
+    result = localize_report_content(
+        readings=[], claims=[claim], sources=[], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({"claims": [{"index": 0, "text": translated}]})),
+    )
+
+    assert result.claims[0].text == f"Experiment: {translated}"
+    assert not result.findings
+
+
+@pytest.mark.parametrize("entries", [
+    None, [], [{"index": True}], [{"index": False}], [{"index": -1}],
+    [{"index": 1}], [{"index": "0"}], [{"index": 0}, {"index": 0}],
+    [{"index": 0}, "not an entry"],
+])
+def test_invalid_translation_indices_fail_chunk_without_replacing_reading(entries: object) -> None:
+    original = _reading()
+    result = localize_report_content(
+        readings=[original], claims=[], sources=[], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({"readings": entries})),
+    )
+
+    assert result.status == "failed"
+    assert localization_body_failed(result)
+    assert result.readings == [original]
+    assert len(result.attempts) == 1
+    assert result.findings[0].metadata["kind"] == "report_localization_failed"
+
+
+@pytest.mark.parametrize("entries", [
+    [], [{"index": False, "text": "changed"}],
+    [{"index": 0, "text": "first"}, {"index": 0, "text": "last"}],
+    [{"index": 1, "text": "wrong slot"}],
+])
+def test_invalid_claim_translation_indices_preserve_verified_originals(entries: object) -> None:
+    claim = _claim()
+    result = localize_report_content(
+        readings=[], claims=[claim], sources=[], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({"claims": entries})),
+    )
+
+    assert result.status == "failed"
+    assert result.claims == [claim]
+    assert len(result.attempts) == 1
+
+
+@pytest.mark.parametrize("field", [
+    "area_context.background", "area_context.active_questions",
+    "problem_solution.problem", "problem_solution.hidden_assumptions",
+    "problem_solution.mechanism", "related_work.prior_work",
+    "limitations.explicit_limitations", "critical_assessment.bottom_line",
+    "experiment_summary", "essence", "plain_language_example",
+])
+def test_structured_translation_checks_quantities_in_each_text_field(field: str) -> None:
+    original = _reading()
+    section, _, name = field.partition(".")
+    if name:
+        value = getattr(getattr(original, section), name)
+        text: str | list[str] = (
+            ["Latency is 10 ms."] if isinstance(value, list) else "Latency is 10 ms."
+        )
+        original = replace(original, **{
+            section: replace(getattr(original, section), **{name: text}),
+        })
+        replacement: str | list[str] = (
+            ["延迟为999 s。"] if isinstance(text, list) else "延迟为999 s。"
+        )
+        entry = {"index": 0, section: {name: replacement}}
+    else:
+        original = replace(original, **{section: "Latency is 10 ms."})
+        entry = (
+            {"index": 0, "experiments": {"summary": "延迟为999 s。"}}
+            if section == "experiment_summary" else {"index": 0, section: "延迟为999 s。"}
+        )
+    result = localize_report_content(
+        readings=[original], claims=[], sources=[], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({"readings": [entry]})),
+    )
+
+    localized = result.readings[0]
+    actual = getattr(getattr(localized, section), name) if name else getattr(localized, section)
+    assert actual == (
+        getattr(getattr(original, section), name) if name else getattr(original, section)
+    )
+    assert any(f.metadata.get("kind") == "report_localization_quantity_changed"
+               for f in result.findings)
+
+
+def test_omitted_explanation_translation_retains_original_for_audit() -> None:
+    original = _reading()
+    result = localize_report_content(
+        readings=[original], claims=[], sources=[], language="zh", model="offline",
+        provider=CapturingProvider('{"readings": [{"index": 0, "essence": "核心。"}]}'),
+    )
+
+    assert result.readings[0].reader_explanation == original.reader_explanation
+    finding = next(f for f in result.findings
+                   if f.metadata.get("kind") == "report_localization_missing_paragraphs")
+    assert finding.metadata["retained_original_paragraph_count"] == 9
+    assert not any(f.metadata.get("kind") == "report_localization_claim_ids_changed"
+                   for f in result.findings)
+
+
+@pytest.mark.parametrize("key", ["readings", "claims"])
+def test_invalid_unused_indices_are_handled_as_localization_failure(key: str) -> None:
+    source = _source()
+    result = localize_report_content(
+        readings=[], claims=[], sources=[source], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({key: [{"index": False}]})),
+    )
+
+    assert result.status == "failed"
+    assert result.sources == [source]
+    assert len(result.attempts) == 1
+
+
+def test_changed_structured_list_retains_original_instead_of_pairing_different_items() -> None:
+    original = replace(_reading(), area_context=AreaContext(
+        background="An evaluation.", active_questions=["Cost is 10 ms.", "Storage is 20 MB."],
+    ))
+    result = localize_report_content(
+        readings=[original], claims=[], sources=[], language="zh", model="offline",
+        provider=CapturingProvider(json.dumps({"readings": [{"index": 0, "area_context": {
+            "active_questions": ["成本为10 ms，存储为20 MB。"],
+        }}]})),
+    )
+
+    assert result.readings[0].area_context.active_questions == (
+        original.area_context.active_questions
+    )
+    assert any(
+        f.metadata.get("kind") == "report_localization_list_changed" for f in result.findings
+    )

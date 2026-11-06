@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from research_radar.models import Artifact, Claim
 
 RESEARCH_RADAR_RUNTIME_CONTRACT = (
@@ -101,7 +103,7 @@ def verifier_prompt(
 ) -> str:
     """Build a prompt for unsupported-claim review."""
 
-    claim_lines = _claim_blocks(claims)
+    claim_lines = _claim_blocks(claims, include_references=True)
     query_lines = "\n".join(f"- {query}" for query in (queries or [])) or "- Unknown"
     topic_context = topic_id or "Unknown"
     return (
@@ -136,7 +138,23 @@ def verifier_prompt(
         "  ]\n"
         "}\n\n"
         "Rules:\n"
+        "- claim_index is the one-based position in THIS request, used only for decisions "
+        "and follow-up actions. CLAIM REFERENCE gives its stable Reader claim_id and source_urls. "
+        "claim_id is source-scoped and does not change when claims are filtered or reordered; "
+        "its numeric suffix is NOT claim_index. A null claim_id means none was supplied; "
+        "do not invent or renumber IDs.\n"
         "- You may only downgrade, reject, or keep claims; do not create new publishable claims.\n"
+        "- Check support for the entire assertion, not just whether its words or numbers "
+        "occur in an excerpt. Verify method/model, baseline, metric, evaluation conditions, "
+        "aggregation and outcome stage where relevant.\n"
+        "- Read all supplied source excerpts for the claim together. Table binding labels "
+        "describe literal extraction, not semantic approval or a guarantee of complete evidence. "
+        "Unresolved layout or missing comparison context requires needs_review.\n"
+        "- Contradictory supplied evidence requires needs_review; cite the disagreement in "
+        "reason, do not silently choose prose over a table or figure. Author attribution "
+        "does not make the disputed result unconditionally supported.\n"
+        "- Do not infer paper-wide absence from missing excerpts. Keep input coverage "
+        "limitations separate from limitations actually stated by the authors.\n"
         "- Use follow_up_actions for missing evidence, too-broad claims, or "
         "primary-source checks.\n"
         "- Follow-up actions are audit tasks only; they are not article content.\n\n"
@@ -144,12 +162,43 @@ def verifier_prompt(
     )
 
 
-def _claim_blocks(claims: list[Claim]) -> str:
+def _claim_blocks(claims: list[Claim], *, include_references: bool = False) -> str:
     claim_lines = []
     for index, claim in enumerate(claims, start=1):
         evidence = "\n".join(
             f"- {anchor.source_url} {anchor.location or ''}: {anchor.quote}"
             for anchor in claim.evidence
         )
-        claim_lines.append(f"{index}. CLAIM: {claim.text}\nEVIDENCE:\n{evidence or '- NONE'}")
+        resolution = claim.metadata.get("anchor_resolution", {})
+        contexts = resolution.get("evidence_contexts", []) if isinstance(resolution, dict) else []
+        if (
+            isinstance(resolution, dict) and resolution.get("status") == "matched"
+            and isinstance(contexts, list)
+        ):
+            for context in contexts:
+                if not isinstance(context, dict):
+                    continue
+                if any(
+                    context.get("source_url") == anchor.source_url
+                    and context.get("quote") == anchor.quote
+                    for anchor in claim.evidence
+                ):
+                    evidence += f"\nMatched source context: {context.get('text', '')}"
+                    if context.get("binding"):
+                        evidence += f"\nTable binding: {context['binding']}"
+                        evidence += f"\nLiteral column labels: {context.get('columns', [])}"
+        original_text = claim.metadata.get("localization", {}).get("original_text")
+        original = f"\nORIGINAL ANALYSIS: {original_text}" if isinstance(original_text, str) else ""
+        reference = ""
+        if include_references:
+            claim_id = claim.metadata.get("paper_reading", {}).get("claim_id")
+            reference = "\nCLAIM REFERENCE: " + json.dumps({
+                "claim_index": index,
+                "claim_id": claim_id if isinstance(claim_id, str) and claim_id.strip() else None,
+                "source_urls": list(dict.fromkeys(anchor.source_url for anchor in claim.evidence)),
+            }, ensure_ascii=False)
+        claim_lines.append(
+            f"{index}. CLAIM: {claim.text}{reference}"
+            f"{original}\nEVIDENCE:\n{evidence or '- NONE'}"
+        )
     return "\n\n".join(claim_lines) or "No claims provided."

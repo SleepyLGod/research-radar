@@ -116,6 +116,7 @@ import Testing
         defer { task3Trash(root) }
         var config = AppConfigurationDefaults.make(workspaceRoot: root,
             codexExecutable: URL(fileURLWithPath: "/usr/bin/true"))
+        config = ReaderBudgetTestConfiguration.declaringBudgets(config)
         config.topics = [.init(id: "one", displayName: "One", researchFocus: "Research",
             queries: ["research"], paperQueries: ["research"], reportLanguage: .english)]
         config.delivery.email = .init(enabled: emailEnabled, smtpHost: "smtp.example.test",

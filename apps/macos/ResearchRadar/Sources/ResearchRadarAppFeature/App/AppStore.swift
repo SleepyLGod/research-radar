@@ -33,6 +33,8 @@ public final class AppStore {
     public private(set) var selectedReportID: UUID?
     public private(set) var isShuttingDown = false
     public private(set) var cancellationRequested = false
+    var paperProgressByTopic: [String: PaperProgressSnapshot] = [:]
+    let topicKnowledge = TopicKnowledgeModel()
     @ObservationIgnored private var commandActive = false
     @ObservationIgnored private var wechatCredentialRevision = UUID()
     private(set) var selectedWeChatCover: WeChatCoverImage?
@@ -86,7 +88,7 @@ public final class AppStore {
         guard !behaviorChangesBlocked else { lastErrorCode = "engine_busy"; return }
         guard selectedTopic?.isPaused == false else { lastErrorCode = "topic_invalid"; return }
         do {
-            try validateResearchConfiguration()
+            try validateResearchConfiguration(topicID: selectedTopic?.id)
             try completeOnboarding()
         } catch AppStoreError.researchConfiguration(let code) { lastErrorCode = code; return }
         catch { lastErrorCode = "configuration_write_failed"; return }
@@ -115,6 +117,10 @@ public final class AppStore {
 
     /// Local readiness only. Saved credentials do not imply a verified connection.
     public var researchConfigurationErrorCode: String? {
+        researchConfigurationErrorCode(for: selectedTopic?.id)
+    }
+
+    private func researchConfigurationErrorCode(for topicID: String?) -> String? {
         do { try configuration.validate() } catch { return "invalid_configuration" }
         let tasks = ["source_gist", "deep_reading", "anchor_repair", "report_localization", "verifier"]
         for task in tasks {
@@ -140,7 +146,20 @@ public final class AppStore {
         if secretLookupFailed { return "keychain_lookup_failed" }
         guard secretPresenceLoaded else { return "credentials_unchecked" }
         if researchSecretNames.contains(where: { secretPresence[$0] != true }) { return "credentials_missing" }
+        let chinese = configuration.topics.first { $0.id == topicID }?.reportLanguage == .chinese
+        for route in readerBudgetRoutes where route.task != "report_localization" || chinese {
+            guard let provider = configuration.providers.first(where: { $0.id == route.providerID }) else {
+                return "invalid_configuration"
+            }
+            if provider.kind != "local", provider.readerContexts?[route.model] == nil {
+                return "reader_context_unknown"
+            }
+        }
         return nil
+    }
+
+    var readerBudgetRoutes: [RouteRecordV1] {
+        configuration.routes.filter { ["deep_reading", "verifier", "report_localization"].contains($0.task) }
     }
 
     private var researchSecretNames: Set<String> {
@@ -157,9 +176,9 @@ public final class AppStore {
             && !directory.boolValue && FileManager.default.isExecutableFile(atPath: path)
     }
 
-    private func validateResearchConfiguration() throws {
+    private func validateResearchConfiguration(topicID: String? = nil) throws {
         refreshSecretPresence()
-        if let code = researchConfigurationErrorCode { throw AppStoreError.researchConfiguration(code) }
+        if let code = researchConfigurationErrorCode(for: topicID) { throw AppStoreError.researchConfiguration(code) }
     }
 
     public var todayPresentation: TodayPresentation {
@@ -303,6 +322,59 @@ public final class AppStore {
         }
         try saveTopic(topic, creating: true)
         topicDraft = nil
+    }
+
+    public func readPaperLedger(topicID: String, reports: [LedgerReportReferenceV1]) async throws -> TopicPaperLedgerV1 {
+        guard !behaviorChangesBlocked else { throw AppStoreError.busy }
+        guard configuration.topics.contains(where: { $0.id == topicID }) else { throw AppStoreError.invalidTopic }
+        if reports.isEmpty { return .init(topicID: topicID, reportIDs: [], papers: []) }
+        guard let commandClient else {
+            throw AppStoreError.invalidTopic
+        }
+        let saved = self.reports.filter { $0.topicID == topicID }
+        guard reports.allSatisfy({ reference in saved.contains {
+            $0.id == reference.reportID && $0.reportDate == reference.reportDate && $0.runDirectory == reference.runDirectory
+        } }) else { throw EngineProtocolError.invalidValue }
+        commandActive = true; isEngineRunning = true; cancellationRequested = false
+        defer { finishCommand() }
+        return try await commandClient.readPaperLedger(topicID: topicID, reports: reports)
+    }
+
+    public var selectedTopicOrganization: OrganizeTopicPayloadV1? {
+        guard let topic = selectedTopic,
+              selectedTopicReports.contains(where: \.isEffectiveDeepReport) else { return nil }
+        return .init(topicID: topic.id, reports: selectedTopicReports.map {
+            .init(reportID: $0.id, reportDate: $0.reportDate, runDirectory: $0.runDirectory)
+        }, researchQuestion: topic.researchFocus, language: topic.reportLanguage)
+    }
+
+    public func organizeSelectedTopic(expectedScope: OrganizeTopicPayloadV1? = nil) async {
+        guard !behaviorChangesBlocked else { lastErrorCode = "engine_busy"; return }
+        guard let payload = selectedTopicOrganization else { lastErrorCode = "knowledge_no_material"; return }
+        guard expectedScope == nil || expectedScope == payload else {
+            lastErrorCode = "knowledge_confirmation_changed"; return
+        }
+        admissionCount += 1
+        defer { admissionCount -= 1 }
+        do {
+            _ = try await queue.enqueueOrganization(payload: payload, reportDate: ReportDate.string(for: Date()))
+            jobs = await queue.jobs()
+            lastErrorCode = nil
+            await executePendingJobs()
+        } catch { lastErrorCode = "configuration_write_failed" }
+    }
+
+    public func readTopicKnowledge(topicID: String) async throws -> TopicKnowledgeV1 {
+        guard !behaviorChangesBlocked else { throw AppStoreError.busy }
+        guard configuration.topics.contains(where: { $0.id == topicID }), let commandClient else {
+            throw AppStoreError.invalidTopic
+        }
+        commandActive = true; isEngineRunning = true; cancellationRequested = false
+        defer { finishCommand() }
+        let scope = reports.filter { $0.topicID == topicID }.map {
+            LedgerReportReferenceV1(reportID: $0.id, reportDate: $0.reportDate, runDirectory: $0.runDirectory)
+        }
+        return try await commandClient.readTopicKnowledge(topicID: topicID, reports: scope)
     }
 
     public func bootstrapTopic(description: String, language: ReportLanguageV1) async {
@@ -486,7 +558,7 @@ public final class AppStore {
             lastErrorCode = nil
             return
         }
-        do { try validateResearchConfiguration() }
+        do { try validateResearchConfiguration(topicID: topicID) }
         catch AppStoreError.researchConfiguration(let code) { lastErrorCode = code; return }
         catch { lastErrorCode = "invalid_configuration"; return }
         admissionCount += 1
@@ -807,7 +879,7 @@ public final class AppStore {
         if enabled, legacyScheduleTopics.contains(topicID) {
             throw AppStoreError.legacyScheduleConflict(topicID)
         }
-        if enabled { try validateResearchConfiguration() }
+        if enabled { try validateResearchConfiguration(topicID: topicID) }
         guard (0...23).contains(hour), (0...59).contains(minute) else {
             throw AppStoreError.invalidScheduleTime
         }
@@ -901,6 +973,22 @@ public final class AppStore {
         guard let id else { selectedReportID = nil; return }
         guard selectedTopicReports.contains(where: { $0.id == id }) else { return }
         selectedReportID = id
+    }
+
+    public func setReaderContextBudget(
+        providerID: String, model: String, budget: ReaderContextBudgetV1
+    ) throws {
+        try requireBehaviorChange()
+        try budget.validate()
+        guard let index = configuration.providers.firstIndex(where: { $0.id == providerID }),
+              readerBudgetRoutes.contains(where: {
+                  $0.providerID == providerID && $0.model == model
+              }) else { throw AppStoreError.researchConfiguration("reader_context_invalid") }
+        var candidate = configuration
+        var budgets = candidate.providers[index].readerContexts ?? [:]
+        budgets[model] = budget
+        candidate.providers[index].readerContexts = budgets
+        try persistConfiguration(candidate)
     }
 
     public func saveTopic(_ topic: TopicRecordV1, creating: Bool = false) throws {
@@ -1001,7 +1089,7 @@ public final class AppStore {
             do {
                 if let next, next.kind == .research {
                     refreshSecretPresence()
-                    if let code = researchConfigurationErrorCode {
+                    if let code = researchConfigurationErrorCode(for: next.topicID) {
                         try await queue.transition(jobID: next.id, to: .cancelled,
                             error: RedactedEngineErrorV1(code: code, message: "Research configuration needs attention.", retryable: false))
                         lastErrorCode = code
@@ -1009,13 +1097,15 @@ public final class AppStore {
                         continue
                     }
                 }
-                guard try await coordinator.executeNext(
+                guard let result = try await coordinator.executeNext(
                     configuration: configuration,
                     onJobsChanged: { [weak self] snapshot in await self?.receiveJobs(snapshot) },
+                    onPaperProgress: { [weak self] event in await self?.receivePaperProgress(event) },
                     onObservationFailure: { [weak self] in await self?.recordObservationFailure() }
-                ) != nil else {
+                ) else {
                     break
                 }
+                if let knowledge = result.knowledge { topicKnowledge.accept(knowledge) }
             } catch let failure as EngineCommandFailure {
                 lastErrorCode = failure.error.code
                 jobs = await queue.jobs()
@@ -1062,12 +1152,17 @@ public final class AppStore {
         if !runtime.schedulesPaused, schedules.contains(where: \.isEnabled) {
             refreshSecretPresence()
         }
-        let blocked = researchConfigurationErrorCode
+        let blocked = researchConfigurationErrorCode(for: nil)
+        let eligibleTopics = configuration.topics.filter { researchConfigurationErrorCode(for: $0.id) == nil }
         schedulingBlockedByConfiguration = !runtime.schedulesPaused
-            && schedules.contains(where: \.isEnabled) && blocked != nil
-        if !runtime.schedulesPaused, schedules.contains(where: \.isEnabled), let blocked { lastErrorCode = blocked }
+            && schedules.contains(where: { schedule in
+                schedule.isEnabled && !eligibleTopics.contains(where: { $0.id == schedule.topicID })
+            })
+        if schedulingBlockedByConfiguration {
+            lastErrorCode = blocked ?? "reader_context_unknown"
+        }
         await scheduleSource.update(ScheduleInputs(
-            schedules: schedules, topics: configuration.topics,
+            schedules: schedules, topics: eligibleTopics,
             reports: reports, paused: runtime.schedulesPaused || blocked != nil
         ))
     }
@@ -1075,7 +1170,9 @@ public final class AppStore {
     private func rearmRecoveredSchedules() {
         guard schedulingBlockedByConfiguration, !isShuttingDown, !requiresReconciliation,
               !runtime.schedulesPaused, schedules.contains(where: \.isEnabled),
-              researchConfigurationErrorCode == nil else { return }
+              schedules.contains(where: { schedule in
+                  schedule.isEnabled && researchConfigurationErrorCode(for: schedule.topicID) == nil
+              }) else { return }
         schedulingBlockedByConfiguration = false
         Task { await startScheduling() }
     }

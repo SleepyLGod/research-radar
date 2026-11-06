@@ -1,9 +1,15 @@
+import json
+
+import pytest
+
 from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.analysis.review import (
     apply_model_review_decisions,
     extract_verification_actions,
     model_review_publishable_claims,
 )
+from research_radar.compose.draft import build_daily_draft
+from research_radar.compose.wechat import render_wechat_html
 from research_radar.evidence.policy import enforce_evidence_policy, publishable_claims
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor
 
@@ -18,6 +24,97 @@ class CapturingProvider:
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         self.messages.append(messages)
         return ModelResponse(content=self.content, model=model)
+
+
+@pytest.mark.parametrize("index", ["²", "9" * 5000])
+def test_invalid_unicode_or_oversized_review_index_cannot_abort_review(index: str) -> None:
+    claim = Claim(
+        text="Experiment: A locally anchored claim.", status=ClaimStatus.SUPPORTED,
+        evidence=[EvidenceAnchor(source_url="https://example.com/paper", quote="A result.")],
+    )
+    feedback = json.dumps({
+        "decisions": [{"claim_index": index, "status": "supported"}],
+        "follow_up_actions": [{"claim_index": index, "action": "inspect", "reason": "Check."}],
+    })
+    result = model_review_publishable_claims([claim], CapturingProvider(feedback), model="offline")
+
+    assert result.reviewed_count == 0
+    assert not result.claims[0].is_publishable()
+    assert all(action.claim_index is None for action in result.actions)
+
+
+@pytest.mark.parametrize(
+    "feedback",
+    [
+        "not JSON",
+        '{}',
+        '{"decisions": []}',
+        '{"decisions": [{"claim_index": 1, "status": "maybe"}]}',
+        '{"decisions": [{"claim_index": true, "status": "supported"}]}',
+    ],
+)
+def test_invalid_review_cannot_reach_public_draft(feedback: str) -> None:
+    claim = Claim(
+        text="Experiment: An unverified result must not be public.",
+        status=ClaimStatus.SUPPORTED,
+        evidence=[EvidenceAnchor(source_url="https://example.com/paper", quote="A result.")],
+        metadata={"paper_reading": {"claim_id": "c1"}},
+    )
+    provider = CapturingProvider(feedback)
+
+    result = model_review_publishable_claims([claim], provider, model="offline")
+    checked, _ = enforce_evidence_policy(result.claims)
+    draft = build_daily_draft("offline", [], checked)
+
+    assert result.reviewed_count == 0
+    assert not result.claims[0].is_publishable()
+    assert result.claims[0].metadata["paper_reading"]["claim_id"] == "c1"
+    assert draft.publishable_claims() == []
+    assert claim.text not in render_wechat_html(draft)
+    assert len(provider.messages) == 1
+
+
+def test_review_counts_only_valid_decisions_and_keeps_rejections() -> None:
+    claims = [
+        Claim(
+            text=f"Result {index}",
+            status=ClaimStatus.SUPPORTED,
+            evidence=[EvidenceAnchor(source_url="https://example.com/paper", quote="A result.")],
+        )
+        for index in range(4)
+    ]
+    provider = CapturingProvider(json.dumps({"decisions": [
+        {"claim_index": 1, "status": "supported"},
+        {"claim_index": 2, "status": "unsupported"},
+        {"claim_index": 3, "status": "maybe"},
+    ]}))
+
+    result = model_review_publishable_claims(claims, provider, model="offline")
+
+    assert result.reviewed_count == 2
+    assert [claim.status for claim in result.claims] == [
+        ClaimStatus.SUPPORTED, ClaimStatus.UNSUPPORTED,
+        ClaimStatus.NEEDS_REVIEW, ClaimStatus.NEEDS_REVIEW,
+    ]
+
+
+def test_malformed_review_does_not_promote_or_reuse_previous_decisions() -> None:
+    claim = Claim(
+        text="Previously reviewed claim", status=ClaimStatus.SUPPORTED,
+        evidence=[EvidenceAnchor(source_url="https://example.com/paper", quote="A result.")],
+        metadata={"model_review": {"requested_status": "supported", "status": "supported"}},
+    )
+    result = model_review_publishable_claims(
+        [claim], CapturingProvider("not JSON"), model="offline",
+    )
+    rejected, _ = apply_model_review_decisions(
+        [Claim(text="Already rejected", status=ClaimStatus.UNSUPPORTED)], "not JSON",
+    )
+
+    assert result.reviewed_count == 0
+    assert not result.claims[0].is_publishable()
+    assert rejected[0].status == ClaimStatus.UNSUPPORTED
+    assert rejected[0].metadata["model_review"]["status"] == "unsupported"
 
 
 def test_model_review_decision_downgrades_supported_claim() -> None:

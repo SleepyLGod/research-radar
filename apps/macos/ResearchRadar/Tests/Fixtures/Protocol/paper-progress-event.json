@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "request_id": "0b5f8bc4-f934-4d86-b513-265e950fb44c",
+  "sequence": 1,
+  "emitted_at": "2026-10-27T09:00:00Z",
+  "type": "progress",
+  "stage": "deep_reading",
+  "status": "running",
+  "message": "Research in progress.",
+  "completed": null,
+  "total": null,
+  "delivery_channel": null,
+  "run_dir": null,
+  "error": null,
+  "paper": {
+    "source_id": "2eb956c1bcbf377c7b80d3a1bfabf2234af7af0c67bea7a8653ad98d95c006f5",
+    "title": "Agent memory / 智能体记忆",
+    "status": "reading"
+  }
+}

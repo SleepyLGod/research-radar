@@ -32,6 +32,7 @@ public final class WindowCoordinator: NSObject, NSPopoverDelegate {
     private var mode: WindowMode = .compact
     private weak var anchor: NSView?
     private var escapeMonitor: Any?
+    private var anchorObservers: [NSObjectProtocol] = []
 
     public init(content: () -> AnyView) {
         let hosting = NSHostingView(rootView: content())
@@ -60,12 +61,29 @@ public final class WindowCoordinator: NSObject, NSPopoverDelegate {
     }
 
     public func show() {
-        guard let anchor, anchor.window != nil else { return }
+        guard let anchor, let anchorWindow = anchor.window else { return }
+        // Status-item windows exist before AppKit has positioned them on a display.
+        guard let screen = anchorWindow.screen, !anchorWindow.frame.isEmpty,
+              anchorWindow.frame.intersects(screen.frame) else {
+            if anchorObservers.isEmpty {
+                for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification,
+                             NSWindow.didChangeScreenNotification] {
+                    anchorObservers.append(NotificationCenter.default.addObserver(
+                        forName: name, object: anchorWindow, queue: .main
+                    ) { [weak self] _ in
+                        MainActor.assumeIsolated { self?.show() }
+                    })
+                }
+            }
+            return
+        }
+        removeAnchorObservers()
         present(mode: mode, animated: false)
         NSApp.activate()
         if !popover.isShown {
             popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         }
+        guard popover.isShown else { return }
         window?.makeKey()
         onVisibilityChange?(true)
         if escapeMonitor == nil {
@@ -78,9 +96,10 @@ public final class WindowCoordinator: NSObject, NSPopoverDelegate {
         }
     }
 
-    public func toggle() { popover.isShown ? close() : show() }
+    public func toggle() { popover.isShown || !anchorObservers.isEmpty ? close() : show() }
 
     public func close() {
+        removeAnchorObservers()
         onVisibilityChange?(false)
         popover.performClose(nil)
         removeMonitor()
@@ -103,6 +122,7 @@ public final class WindowCoordinator: NSObject, NSPopoverDelegate {
     public func popoverShouldDetach(_ popover: NSPopover) -> Bool { false }
 
     public func popoverDidClose(_ notification: Notification) {
+        removeAnchorObservers()
         onVisibilityChange?(false)
         removeMonitor()
     }
@@ -110,5 +130,10 @@ public final class WindowCoordinator: NSObject, NSPopoverDelegate {
     private func removeMonitor() {
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
         escapeMonitor = nil
+    }
+
+    private func removeAnchorObservers() {
+        for observer in anchorObservers { NotificationCenter.default.removeObserver(observer) }
+        anchorObservers.removeAll()
     }
 }

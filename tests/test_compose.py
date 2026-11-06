@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from research_radar.analysis.paper_reading import (
     AreaContext,
     CriticalAssessment,
@@ -24,6 +26,46 @@ from research_radar.compose.zhihu import render_zhihu_markdown
 from research_radar.exceptions import PublishError
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor, SourceCandidate, SourceType
 from research_radar.storage.files import write_json
+
+
+@pytest.mark.parametrize("shared_title", [True, False])
+def test_deep_read_claim_ids_are_scoped_to_source_url(shared_title: bool) -> None:
+    first = replace(_paper_source(), title="A Memory Study - ACL Anthology")
+    second = replace(first, title="A Memory Study", url="https://example.com/paper-b")
+    first_reading = replace(
+        _paper_reading("A Memory Study" if shared_title else first.title),
+        reader_explanation=ReaderExplanation(solution_walkthrough=[
+            _explanation_paragraph("The rejected mechanism of paper A.")
+        ]),
+    )
+    if not shared_title:
+        second = replace(second, title=first.title)
+    rejected = replace(_supported_paper_claim(first), status=ClaimStatus.UNSUPPORTED)
+    accepted = replace(_supported_paper_claim(second), text="Solution: Paper B's own result.")
+
+    draft = build_daily_draft(
+        "offline", [first, second], [rejected, accepted],
+        readings=[first_reading, _paper_reading(second.title)],
+        deep_read_sources=[first, second],
+    )
+    entries = next(section.metadata["deep_reads"] for section in draft.sections
+                   if section.metadata.get("kind") == "deep_reads")
+
+    assert [entry["source"]["url"] for entry in entries] == [second.url]
+    assert "The rejected mechanism of paper A." not in render_wechat_html(draft)
+
+
+def test_legacy_title_only_evidence_can_still_build_a_deep_read() -> None:
+    source = _paper_source()
+    claim = _supported_paper_claim(source)
+    claim = replace(claim, evidence=[replace(claim.evidence[0], source_url="")])
+
+    draft = build_daily_draft(
+        "offline", [source], [claim], readings=[_paper_reading(source.title)],
+        deep_read_sources=[source],
+    )
+
+    assert draft.metadata["deep_read_count"] == 1
 
 
 def test_wechat_html_uses_verified_claims_only() -> None:
@@ -465,7 +507,7 @@ def test_long_form_wechat_keeps_unsupported_claims_out() -> None:
     assert "Unsupported public claim" not in html
 
 
-def test_long_form_wechat_prefers_reader_explanation_prose() -> None:
+def test_long_form_uses_verified_claims_instead_of_unverified_reader_prose() -> None:
     source = _paper_source()
     reading = replace(
         _paper_reading(source.title),
@@ -510,10 +552,16 @@ def test_long_form_wechat_prefers_reader_explanation_prose() -> None:
     html = render_wechat_html(draft)
     markdown = render_markdown(draft)
 
-    assert "Start from the long-term memory problem." in html
-    assert "The mechanism retrieves and filters stored memories." in html
-    assert "Start from the long-term memory problem." in markdown
-    assert "The mechanism retrieves and filters stored memories." in markdown
+    for output in (html, markdown):
+        assert "Supported paper claim" in output
+        assert "Start from the long-term memory problem." not in output
+        assert "The mechanism retrieves and filters stored memories." not in output
+    assert reading.reader_explanation.opening_context[0].text == (
+        "Start from the long-term memory problem."
+    )
+    assert draft.metadata["explanation_audit"] == {
+        "paragraph_count": 9, "kept_count": 0, "dropped_count": 9, "fallback_section_count": 1,
+    }
 
 
 def test_long_form_falls_back_to_verified_claim_when_explanation_is_not_publishable() -> None:
@@ -983,7 +1031,9 @@ def test_long_form_chinese_renders_figures_and_keeps_evidence_quote_english() ->
     )
 
     assert "论文关键图" in html
-    assert "背景知识速读" in html
+    assert "背景知识速读" not in html
+    assert "这是一段背景知识。" not in html
+    assert "这篇论文使用检索式记忆。" in html
     assert "SLM V3.3 架构图，展示 32 冷启动加速和保留层级" in html
     assert 'class="rr-formula"' in html
     assert "R 0.35" in html

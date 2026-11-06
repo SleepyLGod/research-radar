@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
+from research_radar.analysis.reader_input import ReaderContextBudget
 from research_radar.exceptions import ConfigError
 
 
@@ -64,6 +65,9 @@ class ModelProviderConfig:
     timeout_seconds: int = 120
     thinking: str | None = None
     reasoning_effort: str | None = None
+    max_tokens: int | None = None
+    stream: bool = False
+    reader_contexts: dict[str, ReaderContextBudget] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -394,6 +398,19 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             f"model_providers.{name}.reasoning_effort",
             kind=kind,
         )
+        max_tokens = item.get("max_tokens")
+        if max_tokens is not None:
+            if kind != "openai_compatible":
+                raise ConfigError(
+                    f"model_providers.{name}.max_tokens is only valid for openai_compatible."
+                )
+            if type(max_tokens) is not int or max_tokens < 1:
+                raise ConfigError(f"model_providers.{name}.max_tokens must be a positive integer.")
+        stream = item.get("stream", False)
+        if type(stream) is not bool:
+            raise ConfigError(f"model_providers.{name}.stream must be a boolean.")
+        if "stream" in item and kind != "openai_compatible":
+            raise ConfigError(f"model_providers.{name}.stream is only valid for openai_compatible.")
         configs[name.strip()] = ModelProviderConfig(
             kind=kind,
             base_url=_optional_string(item.get("base_url"), f"model_providers.{name}.base_url"),
@@ -405,8 +422,30 @@ def _model_provider_configs(data: dict[str, Any]) -> dict[str, ModelProviderConf
             timeout_seconds=timeout_seconds,
             thinking=thinking,
             reasoning_effort=reasoning_effort,
+            max_tokens=max_tokens,
+            stream=stream,
+            reader_contexts=_reader_contexts(item.get("reader_contexts", {})),
         )
     return configs
+
+
+def _reader_contexts(raw: object) -> dict[str, ReaderContextBudget]:
+    contexts = _mapping(raw, "reader_contexts")
+    result = {}
+    fields = {"context_window_tokens", "output_reserve_tokens", "overhead_reserve_tokens"}
+    for model, value in contexts.items():
+        if not isinstance(model, str) or not model.strip() or model != model.strip():
+            raise ConfigError("reader_contexts requires exact, non-empty model names.")
+        item = _mapping(value, f"reader_contexts.{model}")
+        if set(item) != fields:
+            raise ConfigError(
+                f"reader_contexts.{model} requires exactly: {', '.join(sorted(fields))}.",
+            )
+        try:
+            result[model] = ReaderContextBudget(**item)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"Invalid reader_contexts.{model}: {exc}") from exc
+    return result
 
 
 def _default_model_providers() -> dict[str, ModelProviderConfig]:

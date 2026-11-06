@@ -6,7 +6,7 @@ from research_radar.analysis.paper_reading import (
 from research_radar.models import Claim, ClaimStatus, EvidenceAnchor
 
 
-def test_public_explanation_keeps_only_fully_supported_paragraphs() -> None:
+def test_public_explanation_uses_only_verified_claim_fallbacks() -> None:
     explanation = ReaderExplanation(
         solution_walkthrough=[
             ReaderExplanationParagraph(
@@ -26,12 +26,13 @@ def test_public_explanation_keeps_only_fully_supported_paragraphs() -> None:
 
     public, audit = public_explanation(explanation, claims)
 
-    assert public["solution_walkthrough"] == "The system first retrieves candidates."
+    assert public["solution_walkthrough"] == "c1"
+    assert explanation.solution_walkthrough[0].text == "The system first retrieves candidates."
     assert audit == {
         "paragraph_count": 2,
-        "kept_count": 1,
-        "dropped_count": 1,
-        "fallback_section_count": 0,
+        "kept_count": 0,
+        "dropped_count": 2,
+        "fallback_section_count": 1,
     }
 
 

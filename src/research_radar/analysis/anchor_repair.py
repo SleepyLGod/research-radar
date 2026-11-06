@@ -2,13 +2,68 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
 from dataclasses import dataclass, field, replace
 
 from research_radar.analysis.providers import LLMProvider, Message
-from research_radar.models import Artifact, Claim, ClaimStatus, EvidenceAnchor, ReviewFinding
+from research_radar.analysis.source_references import SourceReferenceError, selected_source_unit
+from research_radar.evidence.pdf_tables import quoted_table_context
+from research_radar.evidence.quotes import QuoteMatch, find_quote
+from research_radar.evidence.tables import numeric_row, table_source_context
+from research_radar.models import (
+    Artifact,
+    Claim,
+    ClaimStatus,
+    EvidenceAnchor,
+    ReviewFinding,
+    dataclass_to_dict,
+)
+
+_CONTEXT_BOUNDARY = re.compile(
+    r"^(?:\[page \d+\]$|\d+(?:\.\d+)*[.)]?\s+[A-Z]|(?:Table|Figure)\s+\d+\s*[:.])"
+)
+_CONTEXT_LIMIT = 1200
+_RETRIEVAL_SET = re.compile(
+    r"\bK\s*(?:∈|=)\s*\{\s*([1-9]\d*(?:\s*,\s*[1-9]\d*)*)\s*\}", re.IGNORECASE,
+)
+_RETRIEVAL_SCALAR = re.compile(
+    r"\b(?:top[-‑–— ]|K\s*=\s*)([1-9]\d*)(?!\d|\.\d)", re.IGNORECASE,
+)
+_METRIC_CUTOFF = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<name>[A-Za-z][A-Za-z0-9_-]*)"
+    r"(?P<separator>@|[ \t]+at[ \t]+)(?P<cutoff>\d+)(?!\w|\.\d)", re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class _AnchorIssue:
+    reason: str
+    reviewable: bool = False
+
+
+def _candidate_binding(claim: Claim) -> str:
+    return hashlib.sha256(json.dumps({"text": claim.text, "status": claim.status.value,
+        "evidence": [dataclass_to_dict(e) for e in claim.evidence],
+        "identity": claim.metadata.get("paper_reading"),
+        "resolution": claim.metadata.get("anchor_resolution")},
+        sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def is_evidence_review_candidate(claim: Claim, artifact: Artifact) -> bool:
+    """Admit only a fresh local ambiguity, bound to unchanged source and assertion bytes."""
+    marker = claim.metadata.get("evidence_review_candidate", {})
+    return (claim.status == ClaimStatus.NEEDS_REVIEW
+        and not any(key in claim.metadata for key in ("model_review", "fact_review"))
+        and marker.get("code") in {"table_semantics", "reader_proposal"}
+        and marker.get("binding_sha256") == _candidate_binding(claim)
+        and marker.get("source_url") == artifact.source.url
+        and marker.get("source_text_sha256") == hashlib.sha256(artifact.text.encode()).hexdigest()
+        and bool(claim.evidence)
+        and all(e.source_url == artifact.source.url
+                and find_quote(e.quote, artifact.text) is not None for e in claim.evidence))
 
 
 @dataclass(frozen=True)
@@ -23,6 +78,7 @@ class AnchorResolution:
     resolved_quote: str | None = None
     location: str | None = None
     page: int | None = None
+    table: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -39,21 +95,44 @@ class AnchorRepairAttempt:
     metadata: dict[str, object] = field(default_factory=dict)
 
 
-def resolve_quote(quote: str, artifact: Artifact) -> AnchorResolution:
+def resolve_quote(
+    quote: str, artifact: Artifact, *, location: str | None = None,
+) -> AnchorResolution:
     """Resolve a quote against an artifact without semantic fuzzy matching."""
 
     quote = quote.strip()
+    try:
+        unit = selected_source_unit(artifact, quote, location)
+    except SourceReferenceError as exc:
+        return AnchorResolution(0, "", "failed", f"invalid source selection: {exc}", quote=quote)
     if not quote:
         return AnchorResolution(0, "", "failed", "empty quote", quote=quote)
-    direct = _direct_match(quote, artifact.text)
-    if direct is not None:
-        return _quote_resolution(quote, artifact, direct, "exact")
-    normalized = _normalized_match(quote, artifact.text)
-    if normalized is not None:
-        return _quote_resolution(quote, artifact, normalized, "normalized")
-    compact = _compact_match(quote, artifact.text)
-    if compact is not None:
-        return _quote_resolution(quote, artifact, compact, "compact")
+    if unit is None:
+        match = find_quote(quote, artifact.text)
+    else:
+        original = artifact.text[unit.start : unit.end]
+        start = unit.start + len(original) - len(original.lstrip())
+        match = QuoteMatch(start, start + len(quote), "source_block")
+    if match is not None:
+        result = _quote_resolution(quote, artifact, (match.start, match.end), match.kind)
+        if unit is not None:
+            result = replace(result, location=f"page {unit.page}", page=unit.page)
+        context = "\n".join([result.resolved_quote or quote,
+                             *(s["text"] for s in result.table["segments"])]) \
+            if result.table else result.resolved_quote or quote
+        positioned = quoted_table_context(
+            artifact, quote, context, result.page, location=location,
+        )
+        if positioned:
+            table = result.table or {"segments": [], "headers": [], "quoted_rows": [],
+                                     "columns": []}
+            rows = _positioned_rows(positioned)
+            table = {**table, "headers": [" ".join(c["column_headers"])
+                                           for c in positioned["table"]["cells"]],
+                     "quoted_rows": rows, "columns": [], "positioned": positioned,
+                     "binding": "positioned literal cells"}
+            result = replace(result, table=table)
+        return result
     return AnchorResolution(0, "", "failed", "quote not found", quote=quote)
 
 
@@ -75,9 +154,19 @@ def resolve_claim_anchors(
                 )
             )
             continue
-        anchor_resolutions = [resolve_quote(anchor.quote, artifact) for anchor in claim.evidence]
+        anchor_resolutions = [resolve_quote(anchor.quote, artifact, location=anchor.location)
+                              for anchor in claim.evidence]
         failed = [resolution for resolution in anchor_resolutions if resolution.status == "failed"]
         matched = [resolution for resolution in anchor_resolutions if resolution.status != "failed"]
+        invalid_selection = next((r for r in failed
+                                  if r.reason.startswith("invalid source selection:")), None)
+        if invalid_selection is not None:
+            resolutions.append(replace(invalid_selection, claim_index=index, claim_text=claim.text))
+            continue
+        if any(e.source_url != artifact.source.url for e in claim.evidence):
+            resolutions.append(AnchorResolution(index, claim.text, "failed",
+                                                "anchor source identity mismatch"))
+            continue
         if failed and not matched:
             resolutions.append(
                 AnchorResolution(
@@ -127,8 +216,8 @@ def resolve_claim_anchors(
                 AnchorResolution(
                     index,
                     claim.text,
-                    "failed",
-                    entity_failure,
+                    "needs_review" if entity_failure.reviewable else "failed",
+                    entity_failure.reason,
                     quote=first.quote,
                     resolved_quote=first.resolved_quote,
                     location=first.location,
@@ -162,8 +251,57 @@ def apply_anchor_resolution(
     checked: list[Claim] = []
     findings: list[ReviewFinding] = []
     for claim, resolution in zip(claims, resolutions, strict=True):
-        if resolution.status == "matched":
-            checked.append(claim)
+        if resolution.status in {"matched", "needs_review"}:
+            contexts = []
+            for anchor in claim.evidence:
+                resolved = resolve_quote(anchor.quote, artifact, location=anchor.location)
+                if (
+                    resolved.resolved_quote
+                    and (resolved.resolved_quote != anchor.quote or resolved.table)
+                    and anchor.source_url == artifact.source.url
+                ):
+                    context = {
+                        "source_url": anchor.source_url,
+                        "quote": anchor.quote,
+                        "text": resolved.resolved_quote[:_CONTEXT_LIMIT],
+                        "location": resolved.location,
+                    }
+                    if resolved.table:
+                        context.update(resolved.table)
+                        context["text"] = "\n[separate source excerpt]\n".join(
+                            segment["text"] for segment in resolved.table["segments"]
+                        )
+                    contexts.append(context)
+            candidate = replace(
+                claim,
+                status=ClaimStatus.NEEDS_REVIEW
+                    if resolution.status == "needs_review" and claim.is_publishable()
+                    else claim.status,
+                metadata={
+                    **claim.metadata,
+                    "anchor_resolution": {
+                        "status": resolution.status,
+                        "reason": resolution.reason,
+                        "evidence_contexts": contexts,
+                    },
+                },
+            )
+            proposal = (resolution.status == "matched" and claim.status == ClaimStatus.NEEDS_REVIEW
+                        and claim.metadata.get("paper_reading", {}).get("publishable_default")
+                        is False)
+            table_candidate = resolution.status == "needs_review" and claim.is_publishable()
+            if ((table_candidate or proposal)
+                    and claim.metadata.get("paper_reading", {}).get("claim_id")
+                    and not any(key in claim.metadata for key in ("model_review", "fact_review"))):
+                candidate = replace(candidate, metadata={**candidate.metadata,
+                    "evidence_review_candidate": {
+                        "code": "reader_proposal" if proposal else "table_semantics",
+                        "source_url": artifact.source.url,
+                        "source_text_sha256": hashlib.sha256(artifact.text.encode()).hexdigest(),
+                        "binding_sha256": _candidate_binding(candidate)}})
+            checked.append(candidate)
+            if resolution.status == "needs_review":
+                findings.append(_resolution_finding(resolution, "warning"))
             continue
         if resolution.status == "partial" and claim.is_publishable():
             checked.append(
@@ -227,7 +365,10 @@ def apply_anchor_repair(
         if resolution.status not in {"failed", "partial"}:
             continue
         claim = resolved_claims[resolution.claim_index - 1]
-        skip_reason = _skip_repair_reason(claim)
+        skip_reason = (
+            resolution.reason if resolution.reason.startswith("invalid source selection:")
+            else _skip_repair_reason(claim)
+        )
         if skip_reason is not None:
             attempt = AnchorRepairAttempt(
                 resolution.claim_index,
@@ -259,7 +400,7 @@ def apply_anchor_repair(
             attempts.append(attempt)
             findings.append(_repair_finding(attempt, "warning"))
             continue
-        quote_resolution = resolve_quote(quote, artifact)
+        quote_resolution = resolve_quote(quote, artifact, location=location)
         if quote_resolution.status == "failed":
             attempt = AnchorRepairAttempt(
                 index,
@@ -275,7 +416,8 @@ def apply_anchor_repair(
         anchor = EvidenceAnchor(
             source_url=artifact.source.url,
             source_title=artifact.source.title,
-            quote=quote_resolution.resolved_quote or quote,
+            quote=(quote if selected_source_unit(artifact, quote, location) is not None
+                   else quote_resolution.resolved_quote or quote),
             location=location or quote_resolution.location,
         )
         candidate = replace(
@@ -310,7 +452,7 @@ def apply_anchor_repair(
                 index,
                 claim.text,
                 "rejected",
-                entity_failure,
+                entity_failure.reason,
                 quote=quote,
                 location=location,
                 page=quote_resolution.page,
@@ -470,6 +612,7 @@ def _quote_resolution(
     reason: str,
 ) -> AnchorResolution:
     resolved, table_context = _evidence_window(artifact.text, span[0], span[1])
+    table = table_source_context(artifact.text, span[0], span[1], limit=_CONTEXT_LIMIT)
     resolution_reason = f"table {reason}" if table_context else reason
     return AnchorResolution(
         0,
@@ -480,106 +623,26 @@ def _quote_resolution(
         resolved_quote=resolved,
         location=_page_location(artifact.text, span[0]),
         page=_page_number(artifact.text, span[0]),
+        table=table,
     )
 
 
-def _direct_match(quote: str, text: str) -> tuple[int, int] | None:
-    start = text.find(quote)
-    if start < 0:
-        return None
-    return start, start + len(quote)
-
-
-def _normalized_match(quote: str, text: str) -> tuple[int, int] | None:
-    return _mapped_substring_match(_normalize_char, quote, text)
-
-
-def _compact_match(quote: str, text: str) -> tuple[int, int] | None:
-    compact_quote = "".join(ch for ch in quote.casefold() if ch.isalnum())
-    if len(compact_quote) < 12:
-        return None
-    return _mapped_substring_match(
-        lambda char: char.casefold() if char.isalnum() else "",
-        quote,
-        text,
-    )
-
-
-def _mapped_substring_match(
-    normalize_char,
-    quote: str,
-    text: str,
-) -> tuple[int, int] | None:
-    normalized_quote = "".join(normalize_char(char) for char in _dehyphenate(quote))
-    normalized_quote = re.sub(r"\s+", " ", normalized_quote).strip()
-    if not normalized_quote:
-        return None
-    chars = []
-    positions = []
-    for char in _dehyphenate(text, keep_positions=True):
-        raw_char, raw_index = char
-        normalized = normalize_char(raw_char)
-        if not normalized:
-            continue
-        if normalized.isspace():
-            normalized = " "
-        chars.append(normalized)
-        positions.append(raw_index)
-    normalized_text = re.sub(r"\s+", " ", "".join(chars)).strip()
-    if not normalized_text:
-        return None
-    start = normalized_text.find(normalized_quote)
-    if start < 0:
-        return None
-    raw_start = positions[min(start, len(positions) - 1)]
-    raw_end_index = min(start + len(normalized_quote) - 1, len(positions) - 1)
-    raw_end = positions[raw_end_index] + 1
-    return raw_start, raw_end
-
-
-def _normalize_char(char: str) -> str:
-    if char in {"\xad", "\x00"}:
-        return ""
-    return char.casefold()
-
-
-def _dehyphenate(
-    text: str,
-    *,
-    keep_positions: bool = False,
-) -> str | list[tuple[str, int]]:
-    output: list[str] | list[tuple[str, int]] = []
-    index = 0
-    while index < len(text):
-        if (
-            text[index] == "-"
-            and index + 1 < len(text)
-            and text[index + 1].isspace()
-            and index > 0
-            and text[index - 1].isalpha()
-        ):
-            next_index = index + 1
-            while next_index < len(text) and text[next_index].isspace():
-                next_index += 1
-            if next_index < len(text) and text[next_index].isalpha():
-                index = next_index
-                continue
-        if keep_positions:
-            output.append((text[index], index))  # type: ignore[arg-type]
-        else:
-            output.append(text[index])  # type: ignore[arg-type]
-        index += 1
-    return output if keep_positions else "".join(output)  # type: ignore[return-value]
-
-
-def _line_window(text: str, start: int, end: int) -> str:
+def _line_window(
+    text: str, start: int, end: int, *, lower: int = 0, upper: int | None = None,
+) -> str:
+    upper = len(text) if upper is None else upper
     window_start = text.rfind("\n", 0, start)
     window_start = 0 if window_start < 0 else window_start + 1
+    if end - lower <= _CONTEXT_LIMIT:
+        window_start = lower
     window_end = text.find("\n", end)
-    window_end = len(text) if window_end < 0 else window_end
-    while window_end - window_start < 600:
+    window_end = upper if window_end < 0 else min(window_end, upper)
+    while window_end - window_start < _CONTEXT_LIMIT:
         next_end = text.find("\n", window_end + 1)
-        if next_end < 0 or next_end - window_start > 600:
+        if next_end < 0:
+            next_end = upper
+        next_end = min(next_end, upper)
+        if next_end <= window_end or next_end - window_start > _CONTEXT_LIMIT:
             break
         window_end = next_end
     return text[window_start:window_end].strip()
@@ -590,9 +653,32 @@ def _evidence_window(text: str, start: int, end: int) -> tuple[str, bool]:
     line_index = _line_index_for_position(lines, start)
     if line_index is None:
         return _line_window(text, start, end), False
+    end_index = _line_index_for_position(lines, end - 1) or line_index
+    lower = 0
+    for index in range(line_index + 1):
+        if _CONTEXT_BOUNDARY.match(lines[index][2].strip()):
+            lower = (
+                index + 1
+                if lines[index][2].startswith("[page ") and index < line_index
+                else index
+            )
+    upper = next(
+        (index for index in range(end_index + 1, len(lines))
+         if _CONTEXT_BOUNDARY.match(lines[index][2].strip())),
+        len(lines),
+    )
+    context_start = (
+        lines[lower][0]
+        if _CONTEXT_BOUNDARY.match(lines[lower][2].strip())
+        else lines[line_index][0]
+    )
+    context_end = lines[upper][0] if upper < len(lines) else len(text)
+    lines = lines[lower:upper]
+    line_index -= lower
+    end_index -= lower
     if _has_table_context(lines, line_index):
-        return _table_window(lines, line_index), True
-    return _line_window(text, start, end), False
+        return _table_window(lines, line_index, end_index), True
+    return _line_window(text, start, end, lower=context_start, upper=context_end), False
 
 
 def _line_spans(text: str) -> list[tuple[int, int, str]]:
@@ -621,29 +707,39 @@ def _has_table_context(lines: list[tuple[int, int, str]], line_index: int) -> bo
         line
         for _, _, line in lines[max(0, line_index - 4) : min(len(lines), line_index + 4)]
     ]
-    if _is_table_signal_line(current):
+    if re.search(r"\btable\s+\d+", current.casefold()):
         return True
     return _is_table_data_line(current) and any(
         _is_table_signal_line(line) for line in nearby
     )
 
 
-def _table_window(lines: list[tuple[int, int, str]], line_index: int) -> str:
+def _table_window(
+    lines: list[tuple[int, int, str]], line_index: int, end_index: int,
+) -> str:
     start = max(0, line_index - 4)
-    end = min(len(lines), line_index + 4)
+    if (
+        _CONTEXT_BOUNDARY.match(lines[0][2].strip())
+        and lines[end_index][1] - lines[0][0] <= _CONTEXT_LIMIT
+    ):
+        start = 0
+    end = min(len(lines), max(end_index + 1, line_index + 4))
+    while end < len(lines) and lines[end][1] - lines[start][0] <= _CONTEXT_LIMIT:
+        end += 1
     while start < line_index and _is_unrelated_table_boundary(lines[start][2]):
         start += 1
-    while end > line_index + 1 and _is_unrelated_table_boundary(lines[end - 1][2]):
+    while end > end_index + 1 and _is_unrelated_table_boundary(lines[end - 1][2]):
         end -= 1
     selected = [line for _, _, line in lines[start:end]]
-    while len("\n".join(selected).strip()) > 600 and len(selected) > 1:
+    while len("\n".join(selected).strip()) > _CONTEXT_LIMIT and len(selected) > 1:
         center = line_index - start
         if center > 1:
             selected.pop(0)
             start += 1
             continue
-        if center < len(selected) - 2:
+        if end > end_index + 1:
             selected.pop()
+            end -= 1
             continue
         break
     return "\n".join(selected).strip()
@@ -694,12 +790,39 @@ def _numeric_anchor_failure(
     claim: Claim,
     resolutions: list[AnchorResolution],
 ) -> str | None:
-    claim_numbers = set(_numbers(claim.text))
-    if not claim_numbers:
-        return None
-    anchor_text = " ".join(resolution.resolved_quote or "" for resolution in resolutions)
-    anchor_numbers = set(_numbers(anchor_text))
-    if not claim_numbers.issubset(anchor_numbers):
+    for resolution in resolutions:
+        if resolution.table and resolution.table.get("error"):
+            return str(resolution.table["error"])
+    claim_text = _retrieval_parameter_text(claim.text)
+    anchor_text = _retrieval_parameter_text(" ".join(
+        _source_context_text(resolution) for resolution in resolutions))
+    metric_names = {match["name"].casefold() for text in (claim_text, anchor_text)
+                    for match in _METRIC_CUTOFF.finditer(text) if match["separator"] == "@"}
+
+    def tokens(text: str) -> set[str]:
+        parameters: set[str] = set()
+
+        def metric(match: re.Match[str]) -> str:
+            name = match["name"].casefold()
+            if name not in metric_names:
+                return match[0]
+            parameters.add(f"metric:{name}@{match['cutoff']}")
+            return " "
+
+        # An explicit repeated annotation identifies a coordinated cutoff without
+        # inferring aliases or borrowing a cutoff as evidence for a measured score.
+        text = re.sub(
+            r"(?P<head>\(\s*(?P<name>[A-Za-z][A-Za-z0-9_-]*)@\d+\s*\))"
+            r"(?P<join>[ \t]+and[ \t]+)at[ \t]+(?P<cutoff>\d+)[ \t]*"
+            r"\(\s*(?P=name)@(?P=cutoff)\s*\)",
+            lambda match: f"{match['head']}{match['join']}{match['name']}@{match['cutoff']}",
+            text, flags=re.IGNORECASE,
+        )
+        # A metric's cutoff is an identity, never evidence for a measured score.
+        text = _METRIC_CUTOFF.sub(metric, text)
+        return parameters | set(_numbers(text))
+
+    if not tokens(claim_text).issubset(tokens(anchor_text)):
         return "numeric anchor missing claim values"
     return None
 
@@ -707,50 +830,240 @@ def _numeric_anchor_failure(
 def _key_entity_anchor_failure(
     claim: Claim,
     resolutions: list[AnchorResolution],
-) -> str | None:
+) -> _AnchorIssue | None:
     table_failure = _table_anchor_row_failure(claim, resolutions)
-    if table_failure is not None:
+    if table_failure is not None and not table_failure.reviewable:
         return table_failure
+    depths = _retrieval_depths(claim.text)
+    quote = " ".join(r.quote or "" for r in resolutions)
+    quoted_depths = _retrieval_depths(quote)
+    # One literal assignment can stand alone even when its block also lists sensitivity sets.
+    explicit = {m[1] for m in _RETRIEVAL_SCALAR.finditer(_retrieval_notation(quote))}
+    single_assignment = len(depths) == 1 and bool(quoted_depths) and depths == explicit
+    if depths and depths != quoted_depths and not single_assignment:
+        return _AnchorIssue("anchor missing or ambiguous retrieval depth")
     entities = _key_entities(claim.text)
     if not entities:
-        return None
-    anchor_text = " ".join(resolution.resolved_quote or "" for resolution in resolutions)
+        return table_failure
+    anchor_text = " ".join(_source_context_text(resolution) for resolution in resolutions)
     normalized_anchor = _compact_key(anchor_text)
     missing = [
         entity for entity in entities if _compact_key(entity) not in normalized_anchor
+        and not (re.fullmatch(r"top[-‑–—](\d+)", entity, re.IGNORECASE)
+                 and re.search(r"\d+", entity)[0] in depths)
     ]
     if missing:
-        return "anchor missing key entities: " + ", ".join(missing)
-    return None
+        return _AnchorIssue("anchor missing key entities: " + ", ".join(missing))
+    return table_failure
+
+
+def _retrieval_depths(text: str) -> set[str]:
+    """Read explicit retrieval depths, not arbitrary equal numbers or model suffixes."""
+    text = _retrieval_notation(text)
+    if not re.search(r"\bretriev\w*\b|\bwhite[- ]box\b", text, re.IGNORECASE):
+        return set()
+    depths = {m[1] for m in _RETRIEVAL_SCALAR.finditer(text)}
+    # Expand only explicit finite sets, never ranges, ellipses or nearby numbers.
+    for match in _RETRIEVAL_SET.finditer(text):
+        depths.update(value.strip() for value in match[1].split(","))
+    return depths
+
+
+def _retrieval_notation(text: str) -> str:
+    # Restore the observed preposition/math boundary, never split identifiers such as rec𝐾.
+    text = re.sub(
+        r"\b(with)([^\x00-\x7f])(?=\s*[=∈])",
+        lambda m: f"{m[1]} {m[2]}" if unicodedata.normalize("NFKC", m[2]) == "K" else m[0],
+        text, flags=re.IGNORECASE,
+    )
+    return unicodedata.normalize("NFKC", text)
+
+
+def _retrieval_parameter_text(text: str) -> str:
+    if not _retrieval_depths(text):
+        return text
+    # Within a finite set a comma separates members, not thousands (e.g. {2,500}).
+    text = _RETRIEVAL_SET.sub(lambda m: m[0].replace(",", " "), _retrieval_notation(text))
+    return re.sub(r"\btop[-‑–—](?=\d)", "top ", text, flags=re.IGNORECASE)
 
 
 def _table_anchor_row_failure(
     claim: Claim,
     resolutions: list[AnchorResolution],
-) -> str | None:
-    method_entities = [
-        entity for entity in _key_entities(claim.text) if _is_method_like_entity(entity)
+) -> _AnchorIssue | None:
+    positioned = [r for r in resolutions if r.table and r.table.get("positioned")]
+    if positioned and len(positioned) == len([r for r in resolutions if _is_table_resolution(r)]):
+        column_failure = _table_column_failure(claim, positioned)
+        if column_failure:
+            return column_failure
+        # Model group + setting name are one row identity, not competing method entities.
+        cells = [c for r in positioned for c in r.table["positioned"]["table"]["cells"]
+                 if c["cell_id"] in r.table["positioned"]["selected_cell_ids"]]
+        for clause in re.split(r";|\b(?:versus|vs\.?|whereas|while|and)\b", claim.text,
+                               flags=re.IGNORECASE):
+            values = set(_numbers(re.sub(r"\b(?:table|figure|page)\s+\d+\b", "", clause,
+                                        flags=re.IGNORECASE)))
+            rows = {tuple(c["row_headers"]) for c in cells
+                    if all(_entity_in_text(part, clause) for part in c["row_headers"])}
+            if not values:
+                continue
+            if not rows:
+                return _AnchorIssue("table assertion has no positioned row identity", True)
+            if len(rows) != 1:
+                return _AnchorIssue("table comparison has ambiguous positioned row binding", True)
+            available = {n for c in cells if tuple(c["row_headers"]) in rows
+                         for n in _numbers(c["value"])}
+            if not values <= available:
+                return _AnchorIssue("table anchor positioned row mismatch")
+        return None
+    rows = [
+        row
+        for resolution in resolutions
+        if _is_table_resolution(resolution)
+        for row in _quoted_table_rows(resolution)
     ]
+    if not rows:
+        return None
+    column_failure = _table_column_failure(claim, resolutions)
+    if column_failure:
+        return column_failure
+    headers = " ".join(str(header) for r in resolutions if r.table
+                       for header in r.table["headers"])
+    method_entities = [entity for entity in _key_entities(claim.text)
+                       if _is_method_like_entity(entity) and not _entity_in_text(entity, headers)]
     if not method_entities:
         return None
-    for resolution in resolutions:
-        if not _is_table_resolution(resolution):
+    # Table labels also identify lowercase names such as "cosine similarity".
+    for row in rows:
+        label = re.split(r"\s+(?=[+−-]?\d)", row.strip(), maxsplit=1)[0]
+        label = re.sub(r"\([^)]*\)", "", label).strip()
+        if (
+            label and not _is_table_signal_line(row)
+            and _entity_in_text(label, claim.text)
+            and not any(_compact_key(label) == _compact_key(entity) for entity in method_entities)
+        ):
+            method_entities.append(label)
+    method_rows = {
+        entity: [row for row in rows if _entity_in_text(entity, row)]
+        for entity in method_entities
+    }
+    # Only a mapped table can defer caption/header roles; missing columns stay unresolved.
+    scope_text = "\n".join(
+        segment["text"]
+        for resolution in resolutions
+        if resolution.table and resolution.table["columns"]
+        for segment in resolution.table["segments"]
+        if segment["role"] in {"header", "caption"}
+    )
+    known_rows = [
+        parsed[0] for resolution in resolutions if resolution.table
+        for segment in resolution.table["segments"] if segment["role"] == "rows"
+        for line in segment["text"].splitlines() if (parsed := numeric_row(line))
+    ]
+    uncertain_roles = []
+    for entity, matching in method_rows.items():
+        if not matching:
+            if (_entity_in_text(entity, scope_text)
+                    and not any(_entity_in_text(entity, row) for row in known_rows)):
+                uncertain_roles.append(entity)
+                continue
+            return _AnchorIssue(f"table anchor row missing method entity: {entity}")
+    method_entities = [entity for entity in method_entities if entity not in uncertain_roles]
+
+    # Compare each local assertion with its method's quoted row, not the whole table.
+    clauses = re.split(
+        r"(?<!\d),|,(?!\d)|;|\b(?:versus|vs\.?|whereas|while|and)\b",
+        claim.text, flags=re.IGNORECASE,
+    )
+    active: list[str] = []
+    for clause in clauses:
+        mentioned = [entity for entity in method_entities if _entity_in_text(entity, clause)]
+        if mentioned:
+            active = mentioned
+        values = set(_numbers(re.sub(
+            r"\b(?:table|figure|page)\s+\d+\b", "", clause, flags=re.IGNORECASE,
+        )))
+        if not values or not active:
             continue
-        row = _quote_row(resolution)
-        if row is None or not _is_table_data_line(row):
-            continue
-        row_key = _compact_key(row)
-        for entity in method_entities:
-            if _compact_key(entity) not in row_key:
-                return f"table anchor row missing method entity: {entity}"
+        if len(active) != 1:
+            return _AnchorIssue("table comparison has ambiguous method-value binding", True)
+        entity = active[0]
+        if not any(values.issubset(set(_numbers(row))) for row in method_rows[entity]):
+            return _AnchorIssue(f"table anchor row missing method values: {entity}")
+    if uncertain_roles:
+        return _AnchorIssue("table entity roles require semantic review", True)
     return None
+
+
+def _table_column_failure(claim: Claim, resolutions: list[AnchorResolution]) -> _AnchorIssue | None:
+    for resolution in resolutions:
+        if resolution.table and (positioned := resolution.table.get("positioned")):
+            cells = [c for c in positioned["table"]["cells"]
+                     if c["cell_id"] in positioned["selected_cell_ids"]]
+            paths = {tuple(c["column_headers"]) for c in cells}
+            for clause in re.split(r";|\b(?:versus|vs\.?|whereas|while|and)\b", claim.text,
+                                   flags=re.IGNORECASE):
+                selected = [p for p in paths if all(_entity_in_text(part, clause) for part in p)]
+                values = set(_numbers(re.sub(r"\b(?:table|figure|page)\s+\d+\b", "", clause,
+                                            flags=re.IGNORECASE)))
+                leaves = [p for p in paths if _entity_in_text(p[-1], clause)]
+                if not selected and leaves and values:
+                    parents = {part for p in paths for part in p[:-1]
+                               if _entity_in_text(part, clause)}
+                    if len(leaves) == 1 and not parents:
+                        selected = leaves
+                    else:
+                        return _AnchorIssue(
+                            "table assertion has ambiguous or mismatched column group")
+                mentioned = {tuple(c["row_headers"]) for c in cells
+                             if all(_entity_in_text(part, clause) for part in c["row_headers"])}
+                if not values or not selected:
+                    continue
+                if len(selected) != 1 or len(mentioned) != 1:
+                    return _AnchorIssue("table comparison has ambiguous positioned binding", True)
+                available = {n for c in cells if tuple(c["column_headers"]) == selected[0]
+                             and tuple(c["row_headers"]) in mentioned for n in _numbers(c["value"])}
+                if not values <= available:
+                    return _AnchorIssue("table anchor positioned column mismatch")
+            continue
+        if not resolution.table or not resolution.table["columns"]:
+            continue
+        columns = resolution.table["columns"]
+        rows = [row for raw in resolution.table["quoted_rows"] if (row := numeric_row(raw))]
+        active_rows = rows
+        for clause in re.split(r";|\b(?:versus|vs\.?|whereas|while|and)\b", claim.text,
+                               flags=re.IGNORECASE):
+            mentioned = [row for row in rows if _entity_in_text(row[0], clause)]
+            if mentioned:
+                active_rows = mentioned
+            metrics = [i for i, column in enumerate(columns) if _entity_in_text(column, clause)]
+            if len(metrics) > 1:
+                return _AnchorIssue(
+                    "table column binding ambiguous: split independent metric assertions", True)
+            values = set(_numbers(re.sub(
+                r"\b(?:table|figure|page)\s+\d+\b", "", clause, flags=re.IGNORECASE,
+            )))
+            if not metrics or not values:
+                continue
+            metric = metrics[0]
+            if not any(values.issubset(set(_numbers(row[1][metric]))) for row in active_rows):
+                return _AnchorIssue(f"table anchor column mismatch: {columns[metric]}")
+    return None
+
+
+def _entity_in_text(entity: str, text: str) -> bool:
+    key = _compact_key(entity)
+    if not key:
+        return False
+    pattern = r"(?<![a-z0-9])" + r"[^a-z0-9]*".join(key) + r"(?![a-z0-9])"
+    return re.search(pattern, unicodedata.normalize("NFKC", text).casefold()) is not None
 
 
 def _is_table_resolution(resolution: AnchorResolution) -> bool:
     return bool(
         resolution.resolved_quote
         and (
-            resolution.reason.startswith("table ")
+            resolution.table or resolution.reason.startswith("table ")
             or _looks_like_table_window(resolution.resolved_quote)
         )
     )
@@ -763,15 +1076,36 @@ def _looks_like_table_window(text: str) -> bool:
     )
 
 
-def _quote_row(resolution: AnchorResolution) -> str | None:
-    quote = resolution.quote or ""
-    quote_key = _compact_key(quote)
-    if not quote_key:
-        return None
-    for line in (resolution.resolved_quote or "").splitlines():
-        if quote in line or quote_key in _compact_key(line):
-            return line
-    return None
+def _quoted_table_rows(resolution: AnchorResolution) -> list[str]:
+    if resolution.table:
+        return list(resolution.table["quoted_rows"])
+    context = resolution.resolved_quote or ""
+    match = find_quote(resolution.quote or "", context)
+    if match is None:
+        return []
+    return [
+        line for start, end, line in _line_spans(context)
+        if start < match.end and end > match.start and numeric_row(line) is not None
+    ]
+
+
+def _source_context_text(resolution: AnchorResolution) -> str:
+    if resolution.table:
+        if positioned := resolution.table.get("positioned"):
+            return "\n".join([
+                *(s["text"] for s in resolution.table["segments"]),
+                *resolution.table["headers"], *_positioned_rows(positioned),
+            ])
+        return " ".join(segment["text"] for segment in resolution.table["segments"])
+    return resolution.resolved_quote or ""
+
+
+def _positioned_rows(positioned: dict) -> list[str]:
+    rows: dict[tuple[str, ...], list[str]] = {}
+    for cell in positioned["table"]["cells"]:
+        if cell["cell_id"] in positioned["selected_cell_ids"]:
+            rows.setdefault(tuple(cell["row_headers"]), []).append(cell["value"])
+    return [" ".join([*headers, *values]) for headers, values in rows.items()]
 
 
 def _is_method_like_entity(entity: str) -> bool:
@@ -801,10 +1135,14 @@ def _is_method_like_entity(entity: str) -> bool:
 
 
 def _key_entities(text: str) -> list[str]:
+    """Recognize explicit identities, not arbitrary hyphenated prose or variables."""
     candidates: list[str] = []
     patterns = (
+        # Prefer complete versioned identities before their acronym/name fragments.
+        r"\b(?=[A-Za-z0-9.\-‑–—]*\d)[A-Za-z][A-Za-z0-9]*"
+        r"(?:[.\-‑–—][A-Za-z0-9]+)+\b",
+        r"\b[A-Z][A-Za-z]*(?:[.\-‑–—][A-Z][A-Za-z0-9]+)+\b",
         r"\b[A-Z]{3,}[A-Z0-9]*\b",
-        r"\b[A-Za-z]+(?:[.\-‑–—][A-Za-z0-9]+)+\b",
         r"\b[A-Z][A-Za-z]+(?:[A-Z][A-Za-z0-9]+)+\b",
         r"\bF1\b",
         r"\bBLEU[-‑–—]?1\b",
@@ -835,10 +1173,23 @@ def _compact_key(text: str) -> str:
 
 
 def _numbers(text: str) -> list[str]:
-    return re.findall(
-        r"(?<![A-Za-z0-9._\-‑–—])\d+(?:\.\d+)?%?(?![A-Za-z0-9])",
-        text,
-    )
+    numbers = []
+    # Consume whole decimals before checking boundaries: a unit must not turn 23.8pp into 23.
+    number = r"\d+(?:,[ \t]*\d{3}(?!\d))*(?:[ \t]*\.[ \t]*\d+)?(?:[eE][+-]?\d+)?"
+    # Only an explicit two-ended percentage range shares its final percent sign.
+    text = re.sub(rf"(?<![\w@.])({number})[ \t]*(?:[-−–—]|to)[ \t]*({number})[ \t]*%",
+                  r"\1% to \2%", text, flags=re.IGNORECASE)
+    pattern = rf"{number}(?:[ \t]*%)?"
+    for match in re.finditer(pattern, text):
+        before = text[match.start() - 1] if match.start() else ""
+        article = (
+            before == "a" and match.start() >= 2
+            and not text[match.start() - 2].isalnum()
+        )
+        if before and (before.isalnum() or before in "_@-‑–—") and not article:
+            continue
+        numbers.append(re.sub(r"[ \t,]", "", match.group()))
+    return numbers
 
 
 def _repair_text(text: str, claims: list[Claim]) -> str:

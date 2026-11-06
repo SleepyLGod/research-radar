@@ -1,0 +1,247 @@
+{
+  "provenance": "Unmodified actual response; public paper assertions and review only.",
+  "response_sha256": "43aae0c8d293509118980365124cb6b550bce9076180912655135f991f96a294",
+  "requested_facts": [
+    {
+      "claim_id": "c1",
+      "claim_index": 1,
+      "text": "Problem: MemConflict frames the task as selecting the memory candidate valid for a query given the interaction history available at that query time."
+    },
+    {
+      "claim_id": "c2",
+      "claim_index": 2,
+      "text": "Solution: The framework distinguishes dynamic conflicts about temporal validity, static conflicts about factual correctness, and conditional conflicts about contextual applicability."
+    },
+    {
+      "claim_id": "c3",
+      "claim_index": 3,
+      "text": "Solution: For each virtual user, an LLM uses a persona seed to generate a structured profile containing invariant attributes, dynamic states, conditional preferences, traits and goals, and related entities."
+    },
+    {
+      "claim_id": "c4",
+      "claim_index": 4,
+      "text": "Solution: The simulated timeline spans January 2022 through December 2025, with sessions organized at monthly granularity."
+    },
+    {
+      "claim_id": "c5",
+      "claim_index": 5,
+      "text": "Solution: In an update session, the construction process selects one or two dynamic attributes and retains proposed changes only after attribute-specific validation."
+    },
+    {
+      "claim_id": "c6",
+      "claim_index": 6,
+      "text": "Solution: A static conflict pairs an earlier true invariant fact with a later plausible but false contradictory mention."
+    },
+    {
+      "claim_id": "c7",
+      "claim_index": 7,
+      "text": "Solution: A conditional conflict introduces multiple valid preference-value pairs under distinct conditions, and the query tests recovery of the condition associated with a specified value."
+    },
+    {
+      "claim_id": "c8",
+      "claim_index": 8,
+      "text": "Solution: Distractors are semantically similar facts attributed to related entities and are inserted between sessions containing the target conflict information."
+    },
+    {
+      "claim_id": "c9",
+      "claim_index": 9,
+      "text": "Solution: The framework generates a session synopsis and then realizes it as dialogue, requiring each assigned nonempty update, static mention, conditional binding, and distractor to appear explicitly."
+    },
+    {
+      "claim_id": "c10",
+      "claim_index": 10,
+      "text": "Solution: Human experts check generated dialogues for naturalness, coherence, information coverage, and correct attribution, and dialogues failing those checks are revised or regenerated."
+    },
+    {
+      "claim_id": "c11",
+      "claim_index": 11,
+      "text": "Solution: A query is issued after the conflict instance contains the information needed to define its gold answer, using the history prefix available after that session."
+    },
+    {
+      "claim_id": "c12",
+      "claim_index": 12,
+      "text": "Experiment: Answer Accuracy measures whether the normalized system answer matches the gold value, or the gold condition for conditional-conflict queries."
+    },
+    {
+      "claim_id": "c13",
+      "claim_index": 13,
+      "text": "Experiment: Support Evidence Hit@K measures whether the top-K retrieved items include the gold supporting memory item."
+    },
+    {
+      "claim_id": "c14",
+      "claim_index": 14,
+      "text": "Experiment: Support Rank Score gives a logarithmically discounted score based on the gold item's rank and assigns zero when that item is absent from the top-K set."
+    },
+    {
+      "claim_id": "c15",
+      "claim_index": 15,
+      "text": "Experiment: The protocol also reports Update Order Consistency Score for dynamic conflicts and Conflict Recognition Score for static conflicts."
+    },
+    {
+      "claim_id": "c16",
+      "claim_index": 16,
+      "text": "Experiment: LLM-assisted answer and memory-item judgments are reviewed by human annotators, especially for ambiguous matches, paraphrases, and attribution cases."
+    },
+    {
+      "claim_id": "c17",
+      "claim_index": 17,
+      "text": "Experiment: The default evaluation uses direct queries, medium-length dialogues, distractors, medium conflict distance, and top-3 retrieval for white-box analysis."
+    },
+    {
+      "claim_id": "c18",
+      "claim_index": 18,
+      "text": "Experiment: The paper states that construction LLM calls and memory-system backends that require an LLM use gpt-5.0-mini."
+    },
+    {
+      "claim_id": "c19",
+      "claim_index": 19,
+      "text": "Experiment: The benchmark contains 12 virtual-user instances, averaging 203,910.83 dialogue tokens per instance."
+    },
+    {
+      "claim_id": "c20",
+      "claim_index": 20,
+      "text": "Experiment: Dynamic conflicts account for an average of 90.82 questions per instance, compared with 16.65 static and 16.86 conditional questions."
+    },
+    {
+      "claim_id": "c21",
+      "claim_index": 21,
+      "text": "Experiment: The paper computes overall averages as macro-averages over the three conflict types because their query counts differ."
+    },
+    {
+      "claim_id": "c22",
+      "claim_index": 22,
+      "text": "Experiment: The experiments evaluate A-Mem, LangMem, Letta, MemOS, Mem0, and Memobase using a shared query protocol, answer normalization procedure, and white-box retrieval interface."
+    },
+    {
+      "claim_id": "c23",
+      "claim_index": 23,
+      "text": "Experiment: Under the reported default setting, MemOS has the highest macro-average Answer Accuracy among the six evaluated systems at 0.5539."
+    },
+    {
+      "claim_id": "c25",
+      "claim_index": 24,
+      "text": "Experiment: MemOS has the highest reported macro-average Support Evidence Hit@3 at 0.6710 and Support Rank Score at 0.5879 among the six systems."
+    },
+    {
+      "claim_id": "c26",
+      "claim_index": 25,
+      "text": "Experiment: The authors report lower average Answer Accuracy, Support Evidence Hit@3, and Support Rank Score for every evaluated system with longer dialogue histories than with default histories."
+    },
+    {
+      "claim_id": "c27",
+      "claim_index": 26,
+      "text": "Experiment: The authors report that removing related-entity distractors improves average Answer Accuracy, Support Evidence Hit@3, and Support Rank Score for all six systems."
+    },
+    {
+      "claim_id": "c28",
+      "claim_index": 27,
+      "text": "Experiment: The authors report lower average Answer Accuracy, Support Evidence Hit@3, and Support Rank Score in the far-distance condition than in the near-distance condition for all six systems."
+    },
+    {
+      "claim_id": "c30",
+      "claim_index": 28,
+      "text": "Critical assessment: Because Evidence Utilization Gap is computed as the difference between two marginal rates, it is not necessarily the fraction of queries with a retrieved gold item and an incorrect answer; correct answers without a retrieved gold item can also affect that difference."
+    },
+    {
+      "claim_id": "c31",
+      "claim_index": 29,
+      "text": "Critical assessment: The main system comparisons are point estimates from 12 simulated users, and the supplied text does not report uncertainty intervals or repeated-run variability."
+    },
+    {
+      "claim_id": "c32",
+      "claim_index": 30,
+      "text": "Limitations: The authors state that the benchmark uses controlled simulation rather than naturally occurring long-term human interactions."
+    },
+    {
+      "claim_id": "c33",
+      "claim_index": 31,
+      "text": "Limitations: The authors state that the benchmark does not explicitly model multimodal grounding, richer social interaction, or strategically omitted information."
+    },
+    {
+      "claim_id": "c34",
+      "claim_index": 32,
+      "text": "Limitations: The authors describe the evaluated system set as limited and note that the white-box protocol assumes supporting memory items can be explicitly retrieved and ranked."
+    },
+    {
+      "claim_id": "c36",
+      "claim_index": 33,
+      "text": "Solution: Algorithm 1 places profile generation before timeline simulation."
+    },
+    {
+      "claim_id": "c37",
+      "claim_index": 34,
+      "text": "Solution: Algorithm 1 places conflict and distractor insertion before dialogue generation."
+    },
+    {
+      "claim_id": "c38",
+      "claim_index": 35,
+      "text": "Solution: Algorithm 1 places query and gold-label construction after dialogue generation."
+    },
+    {
+      "claim_id": "c39",
+      "claim_index": 36,
+      "text": "Solution: The benchmark construction defines a unique gold candidate for each query."
+    },
+    {
+      "claim_id": "c40",
+      "claim_index": 37,
+      "text": "Essence: MemConflict evaluates answer correctness alongside retrieval and ranking of supporting memory evidence under three constructed conflict types."
+    },
+    {
+      "claim_id": "context-3c3fe96b7e7ec2fd",
+      "claim_index": 38,
+      "text": "Experiment: The benchmark is constructed from persona-seeded structured profiles and contains 12 virtual-user instances."
+    },
+    {
+      "claim_id": "context-1d9c6def92c9cd6c",
+      "claim_index": 39,
+      "text": "Experiment: Sessions are simulated at monthly granularity from January 2022 through December 2025."
+    },
+    {
+      "claim_id": "context-c0cb8d4775c26545",
+      "claim_index": 40,
+      "text": "Experiment: Generated dialogues that fail naturalness, coherence, coverage, or attribution checks are revised or regenerated before inclusion."
+    },
+    {
+      "claim_id": "context-bfe26874367bdc89",
+      "claim_index": 41,
+      "text": "Experiment: The query distribution is intentionally imbalanced across dynamic, static, and conditional conflicts; overall averages are macro-averages over conflict types."
+    },
+    {
+      "claim_id": "context-10ccadaeb85d89da",
+      "claim_index": 42,
+      "text": "Experiment: Each query is evaluated against the history prefix available after its conflict-bearing session; the paper defines queries for dynamic, static, and conditional conflicts."
+    },
+    {
+      "claim_id": "context-2b6a1ef55a02816f",
+      "claim_index": 43,
+      "text": "Experiment: The six systems use a shared query protocol and white-box retrieval interface; the default setting uses direct queries, medium dialogues, distractors, medium conflict distance, and top-3 retrieval."
+    },
+    {
+      "claim_id": "context-7ebd6c7506e95fef",
+      "claim_index": 44,
+      "text": "Experiment: LLM calls in construction and memory-system backends that require an LLM use gpt-5.0-mini."
+    },
+    {
+      "claim_id": "context-ba6d4014d22fc86a",
+      "claim_index": 45,
+      "text": "Experiment: Answer Accuracy is computed per query by comparing the normalized answer with the gold value or condition."
+    },
+    {
+      "claim_id": "context-1377748774b3a597",
+      "claim_index": 46,
+      "text": "Experiment: White-box outcomes measure whether top-K retrieval contains the supporting gold memory and how highly it ranks."
+    },
+    {
+      "claim_id": "context-1be6117157ec2151",
+      "claim_index": 47,
+      "text": "Experiment: LLM-assisted judgments are reviewed by human annotators before verified metrics are computed."
+    },
+    {
+      "claim_id": "context-ca1f5e12c17314e2",
+      "claim_index": 48,
+      "text": "Experiment: Conflict-type metrics are reported separately, and overall averages are macro-averages across the three types."
+    }
+  ],
+  "raw_response": "{\"decisions\":[{\"claim_index\":1,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.1 directly frames validity determination over the query-time interaction history.\"},{\"claim_index\":2,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.1 directly maps dynamic, static, and conditional conflicts to temporal validity, factual correctness, and contextual applicability.\"},{\"claim_index\":3,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.2 and Eq. 2 describe an LLM generating a structured profile from a persona seed with I, D, C, T, and R components.\"},{\"claim_index\":4,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.3.1 states the timeline spans January 2022 to December 2025 with monthly session granularity.\"},{\"claim_index\":5,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"The update construction selects a set of size 1 or 2 and retains only changes passing attribute-specific validation.\"},{\"claim_index\":6,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Static conflicts insert the true invariant value first and a later LLM-generated contradictory value defined as false.\"},{\"claim_index\":7,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Conditional conflicts use at least two distinct condition-value pairs; the query asks for the condition matching a specified value.\"},{\"claim_index\":8,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Distractors come from related entities, are semantically similar, and are inserted between the target conflict sessions.\"},{\"claim_index\":9,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.4 describes synopsis generation then dialogue realization, with every nonempty assigned item explicitly expressed.\"},{\"claim_index\":10,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 13 states human experts inspect naturalness, coherence, coverage, and attribution, and failing dialogues are revised or regenerated.\"},{\"claim_index\":11,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.5 issues queries after the conflict is evaluable and uses the history prefix H_t available at that point.\"},{\"claim_index\":12,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Eq. 11 compares the system answer with the gold value or conditional gold condition; normalization is stated in the setup.\"},{\"claim_index\":13,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Eq. 12 defines SEH@K as whether the gold memory item m* is included in the top-K retrieved set.\"},{\"claim_index\":14,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Eq. 13 gives SRS as a logarithmic discount of the gold item's rank and zero when it is not retrieved.\"},{\"claim_index\":15,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"The protocol defines UOCS for dynamic conflicts and CRS for static conflicts.\"},{\"claim_index\":16,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 15 states LLM-assisted matching is followed by human verification, especially for ambiguous matches, paraphrases, and attribution.\"},{\"claim_index\":17,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 17 states the default configuration uses direct queries, medium dialogue length, distractors, medium conflict distance, and K=3.\"},{\"claim_index\":18,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 18 explicitly states construction LLM calls and LLM-dependent memory-system backends use gpt-5.0-mini.\"},{\"claim_index\":19,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.7 reports 12 benchmark instances and an average of 203,910.83 tokens per instance.\"},{\"claim_index\":20,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Table 2 reports 90.82 dynamic, 16.65 static, and 16.86 conditional questions per instance.\"},{\"claim_index\":21,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.7 states overall averages are macro-averages over conflict types because query counts differ.\"},{\"claim_index\":22,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Sections 4.1-4.2 state the six systems share the query protocol, answer normalization, and white-box retrieval interface.\"},{\"claim_index\":23,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Table 3 and the main-results text report MemOS with the highest average Answer Accuracy at 0.5539.\"},{\"claim_index\":24,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Table 4 and page 19 report MemOS with the highest average SEH@3 at 0.6710 and SRS at 0.5879.\"},{\"claim_index\":25,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Figure 5 values show lower AA, SEH@3, and SRS for all six systems under longer dialogue histories.\"},{\"claim_index\":26,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Figure 6 values show higher AA, SEH@3, and SRS for all six systems after distractor removal.\"},{\"claim_index\":27,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Figure 7 values show lower AA, SEH@3, and SRS in the far-distance condition than in the near-distance condition for all six systems.\"},{\"claim_index\":28,\"status\":\"needs_review\",\"risk\":\"medium\",\"reason\":\"The text defines EUG as SEH@3 minus AA, while the Table 7 note calls it the proportion retrieved but incorrect; these definitions are not equivalent, so the critique needs reconciliation.\"},{\"claim_index\":29,\"status\":\"supported\",\"risk\":\"medium\",\"reason\":\"The dataset has 12 benchmark instances, each corresponding to one virtual user; the supplied tables report point estimates and no uncertainty intervals or repeated-run variability.\"},{\"claim_index\":30,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"The conclusion explicitly says the benchmark is built through controlled simulation rather than naturally occurring long-term human interactions.\"},{\"claim_index\":31,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"The conclusion states multimodal memory grounding, richer social interaction, and strategically omitted information are not explicitly modeled.\"},{\"claim_index\":32,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"The conclusion describes the evaluated systems as representative but limited and notes the white-box protocol assumes explicit retrieval and ranking.\"},{\"claim_index\":33,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Algorithm 1 line 2 generates the profile before line 3 simulates the timeline.\"},{\"claim_index\":34,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Algorithm 1 lines 13-15 insert conflicts and distractors before lines 16-18 generate dialogues.\"},{\"claim_index\":35,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Algorithm 1 line 20 constructs queries and gold labels after dialogue generation in lines 16-18.\"},{\"claim_index\":36,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.1 states the benchmark construction guarantees a unique maximizer for each query.\"},{\"claim_index\":37,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.6 defines black-box answer evaluation and white-box retrieval/ranking evaluation across the three conflict types.\"},{\"claim_index\":38,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.2 uses persona-seeded structured profiles, and Section 3.7 reports 12 benchmark instances.\"},{\"claim_index\":39,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.3.1 states monthly sessions from January 2022 through December 2025.\"},{\"claim_index\":40,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 13 says dialogues failing naturalness, coherence, coverage, or attribution checks are revised or regenerated before inclusion.\"},{\"claim_index\":41,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.7 says the conflict-query distribution is intentionally nonuniform and overall averages are macro-averages over conflict types.\"},{\"claim_index\":42,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.5 evaluates each query using the history prefix after the conflict-bearing session and defines queries for all three conflict types.\"},{\"claim_index\":43,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 17 states shared query protocol and white-box interface and lists the default direct-query, medium-dialogue, distractor, medium-distance, K=3 setting.\"},{\"claim_index\":44,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 18 explicitly states LLM calls in construction and LLM-dependent backends use gpt-5.0-mini.\"},{\"claim_index\":45,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Eq. 11 computes per-query Answer Accuracy against the gold value or condition; normalization is described in the setup.\"},{\"claim_index\":46,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Section 3.6 defines white-box evaluation as whether top-K retrieval contains the supporting gold memory and how highly it ranks.\"},{\"claim_index\":47,\"status\":\"supported\",\"risk\":\"low\",\"reason\":\"Page 15 states LLM-assisted judgments are reviewed by human annotators and final metrics use verified judgments.\"}],\"follow_up_actions\":[{\"action_type\":\"source_recheck_query\",\"claim_index\":28,\"reason\":\"Reconcile the contradictory EUG definitions before publishing the critique: the text gives SEH@3 minus AA, while Table 7 calls EUG the retrieved-but-incorrect proportion.\",\"query\":\"MemConflict Evidence Utilization Gap SEH@3 AA Table 7 definition\",\"source_url\":\"http://arxiv.org/abs/2605.20926v1\"}],\"explanation_decisions\":[],\"method_link_decisions\":[{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c3\",\"to_claim_id\":\"c4\",\"status\":\"supported\",\"reason\":\"c36 explicitly states Algorithm 1 places profile generation before timeline simulation.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c4\",\"to_claim_id\":\"c5\",\"status\":\"needs_review\",\"reason\":\"c37 establishes conflict/distractor insertion before dialogue generation, not timeline simulation before dynamic-state construction; Algorithm 1 shows that order but the supplied link anchor is mismatched.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c4\",\"to_claim_id\":\"c6\",\"status\":\"needs_review\",\"reason\":\"c37 does not establish that timeline simulation precedes static conflict construction; it only states conflict/distractor insertion precedes dialogue generation.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c4\",\"to_claim_id\":\"c7\",\"status\":\"needs_review\",\"reason\":\"c37 does not establish timeline simulation before conditional conflict construction; its assertion concerns conflict/distractor insertion before dialogue generation only.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c4\",\"to_claim_id\":\"c8\",\"status\":\"needs_review\",\"reason\":\"c37 establishes distractor insertion before dialogue generation, not timeline simulation before distractor injection.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c8\",\"to_claim_id\":\"c9\",\"status\":\"supported\",\"reason\":\"c37 explicitly places distractor insertion before dialogue generation, matching the c8-to-c9 link.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"from_claim_id\":\"c9\",\"to_claim_id\":\"c11\",\"status\":\"supported\",\"reason\":\"c38 explicitly states Algorithm 1 constructs queries and gold labels after dialogue generation.\"}],\"method_operation_decisions\":[{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c3\",\"status\":\"supported\",\"reason\":\"c3 supports a persona-seeded LLM generating structured virtual-user profiles, including the input seed and output profile.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c4\",\"status\":\"supported\",\"reason\":\"The source simulates a temporally ordered timeline from initialized profiles, with the monthly 2022-2025 span and granularity stated.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c5\",\"status\":\"supported\",\"reason\":\"c5 supports update-session selection of one or two dynamic attributes, validation, and retention of accepted state changes.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c6\",\"status\":\"supported\",\"reason\":\"c6 supports static conflicts built from an invariant true fact and a later plausible but false contradictory mention.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c7\",\"status\":\"supported\",\"reason\":\"c7 supports constructing conditional conflicts from multiple valid condition-value pairs under distinct conditions.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c8\",\"status\":\"supported\",\"reason\":\"c8 supports distractors drawn from related-entity facts, attributed to non-target entities, and inserted within the conflict span.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c9\",\"status\":\"supported\",\"reason\":\"c9 supports synopsis-to-dialogue realization with explicit realization of assigned nonempty updates, static mentions, bindings, and distractors; c10 supports human checking.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c11\",\"status\":\"supported\",\"reason\":\"c11 supports issuing a conflict-targeted query after all gold-answer information is available, using the history prefix H_t.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c12\",\"status\":\"supported\",\"reason\":\"c12 supports computing Answer Accuracy from normalized system outputs against the gold value or conditional gold condition.\"},{\"source_url\":\"http://arxiv.org/abs/2605.20926v1\",\"operation_claim_id\":\"c13\",\"status\":\"supported\",\"reason\":\"c13 and c14 support SEH@K and SRS from retrieved items and the gold supporting memory item, with c17 establishing the default K=3 condition.\"}]}"
+}

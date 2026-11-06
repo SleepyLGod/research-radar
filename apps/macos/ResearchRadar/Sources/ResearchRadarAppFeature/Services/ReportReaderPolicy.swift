@@ -19,6 +19,8 @@ struct ReportReaderPolicy: Sendable {
     private let workspace: FileHandle
     private let runComponents: [String]
     private let entryPath: String
+    private let draftPath: String
+    private let runPath: String
 
     init(report: ReportRecordV1, workspaceRoot: URL) throws {
         guard workspaceRoot.isFileURL else {
@@ -26,6 +28,8 @@ struct ReportReaderPolicy: Sendable {
         }
         let lexicalWorkspace = try Self.lexicalPath(workspaceRoot.path)
         let run = try Self.lexicalPath(report.runDirectory)
+        runPath = run
+        draftPath = report.articleDraftPath
         let entry = try Self.lexicalPath(report.reportHTMLPath)
         let prefix = run + "/"
         guard entry.hasPrefix(prefix), ["html", "htm"].contains((entry as NSString).pathExtension.lowercased()) else {
@@ -114,6 +118,16 @@ struct ReportReaderPolicy: Sendable {
             mime = type
         }
 
+        return Resource(data: try read(parts: parts), mimeType: mime)
+    }
+
+    func articleDraftData() throws -> Data {
+        let path = try Self.lexicalPath(draftPath)
+        guard path.hasPrefix(runPath + "/"), path.hasSuffix(".json") else { throw Failure.deniedResource }
+        return try read(parts: path.dropFirst(runPath.count + 1).split(separator: "/").map(String.init))
+    }
+
+    private func read(parts: [String]) throws -> Data {
         // Every read starts from the pinned trusted workspace, not a pathname
         // validated earlier. Run roots and their ancestors cannot follow links.
         var directory = dup(workspace.fileDescriptor)
@@ -133,6 +147,6 @@ struct ReportReaderPolicy: Sendable {
               info.st_size <= 32 * 1024 * 1024 else { throw Failure.deniedResource }
         let data = try handle.read(upToCount: 32 * 1024 * 1024 + 1) ?? Data()
         guard data.count <= 32 * 1024 * 1024 else { throw Failure.deniedResource }
-        return Resource(data: data, mimeType: mime)
+        return data
     }
 }

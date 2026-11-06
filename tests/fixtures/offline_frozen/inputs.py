@@ -12,6 +12,8 @@ from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.discovery.base import DiscoveryContext
 from research_radar.models import SourceCandidate, SourceType
 
+from .source_reply import source_response
+
 TITLE = "Offline Grounded Agent Memory Benchmark"
 SOURCE_URL = "https://example.com/offline-memory-paper"
 
@@ -124,4 +126,4 @@ class FrozenModel:
             )
         else:
             raise AssertionError(f"Unexpected offline model: {model}")
-        return ModelResponse(content=content, model=model)
+        return ModelResponse(content=source_response(content, messages), model=model)

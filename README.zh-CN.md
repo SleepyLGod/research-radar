@@ -117,7 +117,7 @@ App 投递默认关闭；启用渠道后，合格报告可以自动进入独立�
 ## 默认模型可以替换
 
 当前默认使用 DeepSeek `deepseek-flash`，并为 DeepSeek 任务显式开启 thinking 和 `high` reasoning；Tavily 补充
-网页召回，再由 Codex `gpt-5.6-luna` 以 `xhigh` reasoning 做 verifier。默认值可以按需更换，
+网页召回，再由 Codex `gpt-6-luna` 以 `xhigh` reasoning 做 verifier。默认值可以按需更换，
 不是硬编码限制；
 自定义 API、本地模型和 CLI agent 的接入方式见 [Provider 配置](docs/providers.md)。
 

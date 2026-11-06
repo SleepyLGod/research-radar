@@ -23,6 +23,24 @@ public actor JobQueue {
 
     public func jobs() -> [JobRecordV1] { snapshot.jobs }
 
+    public func enqueueOrganization(payload: OrganizeTopicPayloadV1, reportDate: String) throws -> EnqueueResult {
+        try payload.validate()
+        let prior = snapshot.jobs.filter { $0.kind == .organization && $0.topicID == payload.topicID }
+        if let active = prior.first(where: { [.pending, .running, .cancelling].contains($0.state) }) {
+            return .coalesced(active.id)
+        }
+        let id = UUID()
+        let job = try JobRecordV1(id: id, kind: .organization, topicID: payload.topicID,
+            reportDate: reportDate, trigger: .runNow, attemptCount: (prior.map(\.attemptCount).max() ?? 0) + 1,
+            jobDirectory: jobsRoot.appending(path: id.uuidString.lowercased()).path,
+            createdAt: clock(), organization: payload)
+        var updated = snapshot
+        updated.jobs.append(job)
+        try persist(updated)
+        snapshot = updated
+        return .enqueued(id)
+    }
+
     public func enqueueResearch(
         topicID: String,
         reportDate: String,

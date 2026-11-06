@@ -39,6 +39,6 @@ struct WorkspaceDiagnosticsView: View {
             } else {
                 Label(localization.text("diagnostics.none"), systemImage: "checkmark.circle")
             }
-        }.formStyle(.grouped).padding(20)
+        }.formStyle(.grouped).scrollContentBackground(.hidden)
     }
 }

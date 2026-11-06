@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -17,6 +20,8 @@ _MAX_COMMAND_ERROR_CHARS = 500
 
 class CodexCliProvider:
     """Provider backed by `codex exec` in read-only ephemeral mode."""
+
+    supports_response_schema: bool = True
 
     def __init__(
         self,
@@ -42,8 +47,24 @@ class CodexCliProvider:
     def complete(self, messages: list[Message], *, model: str) -> ModelResponse:
         """Run `codex exec` and return its last message."""
 
+        return self._complete(messages, model=model, response_schema=None)
+
+    def complete_with_schema(
+        self, messages: list[Message], *, model: str, response_schema: dict[str, object],
+    ) -> ModelResponse:
+        """Request a final-response shape for this call only, never a provider-wide mode."""
+
+        return self._complete(messages, model=model, response_schema=response_schema)
+
+    def _complete(
+        self, messages: list[Message], *, model: str, response_schema: dict[str, object] | None,
+    ) -> ModelResponse:
+
         parts = _codex_command_parts(self.command)
         prompt = messages_to_prompt(messages)
+        schema_json = (json.dumps(response_schema, ensure_ascii=False,
+                                 sort_keys=True, allow_nan=False)
+                       if response_schema is not None else None)
         with tempfile.TemporaryDirectory(prefix="research-radar-codex-") as tmpdir:
             output_path = Path(tmpdir) / "last-message.txt"
             command = [
@@ -62,19 +83,41 @@ class CodexCliProvider:
                 command.extend(
                     ["-c", f'model_reasoning_effort="{self.reasoning_effort}"']
                 )
-            command.append(prompt)
-            _run_command(command, self.name, timeout_seconds=self._timeout_seconds, prompt=prompt)
+            if schema_json is not None:
+                schema_path = Path(tmpdir) / "response-schema.json"
+                with os.fdopen(os.open(schema_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600),
+                               "w", encoding="utf-8") as stream:
+                    stream.write(schema_json)
+                command.extend(["--output-schema", str(schema_path)])
+            command.append("-")
+            _run_command(
+                command, self.name, timeout_seconds=self._timeout_seconds,
+                prompt=prompt, stdin_text=prompt,
+            )
             if not output_path.exists():
                 raise AnalysisError(f"{self.name} did not write an output message.")
             content = output_path.read_text(encoding="utf-8").strip()
         if not content:
             raise AnalysisError(f"{self.name} returned an empty response.")
+        if schema_json is not None:
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError as exc:
+                raise AnalysisError(
+                    f"{self.name} constrained response was not complete JSON "
+                    f"(line {exc.lineno}, column {exc.colno})."
+                ) from None
+            if not isinstance(result, dict):
+                raise AnalysisError(f"{self.name} constrained JSON root must be an object.")
         return ModelResponse(
             content=content,
             model=model,
             metadata={
                 "provider": self.name,
                 "reasoning_effort": self.reasoning_effort or "inherited",
+                **({"response_schema_requested": True, "response_schema_sha256":
+                    hashlib.sha256(schema_json.encode()).hexdigest()}
+                   if schema_json is not None else {}),
             },
         )
 
@@ -192,6 +235,7 @@ def _run_command(
     *,
     timeout_seconds: int,
     prompt: str | None = None,
+    stdin_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
@@ -199,6 +243,8 @@ def _run_command(
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            input=stdin_text,
             timeout=timeout_seconds,
         )
     except FileNotFoundError:

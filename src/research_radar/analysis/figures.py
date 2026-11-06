@@ -717,6 +717,11 @@ def _pypdf_caption_crop_box(
 
 
 def _pdf_page_bbox(pdf_path: Path, page_number: int) -> PdfPageBbox | None:
+    return read_pdf_page_bbox(pdf_path, page_number)
+
+
+def read_pdf_page_bbox(pdf_path: Path, page_number: int) -> PdfPageBbox | None:
+    """Read literal word boxes through the existing optional Poppler backend."""
     pdftotext = shutil.which("pdftotext")
     if not pdftotext:
         return None

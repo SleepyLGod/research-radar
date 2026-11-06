@@ -1,0 +1,38 @@
+{
+  "provenance": "MemGuide unified-contract live batch, 2026-11-03. Original paragraphs and reasons are retained verbatim. Editorial controls are not model outputs or approvals.",
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "workflow_source": "MS-\nTOD is built in four stages: (1) multi-session dialogue gen-\neration; (2) confirmation-type response annotation; (3) QA-\nstyle memory bank construction; and (4) human validation.",
+  "generation_source": "An LLM reader receives the dialogue context c, the core\nfacts Acore, and missing slots Lmiss as prompt inputs.\nr = LLMReader(prompt(c, Acore, Lmiss)) (4)",
+  "cases": [
+    {
+      "paragraph_id": "p1.solution_walkthrough.1",
+      "original": {
+        "text": "数据构建从对话生成开始。对从 SGD 采样的每个任务目标，作者用 GPT-4 合成三段按时间排序的会话，每一段的生成以上一段会话的槽位填充状态为条件。整个流程的顺序是先生成多会话对话，再从已完成的会话中构造意图描述与问答记忆，最后由人工验证收尾。在记忆构造阶段，对于每个已完成的会话，作者用 GPT-4 生成一个意图描述和一组记录槽位特定事实的问答对，这些问答对即成为后续检索的记忆单元。验证环节由三名具备自然语言处理经验的标注者承担，检查意图与槽位准确性、冗余、确认准确性、对话连贯性以及重复意图。",
+        "supporting_claim_ids": ["c3", "c22", "c23", "c5", "c7"]
+      },
+      "status": "unsupported",
+      "reason": "The individual construction and validation facts are supported, but the paragraph calls its sequence the whole workflow while omitting confirmation-type response annotation, which the paper lists between dialogue generation and QA-memory construction.",
+      "editorial": {
+        "text": "数据构建从对话生成开始。对从 SGD 采样的每个任务目标，作者用 GPT-4 合成三段按时间排序的会话，每一段的生成以上一段会话的槽位填充状态为条件。已核验的先后关系是：先生成多会话对话，再从已完成的会话构造意图描述与问答记忆，人工验证在两者之后进行；这不是数据集全部步骤的枚举。在记忆构造阶段，对于每个已完成的会话，作者用 GPT-4 生成一个意图描述和一组记录槽位特定事实的问答对，这些问答对即成为后续检索的记忆单元。验证环节由三名具备自然语言处理经验的标注者承担，检查意图与槽位准确性、冗余、确认准确性、对话连贯性以及重复意图。",
+        "supporting_claim_ids": ["c3", "c22", "c23", "c5", "c7"]
+      }
+    },
+    {
+      "paragraph_id": "p1.solution_walkthrough.3",
+      "original": {
+        "text": "候选记忆与当前意图在主题上对齐，但并非每一对问答都服务于当前轮次，因此方法要求先找出信息缺口。在为当前意图检索到候选记忆之后，一个思维链槽位推理器读取当前对话上下文和与当前意图对应的目标，先枚举该意图所需的全部槽位，再核对对话历史中哪些槽位已填或已确认，最后只输出仍未解决的槽位列表。这份缺失槽位列表在过滤器估计问答对效用之前就已产生，因而同时充当过滤与生成两个环节的输入。",
+        "supporting_claim_ids": ["c18", "c12", "c19"]
+      },
+      "status": "needs_review",
+      "reason": "The stages and missing-slot reasoning are supported, but this paragraph also says the missing-slot list is an input to response generation; that clause is not covered by this target's selected evidence choices.",
+      "editorial": {
+        "text": "候选记忆与当前意图在主题上对齐，但并非每一对问答都服务于当前轮次，因此方法要求先找出信息缺口。在为当前意图检索到候选记忆之后，一个思维链槽位推理器读取当前对话上下文和与当前意图对应的目标，先枚举该意图所需的全部槽位，再核对对话历史中哪些槽位已填或已确认，最后只输出仍未解决的槽位列表。这份缺失槽位列表在过滤器估计问答对效用之前就已产生。",
+        "supporting_claim_ids": ["c18", "c12", "c19"]
+      }
+    }
+  ],
+  "unchanged_consumer": {
+    "text": "最后一步是回复生成。排序阶段产出的选中记忆答案被送入回复生成器，生成器同时接收对话上下文、这些记忆答案和缺失槽位列表，并被提示自然延续对话、主动用记忆内容回应尚未解决的信息，例如确认或建议已存储的取值。",
+    "supporting_claim_ids": ["c21", "c16"]
+  }
+}

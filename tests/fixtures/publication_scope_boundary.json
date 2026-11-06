@@ -1,0 +1,24 @@
+{
+  "source_url": "http://arxiv.org/abs/2505.20231v2",
+  "provenance": "Public source excerpts and unchanged candidate clauses from the stopped MemGuide v5 review. The revised prose is a human-authored offline control, not a model approval.",
+  "facts": [
+    {"id": "c8", "section": "solution", "text": "Solution: GPT-4o-mini generates a short current-intent description from dialogue context.", "translation": "Solution: GPT-4o-mini 从对话上下文生成简短的当前意图描述。", "quote": "Current Intent Extraction. Given the dialogue context\nc, we use GPT-4o-mini to generate a high-level intent de-\nscription dint", "location": "page 4"},
+    {"id": "c9", "section": "solution", "text": "Solution: Retrieval compares the current intent with stored intent keys to select candidate memory entries.", "translation": "Solution: 检索阶段比较当前意图和存储的意图键，选出候选记忆条目。", "quote": "Semantic Retrieval. We then retrieve memory units from\nthe bank M, which contain stored intent keys", "location": "page 4"},
+    {"id": "c12", "section": "solution", "text": "Solution: The reasoner identifies unresolved task slots from dialogue context and the goal associated with the current intent.", "translation": "Solution: 推理器根据对话上下文和当前意图对应的目标识别尚未解决的任务槽。", "quote": "to analyze the dialogue context c and the overall\ngoal corresponding with intent key kcur, so as to enumer-\nate a list of essential task slots that have not yet been\nfilled or confirmed", "location": "page 5"},
+    {"id": "c16", "section": "solution", "text": "Solution: The response generator receives dialogue context, selected memory answers and missing slots.", "translation": "Solution: 响应生成器接收对话上下文、选中的记忆答案和缺失槽。", "quote": "An LLM reader receives the dialogue context c, the core\nfacts Acore, and missing slots Lmiss as prompt inputs.\nr = LLMReader(prompt(c, Acore, Lmiss)) (4)", "location": "page 5, equation 4"},
+    {"id": "c30", "section": "experiment", "text": "Experiment: The GPT-4 evaluator receives dialogue context, task goal, reference response and predicted response.", "translation": "Experiment: GPT-4响应评判器接收对话上下文、任务目标、参考响应和预测响应。", "quote": "[Dialogue Context]\n{{conversationhistory}}\n[Task Goal]\n{{task goal}}\n[reference answer]\n{{ref erence anwser}}\n[predict answer]\n{{predict answer}}", "location": "page 17, GPT4 Evaluation prompt"}
+  ],
+  "original": {
+    "text": "在主评估中，系统侧输入可分为当前意图描述、意图对齐候选记忆和缺失槽列表；响应生成使用这些信息。GPT-4 评判器接收对话上下文、任务目标、参考响应和预测响应。",
+    "supporting_claim_ids": ["c8", "c9", "c12", "c16", "c30"]
+  },
+  "rejection_reason": "The retrieval and evaluator clauses are supported, but the paragraph says response generation uses the current intent and candidate memories. The reader actually receives dialogue context, selected memory answers, and missing slots; this conflates retrieval inputs with response-generation inputs.",
+  "editorial_method": {
+    "text": "当前意图用于检索候选记忆，推理器则根据对话上下文和意图对应的目标识别缺失槽。回答生成有它自己的输入边界：生成器接收对话上下文、选中的记忆答案和缺失槽，而不是直接把意图描述与全部候选记忆当作生成输入。",
+    "supporting_claim_ids": ["c8", "c9", "c12", "c16"]
+  },
+  "editorial_measurement": {
+    "text": "GPT-4 评判器接收对话上下文、任务目标、参考响应和预测响应。",
+    "supporting_claim_ids": ["c30"]
+  }
+}

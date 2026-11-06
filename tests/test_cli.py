@@ -549,7 +549,7 @@ def test_schedule_daily_draft_writes_runner_and_plist(
     assert "--secret-source keychain" in daily_command
     assert "--deepseek-provider xiaomi" in daily_command
     assert "--verifier-provider codex" in daily_command
-    assert "--verifier-model gpt-5.6-luna" in daily_command
+    assert "--verifier-model gpt-6-luna" in daily_command
     assert "--dry-run" in publish_command
     assert "API_KEY" not in plist
     assert "appsecret" not in plist.casefold()
@@ -602,7 +602,7 @@ def test_schedule_daily_draft_non_codex_verifier_does_not_inherit_codex_model(
     schedule = json.loads((output_dir / "schedule.json").read_text(encoding="utf-8"))
     daily_command = " ".join(schedule["daily_command"])
     assert "--verifier-provider deepseek" in daily_command
-    assert "--verifier-model gpt-5.6-luna" not in daily_command
+    assert "--verifier-model gpt-6-luna" not in daily_command
 
 
 def test_schedule_daily_draft_fails_when_uv_is_missing(

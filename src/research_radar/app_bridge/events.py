@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -12,6 +14,8 @@ from typing import Any
 from research_radar.security.redaction import redact_text
 
 _MAX_MESSAGE_CHARS = 500
+# Apostrophes can occur inside URLs; never expose the remaining query suffix.
+_TITLE_URL = re.compile(r"https?://[^\s<>\"]+", re.IGNORECASE)
 _EVENT_TYPES = {
     "started",
     "stage_changed",
@@ -22,6 +26,7 @@ _EVENT_TYPES = {
     "cancelled",
 }
 _STAGES = {
+    "knowledge",
     "preflight",
     "topic_bootstrap",
     "discovery",
@@ -38,6 +43,34 @@ _STAGES = {
     "complete",
 }
 _STATUSES = {"running", "succeeded", "failed"}
+_PAPER_STATUSES = {
+    "acquiring", "acquired", "acquisition_failed", "skipped", "reading", "read", "reading_failed",
+}
+
+
+@dataclass(frozen=True)
+class PaperProgressV1:
+    """Attempt-local source identity and observed work, never verification acceptance."""
+
+    source_id: str
+    title: str
+    status: str
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.source_id, str) or len(self.source_id) != 64
+                or any(char not in "0123456789abcdef" for char in self.source_id)):
+            raise ValueError("Paper progress requires a hashed source identity.")
+        if not isinstance(self.title, str) or not self.title.strip():
+            raise ValueError("Paper progress requires a title.")
+        if not isinstance(self.status, str) or self.status not in _PAPER_STATUSES:
+            raise ValueError("Unsupported paper progress status.")
+
+    @property
+    def stage(self) -> str:
+        """Return the existing wire stage for this observed paper operation."""
+        if self.status in {"reading", "read", "reading_failed"}:
+            return "deep_reading"
+        return "acquisition"
 
 
 class EventWriter:
@@ -69,6 +102,7 @@ class EventWriter:
         delivery_channel: str | None = None,
         run_dir: str | None = None,
         error: dict[str, Any] | None = None,
+        paper: PaperProgressV1 | None = None,
     ) -> None:
         """Append and fsync one event before returning."""
 
@@ -84,6 +118,10 @@ class EventWriter:
             raise ValueError("Failed events require a redacted error.")
         if event_type == "delivery_result" and delivery_channel is None:
             raise ValueError("Delivery events require a channel.")
+        if paper is not None and (
+            event_type != "progress" or status != "running" or stage != paper.stage
+        ):
+            raise ValueError("Paper progress requires a running progress event at its own stage.")
         if stage is not None and event_type in {"progress", "stage_changed"}:
             self.last_stage = stage
         self.sequence += 1
@@ -102,6 +140,12 @@ class EventWriter:
             "run_dir": safe_message(run_dir) if run_dir is not None else None,
             "error": _safe_value(error) if error is not None else None,
         }
+        if paper is not None:
+            event["paper"] = {
+                "source_id": paper.source_id,
+                "title": safe_message(_TITLE_URL.sub("[SOURCE_URL]", paper.title)),
+                "status": paper.status,
+            }
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
         descriptor = os.open(self.path, flags, 0o600)
         try:

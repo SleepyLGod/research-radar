@@ -119,7 +119,7 @@ See [Detailed Usage](docs/usage.md) for the exact commands and deployment steps.
 ## Defaults, Not Lock-In
 
 The current quality path uses DeepSeek `deepseek-flash` with explicit thinking and `high` reasoning for
-DeepSeek-backed tasks, Tavily for web recall, and Codex `gpt-5.6-luna` with `xhigh` reasoning for
+DeepSeek-backed tasks, Tavily for web recall, and Codex `gpt-6-luna` with `xhigh` reasoning for
 verification. Provider instances and task routes are configurable; see
 [Provider Configuration](docs/providers.md).
 
