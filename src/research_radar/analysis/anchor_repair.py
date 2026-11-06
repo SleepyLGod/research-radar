@@ -32,6 +32,10 @@ _RETRIEVAL_SET = re.compile(
 _RETRIEVAL_SCALAR = re.compile(
     r"\b(?:top[-‑–— ]|K\s*=\s*)([1-9]\d*)(?!\d|\.\d)", re.IGNORECASE,
 )
+_METRIC_CUTOFF = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<name>[A-Za-z][A-Za-z0-9_-]*)"
+    r"(?P<separator>@|[ \t]+at[ \t]+)(?P<cutoff>\d+)(?!\w|\.\d)", re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -789,12 +793,36 @@ def _numeric_anchor_failure(
     for resolution in resolutions:
         if resolution.table and resolution.table.get("error"):
             return str(resolution.table["error"])
-    claim_numbers = set(_numbers(_retrieval_parameter_text(claim.text)))
-    if not claim_numbers:
-        return None
-    anchor_text = " ".join(_source_context_text(resolution) for resolution in resolutions)
-    anchor_numbers = set(_numbers(_retrieval_parameter_text(anchor_text)))
-    if not claim_numbers.issubset(anchor_numbers):
+    claim_text = _retrieval_parameter_text(claim.text)
+    anchor_text = _retrieval_parameter_text(" ".join(
+        _source_context_text(resolution) for resolution in resolutions))
+    metric_names = {match["name"].casefold() for text in (claim_text, anchor_text)
+                    for match in _METRIC_CUTOFF.finditer(text) if match["separator"] == "@"}
+
+    def tokens(text: str) -> set[str]:
+        parameters: set[str] = set()
+
+        def metric(match: re.Match[str]) -> str:
+            name = match["name"].casefold()
+            if name not in metric_names:
+                return match[0]
+            parameters.add(f"metric:{name}@{match['cutoff']}")
+            return " "
+
+        # An explicit repeated annotation identifies a coordinated cutoff without
+        # inferring aliases or borrowing a cutoff as evidence for a measured score.
+        text = re.sub(
+            r"(?P<head>\(\s*(?P<name>[A-Za-z][A-Za-z0-9_-]*)@\d+\s*\))"
+            r"(?P<join>[ \t]+and[ \t]+)at[ \t]+(?P<cutoff>\d+)[ \t]*"
+            r"\(\s*(?P=name)@(?P=cutoff)\s*\)",
+            lambda match: f"{match['head']}{match['join']}{match['name']}@{match['cutoff']}",
+            text, flags=re.IGNORECASE,
+        )
+        # A metric's cutoff is an identity, never evidence for a measured score.
+        text = _METRIC_CUTOFF.sub(metric, text)
+        return parameters | set(_numbers(text))
+
+    if not tokens(claim_text).issubset(tokens(anchor_text)):
         return "numeric anchor missing claim values"
     return None
 
@@ -804,7 +832,7 @@ def _key_entity_anchor_failure(
     resolutions: list[AnchorResolution],
 ) -> _AnchorIssue | None:
     table_failure = _table_anchor_row_failure(claim, resolutions)
-    if table_failure is not None:
+    if table_failure is not None and not table_failure.reviewable:
         return table_failure
     depths = _retrieval_depths(claim.text)
     quote = " ".join(r.quote or "" for r in resolutions)
@@ -816,7 +844,7 @@ def _key_entity_anchor_failure(
         return _AnchorIssue("anchor missing or ambiguous retrieval depth")
     entities = _key_entities(claim.text)
     if not entities:
-        return None
+        return table_failure
     anchor_text = " ".join(_source_context_text(resolution) for resolution in resolutions)
     normalized_anchor = _compact_key(anchor_text)
     missing = [
@@ -826,7 +854,7 @@ def _key_entity_anchor_failure(
     ]
     if missing:
         return _AnchorIssue("anchor missing key entities: " + ", ".join(missing))
-    return None
+    return table_failure
 
 
 def _retrieval_depths(text: str) -> set[str]:
@@ -855,7 +883,7 @@ def _retrieval_parameter_text(text: str) -> str:
     if not _retrieval_depths(text):
         return text
     # Within a finite set a comma separates members, not thousands (e.g. {2,500}).
-    text = _RETRIEVAL_SET.sub(lambda m: m[0].replace(",", ", "), _retrieval_notation(text))
+    text = _RETRIEVAL_SET.sub(lambda m: m[0].replace(",", " "), _retrieval_notation(text))
     return re.sub(r"\btop[-‑–—](?=\d)", "top ", text, flags=re.IGNORECASE)
 
 
@@ -919,9 +947,28 @@ def _table_anchor_row_failure(
         entity: [row for row in rows if _entity_in_text(entity, row)]
         for entity in method_entities
     }
+    # Only a mapped table can defer caption/header roles; missing columns stay unresolved.
+    scope_text = "\n".join(
+        segment["text"]
+        for resolution in resolutions
+        if resolution.table and resolution.table["columns"]
+        for segment in resolution.table["segments"]
+        if segment["role"] in {"header", "caption"}
+    )
+    known_rows = [
+        parsed[0] for resolution in resolutions if resolution.table
+        for segment in resolution.table["segments"] if segment["role"] == "rows"
+        for line in segment["text"].splitlines() if (parsed := numeric_row(line))
+    ]
+    uncertain_roles = []
     for entity, matching in method_rows.items():
         if not matching:
+            if (_entity_in_text(entity, scope_text)
+                    and not any(_entity_in_text(entity, row) for row in known_rows)):
+                uncertain_roles.append(entity)
+                continue
             return _AnchorIssue(f"table anchor row missing method entity: {entity}")
+    method_entities = [entity for entity in method_entities if entity not in uncertain_roles]
 
     # Compare each local assertion with its method's quoted row, not the whole table.
     clauses = re.split(
@@ -943,6 +990,8 @@ def _table_anchor_row_failure(
         entity = active[0]
         if not any(values.issubset(set(_numbers(row))) for row in method_rows[entity]):
             return _AnchorIssue(f"table anchor row missing method values: {entity}")
+    if uncertain_roles:
+        return _AnchorIssue("table entity roles require semantic review", True)
     return None
 
 
@@ -1126,7 +1175,11 @@ def _compact_key(text: str) -> str:
 def _numbers(text: str) -> list[str]:
     numbers = []
     # Consume whole decimals before checking boundaries: a unit must not turn 23.8pp into 23.
-    pattern = r"\d+(?:,\d{3})*(?:[ \t]*\.[ \t]*\d+)?(?:[eE][+-]?\d+)?(?:[ \t]*%)?"
+    number = r"\d+(?:,[ \t]*\d{3}(?!\d))*(?:[ \t]*\.[ \t]*\d+)?(?:[eE][+-]?\d+)?"
+    # Only an explicit two-ended percentage range shares its final percent sign.
+    text = re.sub(rf"(?<![\w@.])({number})[ \t]*(?:[-−–—]|to)[ \t]*({number})[ \t]*%",
+                  r"\1% to \2%", text, flags=re.IGNORECASE)
+    pattern = rf"{number}(?:[ \t]*%)?"
     for match in re.finditer(pattern, text):
         before = text[match.start() - 1] if match.start() else ""
         article = (

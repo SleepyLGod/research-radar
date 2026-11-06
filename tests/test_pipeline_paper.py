@@ -8,6 +8,7 @@ from reader_fixtures import OfflineStaticProvider as StaticProvider
 
 from research_radar.analysis.model_cache import CachedLLMProvider
 from research_radar.analysis.openai_compatible import OpenAICompatibleProvider
+from research_radar.analysis.paper_reading import ReaderContextError
 from research_radar.analysis.providers import Message, ModelResponse
 from research_radar.config import parse_config
 from research_radar.exceptions import AnalysisError, ResearchRadarError
@@ -168,6 +169,63 @@ def test_single_paper_pipeline_requires_localizer_for_chinese_report(tmp_path: P
         raise AssertionError("Expected ResearchRadarError")
 
     assert not (tmp_path / "runs").exists()
+
+
+@pytest.mark.parametrize("kind,has_evidence", [("interpretation", True), ("fact", False)])
+def test_context_failure_persists_bounded_attempt_and_stops_before_review_or_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str, has_evidence: bool,
+) -> None:
+    class SchemaReader(CountingProvider):
+        supports_response_schema = True
+
+        def complete_with_schema(
+            self, messages: list[Message], *, model: str, response_schema: dict,
+        ) -> ModelResponse:
+            return self.complete(messages, model=model)
+
+    text = "Memory benchmark fixture."
+    payload = json.loads(_claim_unit_reading_json(text))
+    body = payload["deep_readings"]
+    body["claim_units"][0].update(claim_id="c7", claim_kind=kind)
+    if not has_evidence:
+        body["claim_units"][0]["evidence"] = []
+    body["evaluation_context"] = {
+        "data_construction": [], "available_inputs": ["c7"], "outcome_measurement": [],
+    }
+    secret = "sk-fake-secret-value-12345678901234567890"
+    body["area_context"]["background"] = secret
+    body["critical_assessment"]["bottom_line"] = "Unpublished note. " * 100
+    reader = SchemaReader(json.dumps(payload))
+    verifier = CountingProvider("must not review")
+    writer = CountingProvider("must not write")
+    config = parse_config({"topics": [{"id": "memory", "queries": ["memory"]}]})
+    monkeypatch.setattr(paper, "ingest_source", lambda source, _dir: (
+        Artifact(source=source, text=text)))
+
+    with pytest.raises(ReaderContextError):
+        run_paper(tmp_path, config, "memory", "https://example.test/paper", reader,
+                  model="fake-reader", verifier=verifier, verifier_model="fake-verifier",
+                  localizer=writer, localization_model="offline-model", language="zh")
+
+    run_dir = next((tmp_path / "runs").iterdir())
+    attempts = read_jsonl(run_dir / "reader_attempts.jsonl")
+    assert len(attempts) == 1
+    assert attempts[0]["status"] == "failed"
+    assert attempts[0]["attempt_index"] == 1
+    assert "evaluation_context.available_inputs[0]" in attempts[0]["error_message"]
+    assert "c7" in attempts[0]["error_message"]
+    assert attempts[0]["input_budget"]
+    assert len(attempts[0]["response_excerpt"]) <= 803
+    assert secret not in json.dumps(attempts)
+    failure = read_json(run_dir / "run_error.json")
+    assert failure["stage"] == "reader"
+    assert failure["error_type"] == "ReaderContextError"
+    assert failure["message"] == attempts[0]["error_message"]
+    assert read_json(run_dir / "manifest.json")["metadata"]["failure"] == failure
+    assert reader.call_count == 1
+    assert verifier.call_count == writer.call_count == 0
+    assert not (run_dir / "paper.md").exists()
+    assert not (run_dir / "claims.jsonl").exists()
 
 
 def test_single_paper_pipeline_uses_model_cache_on_second_run(

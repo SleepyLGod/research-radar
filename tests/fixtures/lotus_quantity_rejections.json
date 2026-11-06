@@ -1,0 +1,12 @@
+{
+  "source_url": "https://arxiv.org/pdf/2407.11418v3",
+  "provenance": "Minimized public facts and exact model text from the saved 2026-11-06 qualified completion. These are failed candidates, not new approval decisions.",
+  "c19": {
+    "original": "Experiment: The FEVER fact-checking evaluation verifies claims against a corpus of 5.5 million Wikipedia articles and merges Refuted and NotEnoughInfo into one Not Supported class.",
+    "chinese": "Experiment: FEVER 事实核查评估在 550 万篇 Wikipedia 文章构成的语料上验证声明，并把 Refuted 和 NotEnoughInfo 合并为一个 Not Supported 类。"
+  },
+  "c35": {
+    "candidate": "For BioDEX multi-label classification, Table 3 reports rank-precision at 5 (RP@5) and at 10 (RP@10): LOTUS Join scores 0.212 and 0.213, while LOTUS Join + Rank scores 0.265 and 0.280, respectively.",
+    "evidence": "Table 3: Biomedical Multi-label Classification Results on the\nBioDEX Dataset with Llama-70b\nMethod RP@5 RP@10 Execution\nTime (s)\n# LM\nCalls\nLOTUS Join 0.212 0.213 2,340 5,644\nLOTUS Join + Rank 0.265 0.280 2,503 5,869\nThe table reports the rank-precision@5 (RP@5) and\nrank-precision@10 (RP@10), following prior work [ 28], as well\nas execution time in seconds and the number of LLM calls."
+  }
+}

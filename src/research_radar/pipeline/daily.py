@@ -7,6 +7,7 @@ from pathlib import Path
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
+from research_radar.analysis.fact_revision import revise_publication_facts
 from research_radar.analysis.figures import (
     FigureExtractionError,
     FigureExtractor,
@@ -78,7 +79,7 @@ from research_radar.models import (
 )
 from research_radar.pipeline.progress import ProgressListener, ProgressWriter
 from research_radar.pipeline.public_sources import select_public_report_sources
-from research_radar.pipeline.reporting import render_review_report, write_failed_run
+from research_radar.pipeline.reporting import failure_route, render_review_report, write_failed_run
 from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.security.redaction import redact_text
 from research_radar.storage.files import write_json, write_jsonl, write_text
@@ -540,10 +541,19 @@ def run_daily(
             fact_review = review_publication_facts(claims, verifier,
                 model=verifier_model or config.models.verifier, readings=readings,
                 artifacts=deep_artifacts, topic_id=topic.id, queries=topic.queries)
+            if deep_reader is not None:
+                fact_review = revise_publication_facts(fact_review, deep_reader,
+                    model=deep_model or config.models.analyst, verifier=verifier,
+                    verifier_model=verifier_model or config.models.verifier,
+                    artifacts=deep_artifacts, topic_id=topic.id, queries=topic.queries)
+            if fact_review.revision_audit is not None:
+                write_json(run_dir / "fact_revision.json", fact_review.revision_audit)
         except AnalysisError as exc:
-            progress.record("verifier", "failed", scope="facts", error=str(exc))
-            write_failed_run(run_dir, manifest, "verifier", verifier.name,
-                              verifier_model or config.models.verifier, exc)
+            stage, failed_provider, failed_model = failure_route(
+                exc, "verifier", verifier.name, verifier_model or config.models.verifier)
+            progress.record(stage, "failed", scope="facts", provider=failed_provider,
+                            model=failed_model, error=str(exc))
+            write_failed_run(run_dir, manifest, stage, failed_provider, failed_model, exc)
             raise
         claims = fact_review.claims
         readings = fact_review.readings

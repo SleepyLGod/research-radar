@@ -1,0 +1,24 @@
+{
+  "source_url": "https://arxiv.org/pdf/2407.11418v3",
+  "provenance": "Minimized public excerpts and Reader text from the saved LOTUS v3 run; not a repaired answer or fresh review.",
+  "cases": {
+    "c8": {
+      "text": "The filter optimizer accepts tuples above the upper proxy threshold, rejects tuples below the lower threshold, and sends intermediate tuples to the oracle model.",
+      "quote": "If the tuple\u2019s proxy score is at least\ud835\udf0f+, we mark it as pass-\ning the predicate. If the tuple\u2019s proxy score is less than or equal to\n\ud835\udf0f\u2212, we mark it as failing the predicate, and for tuples with proxy\nscores between \ud835\udf0f+ and \ud835\udf0f\u2212, we resort to the oracle model to provide\na label.",
+      "review_status": "needs_review",
+      "review_reason": "The operation matches the described threshold rule, but the source includes equality at both thresholds while the assertion does not specify those boundary cases."
+    },
+    "c32": {
+      "text": "The BioDEX task uses 65,000 biomedical articles and 24,000 possible drug-reaction labels.",
+      "quote": "task on the BioDEX Dataset [ 29], which consists of a corpus of\n65, 000 biomedical articles, and ground-truth expert-created drug\nsafety reports constructed from each article. The task is to classify\nthe patient\u2019s drug reactions, given each medical article. Notably,\nthere are 24, 000 possible drug-reaction labels, making this task an\nextreme multi-label classification task."
+    },
+    "c35": {
+      "text": "The BioDEX outcome metrics are rank-precision at 5 and rank-precision at 10.",
+      "quote": "The table reports the rank-precision@5 (RP@5) and\nrank-precision@10 (RP@10), following prior work [ 28], as well\nas execution time in seconds and the number of LLM calls."
+    },
+    "c48": {
+      "text": "Across the two ranking tasks, the authors report 16% to 32% lower execution time for quick-select top-k than heap top-k, without mapping the range endpoints to a task in the prose.",
+      "quote": "Notably the quick-select top-\ud835\udc58 offers 16 \u2212 32% lower execution\ntime than the heap-based sorting method, despite requiring more\nLLM calls in some cases."
+    }
+  }
+}

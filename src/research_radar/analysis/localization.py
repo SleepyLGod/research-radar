@@ -6,6 +6,7 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass, fields, replace
+from decimal import Decimal, InvalidOperation
 
 from research_radar.analysis.method_flow import (
     method_claim_ids,
@@ -49,8 +50,8 @@ CANONICAL_CLAIM_PREFIXES = (
     "Essence:",
 )
 
-# Compare quantities, not translated prose. Unit aliases allow equivalent Chinese labels
-# without accepting conversions, changed scales, or lost comparison/sign information.
+# Compare ordered quantities, not translated prose. Count scales may change notation
+# exactly; physical units, comparison operators and explicit signs must still match.
 _UNIT_ALIASES = {
     "毫秒": "ms", "milliseconds": "ms", "millisecond": "ms",
     "秒": "s", "seconds": "s", "second": "s", "sec": "s",
@@ -58,6 +59,7 @@ _UNIT_ALIASES = {
     "分钟": "min", "minutes": "min", "minute": "min",
     "小时": "h", "hours": "h", "hour": "h",
     "字节": "bytes", "byte": "bytes", "比特": "bits", "bit": "bits",
+    "米": "m", "千克": "kg", "克": "g",
     "个token": "tokens", "token": "tokens",
     "percent": "%", "per cent": "%",
     "percentage points": "pp", "percentage point": "pp", "个百分点": "pp",
@@ -71,12 +73,23 @@ _UNITS = (
        "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB",
        "kB", "kbit", "Mbit", "Gbit", "bps", "Kbps", "Mbps", "Gbps",
        "m", "cm", "mm", "km", "kg", "g", "mg", "lb", "W", "kW", "J", "kJ", "°C", "K",
-       "×", "x"}
+       "×", "x", "万"}
 )
+_COUNT_SCALES = {"thousand": 3, "million": 6, "billion": 9, "trillion": 12, "万": 4}
+_COUNT_SCALE_PATTERN = "(?:" + "|".join(
+    re.escape(unit) for unit in sorted(
+        set(_COUNT_SCALES) | {k for k, v in _UNIT_ALIASES.items() if v in _COUNT_SCALES},
+        key=lambda unit: (-len(unit), unit),
+    )
+) + r")(?![A-Za-z])"
+_COUNT_SCALE = re.compile(_COUNT_SCALE_PATTERN)
 _UNIT_PATTERN = "(?:" + "|".join(
     re.escape(unit) for unit in sorted(_UNITS, key=lambda unit: (-len(unit), unit))
 ) + r"|[A-Z]{2,})(?![A-Za-z])"
-_UNIT_EXPRESSION = _UNIT_PATTERN + r"(?:\s*/\s*(?:" + _UNIT_PATTERN + r"|[A-Za-z]+))*"
+_UNIT_EXPRESSION = (
+    rf"(?:{_COUNT_SCALE_PATTERN}\s*)?" + _UNIT_PATTERN
+    + r"(?:\s*/\s*(?:" + _UNIT_PATTERN + r"|[A-Za-z]+))*"
+)
 _NUMBER = r"(?:[+−±-]\s*)?(?:\d+(?:[.,]\d+)*|\.\d+)(?:[eE][+-]?\d+)?"
 _QUANTITY = re.compile(
     r"(?:(?P<operator><=|>=|[<>≤≥≈~])\s*)?"
@@ -1201,14 +1214,15 @@ def _preserve_quantities(
     original: str, localized: str, *, findings: list[ReviewFinding], field: str,
     source_identifiers: tuple[str, ...] = (),
 ) -> str:
-    if _quantities(original, source_identifiers) == _quantities(localized, source_identifiers):
+    if _same_quantities(_quantities(original, source_identifiers),
+                        _quantities(localized, source_identifiers)):
         return localized
     # A standalone numeric zero may be written as a word; do not match non-zero,
     # identifiers or zero-shot, or relax ordering/units for other quantities.
     canonical = [_quantities(re.sub(r"(?<![\w-])zero(?![\w-])", "0", value,
                                     flags=re.IGNORECASE), source_identifiers)
                  for value in (original, localized)]
-    if canonical[0] == canonical[1]:
+    if _same_quantities(*canonical):
         return localized
     findings.append(ReviewFinding(
         severity="warning",
@@ -1216,6 +1230,37 @@ def _preserve_quantities(
         metadata={"kind": "report_localization_quantity_changed", "field": field},
     ))
     return original
+
+
+def _same_quantities(
+    original: list[tuple[str, str, str]], localized: list[tuple[str, str, str]],
+) -> bool:
+    return len(original) == len(localized) and all(
+        before == after or _equivalent_count_scale(before, after)
+        for before, after in zip(original, localized, strict=True)
+    )
+
+
+def _equivalent_count_scale(before: tuple[str, str, str], after: tuple[str, str, str]) -> bool:
+    if before[0] != after[0] or before[0] not in {"", "<=", ">=", "<", ">", "≤", "≥", "≈", "~"}:
+        return False
+    if not (_COUNT_SCALE.match(before[2]) or _COUNT_SCALE.match(after[2])):
+        return False
+
+    def scaled(quantity: tuple[str, str, str]) -> tuple[Decimal, str, str]:
+        _, number, unit = quantity
+        scale = _COUNT_SCALE.match(unit)
+        exponent = _COUNT_SCALES[_UNIT_ALIASES.get(scale[0], scale[0])] if scale else 0
+        unit = _quantity_unit(unit[scale.end():].strip()) if scale else unit
+        sign = number[0] if number.startswith(("+", "-", "±")) else ""
+        value = Decimal(number.removeprefix("±")).as_tuple()
+        # Construct the exponent directly: Decimal multiplication would round long inputs.
+        return Decimal((value.sign, value.digits, value.exponent + exponent)), unit, sign
+
+    try:
+        return scaled(before) == scaled(after)
+    except InvalidOperation:
+        return False
 
 
 def _source_identifiers(claim: Claim) -> tuple[str, ...]:

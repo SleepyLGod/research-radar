@@ -31,6 +31,13 @@ class Reading:
         raise AssertionError("No Reader fallback")
 
     def complete_with_schema(self, messages, *, model, response_schema):
+        if "revisions" in response_schema["properties"]:
+            self.order.append("amend")
+            return ModelResponse(json.dumps({"revisions": {
+                identity: {"text": None, "evidence": [],
+                           "reason": "Offline control declines to change the extraction."}
+                for identity in response_schema["properties"]["revisions"]["properties"]
+            }}), model)
         self.order.append("reader")
         assert (
             "method"
@@ -125,6 +132,81 @@ def test_bad_review_never_reaches_writer_or_final_artifacts(tmp_path, monkeypatc
         execute(tmp_path, "memconflict", monkeypatch, bad=bad)
     assert not list(tmp_path.rglob("paper.md"))
     assert not list(tmp_path.rglob("localized_readings.jsonl"))
+
+
+def test_one_bounded_amendment_reaches_chinese_writer_and_final_review(tmp_path, monkeypatch):
+    from test_fact_revision import Reviewer, Reviser
+
+    artifact, response, chinese = control("memconflict")
+    unit = json.loads(json.dumps(response["deep_readings"]["claim_units"][0]))
+    response["deep_readings"]["claim_units"][0]["text"] = (
+        "Each user is initialized from a persona seed.")
+    order = []
+
+    class AmendingReader(Reading):
+        def complete_with_schema(self, messages, *, model, response_schema):
+            if "revisions" in response_schema["properties"]:
+                order.append("amend")
+                return Reviser(artifact, unit).complete_with_schema(
+                    messages, model=model, response_schema=response_schema)
+            return super().complete_with_schema(messages, model=model,
+                                                response_schema=response_schema)
+
+    class BoundReviewer(Reviewer):
+        def complete_with_schema(self, messages, *, model, response_schema):
+            order.append("review")
+            return super().complete_with_schema(messages, model=model,
+                                                response_schema=response_schema)
+
+    monkeypatch.setattr(paper, "ingest_source", lambda *_args: artifact)
+    config = parse_config({"topics": [{"id": "memory", "queries": ["agent memory"]}]})
+    run = paper.run_paper(tmp_path, config, "memory", artifact.source.url,
+        AmendingReader(response, order), model="offline", verifier=BoundReviewer(),
+        verifier_model="offline", localizer=Writing(chinese, order),
+        localization_model="offline", language="zh")
+
+    assert order == ["reader", "review", "amend", "review", "writer", "review"]
+    audit = json.loads((run / "fact_revision.json").read_text())
+    assert audit["status"] == "reviewed"
+    assert audit["attempts"][0]["accepted_candidate_ids"] == ["m1"]
+    assert audit["initial_claims"][0]["text"].endswith("from a persona seed.")
+    assert "Persona Hub" in (run / "paper.md").read_text()
+    assert "宏平均" in (run / "paper.md").read_text()
+
+
+def test_failed_amendment_keeps_original_review_and_stops_before_writing(tmp_path, monkeypatch):
+    from test_fact_revision import Reviewer
+
+    artifact, response, chinese = control("memconflict")
+    response["deep_readings"]["claim_units"][0]["text"] = (
+        "Each user is initialized from a persona seed.")
+    order = []
+
+    class FailingAmendment(Reading):
+        def complete_with_schema(self, messages, *, model, response_schema):
+            if "revisions" in response_schema["properties"]:
+                order.append("amend")
+                raise AnalysisError("Offline amendment transport failure.")
+            return super().complete_with_schema(messages, model=model,
+                                                response_schema=response_schema)
+
+    monkeypatch.setattr(paper, "ingest_source", lambda *_args: artifact)
+    config = parse_config({"topics": [{"id": "memory", "queries": ["agent memory"]}]})
+    with pytest.raises(AnalysisError, match="amendment transport failure"):
+        paper.run_paper(tmp_path, config, "memory", artifact.source.url,
+            FailingAmendment(response, order), model="offline", verifier=Reviewer(),
+            verifier_model="offline", localizer=Writing(chinese, order),
+            localization_model="offline", language="zh")
+    run = next((tmp_path / "runs").iterdir())
+    audit = json.loads((run / "fact_revision.json").read_text())
+    assert audit["status"] == "failed"
+    assert len(audit["attempts"]) == 1
+    assert json.loads(audit["initial_feedback"])["structured_review"]
+    assert audit["initial_readings"][0]["claim_units"][0]["text"] == (
+        "Each user is initialized from a persona seed.")
+    assert json.loads((run / "run_error.json").read_text())["stage"] == "reader"
+    assert order == ["reader", "amend"]
+    assert not (run / "paper.md").exists()
 
 
 def test_real_wrong_pair_cannot_be_rebound_to_another_relation_assertion():

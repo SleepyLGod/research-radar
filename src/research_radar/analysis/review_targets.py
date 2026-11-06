@@ -574,11 +574,29 @@ class ReviewTargets:
             prior = ReviewTargets(saved["targets"], saved["evidence_bindings"])
             if not fresh and saved["schema_id"] not in {REVIEW_SCHEMA_ID, COMPARISON_SCHEMA_ID}:
                 raise ReviewContractError("review_receipt_schema_unsupported")
+            for identity in prior.targets:
+                prior._canonical_target(identity)
+            if saved.get("kind") == "assembled_receipts":
+                if fresh:
+                    raise ReviewContractError("review_expected_original_batch_receipt")
+                originals = saved["receipts"]
+                if not isinstance(originals, list) or not originals:
+                    raise ReviewContractError("review_invalid_receipt")
+                # Historical assemblies contain batches, or a prior receipt followed by batches.
+                # Rebuild either valid form from its originals; never trust the merged approvals.
+                for has_previous in (False, True):
+                    try:
+                        rebuilt, answers = prior._assemble_batches(
+                            originals[1:] if has_previous else originals,
+                            previous=originals[0] if has_previous else None)
+                    except ReviewContractError:
+                        continue
+                    if rebuilt == receipt:
+                        return prior, answers
+                raise ReviewContractError("review_receipt_changed")
             raw = saved["raw_response"]
             if json.loads(prior.normalize(raw)) != receipt:
                 raise ReviewContractError("review_receipt_changed")
-            for identity in prior.targets:
-                prior._canonical_target(identity)
             return prior, validate_review_response(raw, prior.schema)["decisions"]
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise ReviewContractError("review_invalid_receipt") from exc
@@ -610,6 +628,11 @@ class ReviewTargets:
 
     def assemble_batches(self, fresh: list[dict], *, previous: dict | None = None) -> dict:
         """Merge only a complete, disjoint partition of the exact pending targets."""
+        return self._assemble_batches(fresh, previous=previous)[0]
+
+    def _assemble_batches(
+        self, fresh: list[dict], *, previous: dict | None = None,
+    ) -> tuple[dict, dict]:
         decisions = self.reuse_supported(previous) if previous is not None else {}
         reused_ids = sorted(decisions)
         for receipt in fresh:
@@ -626,7 +649,7 @@ class ReviewTargets:
         result = self._normalized_payload(payload)
         result["structured_review"].update(kind="assembled_receipts", receipts=deepcopy(receipts),
             reused_target_ids=reused_ids)
-        return result
+        return result, payload["decisions"]
 
     def _normalized_payload(self, payload: dict) -> dict:
         result = {
@@ -796,6 +819,8 @@ def build_review_targets(
                 "text": claim.text,
                 "evidence": [dataclass_to_dict(a) for a in claim.evidence],
                 "original_text": claim.metadata.get("localization", {}).get("original_text"),
+                **({"revision_of": claim.metadata["fact_revision"]}
+                   if claim.metadata.get("fact_revision") else {}),
                 "direct_evidence": proofs,
                 **({"experimental_results": experiments} if experiments else {}),
                 **({"comparison_units": comparisons} if comparisons else {}),

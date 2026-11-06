@@ -284,6 +284,6 @@ def test_required_indexed_fact_cannot_be_overruled_by_approved_chinese_paragraph
             Reading(response, order), model="offline", verifier=Reviewer(order),
             verifier_model="offline", localizer=Writing(chinese, order),
             localization_model="offline", language="zh")
-    assert order == (["reader", "review"] if stage == "facts"
+    assert order == (["reader", "review", "amend"] if stage == "facts"
                      else ["reader", "review", "writer", "review"])
     assert not list(tmp_path.rglob("paper.md"))

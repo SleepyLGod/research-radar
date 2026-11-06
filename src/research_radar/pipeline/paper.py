@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from research_radar.analysis.anchor_repair import AnchorRepairAttempt
 from research_radar.analysis.deep_reading import run_artifact_deep_reading
+from research_radar.analysis.fact_revision import revise_publication_facts
 from research_radar.analysis.localization import (
     localization_failed,
     localization_status_from_attempts,
@@ -43,7 +44,7 @@ from research_radar.exceptions import AnalysisError, ResearchRadarError
 from research_radar.ingestion.router import ingest_source
 from research_radar.models import RunManifest, SourceCandidate, SourceType, dataclass_to_dict
 from research_radar.pipeline.progress import ProgressWriter
-from research_radar.pipeline.reporting import render_review_report, write_failed_run
+from research_radar.pipeline.reporting import failure_route, render_review_report, write_failed_run
 from research_radar.pipeline.runtime import build_runtime_summary
 from research_radar.storage.files import ensure_dir, write_json, write_jsonl, write_text
 from research_radar.storage.runs import make_run_id
@@ -134,7 +135,6 @@ def run_paper(
             error=str(exc),
         )
         if isinstance(exc, ReaderInputError):
-            write_jsonl(run_dir / "reader_attempts.jsonl", exc.reader_attempts)
             write_jsonl(run_dir / "paper_reading_inputs.jsonl", [{
                 "source_url": source.url, **dataclass_to_dict(reading_packet),
                 "input_budget": exc.audit,
@@ -174,10 +174,17 @@ def run_paper(
         try:
             fact_review = review_publication_facts(claims, review_provider, model=review_model,
                 readings=[reading], artifacts=[artifact], topic_id=topic.id, queries=topic.queries)
+            fact_review = revise_publication_facts(fact_review, reader, model=model,
+                verifier=review_provider, verifier_model=review_model, artifacts=[artifact],
+                topic_id=topic.id, queries=topic.queries)
+            if fact_review.revision_audit is not None:
+                write_json(run_dir / "fact_revision.json", fact_review.revision_audit)
         except ResearchRadarError as exc:
-            progress.record("verifier", "failed", scope="facts", error=str(exc))
-            write_failed_run(run_dir, manifest, "verifier",
-                              review_provider.name, review_model, exc)
+            stage, failed_provider, failed_model = failure_route(
+                exc, "verifier", review_provider.name, review_model)
+            progress.record(stage, "failed", scope="facts", provider=failed_provider,
+                            model=failed_model, error=str(exc))
+            write_failed_run(run_dir, manifest, stage, failed_provider, failed_model, exc)
             raise
         claims = fact_review.claims
         reading = fact_review.readings[0]

@@ -833,15 +833,22 @@ def _parse_evaluation_context(
         raise ReaderContextError("Each evaluation dimension must be a list.")
     if require_references or any(isinstance(item, str) for items in dimensions.values()
                                  for item in items):
-        for ids in dimensions.values():
+        for dimension, ids in dimensions.items():
             if (any(not isinstance(identity, str) or identity not in claim_units
                     for identity in ids)
                     or len(ids) != len(set(ids))):
                 raise ReaderContextError(
                     "References require distinct, explicit existing claim IDs.")
-            if any(claim_units[identity].claim_kind != "fact" or not claim_units[identity].evidence
-                   for identity in ids):
-                raise ReaderContextError("Evaluation references require anchored factual claims.")
+            for index, identity in enumerate(ids):
+                unit = claim_units[identity]
+                if unit.claim_kind != "fact" or not unit.evidence:
+                    raise ReaderContextError(
+                        f"evaluation_context.{dimension}[{index}] "
+                        f"(claim_id={_response_excerpt(identity, limit=80)!r}, "
+                        f"claim_kind={_response_excerpt(unit.claim_kind, limit=48)!r}, "
+                        f"evidence_count={len(unit.evidence)}): "
+                        "Evaluation references require anchored factual claims."
+                    )
         return EvaluationContext(claim_references={key: list(ids)
                                                    for key, ids in dimensions.items()})
     parsed = {}

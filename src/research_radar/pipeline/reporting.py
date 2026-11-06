@@ -13,6 +13,16 @@ from research_radar.models import ReviewFinding, RunManifest, VerificationAction
 from research_radar.storage.files import write_json, write_jsonl, write_text
 
 
+def failure_route(
+    exc: ResearchRadarError, stage: str, provider: str | None, model: str | None,
+) -> tuple[str, str | None, str | None]:
+    """Use the explicit amendment failure route, otherwise keep the pipeline's route."""
+    audit = getattr(exc, "fact_revision_audit", None) or {}
+    failure = audit.get("failure", {})
+    return (failure.get("stage", stage), failure.get("provider", provider),
+            failure.get("model", model))
+
+
 def write_failed_run(
     run_dir: Path,
     manifest: RunManifest,
@@ -22,6 +32,7 @@ def write_failed_run(
     exc: ResearchRadarError,
 ) -> None:
     """Persist a failed-run envelope and any completed publication review evidence."""
+    stage, provider, model = failure_route(exc, stage, provider, model)
     failure = {
         "stage": stage,
         "provider": provider,
@@ -38,6 +49,12 @@ def write_failed_run(
     )
     write_json(run_dir / "manifest.json", failed_manifest)
     write_json(run_dir / "run_error.json", failure)
+    reader_attempts = getattr(exc, "reader_attempts", None)
+    if reader_attempts is not None:
+        write_jsonl(run_dir / "reader_attempts.jsonl", reader_attempts)
+    revision_audit = getattr(exc, "fact_revision_audit", None)
+    if revision_audit is not None:
+        write_json(run_dir / "fact_revision.json", revision_audit)
     if isinstance(exc, PublicationReviewError):
         write_text(run_dir / "final_review.json", exc.raw_feedback)
         write_claims(run_dir / "final_review_claims.jsonl", exc.claims)
