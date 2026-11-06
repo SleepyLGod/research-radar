@@ -131,6 +131,20 @@ confused with an old non-streaming cache hit. Enabling the option can therefore 
 request on a later authorized run. Old cache files are retained. Only complete final answers enter
 the existing cache; stream fragments, reasoning and stream-response body excerpts are not logged.
 HTTP status, allowlisted redacted headers, elapsed time and attempt counts remain available.
+For an SSE `error` event, unreleased source additionally retains only scalar `code`, `type`,
+`param` and a redacted error `message`. Identifier strings are limited to 128 characters;
+message text is limited to 500 characters after redaction. Nested payloads, reasoning fields,
+answer deltas and serialized model/request envelopes are not copied. The current request's
+API key and an echoed request URL are removed before truncation; control characters are not
+retained as active terminal controls. This is not a raw stream/body excerpt.
+
+`provider_error_kind` uses exact structured codes only: `invalid_json_schema` is
+`schema_rejected` only when the actual request asks for a JSON schema; `invalid_api_key`,
+`rate_limit_exceeded`, `insufficient_quota` and `server_error` are reported as authentication,
+rate-limit, quota and service errors respectively. Missing/unrecognized codes remain
+`unclassified`; HTTP-like numbers, English wording, `type` or `param` alone do not establish
+schema rejection. These are provider-reported categories, not independently proved causes or
+proof of constrained generation. They do not change retry, cache or publication decisions.
 Non-streaming responses also require valid UTF-8 and decodable JSON. Invalid encoding and excessive
 JSON nesting produce standard provider failures, without retry, caching or reader repair. Incomplete
 HTTP bodies retain only byte counts and a coarse failure classification, never a body excerpt.
@@ -210,6 +224,25 @@ models:
 
 `reasoning_effort` accepts `medium`, `high`, or `xhigh`. To use a different effort for a
 specific route, define another named `codex_cli` provider instance and route that task to it.
+
+When Codex is used for paper reading, the shared Reader sends the canonical single-paper
+JSON Schema using `codex exec --output-schema <file>`. This is a per-request constraint:
+connection checks, writing and topic knowledge organization do not inherit the Reader schema.
+Structured verification uses its own dynamic target-bound schema, even when these tasks share
+the same provider instance. The factual-only Reader
+schema requires an empty explanation object; the full variant defines paragraph objects.
+Both specify experimental observations as `{subject, value}` objects, not strings.
+
+The inspected `0.166.0-alpha.5.1` CLI help documents this option. Later isolated live runs used
+the shared schema channel; they do not prove arbitrary-model enforcement or normal CLI/App
+end-to-end quality. See [current acceptance](chinese-publication.md). A CLI/backend rejecting
+the option or schema fails normally,
+without dropping the constraint or automatically updating the executable. Complete JSON
+and existing evidence/support checks still run. A malformed constrained answer stops without
+a JSON-repair request; schemas constrain structure, not scientific correctness. Schema bytes
+are included in input planning and their digest separates cached calls from plain requests
+and from other schema variants. Existing cache files are neither cleared nor rewritten.
+No additional Python dependency, model default or configuration field is introduced.
 
 CLI `command` accepts an executable followed by arguments. Quote paths and arguments containing
 spaces inside the YAML string, for example:

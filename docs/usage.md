@@ -194,6 +194,40 @@ uv run research-radar run paper \
   --model-cache
 ```
 
+## Topic Relevance Rules (Unreleased Source)
+
+The current unreleased source candidate supports custom `concept_groups`; the published
+`v0.3.0b1` App and source tag do not include this fix. Inside each group, aliases are alternatives.
+For custom groups, each positive group must match at least one alias. Names starting with `negative`
+are exclusions, not requirements; matching one still prevents a source from being accepted.
+A configuration containing only negative groups cannot qualify a paper by itself.
+
+For example, a semantic-query topic can use:
+
+```yaml
+concept_groups:
+  semantic_operations: [semantic filter, semantic join, semantic aggregate]
+  query_processing: [database, query optimization, dataframe]
+  negative_security: [SQL injection]
+```
+
+This requires both a semantic-operation signal and a data/query-execution signal. Merely
+mentioning an LLM or a database is not enough. Use topic-specific aliases rather than generic
+terms such as `llm` alone. Matching is deterministic keyword matching, not a model's judgment
+that a paper is relevant or correct.
+
+Existing generated/built-in profiles retain their compatibility rule. If any positive group is
+named `agent_context`, `memory_mechanism` or `evaluation_signal`, the existing combination remains
+`agent_context AND (memory_mechanism OR evaluation_signal)`, with the existing configured
+LOCOMO/LongMemEval anchor exception. These historical names are also used by non-memory built-in
+profiles; renaming them or mixing them with custom requirements does not opt into the all-groups
+rule. Custom topics should avoid these reserved names. Memory benchmark names cannot bypass a
+custom topic's required groups.
+
+This rule applies to paper relevance and research-brief repositories. It does not relax source
+quality, ranking, full-text checks or claim verification, and does not change implementation-scan
+repository behavior. Saved reports and real user configurations are not rewritten.
+
 ## Daily Research Run
 
 Run a daily topic report:
@@ -283,6 +317,110 @@ The diagnostic host excludes endpoint URL usernames and passwords. Request bodie
 authorization/cookie headers are not logged; response excerpts remain bounded and
 redacted, including any echoed API key. HTTP 504 remains a
 non-retried HTTP error; a gateway timeout is distinct from the configured local request timeout.
+
+SSE errors now keep a separate `provider_error` block with only bounded, redacted
+`code`/`type`/`param`/`message` fields. Error wording is not treated as a machine decision:
+only recognized exact codes classify the reported cause, and schema rejection also requires
+an actual JSON-schema request. Unknown cases stay `unclassified`. Reasoning, raw events,
+answer fragments and embedded model/request bodies are excluded. These errors still fail
+without caching, Reader JSON repair or an automatic retry. Existing saved errors that lack
+the original fields cannot be reconstructed; this is an unreleased source improvement, not
+a new live NVIDIA compatibility result. Frozen acceptance recorders with their own diagnostic
+allowlists must explicitly preserve these new fields before a newly authorized run.
+
+### Complete Reader Input (Unreleased Source)
+
+Deep reading no longer selects a fixed 24,000-character excerpt. It sends the complete
+available extracted text in one request, or stops explicitly. References, appendices and
+page markers remain; this does not repair PDF extraction or prove visual/table understanding.
+
+Declare the Reader model's capacity and reserves under its provider, using the **exact**
+model name. This example shows syntax only: the numbers are illustrative, not verified
+limits for any service. Use the actual endpoint/model capacity and suitable reserves.
+
+```yaml
+model_providers:
+  custom_reader:
+    kind: openai_compatible
+    base_url: https://api.example.com/v1/chat/completions
+    api_key_secret: custom_reader.api_key
+    max_tokens: 32768
+    reader_contexts:
+      your-exact-model-name:
+        context_window_tokens: 200000
+        output_reserve_tokens: 32768
+        overhead_reserve_tokens: 4096
+```
+
+These declarations apply to Codex and other configured Reader providers too. Every value
+must be a positive integer, reserves must leave room for input, and `max_tokens` must fit
+the output reserve. An output reserve is a planning allowance, not a new generation cap;
+for OpenAI-compatible routes use the existing `max_tokens` to bound requested output.
+Provider/CLI framing, extra instructions and applicable reasoning need overhead reserves.
+
+Checks include complete messages, instructions and reserves, before cache lookup or a
+request, including JSON repair. Input tokens are conservatively **estimated from UTF-8
+bytes**, not measured with the model tokenizer; a passing estimate cannot guarantee remote
+acceptance. Unknown model capacity or insufficient estimated room stops the run, saves a
+diagnostic, and does not try excerpts, split the paper, or call downstream stages.
+
+Old configurations lacking these declarations now stop at Reader. Real configurations
+are not migrated. The source App can save the same exact-model declarations under
+**Full-paper reading limits**; installed Apps/packages are unchanged. Full-input cache
+keys differ from old excerpt keys, so future authorized runs may incur new calls; existing
+cache files stay intact. Codex now receives the full prompt on stdin instead of argv.
+
+See [input and table-evidence boundaries](reader-input-evidence.md). Offline coverage and
+cached-response replay do not establish better live reading quality.
+
+### Reader Output (Unreleased Source)
+
+The shared reader keeps analysis fields as concise research notes and requests an explanation
+layer retained for review. Unreleased public output retains a paragraph only after an explicit
+Verifier decision bound to its exact text and same-paper approved claims; otherwise it uses
+verified-claim fallbacks. Valid claim IDs alone do not approve prose. The reader no longer
+requests unused perspective questions or a redundant global
+evidence index; old results with that index remain readable. Atomic claims, exact source quotes,
+supporting claim IDs, experimental conditions and caveats are still required. Rejected judgments
+from either the outer response or its deep-reading object are retained as unsupported audit
+records, never promoted to public claims.
+Optional `evaluation_context` lists preserve source-backed data construction, available inputs
+and outcome-measurement conditions for review, not as automatically approved claims. The existing
+Verifier call now receives full extracted paper text and exact paragraphs as well as eligible
+claims. Its exact model therefore needs a sufficient `reader_contexts` declaration too; missing
+capacity stops rather than truncating. Larger complete inputs can increase request cost.
+
+Single-paper JSON Schema preparation is opt-in on a dedicated OpenAI-compatible Reader instance;
+normal configuration/routing does not enable it. Hosted NVIDIA enforcement remains unconfirmed.
+Strict parsing and evidence checks remain mandatory. See [output boundaries and remaining
+acceptance](reader-output-reliability.md). A translated paragraph does not inherit approval for
+different English text. For an uncached successful run, English uses one Verifier pass;
+Chinese with structured facts uses one fact review before writing and one final review of
+the exact Chinese claims and paragraphs. Chinese composition uses one body request per paper
+plus a shared claim/display request when needed. Daily figure-caption translation can add one
+later localization request. Reader, search, repair and transport attempts are separate.
+Missing required coverage or unusable required translations stop publication. Optional prose
+without approval may be omitted or fall back to approved final-language facts. See
+[complete integration and offline-quality limits](chinese-publication.md).
+For compatible older responses, a prose string in a note-list field is preserved as one list
+entry rather than silently discarded; it is not split, rewritten or promoted into atomic claims.
+
+The requested response is one JSON object: `deep_readings` is an array containing exactly one
+reading object, and `unsupported_or_rejected_claims` is a separate root-level string array.
+The prompt includes a complete JSON-encoded example rather than disconnected field fragments.
+Valid legacy object-valued `deep_readings` and unwrapped readings remain readable; top-level
+arrays or multiple readings are not silently reduced to their first item. Invalid or unfinished
+JSON is rejected, not completed by adding brackets. Syntax diagnostics give line and column
+without response text. This clarification does not change the existing model repair-request
+policy or guarantee that a model will follow the format.
+
+Optional streaming is available in the unreleased shared provider, off by default; this does not
+update installed Apps or beta packages. A separately authorized diagnostic completed one saved
+paper with the old prompt. A later single request through shared streaming with the revised
+prompt completed transport but returned invalid reader JSON, so it did not yield an accepted
+reading. The exact earlier HTTP 504 origin remains unproven. Transport completion, JSON validity
+and reading-quality acceptance are separate checks; offline envelope tests do not prove live
+model compliance.
 
 ## Single-Paper Run
 
@@ -715,11 +853,38 @@ ResearchRadar separates internal audit material from reader-facing content:
 
 - `sources.jsonl` keeps full discovery records.
 - `claims.jsonl` keeps claim status and evidence anchors.
+- Matched evidence retains its original short quote. Unreleased source also supplies bounded,
+  source-matched context to the verifier, stopping at detected section/caption/page boundaries.
+  These literal excerpts retain benchmark labels and headers. Daily and single-paper review now
+  also supply the complete extracted texts under explicit context budgets. Context is evidence,
+  not an additional approved claim or a reconstruction of an unreadable figure.
 - `review_report.md` keeps verifier findings and follow-up actions.
-- Public reports render supported, complete-anchor claims. Explanatory paragraphs must name their
-  supporting claim IDs, and every named claim from the same paper must still be publishable after
-  verification. Unbound or downgraded prose is hidden and may fall back only to verified atomic
-  claim text.
+- `readings.jsonl` retains original reader explanations and their support IDs for review;
+  localized readings, when generated, remain separate audit material.
+- Public reports render supported, complete-anchor claims. In unreleased source, a reader
+  paragraph does not become publishable merely by naming valid, approved claim IDs: those claims
+  may not support its prose. Public sections retain specifically reviewed, still-bound paragraphs
+  or use verified atomic-claim text, with empty sections where no approved fallback exists.
+  Translation does not inherit approval automatically. This does not rewrite explanations,
+  guess support, add model calls or repair malformed JSON.
+  Existing reports are not rewritten, and installed Apps are not updated by source changes.
+
+Numeric-anchor checks tolerate observed PDF layout noise, not changed numerical results. A reported
+best-of-N rounds/runs/trials result describes trial selection; it is not proof of superiority over
+other systems and still needs matching experimental evidence. Missing labels or conditions must
+be supported by source context or remain unpublishable. Local anchor eligibility is not completed
+model verification.
+
+Unreleased source does not treat ordinary attribution wording such as `Author-reported` as a
+method name that must appear verbatim in the source. Actual named entities and numerical values
+still need evidence; an attributed claim is not an independently established fact.
+
+For explicit method comparisons in tables, each method must have its own quoted row, and its
+stated values must belong to that row. Names and values cannot be pooled from unrelated rows;
+a method visible only in surrounding table context is not a substitute for its quoted row.
+The same checks apply when one quote spans several rows. Ambiguous method/value associations
+remain blocked rather than guessed. These deterministic checks do not replace verifier review
+of metric columns, comparison direction, experimental conditions or scientific meaning.
 
 Web snippets help discovery and ranking. They do not become publishable research claims by
 themselves.

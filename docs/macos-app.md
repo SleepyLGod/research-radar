@@ -68,6 +68,15 @@ Even if you already use the CLI, check the topic, providers, recipient, and sche
 
 ## 2. Set Up Your First Topic
 
+**Unreleased source only:** full-input Reader and Verifier limits can be declared under
+**Settings > Full-paper reading limits**, separately for each exact model. Use documented
+context capacity and output/thinking/overhead reserves; unknown or insufficient capacity
+stops rather than shortening papers. A connection check does not establish these limits.
+The source App passes declarations through to the same CLI research configuration; it does
+not guess capacities or migrate old settings automatically; changes require an explicit save.
+This is not included in the downloadable
+v0.3.0b1 package. [Publication integration and limitations](chinese-publication.md).
+
 Setup has four steps, and you can go back to change your choices.
 Closing the panel does not quit the App. Saved settings survive a restart; unsaved API keys are
 not stored as form drafts.
