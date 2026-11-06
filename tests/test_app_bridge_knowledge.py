@@ -193,6 +193,33 @@ def test_read_dispatch_does_not_even_construct_a_secret_manager(tmp_path: Path) 
     }
 
 
+def test_scoped_read_projects_coverage_without_provider_or_secrets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job, config = setup_request(tmp_path)
+    original = json.loads((job / "request.json").read_text())
+    read_job, _ = setup_request(tmp_path, "read_topic_knowledge")
+    path = read_job / "request.json"
+    request = json.loads(path.read_text())
+    request["payload"]["reports"] = original["payload"]["reports"]
+    path.write_text(json.dumps(request))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Coverage must never access a model or credential")
+
+    monkeypatch.setattr(handlers, "resolve_task_route", forbidden)
+    deps = replace(BridgeDependencies.testing(), config_loader=lambda *_: config,
+                   read_topic_knowledge=handlers.handle_read_topic_knowledge,
+                   secret_manager_factory=forbidden)
+    assert run_bridge(request_path=path, events_path=read_job / "events.jsonl",
+                      result_path=read_job / "result.json", error_path=read_job / "error.json",
+                      dependencies=deps, establish_session=False, watch_parent=False) == 0
+    value = json.loads((read_job / "result.json").read_text())["knowledge"]
+    assert value["coverage"]["status"] == "unorganized"
+    assert len(value["coverage"]["papers"]) == 1
+    assert str(tmp_path) not in json.dumps(value)
+
+
 def test_saved_relation_read_reaches_wire_without_secret_or_provider_access(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

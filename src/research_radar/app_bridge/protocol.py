@@ -146,6 +146,7 @@ class ReadTopicKnowledgePayloadV1:
     """Credential-free read of a topic's last committed knowledge snapshot."""
 
     topic_id: str
+    reports: list[LedgerReport] | None = None
 
 
 EnginePayloadV1 = (
@@ -249,6 +250,8 @@ def _parse_payload(
     if not isinstance(value, dict):
         raise ProtocolError(f"{command.value} payload must be an object.")
     expected = _PAYLOAD_FIELDS[command.value]
+    if command is EngineCommand.READ_TOPIC_KNOWLEDGE and "reports" in value:
+        expected = expected | {"reports"}
     if set(value) != expected:
         known_payload = any(set(value) == fields for fields in _PAYLOAD_FIELDS.values())
         if known_payload:
@@ -259,9 +262,10 @@ def _parse_payload(
         raise ProtocolError(f"Invalid {command.value} payload: {detail}.")
     if command is EngineCommand.PREFLIGHT:
         return PreflightPayloadV1(live_probe=_require_bool(value, "live_probe"))
-    if command is EngineCommand.READ_TOPIC_KNOWLEDGE:
+    if command is EngineCommand.READ_TOPIC_KNOWLEDGE and "reports" not in value:
         return ReadTopicKnowledgePayloadV1(_require_str(value, "topic_id"))
-    if command in {EngineCommand.READ_PAPER_LEDGER, EngineCommand.ORGANIZE_TOPIC}:
+    if command in {EngineCommand.READ_PAPER_LEDGER, EngineCommand.ORGANIZE_TOPIC,
+                   EngineCommand.READ_TOPIC_KNOWLEDGE}:
         references = value["reports"]
         if not isinstance(references, list):
             raise ProtocolError("reports must be an array.")
@@ -284,6 +288,8 @@ def _parse_payload(
                 raise ProtocolError("Invalid paper ledger report reference.") from exc
         if command is EngineCommand.READ_PAPER_LEDGER:
             return ReadPaperLedgerPayloadV1(_require_str(value, "topic_id"), reports)
+        if command is EngineCommand.READ_TOPIC_KNOWLEDGE:
+            return ReadTopicKnowledgePayloadV1(_require_str(value, "topic_id"), reports)
         if not reports or len({UUID(report.report_id) for report in reports}) != len(reports):
             raise ProtocolError("Organization requires saved report references.")
         question = _require_str(value, "research_question")

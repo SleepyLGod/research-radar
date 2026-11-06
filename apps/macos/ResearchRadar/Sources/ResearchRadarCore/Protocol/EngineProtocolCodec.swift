@@ -93,7 +93,8 @@ public enum EngineProtocolCodec {
         try requireSchemaVersion(object)
         let command = try requireEnum(EngineCommand.self, object["command"])
         let payload = try requireObject(object["payload"])
-        let expectedKeys = payloadKeys[command]!
+        var expectedKeys = payloadKeys[command]!
+        if command == .readTopicKnowledge, payload["reports"] != nil { expectedKeys.insert("reports") }
         guard Set(payload.keys) == expectedKeys else {
             if payloadKeys.values.contains(Set(payload.keys)) {
                 throw EngineProtocolError.commandPayloadMismatch
@@ -124,7 +125,7 @@ public enum EngineProtocolCodec {
                   question.count <= 10_000 else { throw EngineProtocolError.invalidValue }
             _ = try requireEnum(ReportLanguageV1.self, payload["language"])
         }
-        if command == .readPaperLedger || command == .organizeTopic {
+        if command == .readPaperLedger || command == .organizeTopic || (command == .readTopicKnowledge && payload["reports"] != nil) {
             guard let topic = payload["topic_id"] as? String, !topic.isEmpty,
                   let reports = payload["reports"] as? [[String: Any]] else { throw EngineProtocolError.invalidValue }
             for report in reports {
@@ -195,7 +196,19 @@ public enum EngineProtocolCodec {
     }
 
     private static func validateKnowledge(_ value: [String: Any], requiresCurrent: Bool) throws {
-        try requireExactKeys(value, value["graph"] == nil ? ["topic_id", "current"] : ["topic_id", "current", "graph"])
+        var keys: Set<String> = ["topic_id", "current"]
+        if value["graph"] != nil { keys.insert("graph") }
+        if let coverage = value["coverage"] {
+            keys.insert("coverage")
+            let object = try requireObject(coverage)
+            try requireExactKeys(object, ["status", "papers"])
+            guard let papers = object["papers"] as? [[String: Any]] else { throw EngineProtocolError.invalidValue }
+            for paper in papers {
+                try requireExactKeys(paper, ["paper_key", "paper_id", "version", "title", "status", "report_ids"])
+            }
+            try decode(KnowledgeCoverageV1.self, from: JSONSerialization.data(withJSONObject: object)).validate()
+        }
+        try requireExactKeys(value, keys)
         guard let topic = value["topic_id"] as? String, !topic.isEmpty else { throw EngineProtocolError.invalidValue }
         if value["current"] is NSNull {
             guard !requiresCurrent, value["graph"] == nil || value["graph"] is NSNull else { throw EngineProtocolError.invalidValue }

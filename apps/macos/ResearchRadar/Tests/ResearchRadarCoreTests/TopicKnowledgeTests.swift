@@ -3,6 +3,35 @@ import Testing
 @testable import ResearchRadarCore
 
 @Suite struct TopicKnowledgeTests {
+    @Test func coverageIsOptionalAndScopedReadsRoundTrip() throws {
+        let payload = ReadTopicKnowledgePayloadV1(topicID: "memory", reports: organizationPayload().reports)
+        let request = try EngineRequestV1(requestID: UUID(), command: .readTopicKnowledge,
+            createdAt: Date(timeIntervalSince1970: 0), appSupportRoot: "/tmp/app", configPath: "/tmp/app/config.json",
+            payload: .readTopicKnowledge(payload))
+        #expect(try EngineProtocolCodec.decodeRequest(EngineProtocolCodec.encode(request)) == request)
+        let legacy = TopicKnowledgeV1(topicID: "memory", current: nil)
+        #expect(legacy.coverage == nil)
+        let coverage = KnowledgeCoverageV1(status: .changes, papers: [.init(
+            paperKey: String(repeating: "a", count: 64), paperID: String(repeating: "b", count: 64),
+            version: "v2", title: "Memory selection", status: .newVersion,
+            reportIDs: organizationPayload().reports.map(\.reportID))])
+        try coverage.validate()
+        let value = TopicKnowledgeV1(topicID: "memory", current: nil, coverage: coverage)
+        let result = EngineResultV1(requestID: UUID(), command: .readTopicKnowledge,
+            status: .succeeded, completedAt: Date(), knowledge: value)
+        #expect(try EngineProtocolCodec.decodeResult(EngineProtocolCodec.encode(result)).knowledge == value)
+        #expect(throws: EngineProtocolError.self) {
+            try KnowledgeCoverageV1(status: .current, papers: coverage.papers).validate()
+        }
+        let unknownVersion = KnowledgeCoverageV1(status: .unorganized, papers: [.init(
+            paperKey: String(repeating: "a", count: 64), paperID: String(repeating: "b", count: 64),
+            version: nil, title: "Unknown version", status: .newPaper,
+            reportIDs: organizationPayload().reports.map(\.reportID))])
+        let unknown = EngineResultV1(requestID: UUID(), command: .readTopicKnowledge,
+            status: .succeeded, completedAt: Date(), knowledge: .init(topicID: "memory", current: nil, coverage: unknownVersion))
+        #expect(try EngineProtocolCodec.decodeResult(EngineProtocolCodec.encode(unknown)).knowledge?.coverage == unknownVersion)
+    }
+
     @Test func sharedPythonProjectionFixtureRoundTripsAndRejectsMalformedResults() throws {
         let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().appending(path: "Fixtures/Protocol/topic-knowledge-result.json")

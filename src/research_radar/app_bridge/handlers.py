@@ -33,6 +33,7 @@ from research_radar.app_bridge.protocol import (
 )
 from research_radar.application.daily import DailyRunOptions, run_daily_application
 from research_radar.application.email import EmailDeliveryOptions, publish_email_application
+from research_radar.application.knowledge_coverage import knowledge_coverage
 from research_radar.application.provider_probe import probe_excerpt, probe_provider
 from research_radar.application.search_probe import probe_web_search
 from research_radar.application.topic_knowledge import load_current_knowledge, organize_topic
@@ -79,8 +80,14 @@ def handle_read_topic_knowledge(
     payload = cast(ReadTopicKnowledgePayloadV1, request.payload)
     _require_knowledge_topic(config, payload.topic_id)
     assert config is not None
-    return _knowledge_projection(payload.topic_id,
-                                 load_current_knowledge(config.workspace_root, payload.topic_id))
+    snapshot = load_current_knowledge(config.workspace_root, payload.topic_id)
+    result = _knowledge_projection(payload.topic_id, snapshot)
+    if payload.reports is not None:
+        result["coverage"] = knowledge_coverage(
+            config.workspace_root, payload.topic_id, payload.reports, snapshot,
+            cancelled=cancellation_event.is_set if cancellation_event else lambda: False,
+        )
+    return result
 
 
 def _require_knowledge_topic(config: LoadedAppConfigurationV1 | None, topic_id: str) -> None:

@@ -50,8 +50,11 @@ public struct OrganizeTopicPayloadV1: Codable, Equatable, Sendable {
 
 public struct ReadTopicKnowledgePayloadV1: Codable, Equatable, Sendable {
     public let topicID: String
-    public init(topicID: String) { self.topicID = topicID }
-    private enum CodingKeys: String, CodingKey { case topicID = "topic_id" }
+    public let reports: [LedgerReportReferenceV1]?
+    public init(topicID: String, reports: [LedgerReportReferenceV1]? = nil) {
+        self.topicID = topicID; self.reports = reports
+    }
+    private enum CodingKeys: String, CodingKey { case topicID = "topic_id", reports }
 }
 
 /// Read-only projection; Python remains the source of the immutable knowledge snapshot.
@@ -59,14 +62,17 @@ public struct TopicKnowledgeV1: Codable, Equatable, Sendable {
     public let topicID: String
     public let current: KnowledgeSummaryV1?
     public let graph: KnowledgeGraphV1?
-    public init(topicID: String, current: KnowledgeSummaryV1?, graph: KnowledgeGraphV1? = nil) {
-        self.topicID = topicID; self.current = current; self.graph = graph
+    public let coverage: KnowledgeCoverageV1?
+    public init(topicID: String, current: KnowledgeSummaryV1?, graph: KnowledgeGraphV1? = nil,
+                coverage: KnowledgeCoverageV1? = nil) {
+        self.topicID = topicID; self.current = current; self.graph = graph; self.coverage = coverage
     }
-    private enum CodingKeys: String, CodingKey { case topicID = "topic_id", current, graph }
+    private enum CodingKeys: String, CodingKey { case topicID = "topic_id", current, graph, coverage }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(topicID, forKey: .topicID); try c.encode(current, forKey: .current)
         try c.encodeIfPresent(graph, forKey: .graph)
+        try c.encodeIfPresent(coverage, forKey: .coverage)
     }
 }
 
